@@ -1,0 +1,71 @@
+// Personas de test — Menuiserie Mont Fèbè
+// Chaque persona a des objectifs, besoins et fonctionnalités précis.
+
+export const PERSONAS = [
+  {
+    id: 'direction',
+    login: 'direction',
+    password: 'direction226',
+    name: 'Sœur Marie, Directrice',
+    role: 'direction',
+    goals: [
+      'Consulter le tableau de bord global (outils, stocks, présences, alertes)',
+      'Approuver ou refuser les demandes de congé/permission',
+      'Consulter les présences du jour et les retards',
+      'Corriger une présence en cas d’erreur',
+      'Gérer les permissions par rôle',
+      'Consulter les magasins et leur contenu',
+      'Scanner un code pour naviguer vite',
+      'Voir son propre espace (historique, prêts)',
+    ],
+    screens: ['dashboard', 'employes', 'magasins', 'outils', 'stock', 'espace', 'parametres'],
+  },
+  {
+    id: 'admin',
+    login: 'admin',
+    password: 'admin226',
+    name: 'Paul, Administrateur système',
+    role: 'admin',
+    goals: [
+      'Gérer les comptes utilisateurs (créer, réinitialiser mdp, activer/désactiver)',
+      'Gérer les terminaux de pointage',
+      'Modifier les paramètres (horaires, tolérance, motifs)',
+      'Gérer la matrice de permissions',
+      'Créer/éditer les magasins',
+      'Toute action de magasinier en secours',
+    ],
+    screens: ['parametres', 'magasins', 'outils', 'stock', 'employes', 'dashboard', 'espace'],
+  },
+  {
+    id: 'chef',
+    login: 'chef',
+    password: 'atelier226',
+    name: 'Jean-Marc, Chef d’atelier',
+    role: 'chef_atelier',
+    goals: [
+      'Consulter les outils et leurs statuts',
+      'Consulter les prêts en cours',
+      'Enregistrer une sortie de stock (pour un chantier)',
+      'Consulter les présences de l’équipe',
+      'Consulter les magasins',
+      'Voir son espace perso (outils détenus, historique)',
+    ],
+    screens: ['dashboard', 'outils', 'stock', 'magasins', 'employes', 'espace', 'pointage'],
+  },
+  {
+    id: 'travailleur',
+    login: 'ouvrier',
+    password: 'atelier226',
+    name: 'Aimé, Menuisier',
+    role: 'travailleur',
+    goals: [
+      'Consulter son historique de présence (30 jours)',
+      'Voir les outils disponibles par magasin',
+      'Voir les outils qu’il détient en prêt',
+      'Consulter le stock disponible',
+      'Consulter ses demandes de congé',
+      'Pointer via le kiosk (si présent sur terminal)',
+    ],
+    screens: ['espace'],
+  },
+];

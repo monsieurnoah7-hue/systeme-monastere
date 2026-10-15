@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env}
+      POSTGRES_DB: ${POSTGRES_DB:-monastere}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "8787"
+      DATA_DIR: data
+      DATABASE_URL: postgres://${POSTGRES_USER:-mf}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-monastere}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:-admin226}
+    volumes:
+      - api-data:/app/data
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  db-data:
+  api-data:
+  caddy-data:
+  caddy-config:

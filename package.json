@@ -1,0 +1,21 @@
+{
+  "name": "mont-febe-menuiserie",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c amber,cyan \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev -w @mf/api",
+    "dev:web": "npm run dev -w @mf/web",
+    "build": "npm run build -w @mf/api && npm run build -w @mf/web",
+    "seed": "npm run seed -w @mf/api",
+    "typecheck": "npm run typecheck -w @mf/api && npm run typecheck -w @mf/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "puppeteer-core": "^25.13.0",
+    "typescript": "^5.9.3"
+  }
+}

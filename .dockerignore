@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+.git
+apps/api/data
+apps/web/dist
+apps/api/dist
+**/*.log
+.env
+.env.local

@@ -1,0 +1,194 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  --color-paper: #f7f5f1;
+  --color-paper-2: #efece6;
+  --color-surface: #ffffff;
+  --color-surface-2: #faf9f7;
+  --color-surface-3: #f3f0eb;
+  --color-ink: #16181d;
+  --color-ink-soft: #55524d;
+  --color-ink-faint: #8b847c;
+  --color-line: #e7e2da;
+  --color-line-strong: #d5ccc0;
+  --color-charcoal: #141519;
+  --color-charcoal-2: #1d1f24;
+  --color-charcoal-3: #292c32;
+  --color-charcoal-4: #383c44;
+  --color-amber: #d9480f;
+  --color-amber-2: #b33a0b;
+  --color-amber-3: #f76707;
+  --color-amber-wash: #fdf0e7;
+  --color-green: #2b7a4b;
+  --color-green-2: #37915c;
+  --color-green-wash: #e8f4ec;
+  --color-blue: #2a628f;
+  --color-blue-wash: #e7f0f7;
+  --color-red: #b02520;
+  --color-red-wash: #fbeae9;
+  --color-grey-wash: #f0ede8;
+
+  --radius-card: 14px;
+  --radius-btn: 11px;
+  --radius-chip: 9px;
+  --radius-pill: 999px;
+
+  --shadow-xs: 0 1px 2px rgb(22 24 29 / 0.05);
+  --shadow-card: 0 1px 2px rgb(22 24 29 / 0.05), 0 2px 6px rgb(22 24 29 / 0.04);
+  --shadow-card-hover: 0 6px 16px rgb(22 24 29 / 0.09), 0 2px 4px rgb(22 24 29 / 0.04);
+  --shadow-pop: 0 16px 48px rgb(22 24 29 / 0.16), 0 4px 12px rgb(22 24 29 / 0.08);
+  --shadow-float: 0 10px 36px rgb(22 24 29 / 0.18);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 320ms;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+  ::selection {
+    background: #f0d7bb;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 2px;
+  }
+}
+
+@utility num {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+@utility fade-in {
+  animation: fade-in var(--duration-normal) var(--ease-out) both;
+}
+
+@utility slide-up {
+  animation: slide-up var(--duration-slow) var(--ease-out) both;
+}
+
+@utility scale-in {
+  animation: scale-in var(--duration-normal) var(--ease-out) both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 1; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+@keyframes scan-laser {
+  0%, 100% { top: 8%; }
+  50% { top: 88%; }
+}
+
+@keyframes float-up {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+#root {
+  animation: fade-in var(--duration-normal) var(--ease-out);
+}
+
+#print-root {
+  display: none;
+}
+
+@media print {
+  html.printing body > #root {
+    display: none !important;
+  }
+  html.printing #print-root {
+    display: block !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #ffffff;
+    height: auto;
+  }
+  .a4-page {
+    width: 190mm;
+    margin: 0 auto;
+  }
+  .a4-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 3.5mm;
+  }
+  .badge-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5mm;
+  }
+  .badge-card {
+    width: 85.6mm;
+    height: 54mm;
+    border: 1px solid #d3cabd;
+    border-radius: 3mm;
+    padding: 3mm 4mm;
+    display: flex;
+    align-items: center;
+    gap: 4mm;
+    break-inside: avoid;
+  }
+  .receipt-page {
+    width: 105mm;
+    margin: 0 auto;
+  }
+}

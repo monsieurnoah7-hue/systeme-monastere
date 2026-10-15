@@ -1,0 +1,29 @@
+{$DOMAIN:localhost} {
+	encode gzip zstd
+
+	@assets path /assets/* /sw.js /manifest.webmanifest /icon-512.png
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+	}
+
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	handle /api/* {
+		header Cache-Control "no-store"
+		reverse_proxy api:8787
+	}
+
+	handle /files/* {
+		header Cache-Control "no-store"
+		reverse_proxy api:8787
+	}
+
+	handle {
+		root * /usr/share/caddy
+		try_files {path} /index.html
+		file_server
+	}
+}
