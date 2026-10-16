@@ -7,3 +7,6 @@ build/
 apps/api/data/
 apps/web/dev-dist/
 .DS_Store
+
+%TEMP%/
+%TEMP%
