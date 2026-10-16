@@ -1,26 +1,40 @@
+import { env } from '../env.js';
 import { DDL, MIGRATION_DDL, MIGRATION_NAME } from './ddl.js';
 import { getDb } from './index.js';
 
-export async function migrate(): Promise<void> {
-  const db = getDb();
-  for (const statement of DDL.split(';')) {
-    const sql = statement.trim();
-    if (!sql) continue;
-    await db.query(sql);
-  }
-  for (const statement of MIGRATION_DDL.split(';')) {
-    const sql = statement.trim();
-    if (!sql) continue;
+// Un seul aller-retour par lot : verrou conseil inclus dans la même
+// requête multi-énoncés → transaction implicite unique, les cold starts
+// Vercel concurrents ne peuvent plus se marcher dessus.
+const LOCK = env.databaseUrl ? 'SELECT pg_advisory_xact_lock(715827882);' : '';
+
+async function runBatch(sql: string): Promise<void> {
+  await getDb().query(`${LOCK}\n${sql}`);
+}
+
+async function runOneByOne(sql: string): Promise<void> {
+  for (const statement of sql.split(';')) {
+    const stmt = statement.trim();
+    if (!stmt) continue;
     try {
-      await db.query(sql);
+      await getDb().query(stmt);
     } catch {
-      // constraint may not exist on fresh DBs
+      // énoncé déjà appliqué ou non applicable sur ce schéma
     }
   }
-  const row = await db.one<{ name: string }>('SELECT name FROM _migrations WHERE name = $1', [MIGRATION_NAME]);
-  if (!row) {
-    await db.query('INSERT INTO _migrations (name) VALUES ($1)', [MIGRATION_NAME]);
+}
+
+async function runSql(sql: string): Promise<void> {
+  try {
+    await runBatch(sql);
+  } catch {
+    await runOneByOne(sql);
   }
+}
+
+export async function migrate(): Promise<void> {
+  await runSql(DDL);
+  await runSql(MIGRATION_DDL);
+  await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [MIGRATION_NAME]);
 }
 
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {

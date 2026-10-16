@@ -1,20 +1,10 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "apps/web/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    },
-    {
-      "src": "api/index.ts",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index.ts" },
-    { "src": "/files/(.*)", "dest": "/api/index.ts" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/apps/web/dist/$1" }
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build --workspace=apps/web",
+  "outputDirectory": "apps/web/dist",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index?__p=:path*" },
+    { "source": "/files/:path*", "destination": "/api/index?__f=:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

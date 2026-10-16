@@ -61,10 +61,12 @@ export async function ensureBootstrapAdmin(): Promise<void> {
   const row = await db.one<{ count: string }>('SELECT count(*)::text AS count FROM users');
   if (Number(row?.count ?? 0) > 0) return;
   const hash = hashPassword(env.bootstrapPassword);
-  await db.query(
+  const inserted = await db.query<{ id: number }>(
     `INSERT INTO users (login, password_hash, display_name, role)
-     VALUES ('admin', $1, 'Administrateur', 'admin')`,
+     VALUES ('admin', $1, 'Administrateur', 'admin')
+     ON CONFLICT (login) DO NOTHING
+     RETURNING id`,
     [hash],
   );
-  console.log('[auth] compte admin initial créé (login: admin)');
+  if (inserted.length > 0) console.log('[auth] compte admin initial créé (login: admin)');
 }

@@ -72,7 +72,12 @@ let instance: Sql | undefined;
 export function getDb(): Sql {
   if (instance) return instance;
   if (env.databaseUrl) {
-    const pool = new pg.Pool({ connectionString: env.databaseUrl, max: 10 });
+    const pool = new pg.Pool({
+      connectionString: env.databaseUrl,
+      max: process.env.VERCEL ? 5 : 10,
+      idleTimeoutMillis: process.env.VERCEL ? 30_000 : undefined,
+      connectionTimeoutMillis: 15_000,
+    });
     instance = fromPool(pool);
   } else {
     mkdirSync(env.dataDir, { recursive: true });
