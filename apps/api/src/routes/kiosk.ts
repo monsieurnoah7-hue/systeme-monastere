@@ -1,11 +1,9 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { env } from '../env.js';
 import { getDb } from '../db/index.js';
 import { checkSelfie } from '../lib/images.js';
 import { loadSettings } from '../lib/settings.js';
+import { saveSelfie } from '../lib/selfie-store.js';
 import { formatHm, localDate, minutesOfDay, parseHm } from '../lib/time.js';
 
 type LockState = { fails: number; lockedUntil: number };
@@ -258,13 +256,8 @@ kioskRoutes.post('/punch', async (c) => {
     );
   }
 
-  const dir = path.join(env.dataDir, 'selfies');
-  mkdirSync(dir, { recursive: true });
   const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\..+$/, '');
-  const fileName = `${employee.id}_${stamp}_${body.data.punchType}.jpg`;
-  const b64 = (body.data.selfie.split(',')[1] ?? '').trim();
-  if (!b64) return c.json({ error: 'Photo illisible.' }, 400);
-  writeFileSync(path.join(dir, fileName), Buffer.from(b64, 'base64'));
+  const fileName = await saveSelfie(employee.id, body.data.punchType, stamp, body.data.selfie);
 
   const status = lateMinutes > 0 ? 'late' : 'normal';
   try {

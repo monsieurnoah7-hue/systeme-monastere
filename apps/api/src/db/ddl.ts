@@ -178,6 +178,12 @@ CREATE TABLE IF NOT EXISTS role_permissions (
   allowed boolean NOT NULL,
   PRIMARY KEY (role, action)
 );
+
+CREATE TABLE IF NOT EXISTS selfie_blobs (
+  file_name text PRIMARY KEY,
+  data text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 `;
 
 // Idempotent adjustments for databases created before breaks/permissions/magasins/leaves.
