@@ -31,7 +31,7 @@ const patchRefBody = z.object({
 });
 
 const movementBody = z.object({
-  ref_id: z.number().int().positive(),
+  ref_id: z.coerce.number().int().positive(),
   move_type: z.enum(['in', 'out', 'correction']),
   qty: z.number().refine((v) => v !== 0, 'Quantité non nulle attendue.'),
   beneficiary: z.string().optional(),

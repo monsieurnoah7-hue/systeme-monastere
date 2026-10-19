@@ -26,6 +26,9 @@ function makeSql(query: (text: string, params: unknown[]) => Promise<unknown[]>,
 }
 
 function fromPool(pool: pg.Pool): Sql {
+  // Les ids bigint reviennent en string avec pg (contrairement à PGlite) :
+  // on aligne pour que les types `id: number` du front restent vrais partout.
+  pg.types.setTypeParser(20, (v) => Number(v));
   return makeSql(
     async (text, params) => (await pool.query(text, params as unknown[])).rows,
     async (fn) => {
