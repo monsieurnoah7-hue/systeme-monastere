@@ -34,12 +34,19 @@ Settings → Environment Variables :
 
 C'est tout : le front et l'API sont sur le même domaine → pas de CORS à configurer.
 
+> **Identifiants de production** : le seed a créé 5 comptes de démo (`admin`/`direction`/
+> `magasinier`/`chef`/`ouvrier`, mdp `*226`). Le compte `admin` a ensuite été durci avec la
+> valeur de `BOOTSTRAP_PASSWORD` (voir Étape 6). Les autres comptes de démo gardent leur mdp
+> simple : changez-les (Paramètres → Utilisateurs) avant toute mise en service réelle.
+
 ## Étape 4 — Deploy
 
 1. Deployments → **Redeploy**
 2. Au premier appel, l'API exécute automatiquement les migrations (verrou PostgreSQL,
    sûr même avec plusieurs fonctions démarrant en parallèle) et crée l'admin.
-3. Ouvrez l'URL (ex. `https://systeme-monastere-xxx.vercel.app`) → `admin` + `BOOTSTRAP_PASSWORD`
+3. Ouvrez `https://systeme-monastere.vercel.app` → `admin` + `BOOTSTRAP_PASSWORD`
+
+> Région confirmée : `vercel inspect` → `λ api/index [fra1]` (Francfort, à côté de Neon).
 
 ## Étape 5 — Seed des données de démonstration (optionnel)
 
@@ -50,12 +57,27 @@ DATABASE_URL="<neon-url>" npx tsx src/db/seed.ts
 ```
 (ou `npx vercel env pull .env.local` puis `npm run seed`)
 
+## Étape 6 — Durcir le compte admin (recommandé)
+
+Le seed crée `admin/admin226` (démo). Pour une vraie utilisation, remplacez le hash par la
+valeur de `BOOTSTRAP_PASSWORD` :
+```bash
+cd apps/api
+DATABASE_URL="<neon-url>" TARGET_PASSWORD="<mot-de-passe-fort>" npx tsx src/db/set-admin-password.ts
+```
+Vérification : l'ancien mdp doit renvoyer 401, le nouveau 200.
+
 ## Vérifications post-déploiement
 
-- [ ] `https://<url>/api/health` → `{"ok":true}`
-- [ ] Connexion admin fonctionne
+- [x] `https://systeme-monastere.vercel.app/api/health` → `{"ok":true}` (200)
+- [x] Connexion admin fonctionne (session cookie `mf_session`, HttpOnly)
+- [x] Routes testées : `/api/auth/me`, `/api/dashboard`, `/api/employees`, `/api/stock/refs`,
+      `/api/settings`, `/api/terminals`, `/api/kiosk/terminals` → 200
 - [ ] Les 5 écrans se chargent, filtres compris (`?status=...`)
 - [ ] Un pointage selfie s'enregistre (selfie stocké en base, image affichée)
+
+> La protection « Vercel Authentication » indiquée au deploy ne s'applique qu'aux aperçus
+> (branch previews). L'alias de production `systeme-monastere.vercel.app` est public.
 
 ## Migration VPS (plus tard)
 
