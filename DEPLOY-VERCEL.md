@@ -74,7 +74,8 @@ Vérification : l'ancien mdp doit renvoyer 401, le nouveau 200.
 - [x] Routes testées : `/api/auth/me`, `/api/dashboard`, `/api/employees`, `/api/stock/refs`,
       `/api/settings`, `/api/terminals`, `/api/kiosk/terminals` → 200
 - [ ] Les 5 écrans se chargent, filtres compris (`?status=...`)
-- [ ] Un pointage selfie s'enregistre (selfie stocké en base, image affichée)
+- [x] Un pointage selfie s'enregistre (testé : retard → motif exigé, photo stockée en base
+      et resservie par `/files/selfies/...`)
 
 > La protection « Vercel Authentication » indiquée au deploy ne s'applique qu'aux aperçus
 > (branch previews). L'alias de production `systeme-monastere.vercel.app` est public.
