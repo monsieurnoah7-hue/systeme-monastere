@@ -1,5 +1,5 @@
 export type ImageCheck =
-  | { ok: true; mime: 'image/jpeg' | 'image/png'; bytes: number; width: number; height: number }
+  | { ok: true; reason?: undefined; mime: 'image/jpeg' | 'image/png'; bytes: number; width: number; height: number }
   | { ok: false; reason: string };
 
 const MIN_EDGE = 160;

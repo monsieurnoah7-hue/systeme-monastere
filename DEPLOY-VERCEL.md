@@ -4,12 +4,11 @@
 
 ## Étape 1 — Créer les comptes (5 min, gratuits)
 
-### Neon.tech (base de données PostgreSQL)
-1. Allez sur https://neon.tech → **Sign up** → continuez avec GitHub
-2. Créez un projet : nom `menuiserie`, région **AWS us-east-1 (N. Virginia)**
-   (région par défaut des fonctions Vercel → latence quasi nulle app ↔ base)
-3. Dans **Connection Details**, copiez le **pooled connection string** (avec `-pooler`)
-   → il contient déjà `sslmode=require` : compatible pg sans configuration SSL.
+### Neon.tech (base de données PostgreSQL) — ✅ fait
+1. Projet « Système de gestion monastère » créé, région **AWS Europe Central 1 (Frankfurt)**
+   → déployez donc Vercel en region `fra1` (proche de Frankfurt) pour la latence minimale.
+2. **Pooled connection string** copiée (avec `-pooler` + `sslmode=require`) — compatible pg sans config SSL.
+3. Migrations + seed déjà appliqués sur la base (17 tables, 5 comptes de démo).
 
 ### Vercel (frontend + API)
 1. Allez sur https://vercel.com → **Sign up** → continuez avec GitHub

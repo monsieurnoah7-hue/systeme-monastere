@@ -46,17 +46,22 @@ async function handler(req: Request): Promise<Response> {
     return Response.json({ error: "Initialisation de la base impossible, réessayez dans un instant." }, { status: 503 });
   }
 
-  const url = new URL(req.url);
+  // Sur Vercel, req.url est un chemin relatif (/api/health?__p=health).
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? 'localhost';
+  const proto = req.headers.get('x-forwarded-proto') ?? 'https';
+  const url = new URL(req.url, `${proto}://${host}`);
   const p = url.searchParams.get('__p');
   const f = url.searchParams.get('__f');
-  if (p !== null || f !== null) {
-    const target = new URL(url);
-    target.pathname = p !== null ? `/api/${p}` : `/files/${f}`;
-    target.searchParams.delete('__p');
-    target.searchParams.delete('__f');
-    req = new Request(target, req);
+  if (p !== null) {
+    url.pathname = `/api/${p}`;
+    url.searchParams.delete('__p');
+    url.searchParams.delete('__f');
+  } else if (f !== null) {
+    url.pathname = `/files/${f}`;
+    url.searchParams.delete('__p');
+    url.searchParams.delete('__f');
   }
-  return root.fetch(req);
+  return root.fetch(new Request(url, req));
 }
 
 export default handler;

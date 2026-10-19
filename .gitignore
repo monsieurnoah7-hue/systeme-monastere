@@ -10,3 +10,5 @@ apps/web/dev-dist/
 
 %TEMP%/
 %TEMP%
+.vercel
+data/pglite/
