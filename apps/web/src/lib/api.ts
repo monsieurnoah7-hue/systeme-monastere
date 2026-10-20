@@ -324,3 +324,9 @@ export type AppUserRow = {
   active: boolean;
   created_at: string;
 };
+
+export type BackupInfo = {
+  pathname: string;
+  uploadedAt: string;
+  size: number;
+};

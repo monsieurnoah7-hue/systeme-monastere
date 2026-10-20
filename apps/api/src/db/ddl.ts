@@ -43,6 +43,14 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id);
 
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  login text NOT NULL,
+  ip text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS login_attempts_login_idx ON login_attempts (login, created_at);
+
 CREATE TABLE IF NOT EXISTS terminals (
   id text PRIMARY KEY,
   name text NOT NULL,

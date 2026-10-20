@@ -3,6 +3,7 @@ import { ROLES_OPTION } from '../lib/roles';
 import {
   api,
   type AppUserRow,
+  type BackupInfo,
   type Employee,
   type KioskSettings,
   type PermissionMatrix,
@@ -25,7 +26,7 @@ import {
   cx,
   useToast,
 } from '../components/ui';
-import { IconGear, IconKey, IconPlus, IconRefresh, IconUsers } from '../components/Icons';
+import { IconAlert, IconBox, IconGear, IconKey, IconPlus, IconRefresh, IconUsers } from '../components/Icons';
 
 const DAYS = [0, 1, 2, 3, 4, 5, 6];
 
@@ -42,10 +43,39 @@ export function Parametres({ user }: { user: User }) {
     );
   }
 
-  return <AdminSettings />;
+  return <AdminSettings user={user} />;
 }
 
-function AdminSettings() {
+function formatBytes(size: number): string {
+  if (size < 1024) return `${size} o`;
+  if (size < 1_048_576) return `${(size / 1024).toFixed(1)} Ko`;
+  return `${(size / 1_048_576).toFixed(1)} Mo`;
+}
+
+async function downloadFile(url: string, filename: string, init?: RequestInit): Promise<void> {
+  const res = await fetch(url, { credentials: 'include', ...init });
+  if (!res.ok) {
+    let message = `Erreur ${res.status}`;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data?.error) message = data.error;
+    } catch {
+      /* réponse non JSON */
+    }
+    throw new Error(message);
+  }
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 4_000);
+}
+
+function AdminSettings({ user }: { user: User }) {
   const toast = useToast();
 
   const [settings, setSettings] = useState<KioskSettings | null>(null);
@@ -60,6 +90,12 @@ function AdminSettings() {
   const [permDraft, setPermDraft] = useState<Record<string, Record<string, boolean>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
+
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [retentionDays, setRetentionDays] = useState(30);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [resetText, setResetText] = useState('');
+  const [resetBusy, setResetBusy] = useState(false);
 
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalForm, setTerminalForm] = useState({ name: '', id: '' });
@@ -88,8 +124,11 @@ function AdminSettings() {
       api<{ users: AppUserRow[] }>('/api/users'),
       api<{ employees: Employee[] }>('/api/employees'),
       api<PermissionMatrix>('/api/permissions').catch(() => null),
+      user.role === 'admin'
+        ? api<{ backups: BackupInfo[]; retentionDays: number }>('/api/admin/backups').catch(() => null)
+        : Promise.resolve(null),
     ])
-      .then(([setRes, termRes, userRes, empRes, permRes]) => {
+      .then(([setRes, termRes, userRes, empRes, permRes, backupRes]) => {
         if (cancelled) return;
         setSettings(setRes.settings);
         setTerminals(termRes.terminals);
@@ -98,6 +137,10 @@ function AdminSettings() {
         if (permRes) {
           setPermMatrix(permRes);
           setPermDraft(permRes.matrix);
+        }
+        if (backupRes) {
+          setBackups(backupRes.backups);
+          setRetentionDays(backupRes.retentionDays);
         }
         setSettingsError(null);
       })
@@ -128,6 +171,66 @@ function AdminSettings() {
       toast(message, 'error');
     } finally {
       setSavingSettings(false);
+    }
+  }
+
+  async function refreshBackups() {
+    try {
+      const res = await api<{ backups: BackupInfo[]; retentionDays: number }>('/api/admin/backups');
+      setBackups(res.backups);
+      setRetentionDays(res.retentionDays);
+    } catch {
+      /* la liste reste telle quelle */
+    }
+  }
+
+  async function saveBackupNow() {
+    setBackupBusy(true);
+    try {
+      const res = await api<{ ok: boolean; size: number; tables: number; rows: number }>('/api/admin/backup/save', {
+        method: 'POST',
+      });
+      toast(`Sauvegarde cloud effectuée (${res.tables} tables, ${formatBytes(res.size)}).`, 'success');
+      await refreshBackups();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Sauvegarde impossible.', 'error');
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function downloadExport() {
+    try {
+      const stamp = new Date().toISOString().slice(0, 10);
+      await downloadFile('/api/admin/backup', `monastere-backup-${stamp}.json.gz`, { method: 'POST' });
+      toast('Export téléchargé.', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Export impossible.', 'error');
+    }
+  }
+
+  async function downloadBackup(pathname: string) {
+    try {
+      const filename = pathname.slice(pathname.lastIndexOf('/') + 1);
+      await downloadFile(`/api/admin/backups/download?backup=${encodeURIComponent(pathname)}`, filename);
+      toast('Sauvegarde téléchargée.', 'success');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Téléchargement impossible.', 'error');
+    }
+  }
+
+  async function resetDemo() {
+    setResetBusy(true);
+    try {
+      await api<{ ok: boolean }>('/api/admin/reset-demo', {
+        method: 'POST',
+        body: JSON.stringify({ confirm: resetText }),
+      });
+      toast('Données de démonstration purgées.', 'success');
+      setTimeout(() => window.location.reload(), 700);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Purge impossible.', 'error');
+      setResetBusy(false);
     }
   }
 
@@ -651,6 +754,87 @@ function AdminSettings() {
           {formError ? <p className="text-sm text-red">{formError}</p> : null}
         </div>
       </Card>
+
+      {user.role === 'admin' ? (
+        <Card className="mt-4 p-5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <IconBox size={16} /> Sauvegardes &amp; maintenance
+          </h2>
+          <p className="mt-1 text-[13px] text-ink-soft">
+            Sauvegarde automatique quotidienne à 03:00 UTC vers le stockage cloud, conservée{' '}
+            {retentionDays} jours. L’export manuel fonctionne depuis n’importe quel appareil connecté.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button variant="primary" disabled={backupBusy} onClick={() => void saveBackupNow()}>
+              {backupBusy ? <Spinner /> : 'Sauvegarder maintenant'}
+            </Button>
+            <Button variant="secondary" onClick={() => void downloadExport()}>
+              Télécharger l’export (.gz)
+            </Button>
+          </div>
+
+          <div className="mt-4">
+            <h3 className="text-[13px] font-semibold text-ink">
+              Sauvegardes cloud ({backups.length})
+            </h3>
+            {backups.length === 0 ? (
+              <p className="mt-1 text-[13px] text-ink-faint">
+                Aucune sauvegarde pour l’instant — la première est créée automatiquement à 03:00 UTC,
+                ou cliquez sur « Sauvegarder maintenant ».
+              </p>
+            ) : (
+              <div className="mt-2 divide-y divide-line rounded-card border border-line">
+                {backups.map((backup) => (
+                  <div
+                    key={backup.pathname}
+                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[13px]"
+                  >
+                    <span className="font-mono text-ink-soft">
+                      {backup.pathname.replace('backups/', '')}
+                    </span>
+                    <span className="flex items-center gap-3 text-ink-faint">
+                      <span>
+                        {formatDateTime(backup.uploadedAt)} · {formatBytes(backup.size)}
+                      </span>
+                      <Button size="sm" variant="quiet" onClick={() => void downloadBackup(backup.pathname)}>
+                        Télécharger
+                      </Button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-5 border-t border-line pt-4">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-red">
+              <IconAlert size={15} /> Purger les données de démonstration
+            </h3>
+            <p className="mt-1 text-[13px] text-ink-soft">
+              Supprime pointages, absences, stocks, outils, magasins, terminaux, employés et journaux.
+              Les comptes de connexion, les paramètres et votre session sont conservés. Action
+              irréversible : téléchargez d’abord un export si vous hésitez.
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div className="w-64">
+                <Field
+                  label="Tapez RESET pour confirmer"
+                  placeholder="RESET"
+                  value={resetText}
+                  onChange={(event) => setResetText(event.target.value)}
+                />
+              </div>
+              <Button
+                variant="danger"
+                disabled={resetText.trim() !== 'RESET' || resetBusy}
+                onClick={() => void resetDemo()}
+              >
+                {resetBusy ? <Spinner /> : 'Purger les données de démo'}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <Modal
         open={terminalOpen}

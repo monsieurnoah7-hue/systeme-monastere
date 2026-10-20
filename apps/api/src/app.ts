@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { env } from './env.js';
+import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
+import { cronRoutes } from './routes/cron.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { employeesRoutes } from './routes/employees.js';
 import { kioskRoutes } from './routes/kiosk.js';
@@ -47,5 +49,7 @@ app.route('/api/terminals', terminalsRoutes);
 app.route('/api/users', usersRoutes);
 app.route('/api/permissions', permissionsRoutes);
 app.route('/api/scan', scanRoutes);
+app.route('/api/cron', cronRoutes);
+app.route('/api/admin', adminRoutes);
 
 app.notFound((c) => c.json({ error: 'Route introuvable.' }, 404));

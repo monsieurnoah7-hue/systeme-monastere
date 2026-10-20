@@ -12,3 +12,4 @@ apps/web/dev-dist/
 %TEMP%
 .vercel
 data/pglite/
+.env*
