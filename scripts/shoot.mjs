@@ -261,9 +261,9 @@ try {
   await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
 
   await page.reload({ waitUntil: 'networkidle2' });
-  await waitForText('Répartition des outils');
+  await waitForText('Répartition des outils', 30000);
   await clickText('Paramètres', { exact: false });
-  await waitForText('Horaires');
+  await waitForText('Horaires', 30000);
   await shot('17-admin-parametres.png');
   await page.evaluate(() => {
     const main = document.querySelector('main');
