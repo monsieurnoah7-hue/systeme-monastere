@@ -20,6 +20,7 @@ import {
   useToast,
 } from '../components/ui';
 import { QrCode } from '../components/QrCode';
+import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { IconArrowIn, IconArrowOut, IconBox, IconHistory, IconPlus, IconRefresh, IconSearch } from '../components/Icons';
 
 type RefForm = {
@@ -168,6 +169,66 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
   }, [refs, q, lowOnly, magasinFilter]);
 
   const selected = refs.find((ref) => ref.id === selectedId) ?? null;
+
+  const stockColumns = useMemo<DataTableColumn<StockRef>[]>(
+    () => [
+      {
+        accessorKey: 'name',
+        header: 'Désignation',
+        sortFn: 'alphanumeric',
+        meta: { cellClassName: 'whitespace-normal min-w-44' },
+        cell: ({ row }) => (
+          <div>
+            <p className="text-sm font-medium text-ink">{row.original.name}</p>
+            <p className="text-[12px] text-ink-faint sm:hidden">
+              {row.original.category} · {row.original.location}
+            </p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'category',
+        header: 'Catégorie',
+        sortFn: 'alphanumeric',
+        meta: { headerClassName: 'hidden sm:table-cell', cellClassName: 'hidden sm:table-cell text-sm text-ink-soft' },
+        cell: ({ row }) => row.original.category,
+      },
+      {
+        accessorKey: 'location',
+        header: 'Emplacement',
+        sortFn: 'alphanumeric',
+        meta: { headerClassName: 'hidden md:table-cell', cellClassName: 'hidden md:table-cell text-sm text-ink-soft' },
+        cell: ({ row }) => row.original.location,
+      },
+      {
+        id: 'qty',
+        accessorKey: 'qty',
+        header: 'Stock',
+        cell: ({ row }) => <StockBar ref={row.original} />,
+      },
+      {
+        id: 'state',
+        accessorKey: 'qty',
+        header: 'État',
+        cell: ({ row }) => {
+          const state = stockState(row.original);
+          return <Chip tone={state.tone}>{state.label}</Chip>;
+        },
+      },
+      {
+        id: 'actions',
+        enableSorting: false,
+        header: '',
+        meta: { headerClassName: 'w-10', cellClassName: 'w-10' },
+        cell: () => (
+          <span className="text-ink-faint" aria-hidden>
+            ›
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
   const selectedMoves = movements.filter((move) => move.ref_id === selectedId);
 
   function openCreate() {
@@ -377,52 +438,13 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
             </div>
           )}
 
-          {filtered.length === 0 ? (
-            <EmptyState title="Aucune référence" hint="Aucun article ne correspond à ce filtre." />
-          ) : (
-            <div className="overflow-hidden rounded-card border border-line bg-surface">
-              <table className="w-full text-left">
-                <thead className="border-b border-line bg-surface-2 text-[12px] uppercase tracking-wide text-ink-faint">
-                  <tr>
-                    <th className="px-4 py-2.5 font-medium">Désignation</th>
-                    <th className="hidden px-4 py-2.5 font-medium sm:table-cell">Catégorie</th>
-                    <th className="hidden px-4 py-2.5 font-medium md:table-cell">Emplacement</th>
-                    <th className="px-4 py-2.5 font-medium">Stock</th>
-                    <th className="px-4 py-2.5 font-medium">État</th>
-                    <th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((ref) => {
-                    const state = stockState(ref);
-                    return (
-                      <tr
-                        key={ref.id}
-                        onClick={() => setSelectedId(ref.id)}
-                        className="cursor-pointer border-b border-line bg-surface last:border-b-0 hover:bg-surface-2"
-                      >
-                        <td className="px-4 py-3">
-                          <p className="text-sm font-medium text-ink">{ref.name}</p>
-                          <p className="text-[12px] text-ink-faint sm:hidden">
-                            {ref.category} · {ref.location}
-                          </p>
-                        </td>
-                        <td className="hidden px-4 py-3 text-sm text-ink-soft sm:table-cell">{ref.category}</td>
-                        <td className="hidden px-4 py-3 text-sm text-ink-soft md:table-cell">{ref.location}</td>
-                        <td className="px-4 py-3">
-                          <StockBar ref={ref} />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Chip tone={state.tone}>{state.label}</Chip>
-                        </td>
-                        <td className="px-2 py-3 text-ink-faint">›</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable
+            data={filtered}
+            columns={stockColumns}
+            onRowClick={(ref) => setSelectedId(ref.id)}
+            caption="Inventaire des références de stock — cliquez une ligne pour ouvrir la fiche"
+            empty={<EmptyState title="Aucune référence" hint="Aucun article ne correspond à ce filtre." />}
+          />
 
           <div className="mt-6">
             <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">

@@ -37,6 +37,7 @@ import {
   useToast,
 } from '../components/ui';
 import { IconChevronRight, IconPlus, IconPrinter, IconQr, IconSearch, IconWrench } from '../components/Icons';
+import { DataTable, type DataTableColumn } from '../components/DataTable';
 
 type ToolDetail = { tool: Tool; events: ToolEvent[]; loan: ToolLoan | null };
 type Facets = { categories: string[]; locations: string[] };
@@ -207,6 +208,63 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
     for (const tool of tools) counts[tool.status] = (counts[tool.status] ?? 0) + 1;
     return counts;
   }, [tools]);
+
+  const toolColumns = useMemo<DataTableColumn<Tool>[]>(
+    () => [
+      {
+        accessorKey: 'id',
+        header: 'ID',
+        sortFn: 'alphanumeric',
+        cell: ({ row }) => <span className="font-mono text-[13px] font-medium num">{row.original.id}</span>,
+      },
+      {
+        accessorKey: 'name',
+        header: 'Désignation',
+        sortFn: 'alphanumeric',
+        meta: { cellClassName: 'whitespace-normal min-w-44' },
+        cell: ({ row }) => (
+          <div>
+            <p className="text-sm font-medium text-ink">{row.original.name}</p>
+            <p className="text-[12px] text-ink-faint">{row.original.category}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'location',
+        header: 'Emplacement',
+        meta: { headerClassName: 'hidden md:table-cell', cellClassName: 'hidden md:table-cell text-sm text-ink-soft' },
+        cell: ({ row }) => row.original.location,
+      },
+      {
+        id: 'condition',
+        accessorKey: 'condition',
+        header: 'État',
+        meta: { headerClassName: 'hidden sm:table-cell', cellClassName: 'hidden sm:table-cell' },
+        cell: ({ row }) => (
+          <Chip tone={row.original.condition === 'bon' ? 'neutral' : 'amber'}>{CONDITION_LABEL[row.original.condition]}</Chip>
+        ),
+      },
+      {
+        id: 'status',
+        accessorKey: 'status',
+        header: 'Statut',
+        sortFn: 'alphanumeric',
+        cell: ({ row }) => <Chip tone={STATUS_TONE[row.original.status]}>{STATUS_LABEL[row.original.status]}</Chip>,
+      },
+      {
+        id: 'actions',
+        enableSorting: false,
+        header: '',
+        meta: { headerClassName: 'w-10', cellClassName: 'w-10' },
+        cell: () => (
+          <span className="flex justify-end text-ink-faint" aria-hidden>
+            <IconChevronRight size={18} />
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
 
   async function createTool() {
     setBusy(true);
@@ -426,49 +484,14 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
           }
         />
       ) : (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[46rem] text-left">
-              <thead className="border-b border-line bg-surface-2">
-                <tr className="text-[12px] uppercase tracking-wide text-ink-faint">
-                  <th className="px-4 py-3 font-medium">ID</th>
-                  <th className="px-4 py-3 font-medium">Désignation</th>
-                  <th className="hidden px-4 py-3 font-medium md:table-cell">Emplacement</th>
-                  <th className="hidden px-4 py-3 font-medium sm:table-cell">État</th>
-                  <th className="px-4 py-3 font-medium">Statut</th>
-                  <th className="px-4 py-3 font-medium">
-                    <span className="sr-only">Ouvrir</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {tools.map((tool) => (
-                  <tr
-                    key={tool.id}
-                    onClick={() => setSelectedId(tool.id)}
-                    className="cursor-pointer border-b border-line last:border-b-0 hover:bg-surface-2"
-                  >
-                    <td className="px-4 py-3 font-mono text-[13px] font-medium num">{tool.id}</td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm font-medium text-ink">{tool.name}</p>
-                      <p className="text-[12px] text-ink-faint">{tool.category}</p>
-                    </td>
-                    <td className="hidden px-4 py-3 text-sm text-ink-soft md:table-cell">{tool.location}</td>
-                    <td className="hidden px-4 py-3 sm:table-cell">
-                      <Chip tone={tool.condition === 'bon' ? 'neutral' : 'amber'}>{CONDITION_LABEL[tool.condition]}</Chip>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Chip tone={STATUS_TONE[tool.status]}>{STATUS_LABEL[tool.status]}</Chip>
-                    </td>
-                    <td className="px-4 py-3 text-right text-ink-faint">
-                      <IconChevronRight size={18} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <DataTable
+          data={tools}
+          columns={toolColumns}
+          onRowClick={(tool) => setSelectedId(tool.id)}
+          caption="Liste des outils — cliquez une ligne pour ouvrir la fiche"
+          minWidth="min-w-[46rem]"
+          empty={<EmptyState title="Aucun outil ne correspond" />}
+        />
       )}
 
       <Drawer

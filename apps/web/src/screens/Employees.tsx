@@ -21,6 +21,7 @@ import {
   useToast,
 } from '../components/ui';
 import { QrCode } from '../components/QrCode';
+import { DataTable, type DataTableColumn } from '../components/DataTable';
 import { IconPlus, IconPrinter, IconRefresh, IconSearch } from '../components/Icons';
 
 const STATUS_FILTERS = [
@@ -157,6 +158,148 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       );
     });
   }, [employees, q, showInactive, statusFilter, statusMap]);
+
+  function dayChip(employee: Employee) {
+    const s = statusMap.get(employee.id);
+    if (!s) return <span className="text-ink-faint">—</span>;
+    const chip = STATUS_CHIP[s.status];
+    if (!chip) return <span className="text-ink-faint">—</span>;
+    const late = s.status === 'late' && s.lateMinutes > 0 ? ` ${s.lateMinutes}′` : '';
+    return (
+      <Chip tone={chip.tone}>
+        {chip.label}
+        {late}
+      </Chip>
+    );
+  }
+
+  const viewColumns = useMemo<DataTableColumn<Employee>[]>(
+    () => [
+      {
+        accessorKey: 'full_name',
+        header: 'Nom',
+        sortFn: 'alphanumeric',
+        meta: { cellClassName: 'whitespace-normal min-w-40' },
+        cell: ({ row }) => (
+          <div>
+            <p className="font-medium text-ink">{row.original.full_name}</p>
+            <p className="text-xs text-ink-faint">{row.original.id}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'job_title',
+        header: 'Métier',
+        sortFn: 'alphanumeric',
+        cell: ({ row }) => <span className="text-ink-soft">{row.original.job_title}</span>,
+      },
+      {
+        id: 'day',
+        accessorKey: 'id',
+        enableSorting: false,
+        header: 'État du jour',
+        cell: ({ row }) => dayChip(row.original),
+      },
+      {
+        id: 'in',
+        accessorKey: 'id',
+        enableSorting: false,
+        header: 'Arrivée',
+        cell: ({ row }) => <span className="font-mono num">{statusMap.get(row.original.id)?.inAt ?? '—'}</span>,
+      },
+      {
+        id: 'out',
+        accessorKey: 'id',
+        enableSorting: false,
+        header: 'Départ',
+        cell: ({ row }) => <span className="font-mono num">{statusMap.get(row.original.id)?.outAt ?? '—'}</span>,
+      },
+    ],
+    [statusMap],
+  );
+
+  const employeeColumns = useMemo<DataTableColumn<Employee>[]>(
+    () => [
+      {
+        accessorKey: 'full_name',
+        header: 'Nom',
+        sortFn: 'alphanumeric',
+        meta: { cellClassName: 'whitespace-normal min-w-52' },
+        cell: ({ row }) => {
+          const employee = row.original;
+          return (
+            <div className="flex items-center gap-3">
+              <span
+                className={cx(
+                  'grid h-9 w-9 shrink-0 place-items-center rounded-btn text-[13px] font-semibold',
+                  employee.active ? 'bg-charcoal text-white' : 'bg-grey-wash text-ink-faint',
+                )}
+              >
+                {initials(employee.full_name)}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-ink">{employee.full_name}</p>
+                <p className="truncate text-[13px] text-ink-soft">
+                  {employee.job_title} · <span className="font-mono num">{employee.id}</span>
+                </p>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'day',
+        accessorKey: 'id',
+        enableSorting: false,
+        header: 'État du jour',
+        cell: ({ row }) => dayChip(row.original),
+      },
+      {
+        id: 'badge',
+        accessorKey: 'badge_token',
+        header: 'Badge',
+        enableSorting: false,
+        meta: { headerClassName: 'hidden sm:table-cell', cellClassName: 'hidden sm:table-cell' },
+        cell: ({ row }) => <span className="font-mono text-[13px] num">{row.original.badge_token ?? '—'}</span>,
+      },
+      {
+        id: 'active',
+        accessorKey: 'active',
+        header: 'Compte',
+        cell: ({ row }) => <Chip tone={row.original.active ? 'green' : 'grey'}>{row.original.active ? 'Actif' : 'Inactif'}</Chip>,
+      },
+      {
+        id: 'actions',
+        enableSorting: false,
+        header: '',
+        meta: { cellClassName: 'whitespace-nowrap' },
+        cell: ({ row }) => {
+          const employee = row.original;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <Button size="sm" variant="quiet" onClick={() => setDetailFor(employee)}>
+                Fiche
+              </Button>
+              <Button size="sm" variant="quiet" onClick={() => openEdit(employee)}>
+                Modifier
+              </Button>
+              <Button size="sm" variant="quiet" onClick={() => setBadgeFor(employee)}>
+                Badge
+              </Button>
+              <Button
+                size="sm"
+                variant={employee.active ? 'outline-danger' : 'quiet'}
+                onClick={() => void toggleActive(employee)}
+              >
+                {employee.active ? 'Désactiver' : 'Réactiver'}
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [canManage],
+  );
 
   function openCreate() {
     setEditing(null);
@@ -304,46 +447,12 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
         {loading ? (
           <Skeleton className="h-64 rounded-xl" />
         ) : (
-          <Card padded={false}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-line text-[12px] uppercase tracking-wide text-ink-faint">
-                    <th className="px-4 py-3">Nom</th>
-                    <th className="px-4 py-3">Métier</th>
-                    <th className="px-4 py-3">État du jour</th>
-                    <th className="px-4 py-3">Arrivée</th>
-                    <th className="px-4 py-3">Départ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {filtered.map((employee) => {
-                    const s = statusMap.get(employee.id);
-                    const chip = s ? STATUS_CHIP[s.status] : null;
-                    return (
-                      <tr key={employee.id} className="hover:bg-surface-2">
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-ink">{employee.full_name}</p>
-                          <p className="text-xs text-ink-faint">{employee.id}</p>
-                        </td>
-                        <td className="px-4 py-3 text-ink-soft">{employee.job_title}</td>
-                        <td className="px-4 py-3">
-                          {chip ? <Chip tone={chip.tone}>{chip.label}{s && s.lateMinutes > 0 ? ` ${s.lateMinutes}′` : ''}</Chip> : <span className="text-ink-faint">—</span>}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-ink">{s?.inAt ?? '—'}</td>
-                        <td className="px-4 py-3 font-mono text-ink">{s?.outAt ?? '—'}</td>
-                      </tr>
-                    );
-                  })}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center text-ink-faint">Aucune fiche trouvée.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+          <DataTable
+            data={filtered}
+            columns={viewColumns}
+            caption="Présences du jour"
+            empty={<span className="text-sm text-ink-faint">Aucune fiche trouvée.</span>}
+          />
         )}
       </>
     );
@@ -441,68 +550,23 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
         <div className="flex items-center justify-center gap-2 py-24 text-sm text-ink-soft">
           <Spinner /> Chargement…
         </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title="Aucun travailleur"
-          hint="Créez la première fiche : l’identifiant EMP-XXX et le badge sont générés automatiquement."
-          action={
-            <Button variant="primary" onClick={openCreate}>
-              Nouveau travailleur
-            </Button>
+      ) : (
+        <DataTable
+          data={filtered}
+          columns={employeeColumns}
+          caption="Fiches du personnel — boutons d’action par ligne"
+          empty={
+            <EmptyState
+              title="Aucun travailleur"
+              hint="Créez la première fiche : l’identifiant EMP-XXX et le badge sont générés automatiquement."
+              action={
+                <Button variant="primary" onClick={openCreate}>
+                  Nouveau travailleur
+                </Button>
+              }
+            />
           }
         />
-      ) : (
-        <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
-          {filtered.map((employee) => (
-            <li key={employee.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <span
-                className={cx(
-                  'grid h-10 w-10 shrink-0 place-items-center rounded-btn text-sm font-semibold',
-                  employee.active ? 'bg-charcoal text-white' : 'bg-grey-wash text-ink-faint',
-                )}
-              >
-                {initials(employee.full_name)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink">{employee.full_name}</p>
-                <p className="truncate text-[13px] text-ink-soft">
-                  {employee.job_title} · <span className="font-mono num">{employee.id}</span>
-                </p>
-              </div>
-              {(() => {
-                const s = statusMap.get(employee.id);
-                if (!s) return null;
-                const chip = STATUS_CHIP[s.status];
-                return chip ? <Chip tone={chip.tone}>{chip.label}{s.status === 'late' && s.lateMinutes > 0 ? ` ${s.lateMinutes}′` : ''}</Chip> : null;
-              })()}
-              <div className="hidden sm:block">
-                <p className="text-[11px] uppercase tracking-wide text-ink-faint">Badge</p>
-                <p className="font-mono text-[13px] text-ink num">{employee.badge_token ?? '—'}</p>
-              </div>
-              <Chip tone={employee.active ? 'green' : 'grey'}>{employee.active ? 'Actif' : 'Inactif'}</Chip>
-              {canManage ? (
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => setDetailFor(employee)}>
-                    Fiche
-                  </Button>
-                  <Button size="sm" onClick={() => openEdit(employee)}>
-                    Modifier
-                  </Button>
-                  <Button size="sm" onClick={() => setBadgeFor(employee)}>
-                    Badge
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={employee.active ? 'danger' : 'secondary'}
-                    onClick={() => void toggleActive(employee)}
-                  >
-                    {employee.active ? 'Désactiver' : 'Réactiver'}
-                  </Button>
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
       )}
 
       <Drawer
