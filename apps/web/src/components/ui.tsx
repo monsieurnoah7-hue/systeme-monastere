@@ -1,18 +1,29 @@
 import {
-  createContext,
   useCallback,
-  useContext,
-  useEffect,
   useId,
-  useMemo,
-  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
+import { toast } from 'sonner';
 import { IconAlert, IconCheck, IconX } from './Icons';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
+import {
+  Drawer as DrawerRoot,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from './ui/drawer';
+import { Toaster } from './ui/sonner';
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
@@ -339,42 +350,44 @@ export function Drawer({
   children: ReactNode;
   wide?: boolean;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 flex justify-end fade-in">
-      <button className="absolute inset-0 bg-charcoal/40 backdrop-blur-[2px]" aria-label="Fermer" onClick={onClose} />
-      <aside
+    <DrawerRoot
+      open={open}
+      direction="right"
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DrawerContent
         className={cx(
-          'relative flex h-full w-full flex-col bg-paper shadow-pop slide-up',
+          'h-full gap-0 bg-paper p-0 shadow-pop',
           wide ? 'sm:max-w-2xl' : 'sm:max-w-lg',
         )}
-        style={{ animationName: 'fade-in, slide-up' }}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-line bg-surface px-5 py-4">
-          <div>
-            <h2 className="text-base font-semibold text-ink">{title}</h2>
-            {subtitle ? <p className="mt-0.5 text-[13px] text-ink-soft">{subtitle}</p> : null}
+        <DrawerHeader className="border-b border-line bg-surface px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <DrawerTitle className="font-semibold text-ink">{title}</DrawerTitle>
+              {subtitle ? (
+                <DrawerDescription className="mt-0.5 text-[13px] text-ink-soft">
+                  {subtitle}
+                </DrawerDescription>
+              ) : (
+                <DrawerDescription className="sr-only">{title}</DrawerDescription>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-btn p-1.5 text-ink-soft transition-colors hover:bg-grey-wash hover:text-ink"
+              aria-label="Fermer le panneau"
+            >
+              <IconX size={18} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-btn p-1.5 text-ink-soft transition-colors hover:bg-grey-wash hover:text-ink"
-            aria-label="Fermer le panneau"
-          >
-            <IconX size={18} />
-          </button>
-        </header>
-        <div className="flex-1 overflow-y-auto scroll-thin px-5 py-4">{children}</div>
-      </aside>
-    </div>
+        </DrawerHeader>
+        <div className="scroll-thin flex-1 overflow-y-auto px-5 py-4">{children}</div>
+      </DrawerContent>
+    </DrawerRoot>
   );
 }
 
@@ -393,83 +406,62 @@ export function Modal({
   footer?: ReactNode;
   wide?: boolean;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center fade-in">
-      <button className="absolute inset-0 bg-charcoal/45 backdrop-blur-[2px]" aria-label="Fermer" onClick={onClose} />
-      <div
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
         className={cx(
-          'relative m-0 flex max-h-[92vh] w-full flex-col rounded-t-card bg-paper shadow-pop sm:m-4 sm:rounded-card scale-in',
+          'grid max-h-[92vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden bg-paper p-0 sm:rounded-card',
           wide ? 'sm:max-w-2xl' : 'sm:max-w-lg',
         )}
       >
-        <header className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="text-base font-semibold text-ink">{title}</h2>
-          <button
-            onClick={onClose}
-            className="rounded-btn p-1.5 text-ink-soft transition-colors hover:bg-grey-wash hover:text-ink"
-            aria-label="Fermer"
-          >
-            <IconX size={18} />
-          </button>
-        </header>
-        <div className="flex-1 overflow-y-auto scroll-thin px-5 py-4">{children}</div>
-        {footer ? <footer className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer> : null}
-      </div>
-    </div>
+        <DialogHeader className="border-b border-line px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <DialogTitle className="text-base font-semibold text-ink">{title}</DialogTitle>
+            <button
+              onClick={onClose}
+              className="rounded-btn p-1.5 text-ink-soft transition-colors hover:bg-grey-wash hover:text-ink"
+              aria-label="Fermer"
+            >
+              <IconX size={18} />
+            </button>
+          </div>
+          <DialogDescription className="sr-only">{title}</DialogDescription>
+        </DialogHeader>
+        <div className="scroll-thin min-h-0 overflow-y-auto px-5 py-4">{children}</div>
+        {footer ? (
+          <footer className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
 
-type Toast = { id: number; tone: 'info' | 'error' | 'success'; message: string };
-const ToastContext = createContext<(message: string, tone?: Toast['tone']) => void>(() => undefined);
+type ToastTone = 'info' | 'error' | 'success';
 
 export function useToast() {
-  return useContext(ToastContext);
+  return useCallback((message: string, tone: ToastTone = 'info') => {
+    if (tone === 'success') {
+      toast.success(message);
+    } else if (tone === 'error') {
+      toast.error(message);
+    } else {
+      toast(message);
+    }
+  }, []);
 }
 
 export function ToastHost({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const push = useCallback((message: string, tone: Toast['tone'] = 'info') => {
-    const id = Date.now() + Math.random();
-    setToasts((current) => [...current, { id, tone, message }]);
-    window.setTimeout(() => setToasts((current) => current.filter((toast) => toast.id !== id)), 4200);
-  }, []);
-
-  const value = useMemo(() => push, [push]);
-
   return (
-    <ToastContext.Provider value={value}>
+    <>
       {children}
-      <div className="no-print pointer-events-none fixed bottom-20 left-1/2 z-[60] flex w-[min(92vw,26rem)] -translate-x-1/2 flex-col gap-2 lg:bottom-6">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={cx(
-              'pointer-events-auto flex items-start gap-2 rounded-btn border px-3.5 py-3 text-sm shadow-float float-up',
-              toast.tone === 'error'
-                ? 'border-red/30 bg-red text-white'
-                : toast.tone === 'success'
-                  ? 'border-green/30 bg-green text-white'
-                  : 'border-charcoal-3 bg-charcoal text-white',
-            )}
-          >
-            <span className="mt-0.5 shrink-0">
-              {toast.tone === 'success' ? <IconCheck size={16} /> : <IconAlert size={16} />}
-            </span>
-            <span>{toast.message}</span>
-          </div>
-        ))}
-      </div>
-    </ToastContext.Provider>
+      <Toaster position="bottom-center" theme="light" className="no-print" />
+    </>
   );
 }
 
