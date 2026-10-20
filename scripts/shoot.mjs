@@ -65,8 +65,8 @@ try {
   await page.type('input[placeholder="ex. magasinier"]', 'direction');
   await page.type('input[type="password"]', 'direction226');
   await clickText('Se connecter');
-  await waitForText('Tableau de bord');
-  await page.waitForFunction(() => !document.body.innerText.includes('Chargement du tableau'));
+  await waitForText('Répartition des outils');
+
   await shot('02-dashboard.png');
 
   // 2. outils
@@ -79,11 +79,20 @@ try {
   await shot('04-outil-fiche.png');
   await page.evaluate(() => document.querySelector('[aria-label="Fermer le panneau"]')?.click());
 
-  // 3. pointage
+  // 3. pointage — deux états possibles : premier passage (aucun terminal →
+  // banner « Aucun terminal enregistré » + bouton « Utiliser ») ou terminal
+  // déjà connu du navigateur (pavé de saisie directement).
   await clickText('Pointage', { exact: false });
-  await waitForText('terminal enregistré');
-  await waitForText('Utiliser');
-  await clickText('Utiliser');
+  let needsPickTerminal = true;
+  try {
+    await waitForText('terminal enregistré', 4000);
+  } catch {
+    needsPickTerminal = false;
+  }
+  if (needsPickTerminal) {
+    await waitForText('Utiliser');
+    await clickText('Utiliser');
+  }
   await waitForText('Scanner badge');
   await shot('05-pointage-identify.png');
 
@@ -151,8 +160,8 @@ try {
   // 4. mobile pass
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
   await page.goto(BASE + '/', { waitUntil: 'networkidle2' });
-  await waitForText('Tableau de bord');
-  await page.waitForFunction(() => !document.body.innerText.includes('Chargement du tableau'));
+  await waitForText('Répartition des outils');
+
   const term = await page.evaluate(() => localStorage.getItem('mf.terminal'));
   console.log('mobile terminal =', term);
   if (!term) await page.evaluate(() => localStorage.setItem('mf.terminal', 'TERM-ATELIER'));
@@ -164,7 +173,7 @@ try {
   // 5. pass admin : stock, travailleurs, paramètres
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
   await page.goto(BASE + '/', { waitUntil: 'networkidle2' });
-  await waitForText('Tableau de bord');
+  await waitForText('Répartition des outils');
   await page.evaluate(() => {
     [...document.querySelectorAll('[aria-label="Se déconnecter"]')]
       .filter((b) => b.offsetParent !== null)
@@ -175,7 +184,7 @@ try {
   await page.type('input[placeholder="ex. magasinier"]', 'admin');
   await page.type('input[type="password"]', 'admin226');
   await clickText('Se connecter');
-  await waitForText('Tableau de bord');
+  await waitForText('Répartition des outils');
 
   await clickText('Stock', { exact: false });
   await waitForText('quincaillerie');
@@ -232,7 +241,7 @@ try {
   await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
 
   await page.reload({ waitUntil: 'networkidle2' });
-  await waitForText('Tableau de bord');
+  await waitForText('Répartition des outils');
   await clickText('Travailleurs', { exact: false });
   await waitForText('badges de pointage');
   await page.waitForFunction(() => document.querySelectorAll('li').length > 0);
@@ -252,7 +261,7 @@ try {
   await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
 
   await page.reload({ waitUntil: 'networkidle2' });
-  await waitForText('Tableau de bord');
+  await waitForText('Répartition des outils');
   await clickText('Paramètres', { exact: false });
   await waitForText('Horaires');
   await shot('17-admin-parametres.png');
@@ -263,9 +272,34 @@ try {
   await new Promise((r) => setTimeout(r, 400));
   await shot('18-admin-parametres-bas.png');
 
+  // 5d. carte « Sauvegardes & maintenance » (admin) — sauvegarde à la demande
+  await waitForText('Sauvegardes & maintenance');
+  await shot('18b-maintenance-carte.png');
+  await page.evaluate(() => {
+    const main = document.querySelector('main');
+    if (main) main.scrollTop = main.scrollHeight;
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  await clickText('Sauvegarder maintenant');
+  await waitForText('Sauvegarde cloud effectuée', 30000);
+  await shot('18c-maintenance-sauvegarde-ok.png');
+  await page.evaluate(() => {
+    const main = document.querySelector('main');
+    if (main) main.scrollTop = main.scrollHeight;
+  });
+  await new Promise((r) => setTimeout(r, 400));
+  const hasList = await page.evaluate(() => document.body.innerText.includes('Sauvegardes cloud ('));
+  if (!hasList) throw new Error('liste des sauvegardes cloud introuvable');
+  await shot('18d-maintenance-liste.png');
+  const purgeArmed = await page.evaluate(
+    () => document.body.innerText.includes('Tapez RESET pour confirmer'),
+  );
+  if (!purgeArmed) throw new Error('bloc de purge absent');
+  console.log('purge zone présente, non déclenchée');
+
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
   await page.goto(BASE + '/', { waitUntil: 'networkidle2' });
-  await waitForText('Tableau de bord');
+  await waitForText('Répartition des outils');
   await clickText('Stock', { exact: false });
   await waitForText('quincaillerie');
   await shot('19-mobile-stock.png');

@@ -123,7 +123,12 @@ curl -X POST https://systeme-monastere.vercel.app/api/admin/reset-demo \
 - [x] Connexion admin fonctionne (session cookie `mf_session`, HttpOnly)
 - [x] Routes testées : `/api/auth/me`, `/api/dashboard`, `/api/employees`, `/api/stock/refs`,
       `/api/settings`, `/api/terminals`, `/api/kiosk/terminals` → 200
-- [ ] Les 5 écrans se chargent, filtres compris (`?status=...`)
+- [x] Les 5 écrans se chargent, filtres compris (`?status=...`) — recette automatisée Edge :
+      `node scripts/shoot.mjs` (msedge.exe headless, desktop 1440×900 + mobile 390×844) →
+      29 captures + 3 PDF dans `%TEMP%\shots` : login, dashboard (KPIs DAS-01/05), outils +
+      fiche, pointage complet (badge → selfie → motif → confirmation → fiche PDF), stock,
+      magasins, espace, badges A4/A6, paramètres + carte maintenance (sauvegarde réelle
+      créée, zone « Purger » constatée verrouillée), écrans mobiles
 - [x] Un pointage selfie s'enregistre (testé : retard → motif exigé, photo stockée en base
       et resservie par `/files/selfies/...`)
 - [x] **Rate-limit login** : 5 échecs consécutifs → 401 avec le nombre de tentatives restantes,
