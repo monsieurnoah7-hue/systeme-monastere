@@ -22,6 +22,7 @@ import {
   cx,
 } from '../components/ui';
 import { IconAlert, IconArrowIn, IconArrowOut, IconBox, IconClock, IconGauge, IconRefresh, IconWrench } from '../components/Icons';
+import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 type DrawerKind =
   | { kind: 'tools'; status: string; title: string }
@@ -33,6 +34,94 @@ type DrawerKind =
   | { kind: 'missingOut' }
   | { kind: 'absent' }
   | { kind: 'conge' };
+
+const STATUS_ORDER = ['disponible', 'en_pret', 'maintenance', 'manquant', 'reforme'] as const;
+type ToolStatusKey = (typeof STATUS_ORDER)[number];
+
+const STATUS_COLOR: Record<ToolStatusKey, string> = {
+  disponible: 'var(--color-green)',
+  en_pret: 'var(--color-blue)',
+  maintenance: 'var(--color-amber)',
+  manquant: 'var(--color-red)',
+  reforme: 'var(--color-ink-soft)',
+};
+
+const TOOLTIP_STYLE: React.CSSProperties = {
+  border: '1px solid var(--color-line)',
+  borderRadius: 8,
+  boxShadow: '0 8px 24px rgb(20 21 25 / 0.12)',
+  background: 'var(--color-surface)',
+  fontSize: 12,
+  color: 'var(--color-ink)',
+  padding: '6px 10px',
+};
+
+function ToolsDonut({
+  das01,
+  onPick,
+}: {
+  das01: Dashboard['das01'];
+  onPick: (status: ToolStatusKey) => void;
+}) {
+  const data = STATUS_ORDER.filter((status) => das01[status] > 0).map((status) => ({
+    status,
+    name: STATUS_LABEL[status],
+    value: das01[status],
+  }));
+  return (
+    <div className="flex flex-col items-center gap-5 sm:flex-row">
+      <div className="relative h-[180px] w-[180px] shrink-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={58}
+              outerRadius={84}
+              paddingAngle={2}
+              startAngle={90}
+              endAngle={-270}
+              stroke="none"
+              isAnimationActive={false}
+            >
+              {data.map((slice) => (
+                <Cell
+                  key={slice.status}
+                  fill={STATUS_COLOR[slice.status]}
+                  onClick={() => onPick(slice.status)}
+                  className="cursor-pointer"
+                />
+              ))}
+            </Pie>
+            <Tooltip cursor={false} contentStyle={TOOLTIP_STYLE} formatter={(value) => [String(value), 'Outils']} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          <div className="text-center">
+            <p className="num font-mono text-[22px] font-semibold leading-none text-ink">{das01.total}</p>
+            <p className="mt-1 text-[11px] uppercase tracking-wide text-ink-faint">outils</p>
+          </div>
+        </div>
+      </div>
+      <div className="grid w-full gap-2">
+        {STATUS_ORDER.map((status) => (
+          <button
+            key={status}
+            onClick={() => onPick(status)}
+            className="flex items-center justify-between rounded-btn border border-line bg-surface-2 px-3 py-2 hover:border-amber"
+          >
+            <span className="flex min-w-0 items-center gap-2.5">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: STATUS_COLOR[status] }} />
+              <span className="truncate text-sm text-ink">{STATUS_LABEL[status]}</span>
+            </span>
+            <span className="num font-mono text-sm font-semibold text-ink">{das01[status]}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function KpiCard({
   label,
@@ -53,9 +142,9 @@ function KpiCard({
     <button
       onClick={onClick}
       className={cx(
-        'group rounded-card border bg-surface p-4 text-left shadow-card transition-colors',
+        'group rounded-card border bg-surface p-4 text-left shadow-card transition-all duration-[160ms] ease-[cubic-bezier(0.16,1,0.3,1)]',
         tone === 'alert' ? 'border-red/30' : tone === 'warn' ? 'border-amber/40' : 'border-line',
-        onClick ? 'hover:border-amber' : 'cursor-default',
+        onClick ? 'hover:-translate-y-[1px] hover:border-amber hover:shadow-card-hover' : 'cursor-default',
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -142,6 +231,11 @@ export function Dashboard() {
 
   const { das01, das02, das03, das04, das05, lastMovements } = data;
   const attendanceHidden = !das04;
+  const dailyMoves = [
+    { name: 'Entrées', value: das03.entries, color: 'var(--color-green)' },
+    { name: 'Sorties', value: das03.exits, color: 'var(--color-amber)' },
+    { name: 'Retours', value: das03.returns, color: 'var(--color-blue)' },
+  ];
 
   return (
     <>
@@ -161,7 +255,7 @@ export function Dashboard() {
         </div>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="rise grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Outils"
           value={das01.total}
@@ -204,110 +298,164 @@ export function Dashboard() {
       </section>
 
       <section className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)]">
-        <Card className="p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink">Répartition des outils (DAS-01)</h2>
-            <p className="text-[12px] text-ink-faint">Chaque indicateur ouvre le détail</p>
+        <div className="flex min-w-0 flex-col gap-4">
+          <Card className="p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-ink">Répartition des outils (DAS-01)</h2>
+              <p className="text-[12px] text-ink-faint">Chaque indicateur ouvre le détail</p>
+            </div>
+            <ToolsDonut das01={das01} onPick={(status) => openTools(status, `Outils — ${STATUS_LABEL[status]}`)} />
+          </Card>
+
+          <div className="rise" style={{ animationDelay: '80ms' }}>
+            <Card className="p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-ink">Alertes (DAS-05)</h2>
+                <IconAlert size={16} className="text-ink-faint" />
+              </div>
+              <ul className="divide-y divide-line rounded-btn border border-line">
+                {[
+                  {
+                    label: 'Prêts en retard de retour',
+                    count: das05.overdueLoans,
+                    open: () => setDrawer({ kind: 'overdue' }),
+                  },
+                  {
+                    label: 'Références sous le seuil minimum',
+                    count: das05.lowStock,
+                    open: () => setDrawer({ kind: 'stock' }),
+                  },
+                  {
+                    label: 'Outils manquants',
+                    count: das05.missingTools,
+                    open: () => setDrawer({ kind: 'missingTools' }),
+                  },
+                  {
+                    label: 'Départs non pointés',
+                    count: das05.missingOut,
+                    open: () => setDrawer({ kind: 'missingOut' }),
+                  },
+                ].map((alert) => (
+                  <li key={alert.label}>
+                    <button
+                      onClick={alert.open}
+                      className="flex w-full items-center justify-between gap-3 bg-surface px-3 py-2.5 text-left hover:bg-surface-2"
+                    >
+                      <span className="flex items-center gap-2 text-sm text-ink">
+                        <span className={cx('text-ink-faint', alert.count > 0 && 'text-amber')}>
+                          <IconAlert size={16} />
+                        </span>
+                        {alert.label}
+                      </span>
+                      <span
+                        className={cx(
+                          'num font-mono text-sm font-semibold',
+                          alert.count > 0 ? 'text-amber' : 'text-ink-faint',
+                        )}
+                      >
+                        {alert.count}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(['disponible', 'en_pret', 'maintenance', 'manquant', 'reforme'] as const).map((status) => (
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="rise" style={{ animationDelay: '50ms' }}>
+            <Card className="p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-ink">Derniers mouvements de stock</h2>
+                <IconGauge size={16} className="text-ink-faint" />
+              </div>
+              {lastMovements.length === 0 ? (
+                <p className="text-sm text-ink-soft">Aucun mouvement enregistré.</p>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {lastMovements.map((move, index) => (
+                    <li key={`${move.id ?? index}-${move.created_at}`} className="flex items-start gap-3 py-2.5">
+                      <span
+                        className={cx(
+                          'mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-chip',
+                          move.move_type === 'in' ? 'bg-green-wash text-green' : 'bg-amber-wash text-amber',
+                        )}
+                      >
+                        {move.move_type === 'in' ? <IconArrowIn size={15} /> : <IconArrowOut size={15} />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-ink">{move.ref_name}</p>
+                        <p className="text-[12px] text-ink-soft">
+                          {MOVE_LABEL[move.move_type]} · {move.beneficiary ?? '—'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="num font-mono text-sm font-semibold">
+                          {move.move_type === 'in' ? '+' : '−'}
+                          {move.qty} {move.unit}
+                        </p>
+                        <p className="num font-mono text-[11px] text-ink-faint">{formatTime(move.created_at)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+
+          <div className="rise" style={{ animationDelay: '110ms' }}>
+            <Card className="p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-ink">Mouvements du jour</h2>
+                <p className="text-[12px] text-ink-faint">Entrées · sorties · retours</p>
+              </div>
+              <div className="h-40">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dailyMoves} margin={{ top: 8, right: 4, bottom: 0, left: -18 }}>
+                    <XAxis
+                      dataKey="name"
+                      axisLine={false}
+                      tickLine={false}
+                      interval={0}
+                      tick={{ fontSize: 11, fill: 'var(--color-ink-faint)' }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                      tick={{ fontSize: 11, fill: 'var(--color-ink-faint)' }}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'var(--color-surface-2)' }}
+                      contentStyle={TOOLTIP_STYLE}
+                      formatter={(value) => [String(value), 'Mouvements']}
+                    />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={56} isAnimationActive={false}>
+                      {dailyMoves.map((bar) => (
+                        <Cell
+                          key={bar.name}
+                          fill={bar.color}
+                          onClick={() => setDrawer({ kind: 'movements' })}
+                          className="cursor-pointer"
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
               <button
-                key={status}
-                onClick={() => openTools(status, `Outils — ${STATUS_LABEL[status]}`)}
-                className="flex items-center justify-between rounded-btn border border-line bg-surface-2 px-3 py-2.5 hover:border-amber"
+                onClick={() => setDrawer({ kind: 'movements' })}
+                className="mt-3 flex w-full items-center justify-between rounded-btn border border-line bg-surface-2 px-3 py-2 text-left text-sm text-ink hover:border-amber"
               >
-                <Chip tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Chip>
-                <span className="font-mono text-sm font-semibold num">{das01[status]}</span>
+                <span>Voir le détail des mouvements</span>
+                <span className="num font-mono text-sm font-semibold">
+                  {das03.exits + das03.entries + das03.returns}
+                </span>
               </button>
-            ))}
+            </Card>
           </div>
-
-          <h2 className="mt-6 mb-2 text-sm font-semibold text-ink">Alertes (DAS-05)</h2>
-          <ul className="divide-y divide-line rounded-btn border border-line">
-            {[
-              {
-                label: 'Prêts en retard de retour',
-                count: das05.overdueLoans,
-                open: () => setDrawer({ kind: 'overdue' }),
-              },
-              {
-                label: 'Références sous le seuil minimum',
-                count: das05.lowStock,
-                open: () => setDrawer({ kind: 'stock' }),
-              },
-              {
-                label: 'Outils manquants',
-                count: das05.missingTools,
-                open: () => setDrawer({ kind: 'missingTools' }),
-              },
-              {
-                label: 'Départs non pointés',
-                count: das05.missingOut,
-                open: () => setDrawer({ kind: 'missingOut' }),
-              },
-            ].map((alert) => (
-              <li key={alert.label}>
-                <button
-                  onClick={alert.open}
-                  className="flex w-full items-center justify-between gap-3 bg-surface px-3 py-2.5 text-left hover:bg-surface-2"
-                >
-                  <span className="flex items-center gap-2 text-sm text-ink">
-                    <span className={cx('text-ink-faint', alert.count > 0 && 'text-amber')}>
-                      <IconAlert size={16} />
-                    </span>
-                    {alert.label}
-                  </span>
-                  <span
-                    className={cx(
-                      'font-mono text-sm font-semibold num',
-                      alert.count > 0 ? 'text-amber' : 'text-ink-faint',
-                    )}
-                  >
-                    {alert.count}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-
-        <Card className="p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink">Derniers mouvements de stock</h2>
-            <IconGauge size={16} className="text-ink-faint" />
-          </div>
-          {lastMovements.length === 0 ? (
-            <p className="text-sm text-ink-soft">Aucun mouvement enregistré.</p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {lastMovements.map((move, index) => (
-                <li key={`${move.id ?? index}-${move.created_at}`} className="flex items-start gap-3 py-2.5">
-                  <span
-                    className={cx(
-                      'mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-chip',
-                      move.move_type === 'in' ? 'bg-green-wash text-green' : 'bg-amber-wash text-amber',
-                    )}
-                  >
-                    {move.move_type === 'in' ? <IconArrowIn size={15} /> : <IconArrowOut size={15} />}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">{move.ref_name}</p>
-                    <p className="text-[12px] text-ink-soft">
-                      {MOVE_LABEL[move.move_type]} · {move.beneficiary ?? '—'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-mono text-sm font-semibold num">
-                      {move.move_type === 'in' ? '+' : '−'}
-                      {move.qty} {move.unit}
-                    </p>
-                    <p className="font-mono text-[11px] text-ink-faint num">{formatTime(move.created_at)}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        </div>
       </section>
 
       {attendanceHidden ? (
