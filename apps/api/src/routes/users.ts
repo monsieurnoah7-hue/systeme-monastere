@@ -24,6 +24,7 @@ const patchBody = z.object({
   role: z.enum(ROLES).optional(),
   active: z.boolean().optional(),
   password: z.string().min(6).optional(),
+  employee_id: z.string().nullable().optional(),
 });
 
 const passwordBody = z.object({
@@ -95,8 +96,13 @@ usersRoutes.patch('/:id', requirePerm('users.manage'), async (c) => {
     return c.json({ error: 'Vous ne pouvez pas désactiver votre propre compte.' }, 409);
   }
 
+  if (patch.employee_id) {
+    const employee = await db.one('SELECT id FROM employees WHERE id = $1', [patch.employee_id]);
+    if (!employee) return c.json({ error: 'Travailleur lié introuvable.' }, 404);
+  }
+
   const updated = await db.one<UserListRow>(
-    `UPDATE users SET display_name = $2, role = $3, active = $4, password_hash = $5
+    `UPDATE users SET display_name = $2, role = $3, active = $4, password_hash = $5, employee_id = $6
       WHERE id = $1
       RETURNING id, login, display_name, role, employee_id, active, created_at`,
     [
@@ -105,6 +111,7 @@ usersRoutes.patch('/:id', requirePerm('users.manage'), async (c) => {
       patch.role ?? before.role,
       patch.active ?? before.active,
       patch.password ? hashPassword(patch.password) : before.password_hash,
+      patch.employee_id === undefined ? before.employee_id : patch.employee_id || null,
     ],
   );
   await writeAudit(db, {

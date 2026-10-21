@@ -30,6 +30,34 @@ import { IconAlert, IconBox, IconGear, IconKey, IconPlus, IconRefresh, IconUsers
 
 const DAYS = [0, 1, 2, 3, 4, 5, 6];
 
+const ROLE_ORDER: Record<Role, number> = { direction: 0, magasinier: 1, chef_atelier: 2, travailleur: 3 };
+
+const ROLE_TONE: Record<Role, 'blue' | 'amber' | 'green' | 'neutral'> = {
+  direction: 'blue',
+  magasinier: 'amber',
+  chef_atelier: 'green',
+  travailleur: 'neutral',
+};
+
+const ROLE_DESC: Record<Role, string> = {
+  direction: 'Tous les droits, y compris comptes et sauvegardes.',
+  magasinier: 'Outils, stocks et magasins.',
+  chef_atelier: 'Équipe, prêts et sorties de chantier.',
+  travailleur: 'Son espace et ses pointages.',
+};
+
+function roleInitials(name: string): string {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part.charAt(0))
+      .join('')
+      .toUpperCase() || '?'
+  );
+}
+
 export function Parametres({ user }: { user: User }) {
   if (user.role !== 'direction') {
     return (
@@ -112,6 +140,8 @@ function AdminSettings({ user }: { user: User }) {
   });
   const [resetFor, setResetFor] = useState<AppUserRow | null>(null);
   const [resetPassword, setResetPassword] = useState('');
+  const [editFor, setEditFor] = useState<AppUserRow | null>(null);
+  const [editForm, setEditForm] = useState({ display_name: '', role: 'travailleur' as Role, employee_id: '' });
 
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
 
@@ -343,6 +373,39 @@ function AdminSettings({ user }: { user: User }) {
     }
   }
 
+  function openEditAccount(account: AppUserRow) {
+    setEditFor(account);
+    setEditForm({
+      display_name: account.display_name,
+      role: account.role,
+      employee_id: account.employee_id ?? '',
+    });
+    setFormError(null);
+  }
+
+  async function updateAccount() {
+    if (!editFor) return;
+    setBusy(true);
+    setFormError(null);
+    try {
+      await api(`/api/users/${editFor.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          display_name: editForm.display_name.trim(),
+          role: editForm.role,
+          employee_id: editForm.employee_id || null,
+        }),
+      });
+      toast('Compte mis à jour.', 'success');
+      setEditFor(null);
+      setReload((value) => value + 1);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Mise à jour impossible.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function changeMyPassword() {
     setBusy(true);
     setFormError(null);
@@ -383,6 +446,13 @@ function AdminSettings({ user }: { user: User }) {
   }
 
   const employeesById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
+  const sortedUsers = useMemo(
+    () =>
+      [...users].sort(
+        (a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || a.display_name.localeCompare(b.display_name, 'fr'),
+      ),
+    [users],
+  );
 
   if (loading && !settings) {
     return (
@@ -400,7 +470,7 @@ function AdminSettings({ user }: { user: User }) {
     <>
       <PageHeader
         title="Paramètres"
-        hint="Horaires de pointage, terminaux enregistrés et comptes (ADM-01 à ADM-03)."
+        hint="Comptes et accès, règles de pointage, terminaux et sauvegardes."
         actions={
           <Button icon={<IconRefresh size={18} />} onClick={() => setReload((value) => value + 1)}>
             Actualiser
@@ -412,6 +482,155 @@ function AdminSettings({ user }: { user: User }) {
         <div className="mb-4">
           <Banner tone="error">{settingsError}</Banner>
         </div>
+      ) : null}
+
+      <Card className="mt-4 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <IconUsers size={16} /> Comptes utilisateurs
+            </h2>
+            <p className="mt-1 text-[13px] text-ink-soft">
+              Les comptes servent aux écrans de gestion — le pointage kiosk n’en nécessite aucun.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<IconPlus size={16} />}
+            onClick={() => {
+              setUserForm({ login: '', display_name: '', password: '', role: 'magasinier', employee_id: '' });
+              setFormError(null);
+              setUserOpen(true);
+            }}
+          >
+            Nouveau compte
+          </Button>
+        </div>
+
+        <ul className="mt-4 divide-y divide-line rounded-btn border border-line">
+          {sortedUsers.map((account) => {
+            const employee = account.employee_id ? employeesById.get(account.employee_id) : undefined;
+            const linkedName = employee?.full_name ?? account.employee_id ?? null;
+            return (
+              <li key={account.id} className="flex flex-col gap-3 bg-surface px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span
+                    aria-hidden
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-paper-2 text-[13px] font-semibold text-ink-soft"
+                  >
+                    {roleInitials(account.display_name)}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-sm font-semibold text-ink">{account.display_name}</span>
+                      <Chip tone={ROLE_TONE[account.role]}>{ROLE_LABEL[account.role]}</Chip>
+                      <Chip tone={account.active ? 'green' : 'grey'}>{account.active ? 'Actif' : 'Inactif'}</Chip>
+                    </div>
+                    <p className="truncate text-[13px] text-ink-soft">
+                      <span className="font-mono num">{account.login}</span>
+                      {linkedName ? ` · rattaché à ${linkedName}` : ' · aucun rattachement'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" onClick={() => openEditAccount(account)}>
+                    Rôle &amp; nom
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setResetFor(account);
+                      setResetPassword('');
+                    }}
+                  >
+                    Mot de passe
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={account.active ? 'danger' : 'secondary'}
+                    onClick={() => void toggleUser(account)}
+                  >
+                    {account.active ? 'Désactiver' : 'Activer'}
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+          {sortedUsers.length === 0 ? (
+            <li className="bg-surface px-4 py-4 text-sm text-ink-soft">Aucun compte enregistré.</li>
+          ) : null}
+        </ul>
+      </Card>
+
+      {permMatrix && permDraft ? (
+        <Card className="mt-4 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <IconKey size={16} /> Permissions par rôle
+            </h2>
+            <Button variant="primary" size="sm" disabled={busy} onClick={() => void savePermissions()}>
+              {busy ? <Spinner /> : 'Enregistrer les permissions'}
+            </Button>
+          </div>
+          <p className="mt-1 text-[13px] text-ink-soft">
+            La direction est super-administratrice : elle conserve toujours tous les droits.
+            Les autres rôles sont accordés ici, action par action.
+          </p>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left">
+              <thead className="border-b border-line text-[12px] uppercase tracking-wide text-ink-faint">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Action</th>
+                  {permMatrix.roles
+                    .filter((r) => r !== 'direction')
+                    .map((role) => (
+                      <th key={role} className="px-3 py-2 text-center font-medium">
+                        {ROLE_LABEL[role]}
+                      </th>
+                    ))}
+                </tr>
+              </thead>
+              <tbody>
+                {permMatrix.groups.map((group) => (
+                  <Fragment key={group.label}>
+                    <tr className="bg-paper-2">
+                      <td colSpan={4} className="px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                        {group.label}
+                      </td>
+                    </tr>
+                    {group.actions.map((action) => {
+                      const meta = permMatrix.actions.find((a) => a.action === action);
+                      return (
+                        <tr key={action} className="border-b border-line last:border-b-0">
+                          <td className="px-3 py-2 text-sm text-ink">{meta?.label ?? action}</td>
+                          {permMatrix.roles
+                            .filter((r) => r !== 'direction')
+                            .map((role) => (
+                              <td key={role} className="px-3 py-2 text-center">
+                                <button
+                                  onClick={() => togglePerm(action, role)}
+                                  aria-label={`${meta?.label} pour ${ROLE_LABEL[role]}`}
+                                  className={cx(
+                                    'grid h-6 w-6 place-items-center rounded-md border text-[13px] font-bold transition-colors',
+                                    permDraft[action]?.[role]
+                                      ? 'border-green bg-green text-white'
+                                      : 'border-line-strong bg-surface text-ink-faint hover:bg-paper-2',
+                                  )}
+                                >
+                                  {permDraft[action]?.[role] ? '✓' : ''}
+                                </button>
+                              </td>
+                            ))}
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -573,151 +792,6 @@ function AdminSettings({ user }: { user: User }) {
           </ul>
         </Card>
       </div>
-
-      <Card className="mt-4 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <IconUsers size={16} /> Comptes utilisateurs
-          </h2>
-          <Button
-            size="sm"
-            variant="primary"
-            icon={<IconPlus size={16} />}
-            onClick={() => {
-              setUserForm({ login: '', display_name: '', password: '', role: 'magasinier', employee_id: '' });
-              setFormError(null);
-              setUserOpen(true);
-            }}
-          >
-            Nouveau compte
-          </Button>
-        </div>
-        <p className="mt-1 text-[13px] text-ink-soft">
-          Le pointage kiosk ne nécessite aucun compte : les comptes servent aux écrans de gestion.
-        </p>
-
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="border-b border-line text-[12px] uppercase tracking-wide text-ink-faint">
-              <tr>
-                <th className="px-3 py-2 font-medium">Identifiant</th>
-                <th className="px-3 py-2 font-medium">Nom affiché</th>
-                <th className="px-3 py-2 font-medium">Rôle</th>
-                <th className="px-3 py-2 font-medium">Liaison</th>
-                <th className="px-3 py-2 font-medium">État</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((account) => (
-                <tr key={account.id} className="border-b border-line last:border-b-0">
-                  <td className="px-3 py-2.5 font-mono text-sm num">{account.login}</td>
-                  <td className="px-3 py-2.5 text-sm text-ink">{account.display_name}</td>
-                  <td className="px-3 py-2.5">
-                    <Chip tone="neutral">{ROLE_LABEL[account.role]}</Chip>
-                  </td>
-                  <td className="px-3 py-2.5 text-[13px] text-ink-soft">
-                    {account.employee_id ? (employeesById.get(account.employee_id)?.full_name ?? account.employee_id) : '—'}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <Chip tone={account.active ? 'green' : 'grey'}>{account.active ? 'Actif' : 'Inactif'}</Chip>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setResetFor(account);
-                          setResetPassword('');
-                        }}
-                      >
-                        Mot de passe
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={account.active ? 'danger' : 'secondary'}
-                        onClick={() => void toggleUser(account)}
-                      >
-                        {account.active ? 'Désactiver' : 'Activer'}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {permMatrix && permDraft ? (
-        <Card className="mt-4 p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <IconKey size={16} /> Permissions par rôle
-            </h2>
-            <Button variant="primary" size="sm" disabled={busy} onClick={() => void savePermissions()}>
-              {busy ? <Spinner /> : 'Enregistrer les permissions'}
-            </Button>
-          </div>
-          <p className="mt-1 text-[13px] text-ink-soft">
-            La direction est super-administratrice : elle conserve toujours tous les droits.
-            Les autres rôles sont accordés ici, action par action.
-          </p>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left">
-              <thead className="border-b border-line text-[12px] uppercase tracking-wide text-ink-faint">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Action</th>
-                  {permMatrix.roles
-                    .filter((r) => r !== 'direction')
-                    .map((role) => (
-                      <th key={role} className="px-3 py-2 text-center font-medium">
-                        {ROLE_LABEL[role]}
-                      </th>
-                    ))}
-                </tr>
-              </thead>
-              <tbody>
-                {permMatrix.groups.map((group) => (
-                  <Fragment key={group.label}>
-                    <tr className="bg-paper-2">
-                      <td colSpan={4} className="px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
-                        {group.label}
-                      </td>
-                    </tr>
-                    {group.actions.map((action) => {
-                      const meta = permMatrix.actions.find((a) => a.action === action);
-                      return (
-                        <tr key={action} className="border-b border-line last:border-b-0">
-                          <td className="px-3 py-2 text-sm text-ink">{meta?.label ?? action}</td>
-                          {permMatrix.roles
-                            .filter((r) => r !== 'direction')
-                            .map((role) => (
-                              <td key={role} className="px-3 py-2 text-center">
-                                <button
-                                  onClick={() => togglePerm(action, role)}
-                                  aria-label={`${meta?.label} pour ${ROLE_LABEL[role]}`}
-                                  className={cx(
-                                    'grid h-6 w-6 place-items-center rounded-md border text-[13px] font-bold transition-colors',
-                                    permDraft[action]?.[role]
-                                      ? 'border-green bg-green text-white'
-                                      : 'border-line-strong bg-surface text-ink-faint hover:bg-paper-2',
-                                  )}
-                                >
-                                  {permDraft[action]?.[role] ? '✓' : ''}
-                                </button>
-                              </td>
-                            ))}
-                        </tr>
-                      );
-                    })}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      ) : null}
 
       <Card className="mt-4 p-5">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
@@ -884,34 +958,52 @@ function AdminSettings({ user }: { user: User }) {
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           {formError ? <Banner tone="error">{formError}</Banner> : null}
-          <div className="grid grid-cols-2 gap-3">
-            <Field
-              label="Identifiant de connexion"
-              value={userForm.login}
-              placeholder="resp.magasin"
-              onChange={(event) => setUserForm({ ...userForm, login: event.target.value.toLowerCase() })}
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field
               label="Nom affiché"
               value={userForm.display_name}
               placeholder="Responsable magasin"
               onChange={(event) => setUserForm({ ...userForm, display_name: event.target.value })}
             />
+            <Field
+              label="Identifiant de connexion"
+              value={userForm.login}
+              placeholder="resp.magasin"
+              hint="Lettres minuscules, chiffres, point ou tiret."
+              onChange={(event) => setUserForm({ ...userForm, login: event.target.value.toLowerCase() })}
+            />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <SelectField
-              label="Rôle"
-              value={userForm.role}
-              onChange={(event) => setUserForm({ ...userForm, role: event.target.value as Role })}
-            >
+          <fieldset>
+            <legend className="mb-2 text-[13px] font-medium text-ink-soft">Rôle et privilèges</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
               {ROLES_OPTION.map((role) => (
-                <option key={role} value={role}>
-                  {ROLE_LABEL[role]}
-                </option>
+                <label
+                  key={role}
+                  className={cx(
+                    'flex cursor-pointer items-start gap-2.5 rounded-btn border p-3 transition-colors',
+                    userForm.role === role
+                      ? 'border-amber bg-amber-wash'
+                      : 'border-line-strong bg-surface hover:bg-surface-2',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="new-account-role"
+                    checked={userForm.role === role}
+                    onChange={() => setUserForm({ ...userForm, role })}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[#d9480f]"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-ink">{ROLE_LABEL[role]}</span>
+                    <span className="block text-[12px] text-ink-soft">{ROLE_DESC[role]}</span>
+                  </span>
+                </label>
               ))}
-            </SelectField>
+            </div>
+          </fieldset>
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field
               label="Mot de passe initial"
               type="text"
@@ -919,11 +1011,78 @@ function AdminSettings({ user }: { user: User }) {
               hint="6 caractères minimum — à communiquer en clair puis changer."
               onChange={(event) => setUserForm({ ...userForm, password: event.target.value })}
             />
+            <SelectField
+              label="Lier à un travailleur (facultatif)"
+              value={userForm.employee_id}
+              onChange={(event) => setUserForm({ ...userForm, employee_id: event.target.value })}
+            >
+              <option value="">Aucun</option>
+              {employees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.full_name} — {employee.id}
+                </option>
+              ))}
+            </SelectField>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!editFor}
+        title={`Modifier le compte — ${editFor?.login ?? ''}`}
+        onClose={() => setEditFor(null)}
+        footer={
+          <>
+            <Button onClick={() => setEditFor(null)}>Annuler</Button>
+            <Button
+              variant="primary"
+              disabled={busy || editForm.display_name.trim().length < 2}
+              onClick={() => void updateAccount()}
+            >
+              {busy ? <Spinner /> : 'Enregistrer'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {formError ? <Banner tone="error">{formError}</Banner> : null}
+          <Field
+            label="Nom affiché"
+            value={editForm.display_name}
+            onChange={(event) => setEditForm({ ...editForm, display_name: event.target.value })}
+          />
+          <fieldset>
+            <legend className="mb-2 text-[13px] font-medium text-ink-soft">Rôle et privilèges</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {ROLES_OPTION.map((role) => (
+                <label
+                  key={role}
+                  className={cx(
+                    'flex cursor-pointer items-start gap-2.5 rounded-btn border p-3 transition-colors',
+                    editForm.role === role
+                      ? 'border-amber bg-amber-wash'
+                      : 'border-line-strong bg-surface hover:bg-surface-2',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="edit-account-role"
+                    checked={editForm.role === role}
+                    onChange={() => setEditForm({ ...editForm, role })}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[#d9480f]"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-ink">{ROLE_LABEL[role]}</span>
+                    <span className="block text-[12px] text-ink-soft">{ROLE_DESC[role]}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <SelectField
             label="Lier à un travailleur (facultatif)"
-            value={userForm.employee_id}
-            onChange={(event) => setUserForm({ ...userForm, employee_id: event.target.value })}
+            value={editForm.employee_id}
+            onChange={(event) => setEditForm({ ...editForm, employee_id: event.target.value })}
           >
             <option value="">Aucun</option>
             {employees.map((employee) => (
