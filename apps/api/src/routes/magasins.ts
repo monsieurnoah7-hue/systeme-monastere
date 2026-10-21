@@ -110,6 +110,40 @@ magasinsRoutes.patch('/:id', requirePerm('magasins.manage'), async (c) => {
   return c.json({ magasin: updated });
 });
 
+magasinsRoutes.delete('/:id', requirePerm('magasins.manage'), async (c) => {
+  const id = c.req.param('id') ?? '';
+  const db = getDb();
+  const before = await db.one<MagasinRow>('SELECT * FROM magasins WHERE id = $1', [id]);
+  if (!before) return c.json({ error: 'Magasin introuvable.' }, 404);
+
+  const usage = await db.one<{ tools: number; refs: number }>(
+    `SELECT (SELECT count(*) FROM tools WHERE magasin_id = $1)::int AS tools,
+            (SELECT count(*) FROM stock_refs WHERE magasin_id = $1)::int AS refs`,
+    [id],
+  );
+  const toolsCount = Number(usage?.tools ?? 0);
+  const refsCount = Number(usage?.refs ?? 0);
+  if (toolsCount > 0 || refsCount > 0) {
+    return c.json(
+      {
+        error: `Ce magasin contient encore ${toolsCount} outil(s) et ${refsCount} référence(s) de stock. Affectez-les ailleurs avant de le supprimer.`,
+      },
+      409,
+    );
+  }
+
+  await db.query('DELETE FROM magasins WHERE id = $1', [id]);
+  await writeAudit(db, {
+    entity: 'magasin',
+    entityId: id,
+    action: 'delete',
+    before,
+    actorId: actorId(c),
+    actorName: actorName(c),
+  });
+  return c.json({ ok: true });
+});
+
 magasinsRoutes.get('/:id', requirePerm('magasins.view'), async (c) => {
   const id = c.req.param('id') ?? '';
   const db = getDb();

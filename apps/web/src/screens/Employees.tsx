@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, type Employee, type EmployeeDetail, type Leave, type ScanResult, type TodayEmployee, type User } from '../lib/api';
 import { QR_PREFIX } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
-import { initials } from '../lib/labels';
+import { formatDate, initials } from '../lib/labels';
 import {
   Banner,
   Button,
@@ -452,6 +452,23 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             columns={viewColumns}
             caption="Présences du jour"
             empty={<span className="text-sm text-ink-faint">Aucune fiche trouvée.</span>}
+            renderCard={(employee) => (
+              <div className="px-4 py-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-ink">{employee.full_name}</p>
+                    <p className="truncate text-[13px] text-ink-soft">
+                      {employee.job_title} · <span className="font-mono num">{employee.id}</span>
+                    </p>
+                  </div>
+                  {dayChip(employee)}
+                </div>
+                <div className="mt-2 flex gap-4 font-mono text-[13px] num text-ink-soft">
+                  <span>Arr. {statusMap.get(employee.id)?.inAt ?? '—'}</span>
+                  <span>Dép. {statusMap.get(employee.id)?.outAt ?? '—'}</span>
+                </div>
+              </div>
+            )}
           />
         )}
       </>
@@ -462,7 +479,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     <>
       <PageHeader
         title="Travailleurs"
-        hint="Fiches du personnel, badges de pointage et activation (EMP-01 à EMP-04)."
+        hint="Fiches du personnel, badges de pointage et activation."
         actions={
           <>
             <Button icon={<IconRefresh size={18} />} onClick={() => setReload((value) => value + 1)}>
@@ -534,7 +551,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
               <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-ink">{l.full_name} — {l.kind === 'conge' ? 'Congé' : l.kind === 'permission' ? 'Permission' : 'Absence'}</p>
-                  <p className="text-xs text-ink-soft">{l.from_date} → {l.to_date}{l.note ? ` · ${l.note}` : ''}</p>
+                  <p className="text-xs text-ink-soft">{formatDate(l.from_date)} → {formatDate(l.to_date)}{l.note ? ` · ${l.note}` : ''}</p>
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="success" onClick={() => reviewLeave(l, 'approved')}>Approuver</Button>
@@ -555,6 +572,55 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
           data={filtered}
           columns={employeeColumns}
           caption="Fiches du personnel — boutons d’action par ligne"
+          renderCard={(employee) => (
+            <div className="px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <span
+                  className={cx(
+                    'grid h-9 w-9 shrink-0 place-items-center rounded-btn text-[13px] font-semibold',
+                    employee.active ? 'bg-charcoal text-white' : 'bg-grey-wash text-ink-faint',
+                  )}
+                >
+                  {initials(employee.full_name)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink">{employee.full_name}</p>
+                  <p className="truncate text-[13px] text-ink-soft">
+                    {employee.job_title} · <span className="font-mono num">{employee.id}</span>
+                  </p>
+                </div>
+              </div>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                {dayChip(employee)}
+                <Chip tone={employee.active ? 'green' : 'grey'}>
+                  {employee.active ? 'Actif' : 'Inactif'}
+                </Chip>
+                <span className="font-mono text-[13px] num text-ink-soft">
+                  Badge {employee.badge_token ?? '—'}
+                </span>
+              </div>
+              {canManage ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" variant="quiet" onClick={() => setDetailFor(employee)}>
+                    Fiche
+                  </Button>
+                  <Button size="sm" variant="quiet" onClick={() => openEdit(employee)}>
+                    Modifier
+                  </Button>
+                  <Button size="sm" variant="quiet" onClick={() => setBadgeFor(employee)}>
+                    Badge
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={employee.active ? 'outline-danger' : 'quiet'}
+                    onClick={() => void toggleActive(employee)}
+                  >
+                    {employee.active ? 'Désactiver' : 'Réactiver'}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          )}
           empty={
             <EmptyState
               title="Aucun travailleur"
@@ -769,7 +835,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             <Banner tone="info">Ce travailleur n’a pas encore de badge. Cliquez sur « Badge » pour le créer.</Banner>
           )}
           <p className="text-[13px] text-ink-soft">
-            Le QR code ne contient qu’un jeton aléatoire (QR-01) : il ne donne aucun accès aux données. Aperçu
+              Le QR code ne contient qu’un jeton aléatoire : il ne donne aucun accès aux données. Aperçu
             imprimable au format carte (85,6 × 54 mm).
           </p>
           <Button

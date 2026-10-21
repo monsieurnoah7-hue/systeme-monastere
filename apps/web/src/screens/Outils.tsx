@@ -374,7 +374,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
     <>
       <PageHeader
         title="Outils & QR codes"
-        hint="Fiche, statut, historique et planches d’étiquettes (OUT-01 à QR-04)."
+        hint="Parc d’outils, statuts en direct et étiquettes QR à imprimer."
         actions={
           <>
             <Button
@@ -491,6 +491,26 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
           caption="Liste des outils — cliquez une ligne pour ouvrir la fiche"
           minWidth="min-w-[46rem]"
           empty={<EmptyState title="Aucun outil ne correspond" />}
+          renderCard={(tool) => (
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-[12px] font-medium num text-ink-faint">{tool.id}</span>
+                  <Chip tone={STATUS_TONE[tool.status]}>{STATUS_LABEL[tool.status]}</Chip>
+                  <Chip tone={tool.condition === 'bon' ? 'neutral' : 'amber'}>
+                    {CONDITION_LABEL[tool.condition]}
+                  </Chip>
+                </div>
+                <p className="mt-1 truncate text-sm font-semibold text-ink">{tool.name}</p>
+                <p className="truncate text-[12px] text-ink-faint">
+                  {tool.category} · {tool.location}
+                </p>
+              </div>
+              <span className="flex shrink-0 text-ink-faint" aria-hidden>
+                <IconChevronRight size={18} />
+              </span>
+            </div>
+          )}
         />
       )}
 
@@ -530,9 +550,9 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
             <Card className="flex items-center gap-4 p-4">
               <ToolQr id={detail.tool.id} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-ink">QR code de l’outil</p>
+                <p className="text-sm font-semibold text-ink">QR de l’outil</p>
                 <p className="mt-1 text-[13px] text-ink-soft">
-                  Le code renvoie à la fiche et ne contient que l’identifiant (QR-01).
+                  Scannez-le pour ouvrir la fiche de l’outil.
                 </p>
                 <Button
                   className="mt-3"
@@ -547,40 +567,30 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               </div>
             </Card>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {canManage && detail.tool.status === 'disponible' ? (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setLoanFor(detail.tool);
-                    setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
-                  }}
-                >
-                  Enregistrer un prêt (sortir)
-                </Button>
-              ) : null}
-              {canManage && detail.loan ? (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setReturnFor(detail.loan);
-                    setReturnForm({ condition: 'bon', observations: '' });
-                  }}
-                >
-                  Enregistrer un retour (entrer)
-                </Button>
-              ) : null}
-              {canManage ? (
-                <Button
-                  onClick={() => {
-                    setAssignFor(detail.tool);
-                    setAssignMagasinId(detail.tool.magasin_id ?? '');
-                  }}
-                >
-                  Affecter à un magasin
-                </Button>
-              ) : null}
-              {canManage ? (
+            {canManage ? (
+              <div className="flex flex-col gap-2">
+                {detail.tool.status === 'disponible' ? (
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setLoanFor(detail.tool);
+                      setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
+                    }}
+                  >
+                    Prêter l’outil
+                  </Button>
+                ) : null}
+                {detail.loan ? (
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setReturnFor(detail.loan);
+                      setReturnForm({ condition: 'bon', observations: '' });
+                    }}
+                  >
+                    Enregistrer le retour
+                  </Button>
+                ) : null}
                 <Button
                   onClick={() => {
                     setStatusFor(detail.tool);
@@ -589,8 +599,16 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                 >
                   Changer le statut
                 </Button>
-              ) : null}
-            </div>
+                <Button
+                  onClick={() => {
+                    setAssignFor(detail.tool);
+                    setAssignMagasinId(detail.tool.magasin_id ?? '');
+                  }}
+                >
+                  Affecter à un magasin
+                </Button>
+              </div>
+            ) : null}
 
             {detail.tool.observations ? (
               <div>
@@ -601,22 +619,42 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
 
             <div>
               <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
-                <IconWrench size={16} /> Historique (OUT-03)
+                <IconWrench size={16} /> Historique
               </p>
-              <ol className="space-y-2">
+              <ol className="relative ml-1 space-y-3 border-l border-line pl-4">
                 {detail.events.map((event) => (
-                  <li key={event.id} className="rounded-btn border border-line bg-surface px-3 py-2.5">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-ink">{EVENT_LABEL[event.event_type] ?? event.event_type}</p>
-                      <p className="font-mono text-[12px] text-ink-faint num">{formatDateTime(event.created_at)}</p>
+                  <li key={event.id} className="relative">
+                    <span
+                      aria-hidden
+                      className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-line-strong"
+                    />
+                    <div className="rounded-btn border border-line bg-surface px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-ink">
+                          {EVENT_LABEL[event.event_type] ?? event.event_type}
+                        </p>
+                        <p className="font-mono text-[12px] text-ink-faint num">{formatDateTime(event.created_at)}</p>
+                      </div>
+                      {event.from_status || event.to_status ? (
+                        <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {event.from_status ? (
+                            <Chip tone={STATUS_TONE[event.from_status as ToolStatus] ?? 'grey'}>
+                              {STATUS_LABEL[event.from_status as ToolStatus] ?? event.from_status}
+                            </Chip>
+                          ) : null}
+                          <span aria-hidden className="text-[12px] text-ink-faint">
+                            →
+                          </span>
+                          {event.to_status ? (
+                            <Chip tone={STATUS_TONE[event.to_status as ToolStatus] ?? 'grey'}>
+                              {STATUS_LABEL[event.to_status as ToolStatus] ?? event.to_status}
+                            </Chip>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {event.note ? <p className="mt-1 text-[13px] text-ink-soft">{event.note}</p> : null}
+                      <p className="mt-1 text-[12px] text-ink-faint">Par {event.actor}</p>
                     </div>
-                    {event.from_status || event.to_status ? (
-                      <p className="mt-1 font-mono text-[12px] text-ink-soft">
-                        {event.from_status ?? '—'} → {event.to_status ?? '—'}
-                      </p>
-                    ) : null}
-                    {event.note ? <p className="mt-1 text-[13px] text-ink-soft">{event.note}</p> : null}
-                    <p className="mt-1 text-[12px] text-ink-faint">Par {event.actor}</p>
                   </li>
                 ))}
               </ol>
@@ -849,7 +887,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         }
       >
         <p className="mb-3 text-sm text-ink-soft">
-          Chaque étiquette comporte le QR code, l’identifiant et le nom (QR-02). Sélectionnez les outils à imprimer.
+          Chaque étiquette comporte le QR code, l’identifiant et le nom. Sélectionnez les outils à imprimer.
         </p>
         <div className="space-y-1">
           {tools.map((tool) => (

@@ -863,7 +863,7 @@ export function Pointage() {
           </h1>
           <p className="mt-1 text-sm text-ink-soft">{result.employee.full_name}</p>
           <p className="mt-4 font-mono text-3xl font-semibold text-ink num">{result.serverTime}</p>
-          <p className="mt-1 text-[13px] text-ink-faint">Heure du serveur — non modifiable</p>
+          <p className="mt-1 text-[13px] text-ink-faint">Heure du serveur, non modifiable.</p>
           {result.lateMinutes > 0 ? (
             <p className="mt-3 text-sm font-medium text-amber">{result.lateMinutes} min de retard enregistrés</p>
           ) : null}

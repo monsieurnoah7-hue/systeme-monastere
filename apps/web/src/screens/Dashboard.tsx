@@ -291,7 +291,7 @@ export function Dashboard() {
           <KpiCard
             label="Présences du jour"
             value="—"
-            hint="Réservé à la direction (CDC, section 3)"
+            hint="Réservé à la direction"
             icon={<IconClock size={18} />}
           />
         )}
@@ -301,8 +301,8 @@ export function Dashboard() {
         <div className="flex min-w-0 flex-col gap-4">
           <Card className="p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-ink">Répartition des outils (DAS-01)</h2>
-              <p className="text-[12px] text-ink-faint">Chaque indicateur ouvre le détail</p>
+              <h2 className="text-sm font-semibold text-ink">Répartition des outils</h2>
+              <p className="text-[12px] text-ink-faint">Cliquez une part pour voir les outils</p>
             </div>
             <ToolsDonut das01={das01} onPick={(status) => openTools(status, `Outils — ${STATUS_LABEL[status]}`)} />
           </Card>
@@ -310,7 +310,7 @@ export function Dashboard() {
           <div className="rise" style={{ animationDelay: '80ms' }}>
             <Card className="p-4">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-ink">Alertes (DAS-05)</h2>
+                <h2 className="text-sm font-semibold text-ink">Alertes</h2>
                 <IconAlert size={16} className="text-ink-faint" />
               </div>
               <ul className="divide-y divide-line rounded-btn border border-line">
@@ -461,7 +461,7 @@ export function Dashboard() {
       {attendanceHidden ? (
         <div className="mt-4">
           <Banner tone="info" title="Présences non visibles avec ce profil">
-            Le détail des arrivées, des selfies et des retards est réservé à la direction (PRS-03).
+            Le détail des arrivées, des selfies et des retards est réservé à la direction.
           </Banner>
         </div>
       ) : null}

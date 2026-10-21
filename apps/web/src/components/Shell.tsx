@@ -187,7 +187,7 @@ export function Shell({
               {onScan && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button onClick={onScan} className="rounded-lg p-2 text-ink-soft hover:bg-paper-2" aria-label="Scanner">
+                    <button onClick={onScan} className="rounded-lg p-2 text-ink-soft hover:bg-paper-2" aria-label="Scanner un code">
                       <QrCode size={20} />
                     </button>
                   </TooltipTrigger>
@@ -247,16 +247,6 @@ export function Shell({
           <main className="min-h-0 flex-1 overflow-y-auto scroll-thin">
             <div className="mx-auto w-full max-w-6xl px-4 py-5 pb-28 lg:px-8 lg:py-8 lg:pb-12">{children}</div>
           </main>
-
-          {onScan && (
-            <button
-              onClick={onScan}
-              className="no-print fixed bottom-24 right-5 z-30 grid h-14 w-14 place-items-center rounded-full bg-amber text-white shadow-float transition-transform duration-150 active:scale-95 lg:hidden"
-              aria-label="Scanner un code"
-            >
-              <QrCode size={24} />
-            </button>
-          )}
 
           <nav className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden">
             <div className="mx-auto flex max-w-lg items-stretch justify-around px-2 pb-[env(safe-area-inset-bottom)]">

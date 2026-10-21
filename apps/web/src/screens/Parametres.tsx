@@ -638,7 +638,7 @@ function AdminSettings({ user }: { user: User }) {
           <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
             <IconGear size={16} /> Horaires & tolérance
           </h2>
-          <p className="mt-1 text-[13px] text-ink-soft">Règles appliquées par le kiosk de pointage (PRS-03).</p>
+          <p className="mt-1 text-[13px] text-ink-soft">Règles appliquées par le kiosk de pointage.</p>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <Field
@@ -1008,7 +1008,7 @@ function AdminSettings({ user }: { user: User }) {
               label="Mot de passe initial"
               type="text"
               value={userForm.password}
-              hint="6 caractères minimum — à communiquer en clair puis changer."
+              hint="6 caractères minimum. À communiquer en clair, puis à changer."
               onChange={(event) => setUserForm({ ...userForm, password: event.target.value })}
             />
             <SelectField

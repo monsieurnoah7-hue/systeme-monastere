@@ -478,9 +478,9 @@ export function ToastHost({ children }: { children: ReactNode }) {
 
 export function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-line py-2 last:border-b-0">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 border-b border-line py-2 last:border-b-0">
       <span className="text-[13px] text-ink-soft">{label}</span>
-      <span className={cx('text-right text-sm font-medium text-ink', mono && 'font-mono num')}>{value}</span>
+      <span className={cx('ml-auto whitespace-nowrap text-right text-sm font-medium text-ink', mono && 'font-mono num')}>{value}</span>
     </div>
   );
 }

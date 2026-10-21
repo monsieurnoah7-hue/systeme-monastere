@@ -68,7 +68,7 @@ export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User |
   if (!employee) {
     return (
       <div className="space-y-5">
-        <PageHeader eyebrow="Espace personnel" title={`Bonjour, ${user?.display_name ?? 'utilisateur'}`} hint="Compte de gestion — non rattaché à une fiche travailleur" />
+        <PageHeader eyebrow="Espace personnel" title={`Bonjour, ${user?.display_name ?? 'utilisateur'}`} hint="Compte de gestion, non rattaché à une fiche travailleur" />
         <EmptyState
           icon={<IconUser size={28} />}
           title="Aucune fiche travailleur rattachée"
@@ -145,30 +145,51 @@ export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User |
           {historyRows.length === 0 ? (
             <EmptyState icon={<IconHistory size={24} />} title="Aucun pointage récent" />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-xs uppercase tracking-wider text-ink-faint">
-                    <th className="px-4 py-2.5">Date</th>
-                    <th className="px-4 py-2.5">Arrivée</th>
-                    <th className="px-4 py-2.5">Pause</th>
-                    <th className="px-4 py-2.5">Départ</th>
-                    <th className="px-4 py-2.5">Retard</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {historyRows.map((h) => (
-                    <tr key={h.date} className="hover:bg-surface-2">
-                      <td className="px-4 py-2.5 font-medium text-ink">{formatDate(h.date)}</td>
-                      <td className="px-4 py-2.5 font-mono text-ink">{h.in_at ?? '—'}</td>
-                      <td className="px-4 py-2.5 font-mono text-ink-soft">{h.break_in ? `${h.break_in}→${h.break_out ?? '…'}` : '—'}</td>
-                      <td className="px-4 py-2.5 font-mono text-ink">{h.out_at ?? '—'}</td>
-                      <td className="px-4 py-2.5">{h.late_minutes > 0 ? <Chip tone="amber">{h.late_minutes} min</Chip> : <span className="text-ink-faint">—</span>}</td>
+            <>
+              <ul className="divide-y divide-line md:hidden">
+                {historyRows.map((h) => (
+                  <li key={h.date} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-ink">{formatDate(h.date)}</p>
+                      {h.late_minutes > 0 ? (
+                        <Chip tone="amber">Retard {h.late_minutes} min</Chip>
+                      ) : (
+                        <span className="text-xs text-ink-faint">Ponctuel</span>
+                      )}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[13px] num text-ink-soft">
+                      <span>Arr. {h.in_at ?? '—'}</span>
+                      <span>Pause {h.break_in ? `${h.break_in}→${h.break_out ?? '…'}` : '—'}</span>
+                      <span>Dép. {h.out_at ?? '—'}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-left text-xs uppercase tracking-wider text-ink-faint">
+                      <th className="px-4 py-2.5">Date</th>
+                      <th className="px-4 py-2.5">Arrivée</th>
+                      <th className="px-4 py-2.5">Pause</th>
+                      <th className="px-4 py-2.5">Départ</th>
+                      <th className="px-4 py-2.5">Retard</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {historyRows.map((h) => (
+                      <tr key={h.date} className="hover:bg-surface-2">
+                        <td className="px-4 py-2.5 font-medium text-ink">{formatDate(h.date)}</td>
+                        <td className="px-4 py-2.5 font-mono text-ink">{h.in_at ?? '—'}</td>
+                        <td className="px-4 py-2.5 font-mono text-ink-soft">{h.break_in ? `${h.break_in}→${h.break_out ?? '…'}` : '—'}</td>
+                        <td className="px-4 py-2.5 font-mono text-ink">{h.out_at ?? '—'}</td>
+                        <td className="px-4 py-2.5">{h.late_minutes > 0 ? <Chip tone="amber">{h.late_minutes} min</Chip> : <span className="text-ink-faint">—</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </Card>
       )}

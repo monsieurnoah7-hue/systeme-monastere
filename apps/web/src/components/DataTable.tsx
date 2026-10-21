@@ -43,6 +43,7 @@ type DataTableProps<TData extends RowData> = {
   pageSize?: number;
   initialSorting?: ColumnSort[];
   empty?: ReactNode;
+  renderCard?: (row: TData) => ReactNode;
   className?: string;
 };
 
@@ -57,6 +58,7 @@ export function DataTable<TData extends RowData>({
   pageSize = DEFAULT_PAGE_SIZE,
   initialSorting,
   empty,
+  renderCard,
   className,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>(initialSorting ?? []);
@@ -85,7 +87,7 @@ export function DataTable<TData extends RowData>({
   return (
     <div className={cn('overflow-hidden rounded-card border border-line bg-surface', className)}>
       {caption ? <p className="sr-only">{caption}</p> : null}
-      <div className="overflow-x-auto scroll-thin">
+      <div className={cn('overflow-x-auto scroll-thin', renderCard && 'hidden md:block')}>
         <Table className={cn('text-left', minWidth)}>
           <TableHeader className="border-b border-line bg-surface-2 [&_tr]:border-0">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -170,6 +172,37 @@ export function DataTable<TData extends RowData>({
           </TableBody>
         </Table>
       </div>
+      {renderCard ? (
+        rows.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-ink-faint md:hidden">
+            {empty ?? <span>Aucune ligne à afficher.</span>}
+          </div>
+        ) : (
+          <ul className="divide-y divide-line md:hidden">
+            {rows.map((row) => (
+              <li key={row.id}>
+                {onRowClick ? (
+                  <button
+                    type="button"
+                    onClick={() => onRowClick(row.original)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onRowClick(row.original);
+                      }
+                    }}
+                    className="block w-full text-left transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none"
+                  >
+                    {renderCard(row.original)}
+                  </button>
+                ) : (
+                  renderCard(row.original)
+                )}
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
       {paginated ? (
         <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-2/60 px-4 py-2.5">
           <p className="text-[13px] text-ink-faint num">

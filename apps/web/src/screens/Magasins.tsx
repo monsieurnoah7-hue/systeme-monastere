@@ -29,6 +29,9 @@ export function Magasins({ user, scan }: { user: { role: string }; scan?: ScanRe
   const [form, setForm] = useState({ name: '', code: '', description: '' });
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [deleteFor, setDeleteFor] = useState<Magasin | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,12 +82,26 @@ export function Magasins({ user, scan }: { user: { role: string }; scan?: ScanRe
     } finally { setBusy(false); }
   };
 
+  const removeMagasin = async () => {
+    if (!deleteFor) return;
+    setDeleteBusy(true); setDeleteError(null);
+    try {
+      await api(`/api/magasins/${deleteFor.id}`, { method: 'DELETE' });
+      toast('Magasin supprimé', 'success');
+      if (selectedId === deleteFor.id) setSelectedId(null);
+      setDeleteFor(null);
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      setDeleteError(e instanceof ApiError ? e.message : 'Suppression impossible.');
+    } finally { setDeleteBusy(false); }
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Inventaire"
         title="Magasins"
-        hint="Magasins, ateliers et quincaillerie — rattachement des outils et du stock"
+        hint="Magasins, ateliers et quincaillerie : rattachement des outils et du stock"
         actions={
           canManage ? (
             <Button variant="primary" icon={<IconPlus size={16} />} onClick={openNew}>Nouveau magasin</Button>
@@ -150,9 +167,14 @@ export function Magasins({ user, scan }: { user: { role: string }; scan?: ScanRe
           <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
         ) : (
           <div className="space-y-5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-ink">Outils rattachés</p>
-              {canManage && <Button size="sm" variant="ghost" onClick={() => { setEditing(detail.magasin); setForm({ name: detail.magasin.name, code: detail.magasin.code, description: detail.magasin.description ?? '' }); setFormOpen(true); }}>Modifier</Button>}
+              {canManage && (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => { setEditing(detail.magasin); setForm({ name: detail.magasin.name, code: detail.magasin.code, description: detail.magasin.description ?? '' }); setFormOpen(true); }}>Modifier</Button>
+                  <Button size="sm" variant="danger" onClick={() => { setDeleteError(null); setDeleteFor(detail.magasin); }}>Supprimer</Button>
+                </div>
+              )}
             </div>
             {detail.tools.length === 0 ? (
               <p className="text-sm text-ink-faint">Aucun outil dans ce magasin.</p>
@@ -201,6 +223,27 @@ export function Magasins({ user, scan }: { user: { role: string }; scan?: ScanRe
           <Field label="Nom" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Magasin C" />
           <Field label="Code (court)" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="MGC" />
           <TextArea label="Description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Réserve principale, atelier…" />
+        </div>
+      </Modal>
+
+      <Modal open={!!deleteFor} title="Supprimer le magasin" onClose={() => setDeleteFor(null)} footer={
+        <>
+          <Button variant="ghost" onClick={() => setDeleteFor(null)}>Annuler</Button>
+          <Button variant="danger" loading={deleteBusy} onClick={() => void removeMagasin()}>Supprimer définitivement</Button>
+        </>
+      }>
+        <div className="space-y-3">
+          {deleteError && <div className="rounded-lg bg-red-wash px-3 py-2 text-sm text-red">{deleteError}</div>}
+          <p className="text-sm text-ink">
+            Supprimer <span className="font-semibold">{deleteFor?.name}</span> ({deleteFor?.code}) ?
+            {deleteFor && (deleteFor.tools_count ?? 0) + (deleteFor.stock_count ?? 0) > 0 ? (
+              <span className="mt-2 block text-ink-soft">
+                Ce magasin est encore rattaché à {deleteFor.tools_count ?? 0} outil(s) et {deleteFor.stock_count ?? 0} référence(s)
+                de stock : la suppression sera refusée tant qu’ils n’ont pas été affectés ailleurs.
+              </span>
+            ) : null}
+          </p>
+          <p className="text-[13px] text-ink-faint">Cette action est définitive et journalisée.</p>
         </div>
       </Modal>
     </div>

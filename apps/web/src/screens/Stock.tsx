@@ -57,7 +57,7 @@ function StockBar({ ref }: { ref: StockRef }) {
   const state = stockState(ref);
   return (
     <div className="flex items-center gap-2">
-      <span className="w-14 text-right font-mono text-sm font-semibold num">
+      <span className="min-w-14 whitespace-nowrap text-right font-mono text-sm font-semibold num">
         {ref.qty} <span className="text-[11px] font-normal text-ink-faint">{ref.unit}</span>
       </span>
       <span className="h-1.5 w-16 overflow-hidden rounded-full bg-line">
@@ -349,7 +349,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
     <>
       <PageHeader
         title="Stock quincaillerie"
-        hint="Inventaire, seuils minimums et journal des mouvements (STK-01 à STK-04)."
+        hint="Inventaire, seuils minimums et journal des mouvements."
         actions={
           <>
             <Button icon={<IconRefresh size={18} />} onClick={refresh}>
@@ -444,6 +444,25 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
             onRowClick={(ref) => setSelectedId(ref.id)}
             caption="Inventaire des références de stock — cliquez une ligne pour ouvrir la fiche"
             empty={<EmptyState title="Aucune référence" hint="Aucun article ne correspond à ce filtre." />}
+            renderCard={(ref) => {
+              const state = stockState(ref);
+              return (
+                <div className="px-4 py-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">{ref.name}</p>
+                      <p className="truncate text-[12px] text-ink-faint">
+                        {ref.category} · {ref.location}
+                      </p>
+                    </div>
+                    <Chip tone={state.tone}>{state.label}</Chip>
+                  </div>
+                  <div className="mt-2.5">
+                    <StockBar ref={ref} />
+                  </div>
+                </div>
+              );
+            }}
           />
 
           <div className="mt-6">

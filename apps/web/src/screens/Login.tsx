@@ -48,7 +48,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
         <div className="rise rounded-card border border-white/10 bg-surface p-6 shadow-pop">
           <h1 className="text-lg font-semibold text-ink">Connexion</h1>
-          <p className="mt-1 text-sm text-ink-soft">Accès réservé aux profils autorisés (CDC, section 3).</p>
+          <p className="mt-1 text-sm text-ink-soft">Accès réservé aux profils autorisés.</p>
 
           <form onSubmit={submit} className="mt-5 space-y-4">
             <Field
