@@ -35,8 +35,8 @@ async function login(login, password) {
   return res.status === 200;
 }
 
-// 1. connexion admin
-check('login admin', await login('admin', 'admin226'));
+// 1. connexion direction
+check('login direction', await login('direction', 'direction226'));
 
 // 2. références de stock
 const ref = await call('POST', '/api/stock/refs', {
@@ -175,7 +175,7 @@ const chefOut = await call('POST', '/api/stock/movements', {
 check('chef peut faire une sortie', chefOut.status === 201);
 
 // nettoyage : désactivation compte de test
-await login('admin', 'admin226');
+await login('direction', 'direction226');
 await call('PATCH', `/api/users/${userId}`, { active: false });
 
 console.log(failures === 0 ? '\nTous les contrôles sont au vert.' : `\n${failures} contrôle(s) en échec.`);

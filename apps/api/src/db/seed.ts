@@ -60,7 +60,6 @@ async function seed() {
   }
 
   const users: [string, string, string, string, string | null][] = [
-    ['admin', 'admin226', 'Administrateur', 'admin', null],
     ['direction', 'direction226', 'Direction du Monastère', 'direction', null],
     ['magasinier', 'magasin226', 'Pierre NKOA', 'magasinier', 'EMP-002'],
     ['chef', 'atelier226', 'Jean-Marc ATANGANA', 'chef_atelier', 'EMP-001'],
@@ -195,7 +194,7 @@ async function seed() {
   );
 
   console.log('[seed] données de démonstration insérées');
-  console.log('[seed] comptes : admin/admin226 · direction/direction226 · magasinier/magasin226 · chef/atelier226 · ouvrier/atelier226');
+  console.log('[seed] comptes : direction/direction226 · magasinier/magasin226 · chef/atelier226 · ouvrier/atelier226');
 }
 
 seed()

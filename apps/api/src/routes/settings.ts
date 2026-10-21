@@ -23,7 +23,7 @@ const putBody = z.object({
   card_display_seconds: z.number().int().min(3).max(60).optional(),
 });
 
-settingsRoutes.get('/', requireRole('direction', 'admin'), async (c) => {
+settingsRoutes.get('/', requireRole('direction'), async (c) => {
   return c.json({ settings: await loadSettings(), defaults: DEFAULT_SETTINGS });
 });
 

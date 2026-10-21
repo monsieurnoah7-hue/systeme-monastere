@@ -15,7 +15,7 @@ function stripPrefix(raw: string, prefix: string): string | null {
   return null;
 }
 
-scanRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier', 'admin'), async (c) => {
+scanRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
   const parsed = query.safeParse(c.req.query());
   if (!parsed.success) return c.json({ error: 'Code requis.' }, 400);
   const rawCode = parsed.data.q.trim();

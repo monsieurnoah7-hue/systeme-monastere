@@ -35,7 +35,7 @@ export const env = {
   dataDir: required('DATA_DIR', 'data'),
   nodeEnv: required('NODE_ENV', 'development'),
   sessionTtlHours: Number(process.env.SESSION_TTL_HOURS ?? 12),
-  bootstrapPassword: process.env.BOOTSTRAP_PASSWORD?.trim() || 'admin226',
+  bootstrapPassword: process.env.BOOTSTRAP_PASSWORD?.trim() || 'direction226',
   corsOrigin: required('CORS_ORIGIN', 'http://localhost:5173'),
   isProd: (process.env.NODE_ENV ?? 'development') === 'production',
   cronSecret: process.env.CRON_SECRET?.trim() || '',

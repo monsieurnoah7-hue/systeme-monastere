@@ -399,12 +399,12 @@ export function Pointage() {
       <div className="mx-auto max-w-lg">
         <h1 className="text-[22px] font-semibold text-ink">Pointage</h1>
         <p className="mt-1 text-sm text-ink-soft">
-          Sélectionnez le terminal enregistré par l’administrateur. L’heure retenue est celle du serveur.
+          Sélectionnez le terminal enregistré par la direction. L’heure retenue est celle du serveur.
         </p>
         <div className="mt-5 space-y-3">
           {terminals.length === 0 ? (
             <Banner tone="info" title="Aucun terminal enregistré">
-              L’administrateur doit enregistrer un téléphone ou une tablette avant le premier pointage.
+              La direction doit enregistrer un téléphone ou une tablette avant le premier pointage.
             </Banner>
           ) : (
             terminals.map((terminal) => (

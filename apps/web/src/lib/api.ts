@@ -23,7 +23,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return data as T;
 }
 
-export type Role = 'direction' | 'magasinier' | 'chef_atelier' | 'travailleur' | 'admin';
+export type Role = 'direction' | 'magasinier' | 'chef_atelier' | 'travailleur';
 
 export type User = {
   id: number;

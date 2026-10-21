@@ -22,8 +22,8 @@ async function waitForText(text, timeout = 15000) {
 }
 
 await page.goto(BASE, { waitUntil: 'networkidle2' });
-await page.type('input[placeholder="ex. magasinier"]', 'admin');
-await page.type('input[type="password"]', 'admin226');
+await page.type('input[placeholder="ex. magasinier"]', 'direction');
+await page.type('input[type="password"]', 'direction226');
 await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Se connecter'))?.click());
 await waitForText('Tableau de bord');
 await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Travailleurs'))?.click());

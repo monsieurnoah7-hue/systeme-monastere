@@ -11,7 +11,7 @@ import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth
 export const adminRoutes = new Hono();
 
 adminRoutes.use('*', requireAuth);
-adminRoutes.use('*', requireRole('admin'));
+adminRoutes.use('*', requireRole('direction'));
 
 // Tables de données de démonstration remises à zéro par /reset-demo.
 // Conservées : users, sessions, settings, role_permissions, _migrations, login_attempts.

@@ -75,8 +75,8 @@ function StockBar({ ref }: { ref: StockRef }) {
 
 export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) {
   const toast = useToast();
-  const canManageRefs = user.role === 'magasinier' || user.role === 'admin';
-  const canMove = ['direction', 'magasinier', 'chef_atelier', 'admin'].includes(user.role);
+  const canManageRefs = user.role === 'magasinier' || user.role === 'direction';
+  const canMove = ['direction', 'magasinier', 'chef_atelier'].includes(user.role);
 
   const [refs, setRefs] = useState<StockRef[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);

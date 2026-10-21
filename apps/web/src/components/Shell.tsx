@@ -31,7 +31,7 @@ type NavItem = {
   roles: Role[];
 };
 
-const ALL_STAFF: Role[] = ['direction', 'magasinier', 'chef_atelier', 'admin'];
+const ALL_STAFF: Role[] = ['direction', 'magasinier', 'chef_atelier'];
 
 export const NAV: NavItem[] = [
   { id: 'dashboard', label: 'Tableau de bord', short: 'Bord', icon: Gauge, roles: ALL_STAFF },
@@ -39,9 +39,9 @@ export const NAV: NavItem[] = [
   { id: 'magasins', label: 'Magasins', short: 'Magasin', icon: Warehouse, roles: ALL_STAFF },
   { id: 'pointage', label: 'Pointage', short: 'Pointage', icon: Clock, roles: ALL_STAFF },
   { id: 'stock', label: 'Stock', short: 'Stock', icon: Package, roles: ALL_STAFF },
-  { id: 'employes', label: 'Travailleurs', short: 'Staff', icon: Users, roles: ['direction', 'magasinier', 'chef_atelier', 'admin'] },
-  { id: 'espace', label: 'Mon espace', short: 'Espace', icon: UserIcon, roles: ['direction', 'magasinier', 'chef_atelier', 'travailleur', 'admin'] },
-  { id: 'parametres', label: 'Paramètres', short: 'Réglages', icon: Settings, roles: ['direction', 'admin'] },
+  { id: 'employes', label: 'Travailleurs', short: 'Staff', icon: Users, roles: ['direction', 'magasinier', 'chef_atelier'] },
+  { id: 'espace', label: 'Mon espace', short: 'Espace', icon: UserIcon, roles: ['direction', 'magasinier', 'chef_atelier', 'travailleur'] },
+  { id: 'parametres', label: 'Paramètres', short: 'Réglages', icon: Settings, roles: ['direction'] },
 ];
 
 export function allowedViews(role: Role): ViewId[] {

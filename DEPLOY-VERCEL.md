@@ -30,7 +30,7 @@ Settings → Environment Variables :
 | Nom | Valeur | Origine |
 |---|---|---|
 | `DATABASE_URL` | connection string Neon (avec `-pooler` et `sslmode=require`) | manuelle |
-| `BOOTSTRAP_PASSWORD` | mot de passe fort aléatoire (compte `admin`) | manuelle |
+| `BOOTSTRAP_PASSWORD` | mot de passe fort aléatoire (compte de secours `direction`) | manuelle |
 | `CRON_SECRET` | secret aléatoire (64 hex) protégeant le cron de sauvegarde | manuelle |
 | `BLOB_READ_WRITE_TOKEN` | jeton du store Blob « monastere-backups » | ajouté automatiquement par `npx vercel blob create-store monastere-backups --access private` (env `development`, `preview` **et** `production`) |
 
@@ -40,7 +40,8 @@ Settings → Environment Variables :
 C'est tout : le front et l'API sont sur le même domaine → pas de CORS à configurer.
 
 > **Identifiants de production (5 comptes)** — tous avec mot de passe fort, à conserver
-> **hors du dépôt** (le dépôt GitHub est public) : `admin` = valeur de `BOOTSTRAP_PASSWORD`,
+> **hors du dépôt** (le dépôt GitHub est public) : l’ancien compte `admin` (valeur de
+> `BOOTSTRAP_PASSWORD`) a désormais le rôle `direction` — un seul rôle de direction existe,
 > et les comptes `direction` / `magasinier` / `chef` / `ouvrier` ont été durcis individuellement
 > avec `apps/api/src/db/set-user-password.ts` (anciens mdp `*226` refusés : HTTP 401).
 
@@ -48,8 +49,8 @@ C'est tout : le front et l'API sont sur le même domaine → pas de CORS à conf
 
 1. Deployments → **Redeploy**
 2. Au premier appel, l'API exécute automatiquement les migrations (verrou PostgreSQL,
-   sûr même avec plusieurs fonctions démarrant en parallèle) et crée l'admin.
-3. Ouvrez `https://systeme-monastere.vercel.app` → `admin` + `BOOTSTRAP_PASSWORD`
+   sûr même avec plusieurs fonctions démarrant en parallèle) et crée le compte `direction` de secours.
+3. Ouvrez `https://systeme-monastere.vercel.app` → `direction` + `BOOTSTRAP_PASSWORD`
 
 > Région confirmée : `vercel inspect` → `λ api/index [fra1]` (Francfort, à côté de Neon).
 

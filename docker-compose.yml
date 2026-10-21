@@ -29,7 +29,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-mf}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-monastere}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
-      BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:-admin226}
+      BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:-direction226}
     volumes:
       - api-data:/app/data
 

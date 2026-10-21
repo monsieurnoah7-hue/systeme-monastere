@@ -105,10 +105,10 @@ export async function ensureBootstrapAdmin(): Promise<void> {
   const hash = hashPassword(env.bootstrapPassword);
   const inserted = await db.query<{ id: number }>(
     `INSERT INTO users (login, password_hash, display_name, role)
-     VALUES ('admin', $1, 'Administrateur', 'admin')
+     VALUES ('direction', $1, 'Direction du Monastère', 'direction')
      ON CONFLICT (login) DO NOTHING
      RETURNING id`,
     [hash],
   );
-  if (inserted.length > 0) console.log('[auth] compte admin initial créé (login: admin)');
+  if (inserted.length > 0) console.log('[auth] compte direction initial créé (login: direction)');
 }

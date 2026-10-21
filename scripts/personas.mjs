@@ -21,22 +21,6 @@ export const PERSONAS = [
     screens: ['dashboard', 'employes', 'magasins', 'outils', 'stock', 'espace', 'parametres'],
   },
   {
-    id: 'admin',
-    login: 'admin',
-    password: 'admin226',
-    name: 'Paul, Administrateur système',
-    role: 'admin',
-    goals: [
-      'Gérer les comptes utilisateurs (créer, réinitialiser mdp, activer/désactiver)',
-      'Gérer les terminaux de pointage',
-      'Modifier les paramètres (horaires, tolérance, motifs)',
-      'Gérer la matrice de permissions',
-      'Créer/éditer les magasins',
-      'Toute action de magasinier en secours',
-    ],
-    screens: ['parametres', 'magasins', 'outils', 'stock', 'employes', 'dashboard', 'espace'],
-  },
-  {
     id: 'chef',
     login: 'chef',
     password: 'atelier226',

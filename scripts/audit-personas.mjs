@@ -203,7 +203,7 @@ async function testPersona(browser, persona) {
     ]);
   }
 
-  if (persona.id === 'admin') {
+  if (persona.id === 'direction') {
     await apiFlow(page, persona.id, 'api-admin', [
       { method: 'GET', path: '/api/users', expect: 200 },
       { method: 'GET', path: '/api/terminals', expect: 200 },

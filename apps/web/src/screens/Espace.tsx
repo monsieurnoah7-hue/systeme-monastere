@@ -72,7 +72,7 @@ export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User |
         <EmptyState
           icon={<IconUser size={28} />}
           title="Aucune fiche travailleur rattachée"
-          hint="Votre compte de direction ou d’administration n’est pas lié à un salarié. L’espace personnel (historique de présence, outils en prêt) est réservé aux comptes rattachés à une fiche."
+          hint="Votre compte de direction n’est pas lié à un salarié. L’espace personnel (historique de présence, outils en prêt) est réservé aux comptes rattachés à une fiche."
         />
         <div className="grid gap-3 sm:grid-cols-3">
           <StatCard label="Jours ce mois" value={month.daysPresent} icon={<IconClock size={16} />} />

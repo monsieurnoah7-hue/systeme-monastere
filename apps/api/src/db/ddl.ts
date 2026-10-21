@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
   login text NOT NULL UNIQUE,
   password_hash text NOT NULL,
   display_name text NOT NULL,
-  role text NOT NULL CHECK (role IN ('direction','magasinier','chef_atelier','travailleur','admin')),
+  role text NOT NULL CHECK (role IN ('direction','magasinier','chef_atelier','travailleur')),
   employee_id text REFERENCES employees(id),
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
@@ -210,6 +210,10 @@ ALTER TABLE absences ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'appr
 ALTER TABLE absences ADD COLUMN IF NOT EXISTS reviewed_by text;
 ALTER TABLE absences ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
 ALTER TABLE absences ADD COLUMN IF NOT EXISTS review_note text;
+UPDATE users SET role = 'direction' WHERE role = 'admin';
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check
+  CHECK (role IN ('direction','magasinier','chef_atelier','travailleur'));
 `;
 
 export const MIGRATION_NAME = '003_magasins_leaves';

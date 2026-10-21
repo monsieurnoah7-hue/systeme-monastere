@@ -31,13 +31,13 @@ import { IconAlert, IconBox, IconGear, IconKey, IconPlus, IconRefresh, IconUsers
 const DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 export function Parametres({ user }: { user: User }) {
-  if (user.role !== 'admin' && user.role !== 'direction') {
+  if (user.role !== 'direction') {
     return (
       <>
         <PageHeader title="Paramètres" hint="Réglages de l’atelier." />
         <EmptyState
           title="Accès réservé"
-          hint="Les paramètres, les terminaux et les comptes sont gérés par la direction et l’administrateur."
+          hint="Les paramètres, les terminaux et les comptes sont gérés par la direction."
         />
       </>
     );
@@ -124,7 +124,7 @@ function AdminSettings({ user }: { user: User }) {
       api<{ users: AppUserRow[] }>('/api/users'),
       api<{ employees: Employee[] }>('/api/employees'),
       api<PermissionMatrix>('/api/permissions').catch(() => null),
-      user.role === 'admin'
+      user.role === 'direction'
         ? api<{ backups: BackupInfo[]; retentionDays: number }>('/api/admin/backups').catch(() => null)
         : Promise.resolve(null),
     ])
@@ -660,7 +660,7 @@ function AdminSettings({ user }: { user: User }) {
             </Button>
           </div>
           <p className="mt-1 text-[13px] text-ink-soft">
-            La direction et l’administrateur sont super-administrateurs : ils conservent toujours tous les droits.
+            La direction est super-administratrice : elle conserve toujours tous les droits.
             Les autres rôles sont accordés ici, action par action.
           </p>
           <div className="mt-4 overflow-x-auto">
@@ -669,7 +669,7 @@ function AdminSettings({ user }: { user: User }) {
                 <tr>
                   <th className="px-3 py-2 font-medium">Action</th>
                   {permMatrix.roles
-                    .filter((r) => r !== 'direction' && r !== 'admin')
+                    .filter((r) => r !== 'direction')
                     .map((role) => (
                       <th key={role} className="px-3 py-2 text-center font-medium">
                         {ROLE_LABEL[role]}
@@ -691,7 +691,7 @@ function AdminSettings({ user }: { user: User }) {
                         <tr key={action} className="border-b border-line last:border-b-0">
                           <td className="px-3 py-2 text-sm text-ink">{meta?.label ?? action}</td>
                           {permMatrix.roles
-                            .filter((r) => r !== 'direction' && r !== 'admin')
+                            .filter((r) => r !== 'direction')
                             .map((role) => (
                               <td key={role} className="px-3 py-2 text-center">
                                 <button
@@ -755,7 +755,7 @@ function AdminSettings({ user }: { user: User }) {
         </div>
       </Card>
 
-      {user.role === 'admin' ? (
+      {user.role === 'direction' ? (
         <Card className="mt-4 p-5">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
             <IconBox size={16} /> Sauvegardes &amp; maintenance

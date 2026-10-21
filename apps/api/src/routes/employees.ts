@@ -34,14 +34,14 @@ function newBadgeToken(): string {
   return `badge-${randomBytes(6).toString('hex')}`;
 }
 
-employeesRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier', 'admin'), async (c) => {
+employeesRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
   const employees = await getDb().query<EmployeeRow>(
     'SELECT id, full_name, job_title, photo_path, badge_token, active FROM employees ORDER BY full_name',
   );
   return c.json({ employees });
 });
 
-employeesRoutes.get('/today-status', requireRole('direction', 'magasinier', 'chef_atelier', 'admin'), async (c) => {
+employeesRoutes.get('/today-status', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
   const db = getDb();
   const today = await db.query<{ id: string; full_name: string; job_title: string; photo_path: string | null; active: boolean; in_at: string | null; out_at: string | null; break_in: string | null; break_out: string | null; late_minutes: number; status: string; leave_kind: string | null }>(
     `SELECT e.id, e.full_name, e.job_title, e.photo_path, e.active,
@@ -85,7 +85,7 @@ employeesRoutes.get('/today-status', requireRole('direction', 'magasinier', 'che
   });
 });
 
-employeesRoutes.get('/:id', requireRole('direction', 'magasinier', 'chef_atelier', 'admin'), async (c) => {
+employeesRoutes.get('/:id', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
   const id = c.req.param('id') ?? '';
   const employee = await getDb().one<EmployeeRow>(
     'SELECT id, full_name, job_title, photo_path, badge_token, active FROM employees WHERE id = $1',
@@ -95,7 +95,7 @@ employeesRoutes.get('/:id', requireRole('direction', 'magasinier', 'chef_atelier
   return c.json({ employee });
 });
 
-employeesRoutes.get('/:id/detail', requireRole('direction', 'magasinier', 'chef_atelier', 'admin'), async (c) => {
+employeesRoutes.get('/:id/detail', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
   const id = c.req.param('id') ?? '';
   const db = getDb();
   const employee = await db.one<EmployeeRow>(

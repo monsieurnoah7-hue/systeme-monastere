@@ -97,7 +97,7 @@ function A4Sheet({ tools }: { tools: Tool[] }) {
 
 export function Outils({ user, scan }: { user: User; scan?: ScanResult | null }) {
   const toast = useToast();
-  const canManage = user.role === 'magasinier' || user.role === 'admin';
+  const canManage = user.role === 'direction' || user.role === 'magasinier';
 
   const [filters, setFilters] = useState({ q: '', status: '', category: '', location: '', magasin_id: '' });
   const [tools, setTools] = useState<Tool[]>([]);

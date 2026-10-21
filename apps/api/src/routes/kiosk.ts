@@ -79,7 +79,7 @@ kioskRoutes.post('/identify', async (c) => {
 
   const db = getDb();
   const terminal = await db.one<{ id: string }>('SELECT id FROM terminals WHERE id = $1 AND active = true', [body.data.terminalId]);
-  if (!terminal) return c.json({ error: 'Terminal non enregistré par l’administrateur.' }, 403);
+  if (!terminal) return c.json({ error: 'Terminal non enregistré par la direction.' }, 403);
 
   const candidates = normalizeCode(body.data.code);
   const employee = await db.one<{
@@ -204,7 +204,7 @@ kioskRoutes.post('/punch', async (c) => {
 
   const db = getDb();
   const terminal = await db.one<{ id: string }>('SELECT id FROM terminals WHERE id = $1 AND active = true', [body.data.terminalId]);
-  if (!terminal) return c.json({ error: 'Terminal non enregistré par l’administrateur.' }, 403);
+  if (!terminal) return c.json({ error: 'Terminal non enregistré par la direction.' }, 403);
 
   const employee = await db.one<{ id: string; full_name: string; active: boolean }>(
     'SELECT id, full_name, active FROM employees WHERE id = $1 AND active = true',

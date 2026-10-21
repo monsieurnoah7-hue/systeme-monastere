@@ -162,5 +162,5 @@ export function buildMatrix(
 }
 
 export function isSuperAdmin(role: Role): boolean {
-  return role === 'admin' || role === 'direction';
+  return role === 'direction';
 }

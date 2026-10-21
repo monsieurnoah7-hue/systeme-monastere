@@ -20,7 +20,7 @@ export const loansRoutes = new Hono();
 
 loansRoutes.use('*', requireAuth);
 
-loansRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier', 'admin'), async (c) => {
+loansRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
   const status = c.req.query('status') ?? 'out';
   const db = getDb();
   const loans = await db.query(

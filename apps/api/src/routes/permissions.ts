@@ -19,7 +19,7 @@ permissionsRoutes.use('*', requireAuth);
 
 const MATRIX_ROLES = ['direction', 'magasinier', 'chef_atelier', 'travailleur'] as const;
 
-permissionsRoutes.get('/', requireRole('direction', 'admin'), async (c) => {
+permissionsRoutes.get('/', requireRole('direction'), async (c) => {
   const rows = await getDb().query<{ role: string; action: string; allowed: boolean }>(
     'SELECT role, action, allowed FROM role_permissions',
   );
@@ -60,7 +60,7 @@ const saveBody = z.object({
   ),
 });
 
-permissionsRoutes.put('/', requireRole('direction', 'admin'), async (c) => {
+permissionsRoutes.put('/', requireRole('direction'), async (c) => {
   const body = saveBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) return c.json({ error: 'Matrice de permissions invalide.' }, 400);
   const db = getDb();
@@ -73,7 +73,6 @@ permissionsRoutes.put('/', requireRole('direction', 'admin'), async (c) => {
     if (!(PERMISSION_ACTIONS as readonly string[]).includes(action)) continue;
     for (const [role, allowed] of Object.entries(roles)) {
       if (!(MATRIX_ROLES as readonly string[]).includes(role)) continue;
-      if (role === 'admin') continue; // admin is always super-admin
       entries.push({ role, action, allowed: Boolean(allowed) });
     }
   }

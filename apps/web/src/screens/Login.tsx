@@ -6,7 +6,6 @@ const DEMO: { login: string; password: string; label: string }[] = [
   { login: 'direction', password: 'direction226', label: 'Direction' },
   { login: 'magasinier', password: 'magasin226', label: 'Magasinier' },
   { login: 'chef', password: 'atelier226', label: 'Chef d’atelier' },
-  { login: 'admin', password: 'admin226', label: 'Administrateur' },
 ];
 
 export function Login({ onLogin }: { onLogin: (user: User) => void }) {

@@ -44,7 +44,7 @@ const STATUS_CHIP: Record<string, { tone: 'green' | 'amber' | 'red' | 'blue' | '
 
 export function Employees({ user, scan }: { user: User; scan?: ScanResult | null }) {
   const toast = useToast();
-  const canManage = user.role === 'direction' || user.role === 'admin';
+  const canManage = user.role === 'direction';
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [todayStatus, setTodayStatus] = useState<TodayEmployee[]>([]);

@@ -66,7 +66,7 @@ async function refQty(refId: number): Promise<number> {
   return Number(row?.qty ?? 0);
 }
 
-stockRoutes.get('/refs', requireRole('direction', 'magasinier', 'chef_atelier', 'admin'), async (c) => {
+stockRoutes.get('/refs', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
   const magasinId = c.req.query('magasin_id');
   const params: unknown[] = [];
   let magasinWhere = '';
@@ -101,7 +101,7 @@ stockRoutes.get('/refs', requireRole('direction', 'magasinier', 'chef_atelier', 
   });
 });
 
-stockRoutes.get('/movements', requireRole('direction', 'magasinier', 'chef_atelier', 'admin'), async (c) => {
+stockRoutes.get('/movements', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
   const refId = c.req.query('refId');
   const moveType = c.req.query('move_type');
   const from = c.req.query('from');
@@ -229,8 +229,8 @@ stockRoutes.post(
     if (!body.success) return c.json({ error: 'Mouvement invalide (type, quantité et référence requis).' }, 400);
     const data = body.data;
     const role = c.get('auth')?.user.role;
-    if (data.move_type === 'correction' && role !== 'magasinier' && role !== 'admin') {
-      return c.json({ error: 'Seul le magasinier ou l’administrateur peut corriger le stock.' }, 403);
+    if (data.move_type === 'correction' && role !== 'magasinier' && role !== 'direction') {
+      return c.json({ error: 'Seul le magasinier ou la direction peut corriger le stock.' }, 403);
     }
     if (data.move_type !== 'out' && role === 'chef_atelier') {
       return c.json({ error: 'Le chef d’atelier ne peut enregistrer qu’une sortie de matériel.' }, 403);

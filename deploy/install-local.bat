@@ -81,7 +81,6 @@ echo.
 echo  Acces : http://localhost
 echo.
 echo  Comptes :
-echo    admin / (voir .env - BOOTSTRAP_PASSWORD)
 echo    direction / direction226
 echo    magasinier / magasin226
 echo    chef / atelier226

@@ -181,8 +181,8 @@ try {
       ?.click();
   });
   await waitForText('Connexion');
-  await page.type('input[placeholder="ex. magasinier"]', 'admin');
-  await page.type('input[type="password"]', 'admin226');
+  await page.type('input[placeholder="ex. magasinier"]', 'direction');
+  await page.type('input[type="password"]', 'direction226');
   await clickText('Se connecter');
   await waitForText('Répartition des outils');
 

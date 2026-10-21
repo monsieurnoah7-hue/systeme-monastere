@@ -15,7 +15,7 @@ type MagasinDetail = {
 
 export function Magasins({ user, scan }: { user: { role: string }; scan?: ScanResult | null }) {
   const toast = useToast();
-  const canManage = user.role === 'magasinier' || user.role === 'admin' || user.role === 'direction';
+  const canManage = user.role === 'magasinier' || user.role === 'direction';
   const [magasins, setMagasins] = useState<Magasin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

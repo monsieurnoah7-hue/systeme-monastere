@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { localDate } from '../lib/time.js';
 import type { Role } from '../types.js';
 
-const FULL_ROLES: Role[] = ['direction', 'admin'];
+const FULL_ROLES: Role[] = ['direction'];
 const PARTIAL_ROLES: Role[] = ['magasinier', 'chef_atelier'];
 
 export const dashboardRoutes = new Hono();
