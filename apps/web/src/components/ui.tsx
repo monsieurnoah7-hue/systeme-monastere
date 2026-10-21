@@ -185,6 +185,7 @@ export function Field({
   label,
   hint,
   className,
+  'aria-invalid': ariaInvalid,
   ...rest
 }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
   const id = useId();
@@ -193,9 +194,13 @@ export function Field({
       <span className="mb-1.5 block text-[13px] font-medium text-ink-soft">{label}</span>
       <input
         id={id}
+        aria-invalid={ariaInvalid}
         className={cx(
-          'h-11 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-ink-faint',
-          'transition-colors duration-[120ms] focus:border-amber focus:outline-none focus:ring-2 focus:ring-amber/15',
+          'h-11 w-full rounded-btn border bg-surface px-3 text-sm text-ink placeholder:text-ink-faint',
+          'transition-colors duration-[120ms] focus:outline-none focus:ring-2',
+          ariaInvalid
+            ? 'border-red focus:border-red focus:ring-red/15'
+            : 'border-line-strong focus:border-amber focus:ring-amber/15',
         )}
         {...rest}
       />
@@ -310,11 +315,13 @@ export function Banner({
   title,
   children,
   icon,
+  className,
 }: {
   tone?: 'info' | 'error' | 'success' | 'warning';
   title?: string;
   children?: ReactNode;
   icon?: ReactNode;
+  className?: string;
 }) {
   const styles = {
     info: 'border-blue/20 bg-blue-wash text-blue',
@@ -323,7 +330,11 @@ export function Banner({
     warning: 'border-amber/25 bg-amber-wash text-amber',
   }[tone];
   return (
-    <div className={cx('flex items-start gap-2.5 rounded-btn border px-3.5 py-3 text-sm fade-in', styles)}>
+    <div
+      role={tone === 'error' ? 'alert' : 'status'}
+      aria-live={tone === 'error' ? 'assertive' : 'polite'}
+      className={cx('flex items-start gap-2.5 rounded-btn border px-3.5 py-3 text-sm fade-in', styles, className)}
+    >
       <span className="mt-0.5 shrink-0">
         {icon ?? (tone === 'success' ? <IconCheck size={16} /> : <IconAlert size={16} />)}
       </span>

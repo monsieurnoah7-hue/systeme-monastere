@@ -102,8 +102,13 @@ function useCamera(active: boolean) {
     let cancelled = false;
     setError(null);
     setReady(false);
-    navigator.mediaDevices
-      ?.getUserMedia({ video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 960 } }, audio: false })
+    const media = navigator.mediaDevices;
+    if (!media?.getUserMedia) {
+      setError('Caméra indisponible : ce terminal n’expose aucune caméra (contexte non sécurisé ou matériel absent).');
+      return;
+    }
+    media
+      .getUserMedia({ video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 960 } }, audio: false })
       .then((stream) => {
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
@@ -119,8 +124,16 @@ function useCamera(active: boolean) {
           };
         }
       })
-      .catch(() => {
-        if (!cancelled) setError('Caméra indisponible : autorisez l’accès à la caméra ou utilisez un autre terminal.');
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const name = err instanceof DOMException ? err.name : '';
+        if (name === 'NotAllowedError') {
+          setError('Accès caméra refusé : autorisez la caméra dans le navigateur, puis réessayez.');
+        } else if (name === 'NotFoundError') {
+          setError('Aucune caméra détectée sur ce terminal.');
+        } else {
+          setError('Caméra indisponible : vérifiez le matériel ou utilisez un autre terminal.');
+        }
       });
     return () => {
       cancelled = true;
@@ -188,13 +201,24 @@ function BadgeScanner({ onCode, onClose }: { onCode: (code: string) => void; onC
     <div className="fixed inset-0 z-50 flex flex-col bg-charcoal text-white">
       <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <p className="text-sm font-medium">Présentez le badge devant la caméra</p>
-        <button onClick={onClose} className="rounded-btn p-2 text-white/70 hover:bg-white/10" aria-label="Fermer le scanner">
+        <button
+          onClick={onClose}
+          className="rounded-btn p-2 text-white/70 transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+          aria-label="Fermer le scanner"
+        >
           <IconX size={18} />
         </button>
       </header>
       <div className="relative flex flex-1 items-center justify-center overflow-hidden">
         <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
-        <div className="pointer-events-none absolute inset-12 border-2 border-amber/80" />
+        <div className="pointer-events-none absolute inset-12">
+          <div className="absolute inset-0 rounded-lg border-2 border-amber/50" />
+          <span className="absolute -left-0.5 -top-0.5 h-7 w-7 border-l-4 border-t-4 border-amber" />
+          <span className="absolute -right-0.5 -top-0.5 h-7 w-7 border-r-4 border-t-4 border-amber" />
+          <span className="absolute -bottom-0.5 -left-0.5 h-7 w-7 border-b-4 border-l-4 border-amber" />
+          <span className="absolute -bottom-0.5 -right-0.5 h-7 w-7 border-b-4 border-r-4 border-amber" />
+          <div className="scan-laser absolute inset-x-3 top-2 h-0.5 rounded-full bg-amber shadow-[0_0_14px_var(--color-amber)]" />
+        </div>
         {error ? (
           <div className="absolute inset-x-6 bottom-24">
             <Banner tone="error">{error}</Banner>
@@ -222,9 +246,10 @@ function Keypad({ value, onChange, onSubmit }: { value: string; onChange: (next:
             else if (value.length < 8) onChange(value + key);
           }}
           className={cx(
-            'h-14 rounded-btn border text-lg font-semibold transition-colors',
+            'h-14 rounded-btn border text-lg font-semibold transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.96]',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/40 focus-visible:ring-offset-1',
             key === 'OK'
-              ? 'border-amber bg-amber text-white hover:bg-amber-2'
+              ? 'border-amber bg-amber text-white hover:bg-amber-2 active:bg-amber-2'
               : key === 'C'
                 ? 'border-line-strong bg-surface-2 text-ink-soft hover:bg-grey-wash'
                 : 'border-line-strong bg-surface text-ink hover:bg-surface-2',
@@ -383,7 +408,7 @@ export function Pointage() {
             </Banner>
           ) : (
             terminals.map((terminal) => (
-              <Card key={terminal.id} className="p-4">
+              <Card key={terminal.id} className="rise p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-ink">{terminal.name}</p>
@@ -433,9 +458,9 @@ export function Pointage() {
           <p className="mt-1 text-[13px] capitalize text-white/60">{dateStr}</p>
         </div>
 
-        <Card className="p-5">
+        <Card className="rise p-5">
           <div className="mb-4 flex h-16 items-center justify-center rounded-btn border border-line-strong bg-surface-2">
-            <span className="font-mono text-2xl font-semibold tracking-[0.2em] text-ink num">
+            <span className="num font-mono text-2xl font-semibold tracking-[0.2em] text-ink transition-opacity duration-150">
               {code || '— — —'}
             </span>
           </div>
@@ -458,7 +483,12 @@ export function Pointage() {
 
           {error ? (
             <div className="mt-4">
-              <Banner tone="error" title={locked ? 'Terminal verrouillé' : 'Identification refusée'}>
+              <Banner
+                tone="error"
+                className="shake"
+                key={error}
+                title={locked ? 'Terminal verrouillé' : 'Identification refusée'}
+              >
                 <span className="inline-flex items-start gap-2">
                   {locked ? <IconLock size={16} className="mt-0.5" /> : null}
                   <span>{error}</span>
@@ -489,7 +519,7 @@ export function Pointage() {
           <div className="h-full bg-amber transition-[width] duration-1000 ease-linear" style={{ width: `${progress}%` }} />
         </div>
 
-        <Card className="p-5">
+        <Card className="rise p-5">
           <div className="flex items-start gap-4">
             {employee.photo_path ? (
               <img
@@ -611,7 +641,7 @@ export function Pointage() {
           ) : null}
         </div>
 
-        <Card className="mt-4 p-4">
+        <Card className="rise mt-4 p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
             <IconClock size={16} />
             30 derniers jours
@@ -674,7 +704,7 @@ export function Pointage() {
         </div>
 
         {!selfie ? (
-          <Card className="overflow-hidden">
+          <Card className="rise overflow-hidden">
             <div className="relative aspect-square w-full bg-charcoal">
               <video ref={videoRef} playsInline muted className="h-full w-full -scale-x-100 object-cover" />
               {!ready && !cameraError ? (
@@ -707,7 +737,7 @@ export function Pointage() {
             ) : null}
           </Card>
         ) : (
-          <Card className="overflow-hidden">
+          <Card className="rise overflow-hidden">
             <div className="aspect-square w-full bg-charcoal">
               <img src={selfie} alt="Aperçu du selfie" className="h-full w-full object-cover" />
             </div>
@@ -722,7 +752,7 @@ export function Pointage() {
                   <select
                     value={motif}
                     onChange={(event) => setMotif(event.target.value)}
-                    className="h-11 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm"
+                    className="h-11 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm transition-colors duration-150 focus:border-amber focus:outline-none focus:ring-2 focus:ring-amber/15"
                   >
                     <option value="">Choisir un motif…</option>
                     {(situation?.lateMotifs ?? []).map((item) => (
@@ -738,7 +768,7 @@ export function Pointage() {
                     onChange={(event) => setMotifNote(event.target.value)}
                     placeholder="Précisez le motif"
                     rows={2}
-                    className="w-full rounded-btn border border-line-strong bg-surface px-3 py-2 text-sm"
+                    className="w-full rounded-btn border border-line-strong bg-surface px-3 py-2 text-sm transition-colors duration-150 focus:border-amber focus:outline-none focus:ring-2 focus:ring-amber/15"
                   />
                 ) : null}
               </div>
@@ -772,8 +802,8 @@ export function Pointage() {
   if (stage === 'confirm' && result) {
     return (
       <div className="mx-auto max-w-md">
-        <Card className="p-6 text-center">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-green-wash text-green">
+        <Card className="rise p-6 text-center">
+          <span className="scale-in mx-auto grid h-14 w-14 place-items-center rounded-full bg-green-wash text-green">
             <IconCheck size={28} />
           </span>
           <h1 className="mt-4 text-xl font-semibold text-ink">

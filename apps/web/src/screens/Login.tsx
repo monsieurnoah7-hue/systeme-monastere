@@ -47,7 +47,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
           </div>
         </div>
 
-        <div className="rounded-card border border-white/10 bg-surface p-6 shadow-pop">
+        <div className="rise rounded-card border border-white/10 bg-surface p-6 shadow-pop">
           <h1 className="text-lg font-semibold text-ink">Connexion</h1>
           <p className="mt-1 text-sm text-ink-soft">Accès réservé aux profils autorisés (CDC, section 3).</p>
 
@@ -58,6 +58,8 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
               autoComplete="username"
               onChange={(event) => setLogin(event.target.value)}
               placeholder="ex. magasinier"
+              aria-invalid={error ? true : undefined}
+              autoFocus
               required
             />
             <Field
@@ -67,10 +69,15 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
               autoComplete="current-password"
               onChange={(event) => setPassword(event.target.value)}
               placeholder="••••••••"
+              aria-invalid={error ? true : undefined}
               required
             />
-            {error ? <Banner tone="error">{error}</Banner> : null}
-            <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>
+            {error ? (
+              <Banner tone="error" className="shake" key={error}>
+                {error}
+              </Banner>
+            ) : null}
+            <Button type="submit" variant="primary" size="lg" className="w-full" loading={busy}>
               {busy ? 'Connexion…' : 'Se connecter'}
             </Button>
           </form>
@@ -89,7 +96,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
                       setLogin(account.login);
                       setPassword(account.password);
                     }}
-                    className="rounded-chip border border-line-strong bg-surface-2 px-2.5 py-1 text-[12px] font-medium text-ink-soft hover:border-amber hover:text-amber"
+                    className="rounded-chip border border-line-strong bg-surface-2 px-2.5 py-1 text-[12px] font-medium text-ink-soft transition-colors duration-150 hover:border-amber hover:text-amber focus-visible:border-amber focus-visible:text-amber"
                   >
                     {account.label}
                   </button>
