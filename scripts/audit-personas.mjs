@@ -181,7 +181,7 @@ async function testPersona(browser, persona) {
       { method: 'GET', path: '/api/leaves?status=pending', expect: 200 },
       { method: 'GET', path: '/api/dashboard', expect: 200 },
       { method: 'GET', path: '/api/scan?q=RBT-001', expect: 200 },
-      { method: 'GET', path: '/api/scan?q=badge-jean-marc', expect: 200 },
+      { method: 'GET', path: '/api/scan?q=H4K7M', expect: 200 },
     ]);
     // récupérer l'ID réel d'une demande pending puis la traiter
     const pendingList = await page.evaluate(async () => {

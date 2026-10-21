@@ -232,32 +232,64 @@ function BadgeScanner({ onCode, onClose }: { onCode: (code: string) => void; onC
   );
 }
 
-function Keypad({ value, onChange, onSubmit }: { value: string; onChange: (next: string) => void; onSubmit: () => void }) {
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', 'OK'];
+const CODE_LENGTH = 5;
+
+const KEYPAD_ROWS: string[][] = [
+  ['1', '2', '3', '4', '5', '6'],
+  ['7', '8', '9', '0', 'A', 'B'],
+  ['C', 'D', 'E', 'F', 'G', 'H'],
+  ['I', 'J', 'K', 'L', 'M', 'N'],
+  ['O', 'P', 'Q', 'R', 'S', 'T'],
+  ['U', 'V', 'W', 'X', 'Y', 'Z'],
+];
+
+function Keypad({ value, onChange }: { value: string; onChange: (next: string) => void }) {
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {keys.map((key) => (
+    <div className="grid grid-cols-6 gap-2">
+      {KEYPAD_ROWS.flat().map((key) => (
         <button
           key={key}
           type="button"
           onClick={() => {
-            if (key === 'C') onChange('');
-            else if (key === 'OK') onSubmit();
-            else if (value.length < 8) onChange(value + key);
+            if (value.length < CODE_LENGTH) onChange(value + key);
           }}
           className={cx(
-            'h-14 rounded-btn border text-lg font-semibold transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.96]',
+            'h-12 rounded-btn border text-[15px] font-semibold transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.96]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/40 focus-visible:ring-offset-1',
-            key === 'OK'
-              ? 'border-amber bg-amber text-white hover:bg-amber-2 active:bg-amber-2'
-              : key === 'C'
-                ? 'border-line-strong bg-surface-2 text-ink-soft hover:bg-grey-wash'
-                : 'border-line-strong bg-surface text-ink hover:bg-surface-2',
+            value.includes(key)
+              ? 'border-amber bg-amber-wash text-amber'
+              : 'border-line-strong bg-surface text-ink hover:bg-surface-2',
           )}
         >
           {key}
         </button>
       ))}
+      <button
+        type="button"
+        disabled={value.length === 0}
+        onClick={() => onChange(value.slice(0, -1))}
+        aria-label="Retirer le dernier caractère"
+        className={cx(
+          'col-span-4 h-12 rounded-btn border text-[15px] font-semibold transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.96]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/40 focus-visible:ring-offset-1',
+          'border-line-strong bg-surface-2 text-ink-soft hover:bg-grey-wash disabled:opacity-40',
+        )}
+      >
+        ⌫ Effacer
+      </button>
+      <button
+        type="button"
+        disabled={value.length === 0}
+        onClick={() => onChange('')}
+        aria-label="Effacer tout le code"
+        className={cx(
+          'col-span-2 h-12 rounded-btn border text-[15px] font-semibold transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.96]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/40 focus-visible:ring-offset-1',
+          'border-line-strong bg-surface-2 text-ink-soft hover:bg-grey-wash disabled:opacity-40',
+        )}
+      >
+        Tout
+      </button>
     </div>
   );
 }
@@ -446,7 +478,7 @@ export function Pointage() {
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-[22px] font-semibold text-ink">Pointage</h1>
-            <p className="mt-1 text-sm text-ink-soft">Saisissez votre identifiant ou présentez votre badge.</p>
+            <p className="mt-1 text-sm text-ink-soft">Saisissez votre code à 5 caractères ou présentez votre badge.</p>
           </div>
           <Button variant="quiet" size="sm" onClick={clear}>
             Terminal
@@ -459,13 +491,33 @@ export function Pointage() {
         </div>
 
         <Card className="rise p-5">
-          <div className="mb-4 flex h-16 items-center justify-center rounded-btn border border-line-strong bg-surface-2">
-            <span className="num font-mono text-2xl font-semibold tracking-[0.2em] text-ink transition-opacity duration-150">
-              {code || '— — —'}
-            </span>
+          <div className="mb-1 flex items-baseline justify-between">
+            <p className="text-[13px] font-semibold text-ink">Code de pointage</p>
+            <p className="text-[12px] text-ink-faint">{CODE_LENGTH} caractères</p>
+          </div>
+          <div className="mb-4 flex justify-center gap-2" role="group" aria-label="Code saisi" data-code={code}>
+            {Array.from({ length: CODE_LENGTH }, (_, index) => {
+              const character = code[index];
+              return (
+                <span
+                  key={index}
+                  aria-hidden
+                  className={cx(
+                    'grid h-14 w-11 place-items-center rounded-btn border-2 font-mono text-2xl font-semibold num transition-colors duration-150',
+                    character
+                      ? 'border-line-strong bg-surface text-ink'
+                      : index === code.length
+                        ? 'border-amber bg-amber-wash text-ink-faint'
+                        : 'border-line bg-paper-2 text-ink-faint',
+                  )}
+                >
+                  {character ?? '·'}
+                </span>
+              );
+            })}
           </div>
 
-          <Keypad value={code} onChange={setCode} onSubmit={() => void identify(code)} />
+          <Keypad value={code} onChange={setCode} />
 
           <div className="mt-4 flex gap-2">
             <Button className="flex-1" icon={<IconQr size={18} />} onClick={() => setScanning(true)}>

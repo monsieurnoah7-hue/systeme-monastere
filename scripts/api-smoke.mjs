@@ -91,7 +91,7 @@ check('création employé', emp.status === 201 && /^EMP-\d{3}$/.test(emp.json?.e
 const empId = emp.json?.employee?.id;
 
 const badge = await call('POST', `/api/employees/${empId}/badge`);
-check('regeneration badge', badge.status === 200 && badge.json?.employee?.badge_token?.startsWith('badge-'));
+check('regeneration badge', badge.status === 200 && /^[A-Z0-9]{5}$/.test(badge.json?.employee?.badge_token ?? ''));
 
 const deac = await call('PATCH', `/api/employees/${empId}`, { active: false });
 check('désactivation employé', deac.status === 200 && deac.json?.employee?.active === false);

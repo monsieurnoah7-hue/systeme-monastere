@@ -96,13 +96,12 @@ try {
   await waitForText('Scanner badge');
   await shot('05-pointage-identify.png');
 
-  // code 008 = EMP-008
-  const steps = ['0', '00', '008'];
-  for (let i = 0; i < 3; i += 1) {
-    await clickText(steps[i].at(-1));
-    const expected = steps[i];
+  // code de pointage EMP-008 = W3J6N (5 caractères alnum)
+  const steps = ['W', 'W3', 'W3J', 'W3J6', 'W3J6N'];
+  for (const expected of steps) {
+    await clickText(expected.at(-1));
     await page.waitForFunction(
-      (value) => [...document.querySelectorAll('div')].some((d) => d.textContent.trim() === value),
+      (value) => document.querySelector('[data-code]')?.getAttribute('data-code') === value,
       { timeout: 5000 },
       expected,
     );

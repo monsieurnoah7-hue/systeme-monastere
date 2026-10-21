@@ -41,14 +41,14 @@ async function seed() {
   );
 
   const employees = [
-    ['EMP-001', 'Jean-Marc ATANGANA', 'Chef d’atelier', 'badge-jean-marc'],
-    ['EMP-002', 'Pierre NKOA', 'Magasinier', 'badge-pierre'],
-    ['EMP-003', 'Aimé MBARGA', 'Menuisier', 'badge-aime'],
-    ['EMP-004', 'Serge OLIVIER', 'Menuisier', 'badge-serge'],
-    ['EMP-005', 'Bruno EYENGA', 'Apprenti', 'badge-bruno'],
-    ['EMP-006', 'Claire ATANGANA', 'Comptable', 'badge-claire'],
-    ['EMP-007', 'David SIMO', 'Menuisier', 'badge-david'],
-    ['EMP-008', 'Landry ONANA', 'Apprenti', 'badge-landry'],
+    ['EMP-001', 'Jean-Marc ATANGANA', 'Chef d’atelier', 'H4K7M'],
+    ['EMP-002', 'Pierre NKOA', 'Magasinier', 'R9T2W'],
+    ['EMP-003', 'Aimé MBARGA', 'Menuisier', 'P3N8D'],
+    ['EMP-004', 'Serge OLIVIER', 'Menuisier', 'X6V5J'],
+    ['EMP-005', 'Bruno EYENGA', 'Apprenti', 'M2Q9F'],
+    ['EMP-006', 'Claire ATANGANA', 'Comptable', 'T7B4K'],
+    ['EMP-007', 'David SIMO', 'Menuisier', 'C5R8H'],
+    ['EMP-008', 'Landry ONANA', 'Apprenti', 'W3J6N'],
   ] as const;
   for (const [id, name, job, badge] of employees) {
     await db.query('INSERT INTO employees (id, full_name, job_title, badge_token) VALUES ($1, $2, $3, $4)', [

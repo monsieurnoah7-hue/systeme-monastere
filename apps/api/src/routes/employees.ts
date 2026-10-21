@@ -30,8 +30,13 @@ async function nextEmployeeId(): Promise<string> {
   return `EMP-${String(current + 1).padStart(3, '0')}`;
 }
 
+const BADGE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
 function newBadgeToken(): string {
-  return `badge-${randomBytes(6).toString('hex')}`;
+  const bytes = randomBytes(5);
+  let token = '';
+  for (let i = 0; i < 5; i += 1) token += BADGE_ALPHABET[bytes.readUInt8(i) % BADGE_ALPHABET.length];
+  return token;
 }
 
 employeesRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {

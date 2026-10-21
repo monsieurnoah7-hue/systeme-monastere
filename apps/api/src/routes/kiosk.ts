@@ -13,10 +13,10 @@ const LOCK_MS = 60_000;
 
 function normalizeCode(code: string): string[] {
   const raw = code.trim().toUpperCase();
-  const digits = raw.replace(/\D/g, '');
+  if (!raw) return [];
   const candidates = [raw];
-  if (digits) {
-    candidates.push(`EMP-${digits.padStart(3, '0')}`, `EMP-${digits}`, digits);
+  if (/^\d+$/.test(raw)) {
+    candidates.push(`EMP-${raw.padStart(3, '0')}`, `EMP-${raw}`);
   }
   return [...new Set(candidates)];
 }
