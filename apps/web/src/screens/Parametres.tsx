@@ -15,35 +15,80 @@ import { ROLE_LABEL, WORKDAY_LABEL, formatDateTime } from '../lib/labels';
 import {
   Banner,
   Button,
-  Card,
-  Chip,
   EmptyState,
-  Field,
   Modal,
   PageHeader,
-  SelectField,
   Spinner,
   cx,
   useToast,
 } from '../components/ui';
-import { IconAlert, IconBox, IconGear, IconKey, IconPlus, IconRefresh, IconUsers } from '../components/Icons';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
+import { Separator } from '../components/ui/separator';
+import {
+  AlertTriangle,
+  Check,
+  CheckCheck,
+  CheckCircle2,
+  Clock,
+  Copy,
+  Database,
+  Download,
+  Filter,
+  HardDrive,
+  KeyRound,
+  Lock,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Smartphone,
+  UserPlus,
+  Users,
+  UserX,
+  X,
+} from 'lucide-react';
 
-const DAYS = [0, 1, 2, 3, 4, 5, 6];
+const WEEKDAYS_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Lundi -> Dimanche
 
 const ROLE_ORDER: Record<Role, number> = { direction: 0, magasinier: 1, chef_atelier: 2, travailleur: 3 };
 
-const ROLE_TONE: Record<Role, 'blue' | 'amber' | 'green' | 'neutral'> = {
-  direction: 'blue',
-  magasinier: 'amber',
-  chef_atelier: 'green',
-  travailleur: 'neutral',
+const ROLE_THEME: Record<Role, { badgeVariant: 'default' | 'secondary' | 'outline'; tone: 'blue' | 'amber' | 'green' | 'neutral'; bg: string; text: string; border: string }> = {
+  direction: {
+    badgeVariant: 'default',
+    tone: 'blue',
+    bg: 'bg-surface-2 text-ink border-line',
+    text: 'text-ink',
+    border: 'border-line',
+  },
+  magasinier: {
+    badgeVariant: 'secondary',
+    tone: 'amber',
+    bg: 'bg-surface-2 text-ink border-line',
+    text: 'text-amber',
+    border: 'border-line',
+  },
+  chef_atelier: {
+    badgeVariant: 'secondary',
+    tone: 'green',
+    bg: 'bg-surface-2 text-ink border-line',
+    text: 'text-green',
+    border: 'border-line',
+  },
+  travailleur: {
+    badgeVariant: 'outline',
+    tone: 'neutral',
+    bg: 'bg-surface-2 text-ink-soft border-line',
+    text: 'text-ink-soft',
+    border: 'border-line',
+  },
 };
 
 const ROLE_DESC: Record<Role, string> = {
-  direction: 'Tous les droits, y compris comptes et sauvegardes.',
-  magasinier: 'Outils, stocks et magasins.',
-  chef_atelier: 'Équipe, prêts et sorties de chantier.',
-  travailleur: 'Son espace et ses pointages.',
+  direction: 'Super-administrateur : accès intégral à tous les modules, comptes et sauvegardes.',
+  magasinier: 'Gestion logistique : inventaire d’outils, stocks, entrées/sorties et magasins.',
+  chef_atelier: 'Supervision terrain : gestion des équipes, prêts d’outils et départs de chantier.',
+  travailleur: 'Accès restreint : consultation de son espace personnel, prêts et pointages.',
 };
 
 function roleInitials(name: string): string {
@@ -56,22 +101,6 @@ function roleInitials(name: string): string {
       .join('')
       .toUpperCase() || '?'
   );
-}
-
-export function Parametres({ user }: { user: User }) {
-  if (user.role !== 'direction') {
-    return (
-      <>
-        <PageHeader title="Paramètres" hint="Réglages de l’atelier." />
-        <EmptyState
-          title="Accès réservé"
-          hint="Les paramètres, les terminaux et les comptes sont gérés par la direction."
-        />
-      </>
-    );
-  }
-
-  return <AdminSettings user={user} />;
 }
 
 function formatBytes(size: number): string {
@@ -103,9 +132,35 @@ async function downloadFile(url: string, filename: string, init?: RequestInit): 
   setTimeout(() => URL.revokeObjectURL(href), 4_000);
 }
 
+export function Parametres({ user }: { user: User }) {
+  if (user.role !== 'direction') {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Paramètres" hint="Réglages de l’atelier." />
+        <Card className="border-line bg-surface p-8 text-center shadow-card">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-amber-wash text-amber">
+            <Lock size={22} />
+          </div>
+          <h2 className="mt-4 text-base font-semibold text-ink">Espace réservé à la direction</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-ink-soft">
+            La gestion des comptes d’accès, des terminaux, des permissions et des sauvegardes système est réservée aux
+            membres de la direction.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  return <AdminSettings user={user} />;
+}
+
 function AdminSettings({ user }: { user: User }) {
   const toast = useToast();
 
+  // Navigation tab
+  const [activeTab, setActiveTab] = useState<'comptes' | 'permissions' | 'kiosk' | 'securite' | 'sauvegardes'>('comptes');
+
+  // Core data states
   const [settings, setSettings] = useState<KioskSettings | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -117,19 +172,22 @@ function AdminSettings({ user }: { user: User }) {
   const [permMatrix, setPermMatrix] = useState<PermissionMatrix | null>(null);
   const [permDraft, setPermDraft] = useState<Record<string, Record<string, boolean>> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [reload, setReload] = useState(0);
 
+  // Backup & Reset states
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [retentionDays, setRetentionDays] = useState(30);
   const [backupBusy, setBackupBusy] = useState(false);
   const [resetText, setResetText] = useState('');
   const [resetBusy, setResetBusy] = useState(false);
 
+  // Terminal dialog state
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalForm, setTerminalForm] = useState({ name: '', id: '' });
-  const [busy, setBusy] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [copiedTerminalId, setCopiedTerminalId] = useState<string | null>(null);
 
+  // User management dialogs
   const [userOpen, setUserOpen] = useState(false);
   const [userForm, setUserForm] = useState({
     login: '',
@@ -143,11 +201,23 @@ function AdminSettings({ user }: { user: User }) {
   const [editFor, setEditFor] = useState<AppUserRow | null>(null);
   const [editForm, setEditForm] = useState({ display_name: '', role: 'travailleur' as Role, employee_id: '' });
 
+  // Password change for current user
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
+
+  // General busy & error states
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Filter states for accounts
+  const [userSearch, setUserSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'all' | Role>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    if (reload === 0) setLoading(true);
+    else setIsRefreshing(true);
+
     Promise.all([
       api<{ settings: KioskSettings }>('/api/settings'),
       api<{ terminals: TerminalInfo[] }>('/api/terminals'),
@@ -178,13 +248,17 @@ function AdminSettings({ user }: { user: User }) {
         if (!cancelled) setSettingsError(err instanceof Error ? err.message : 'Chargement impossible.');
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setIsRefreshing(false);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [reload]);
+  }, [reload, user.role]);
 
+  // Save Settings helper
   async function saveSettings(patch: Partial<KioskSettings>) {
     setSavingSettings(true);
     setSettingsError(null);
@@ -204,6 +278,7 @@ function AdminSettings({ user }: { user: User }) {
     }
   }
 
+  // Backup actions
   async function refreshBackups() {
     try {
       const res = await api<{ backups: BackupInfo[]; retentionDays: number }>('/api/admin/backups');
@@ -220,7 +295,7 @@ function AdminSettings({ user }: { user: User }) {
       const res = await api<{ ok: boolean; size: number; tables: number; rows: number }>('/api/admin/backup/save', {
         method: 'POST',
       });
-      toast(`Sauvegarde cloud effectuée (${res.tables} tables, ${formatBytes(res.size)}).`, 'success');
+      toast(`Sauvegarde cloud réussie (${res.tables} tables, ${formatBytes(res.size)}).`, 'success');
       await refreshBackups();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Sauvegarde impossible.', 'error');
@@ -233,7 +308,7 @@ function AdminSettings({ user }: { user: User }) {
     try {
       const stamp = new Date().toISOString().slice(0, 10);
       await downloadFile('/api/admin/backup', `monastere-backup-${stamp}.json.gz`, { method: 'POST' });
-      toast('Export téléchargé.', 'success');
+      toast('Export JSON compressé téléchargé.', 'success');
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Export impossible.', 'error');
     }
@@ -256,7 +331,7 @@ function AdminSettings({ user }: { user: User }) {
         method: 'POST',
         body: JSON.stringify({ confirm: resetText }),
       });
-      toast('Données de démonstration purgées.', 'success');
+      toast('Données de démonstration purgées avec succès.', 'success');
       setTimeout(() => window.location.reload(), 700);
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Purge impossible.', 'error');
@@ -264,6 +339,7 @@ function AdminSettings({ user }: { user: User }) {
     }
   }
 
+  // Workdays & Motifs
   function toggleWorkday(day: number) {
     if (!settings) return;
     const workdays = settings.workdays.includes(day)
@@ -276,7 +352,7 @@ function AdminSettings({ user }: { user: User }) {
     if (!settings) return;
     const late_motifs = settings.late_motifs.filter((value) => value !== motif);
     if (late_motifs.length === 0) {
-      toast('Au moins un motif de retard doit rester.', 'error');
+      toast('Au moins un motif de retard doit rester configuré.', 'error');
       return;
     }
     void saveSettings({ late_motifs });
@@ -293,15 +369,16 @@ function AdminSettings({ user }: { user: User }) {
     void saveSettings({ late_motifs: [...settings.late_motifs, value] });
   }
 
+  // Terminal actions
   async function createTerminal() {
     setBusy(true);
     setFormError(null);
     try {
       await api('/api/terminals', {
         method: 'POST',
-        body: JSON.stringify({ name: terminalForm.name, id: terminalForm.id.trim() || undefined }),
+        body: JSON.stringify({ name: terminalForm.name.trim(), id: terminalForm.id.trim() || undefined }),
       });
-      toast('Terminal enregistré.', 'success');
+      toast('Terminal enregistré avec succès.', 'success');
       setTerminalOpen(false);
       setReload((value) => value + 1);
     } catch (err) {
@@ -324,6 +401,15 @@ function AdminSettings({ user }: { user: User }) {
     }
   }
 
+  function copyToClipboard(text: string, id: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedTerminalId(id);
+      toast(`Identifiant ${text} copié dans le presse-papier.`, 'info');
+      setTimeout(() => setCopiedTerminalId(null), 2500);
+    });
+  }
+
+  // User actions
   async function createUser() {
     setBusy(true);
     setFormError(null);
@@ -332,7 +418,7 @@ function AdminSettings({ user }: { user: User }) {
         method: 'POST',
         body: JSON.stringify({ ...userForm, employee_id: userForm.employee_id || undefined }),
       });
-      toast('Compte créé.', 'success');
+      toast('Nouveau compte créé.', 'success');
       setUserOpen(false);
       setReload((value) => value + 1);
     } catch (err) {
@@ -348,7 +434,7 @@ function AdminSettings({ user }: { user: User }) {
         method: 'PATCH',
         body: JSON.stringify({ active: !account.active }),
       });
-      toast(account.active ? 'Compte désactivé.' : 'Compte activé.', 'success');
+      toast(account.active ? `Compte ${account.login} désactivé.` : `Compte ${account.login} activé.`, 'success');
       setReload((value) => value + 1);
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Opération refusée.', 'error');
@@ -415,7 +501,7 @@ function AdminSettings({ user }: { user: User }) {
         method: 'POST',
         body: JSON.stringify({ current_password: pw.current, new_password: pw.next }),
       });
-      toast('Mot de passe modifié.', 'success');
+      toast('Votre mot de passe a été modifié avec succès.', 'success');
       setPw({ current: '', next: '', confirm: '' });
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Changement impossible.');
@@ -424,6 +510,7 @@ function AdminSettings({ user }: { user: User }) {
     }
   }
 
+  // Permissions Matrix actions
   function togglePerm(action: string, role: string) {
     setPermDraft((prev) => {
       if (!prev) return prev;
@@ -431,12 +518,17 @@ function AdminSettings({ user }: { user: User }) {
     });
   }
 
+  const hasUnsavedPerms = useMemo(() => {
+    if (!permMatrix || !permDraft) return false;
+    return JSON.stringify(permMatrix.matrix) !== JSON.stringify(permDraft);
+  }, [permMatrix, permDraft]);
+
   async function savePermissions() {
     if (!permDraft) return;
     setBusy(true);
     try {
       await api('/api/permissions', { method: 'PUT', body: JSON.stringify({ matrix: permDraft }) });
-      toast('Permissions enregistrées.', 'success');
+      toast('Matrice des permissions mise à jour.', 'success');
       setReload((value) => value + 1);
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Enregistrement impossible.', 'error');
@@ -445,7 +537,16 @@ function AdminSettings({ user }: { user: User }) {
     }
   }
 
+  function resetPermDraft() {
+    if (permMatrix) {
+      setPermDraft(permMatrix.matrix);
+      toast('Modifications de permissions annulées.', 'info');
+    }
+  }
+
+  // Mappings & Filtered Data
   const employeesById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
+
   const sortedUsers = useMemo(
     () =>
       [...users].sort(
@@ -454,10 +555,38 @@ function AdminSettings({ user }: { user: User }) {
     [users],
   );
 
+  const filteredUsers = useMemo(() => {
+    return sortedUsers.filter((u) => {
+      // Role filter
+      if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+      // Status filter
+      if (statusFilter === 'active' && !u.active) return false;
+      if (statusFilter === 'inactive' && u.active) return false;
+      // Search query
+      if (userSearch.trim()) {
+        const query = userSearch.toLowerCase();
+        const emp = u.employee_id ? employeesById.get(u.employee_id) : undefined;
+        const empName = emp ? emp.full_name.toLowerCase() : '';
+        const match =
+          u.login.toLowerCase().includes(query) ||
+          u.display_name.toLowerCase().includes(query) ||
+          (u.employee_id && u.employee_id.toLowerCase().includes(query)) ||
+          empName.includes(query);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [sortedUsers, roleFilter, statusFilter, userSearch, employeesById]);
+
+  // Key performance indicators
+  const activeUsersCount = useMemo(() => users.filter((u) => u.active).length, [users]);
+  const activeTerminalsCount = useMemo(() => terminals.filter((t) => t.active).length, [terminals]);
+
   if (loading && !settings) {
     return (
-      <div className="flex items-center justify-center gap-2 py-24 text-sm text-ink-soft">
-        <Spinner /> Chargement des paramètres…
+      <div className="flex flex-col items-center justify-center gap-3 py-24 text-sm text-ink-soft">
+        <Spinner className="h-6 w-6 text-amber" />
+        <p className="font-medium">Chargement des paramètres de la console…</p>
       </div>
     );
   }
@@ -467,13 +596,21 @@ function AdminSettings({ user }: { user: User }) {
   }
 
   return (
-    <>
+    <div className="space-y-6">
+      {/* Top Header */}
       <PageHeader
+        eyebrow="Console d’administration"
         title="Paramètres"
-        hint="Comptes et accès, règles de pointage, terminaux et sauvegardes."
+        hint="Contrôle d’accès, gestion des rôles RBAC, règles de pointage et sauvegardes cloud."
         actions={
-          <Button icon={<IconRefresh size={18} />} onClick={() => setReload((value) => value + 1)}>
-            Actualiser
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={isRefreshing}
+            icon={<RefreshCw size={15} className={cx(isRefreshing && 'animate-spin text-amber')} />}
+            onClick={() => setReload((value) => value + 1)}
+          >
+            {isRefreshing ? 'Actualisation…' : 'Actualiser'}
           </Button>
         }
       />
@@ -484,470 +621,981 @@ function AdminSettings({ user }: { user: User }) {
         </div>
       ) : null}
 
-      <Card className="mt-4 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <IconUsers size={16} /> Comptes utilisateurs
-            </h2>
-            <p className="mt-1 text-[13px] text-ink-soft">
-              Les comptes servent aux écrans de gestion — le pointage kiosk n’en nécessite aucun.
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant="primary"
-            icon={<IconPlus size={16} />}
-            onClick={() => {
-              setUserForm({ login: '', display_name: '', password: '', role: 'magasinier', employee_id: '' });
-              setFormError(null);
-              setUserOpen(true);
-            }}
-          >
-            Nouveau compte
-          </Button>
+      {/* Main Tabs Navigation */}
+      <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-6">
+        <div className="border-b border-line pb-px overflow-x-auto scroll-thin">
+          <TabsList variant="line" className="flex gap-1.5 sm:gap-2 bg-transparent p-0 w-max min-w-full">
+            <TabsTrigger
+              value="comptes"
+              className="shrink-0 whitespace-nowrap gap-2 px-3 py-2 text-xs sm:text-sm font-medium data-active:border-b-2 data-active:border-amber data-active:text-ink"
+            >
+              <Users size={16} />
+              <span>Comptes</span>
+              <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
+                {activeUsersCount}/{users.length}
+              </span>
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="permissions"
+              className="shrink-0 whitespace-nowrap relative gap-2 px-3 py-2 text-xs sm:text-sm font-medium data-active:border-b-2 data-active:border-amber data-active:text-ink"
+            >
+              <ShieldCheck size={16} />
+              <span>Rôles &amp; Permissions</span>
+              {hasUnsavedPerms ? (
+                <span className="h-2 w-2 rounded-full bg-amber" title="Modifications en attente" />
+              ) : null}
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="kiosk"
+              className="shrink-0 whitespace-nowrap gap-2 px-3 py-2 text-xs sm:text-sm font-medium data-active:border-b-2 data-active:border-amber data-active:text-ink"
+            >
+              <Clock size={16} />
+              <span>Pointage &amp; Kiosque</span>
+              <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
+                {activeTerminalsCount} act.
+              </span>
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="securite"
+              className="shrink-0 whitespace-nowrap gap-2 px-3 py-2 text-xs sm:text-sm font-medium data-active:border-b-2 data-active:border-amber data-active:text-ink"
+            >
+              <KeyRound size={16} />
+              <span>Sécurité &amp; Profil</span>
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="sauvegardes"
+              className="shrink-0 whitespace-nowrap gap-2 px-3 py-2 text-xs sm:text-sm font-medium data-active:border-b-2 data-active:border-amber data-active:text-ink"
+            >
+              <HardDrive size={16} />
+              <span>Sauvegardes &amp; Système</span>
+              <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
+                {backups.length}
+              </span>
+            </TabsTrigger>
+          </TabsList>
         </div>
 
-        <ul className="mt-4 divide-y divide-line rounded-btn border border-line">
-          {sortedUsers.map((account) => {
-            const employee = account.employee_id ? employeesById.get(account.employee_id) : undefined;
-            const linkedName = employee?.full_name ?? account.employee_id ?? null;
-            return (
-              <li key={account.id} className="flex flex-col gap-3 bg-surface px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <span
-                    aria-hidden
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-paper-2 text-[13px] font-semibold text-ink-soft"
-                  >
-                    {roleInitials(account.display_name)}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-ink">{account.display_name}</span>
-                      <Chip tone={ROLE_TONE[account.role]}>{ROLE_LABEL[account.role]}</Chip>
-                      <Chip tone={account.active ? 'green' : 'grey'}>{account.active ? 'Actif' : 'Inactif'}</Chip>
-                    </div>
-                    <p className="truncate text-[13px] text-ink-soft">
-                      <span className="font-mono num">{account.login}</span>
-                      {linkedName ? ` · rattaché à ${linkedName}` : ' · aucun rattachement'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" onClick={() => openEditAccount(account)}>
-                    Rôle &amp; nom
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setResetFor(account);
-                      setResetPassword('');
-                    }}
-                  >
-                    Mot de passe
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={account.active ? 'danger' : 'secondary'}
-                    onClick={() => void toggleUser(account)}
-                  >
-                    {account.active ? 'Désactiver' : 'Activer'}
-                  </Button>
-                </div>
-              </li>
-            );
-          })}
-          {sortedUsers.length === 0 ? (
-            <li className="bg-surface px-4 py-4 text-sm text-ink-soft">Aucun compte enregistré.</li>
-          ) : null}
-        </ul>
-      </Card>
-
-      {permMatrix && permDraft ? (
-        <Card className="mt-4 p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <IconKey size={16} /> Permissions par rôle
-            </h2>
-            <Button variant="primary" size="sm" disabled={busy} onClick={() => void savePermissions()}>
-              {busy ? <Spinner /> : 'Enregistrer les permissions'}
-            </Button>
+        {/* =========================================================================
+            TAB 1: COMPTES UTILISATEURS
+        ========================================================================= */}
+        <TabsContent value="comptes" className="space-y-6">
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Card className="p-4 shadow-card">
+              <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Total Comptes</p>
+              <p className="mt-1 text-2xl font-semibold text-ink">{users.length}</p>
+            </Card>
+            <Card className="p-4 shadow-card">
+              <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Comptes Actifs</p>
+              <p className="mt-1 text-2xl font-semibold text-green">{activeUsersCount}</p>
+            </Card>
+            <Card className="p-4 shadow-card">
+              <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Rattachés Travailleurs</p>
+              <p className="mt-1 text-2xl font-semibold text-ink">
+                {users.filter((u) => !!u.employee_id).length}
+              </p>
+            </Card>
+            <Card className="p-4 shadow-card">
+              <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Direction &amp; Admin</p>
+              <p className="mt-1 text-2xl font-semibold text-blue">
+                {users.filter((u) => u.role === 'direction').length}
+              </p>
+            </Card>
           </div>
-          <p className="mt-1 text-[13px] text-ink-soft">
-            La direction est super-administratrice : elle conserve toujours tous les droits.
-            Les autres rôles sont accordés ici, action par action.
-          </p>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left">
-              <thead className="border-b border-line text-[12px] uppercase tracking-wide text-ink-faint">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Action</th>
-                  {permMatrix.roles
-                    .filter((r) => r !== 'direction')
-                    .map((role) => (
-                      <th key={role} className="px-3 py-2 text-center font-medium">
-                        {ROLE_LABEL[role]}
-                      </th>
-                    ))}
-                </tr>
-              </thead>
-              <tbody>
-                {permMatrix.groups.map((group) => (
-                  <Fragment key={group.label}>
-                    <tr className="bg-paper-2">
-                      <td colSpan={4} className="px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
-                        {group.label}
-                      </td>
-                    </tr>
-                    {group.actions.map((action) => {
-                      const meta = permMatrix.actions.find((a) => a.action === action);
-                      return (
-                        <tr key={action} className="border-b border-line last:border-b-0">
-                          <td className="px-3 py-2 text-sm text-ink">{meta?.label ?? action}</td>
+
+          {/* User Management Toolbar & Card */}
+          <Card className="shadow-card">
+            <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <Users size={18} className="text-amber" /> Gestion des accès applicatifs
+                </CardTitle>
+                <CardDescription className="text-xs text-ink-soft">
+                  Contrôlez les comptes habilités à administrer la menuiserie et gérer les stocks et outillages.
+                </CardDescription>
+              </div>
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<UserPlus size={16} />}
+                onClick={() => {
+                  setUserForm({ login: '', display_name: '', password: '', role: 'magasinier', employee_id: '' });
+                  setFormError(null);
+                  setUserOpen(true);
+                }}
+              >
+                Nouveau compte
+              </Button>
+            </CardHeader>
+
+            {/* Filters Bar */}
+            <div className="flex flex-col gap-3 bg-paper-2/40 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative min-w-0 flex-1">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Rechercher par nom, identifiant ou travailleur…"
+                  className="h-9 w-full rounded-btn border border-line-strong bg-surface pl-9 pr-3 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none"
+                />
+                {userSearch ? (
+                  <button
+                    onClick={() => setUserSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink"
+                  >
+                    <X size={14} />
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 text-xs text-ink-soft">
+                  <Filter size={13} className="text-ink-faint" />
+                  <span>Rôle :</span>
+                </div>
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
+                  className="h-9 rounded-btn border border-line-strong bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+                >
+                  <option value="all">Tous les rôles</option>
+                  {ROLES_OPTION.map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABEL[r]}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                  className="h-9 rounded-btn border border-line-strong bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+                >
+                  <option value="all">Tous les statuts</option>
+                  <option value="active">Actifs uniquement</option>
+                  <option value="inactive">Inactifs uniquement</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Accounts List */}
+            <CardContent className="p-0">
+              <ul className="divide-y divide-line">
+                {filteredUsers.map((account) => {
+                  const employee = account.employee_id ? employeesById.get(account.employee_id) : undefined;
+                  const theme = ROLE_THEME[account.role];
+                  return (
+                    <li
+                      key={account.id}
+                      className={cx(
+                        'flex flex-col gap-3 px-5 py-3.5 transition-colors sm:flex-row sm:items-center sm:justify-between',
+                        !account.active ? 'bg-paper/40 opacity-75' : 'hover:bg-paper-2/30',
+                      )}
+                    >
+                      {/* Left: Avatar & Identity */}
+                      <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                        <div
+                          className={cx(
+                            'grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs',
+                            theme.bg,
+                          )}
+                        >
+                          {roleInitials(account.display_name)}
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate text-sm font-semibold text-ink">{account.display_name}</span>
+                            <span
+                              className={cx(
+                                'inline-flex items-center rounded-chip border px-2 py-0.5 text-[11px] font-medium',
+                                theme.bg,
+                              )}
+                            >
+                              {ROLE_LABEL[account.role]}
+                            </span>
+                            <span
+                              className={cx(
+                                'inline-flex items-center gap-1 rounded-chip border px-2 py-0.5 text-[11px] font-medium',
+                                account.active
+                                  ? 'border-green/20 bg-green-wash text-green'
+                                  : 'border-line-strong bg-grey-wash text-ink-faint',
+                              )}
+                            >
+                              <span
+                                className={cx('h-1.5 w-1.5 rounded-full', account.active ? 'bg-green' : 'bg-ink-faint')}
+                              />
+                              {account.active ? 'Actif' : 'Inactif'}
+                            </span>
+                          </div>
+
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+                            <span className="font-mono text-ink font-medium">@{account.login}</span>
+                            <span>•</span>
+                            {employee ? (
+                              <span className="text-ink-soft">
+                                Fiche travailleur : <strong className="font-medium text-ink">{employee.full_name}</strong> ({employee.id})
+                              </span>
+                            ) : (
+                              <span className="text-ink-faint italic">Aucun profil travailleur lié</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Actions */}
+                      <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
+                        <Button size="sm" variant="ghost" onClick={() => openEditAccount(account)}>
+                          Modifier
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setResetFor(account);
+                            setResetPassword('');
+                          }}
+                        >
+                          Mot de passe
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={account.active ? 'outline-danger' : 'secondary'}
+                          onClick={() => void toggleUser(account)}
+                        >
+                          {account.active ? 'Désactiver' : 'Activer'}
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+
+                {filteredUsers.length === 0 ? (
+                  <li className="px-6 py-12 text-center text-sm text-ink-soft">
+                    <UserX size={32} className="mx-auto text-ink-faint mb-2" />
+                    <p className="font-semibold text-ink">Aucun compte utilisateur trouvé</p>
+                    <p className="mt-1 text-xs text-ink-faint">
+                      {userSearch || roleFilter !== 'all' || statusFilter !== 'all'
+                        ? 'Modifiez ou effacez vos filtres de recherche.'
+                        : 'Cliquez sur « Nouveau compte » pour ajouter un collaborateur.'}
+                    </p>
+                  </li>
+                ) : null}
+              </ul>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* =========================================================================
+            TAB 2: ROLES & PERMISSIONS (RBAC)
+        ========================================================================= */}
+        <TabsContent value="permissions" className="space-y-6">
+          <Card className="shadow-card">
+            <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <ShieldCheck size={18} className="text-green" /> Matrice de contrôle d’accès (RBAC)
+                </CardTitle>
+                <CardDescription className="text-xs text-ink-soft">
+                  Configurez précisément les privilèges accordés à chaque rôle métier. Le rôle Direction est super-administrateur permanent.
+                </CardDescription>
+              </div>
+
+              {hasUnsavedPerms ? (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={resetPermDraft} disabled={busy}>
+                    Annuler
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={busy}
+                    icon={busy ? <Spinner /> : <Check size={15} />}
+                    onClick={() => void savePermissions()}
+                  >
+                    Enregistrer les modifications
+                  </Button>
+                </div>
+              ) : null}
+            </CardHeader>
+
+            {hasUnsavedPerms ? (
+              <div className="flex items-center justify-between bg-amber-wash/80 border-b border-amber/20 px-5 py-2.5 text-xs text-amber font-medium">
+                <span className="flex items-center gap-2">
+                  <AlertTriangle size={15} />
+                  Vous avez des modifications de permissions non sauvegardées.
+                </span>
+                <span className="underline cursor-pointer" onClick={() => void savePermissions()}>
+                  Sauvegarder maintenant
+                </span>
+              </div>
+            ) : null}
+
+            <CardContent className="p-0">
+              {permMatrix && permDraft ? (
+                <div>
+                  <div className="sm:hidden px-4 py-2 bg-surface-2/60 border-b border-line flex items-center justify-between text-[11px] text-ink-soft">
+                    <span>Glissez horizontalement pour configurer tous les rôles</span>
+                    <span className="font-mono font-bold text-amber">← →</span>
+                  </div>
+                  <div className="overflow-x-auto scroll-thin">
+                    <table className="w-full min-w-[620px] text-left">
+                      <thead className="border-b border-line bg-paper-2/60 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+                        <tr>
+                          <th className="sticky left-0 top-0 z-20 bg-surface-2 px-4 py-3 border-r border-line min-w-[190px] sm:min-w-[240px]">
+                            Module &amp; Action
+                          </th>
                           {permMatrix.roles
                             .filter((r) => r !== 'direction')
                             .map((role) => (
-                              <td key={role} className="px-3 py-2 text-center">
-                                <button
-                                  onClick={() => togglePerm(action, role)}
-                                  aria-label={`${meta?.label} pour ${ROLE_LABEL[role]}`}
+                              <th key={role} className="px-4 py-3 text-center min-w-[110px]">
+                                <span
                                   className={cx(
-                                    'grid h-6 w-6 place-items-center rounded-md border text-[13px] font-bold transition-colors',
-                                    permDraft[action]?.[role]
-                                      ? 'border-green bg-green text-white'
-                                      : 'border-line-strong bg-surface text-ink-faint hover:bg-paper-2',
+                                    'inline-flex items-center rounded-chip border px-2 py-0.5 text-[11px] font-semibold',
+                                    ROLE_THEME[role].bg,
                                   )}
                                 >
-                                  {permDraft[action]?.[role] ? '✓' : ''}
-                                </button>
-                              </td>
+                                  {ROLE_LABEL[role]}
+                                </span>
+                              </th>
                             ))}
                         </tr>
-                      );
-                    })}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      ) : null}
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <IconGear size={16} /> Horaires & tolérance
-          </h2>
-          <p className="mt-1 text-[13px] text-ink-soft">Règles appliquées par le kiosk de pointage.</p>
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <Field
-              label="Ouverture"
-              type="time"
-              value={settings.opening_time}
-              onChange={(event) => void saveSettings({ opening_time: event.target.value })}
-            />
-            <Field
-              label="Fermeture"
-              type="time"
-              value={settings.closing_time}
-              onChange={(event) => void saveSettings({ closing_time: event.target.value })}
-            />
-          </div>
-
-          <div className="mt-3">
-            <Field
-              label="Tolérance de retard (minutes)"
-              type="number"
-              min={0}
-              max={180}
-              hint="Au-delà, le motif devient obligatoire."
-              value={String(settings.tolerance_minutes)}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (!Number.isNaN(value)) void saveSettings({ tolerance_minutes: value });
-              }}
-            />
-          </div>
-
-          <p className="mb-2 mt-4 text-[13px] font-medium text-ink-soft">Jours ouvrés</p>
-          <div className="flex flex-wrap gap-2">
-            {DAYS.map((day) => (
-              <button
-                key={day}
-                onClick={() => toggleWorkday(day)}
-                className={cx(
-                  'h-10 rounded-btn border px-3 text-[13px] font-medium',
-                  settings.workdays.includes(day)
-                    ? 'border-amber bg-amber-wash text-amber'
-                    : 'border-line-strong bg-surface text-ink-soft hover:bg-surface-2',
-                )}
-              >
-                {(WORKDAY_LABEL[day] ?? '').slice(0, 3)}
-              </button>
-            ))}
-          </div>
-
-          <p className="mb-2 mt-4 text-[13px] font-medium text-ink-soft">Motifs de retard</p>
-          <div className="flex flex-wrap gap-2">
-            {settings.late_motifs.map((motif) => (
-              <span
-                key={motif}
-                className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-surface-2 px-2.5 py-1 text-[13px] text-ink"
-              >
-                {motif}
-                <button
-                  onClick={() => removeMotif(motif)}
-                  className="text-ink-faint hover:text-red"
-                  aria-label={`Retirer ${motif}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-          <div className="mt-2 flex gap-2">
-            <input
-              value={motifDraft}
-              onChange={(event) => setMotifDraft(event.target.value)}
-              placeholder="Ajouter un motif…"
-              className="h-10 flex-1 rounded-btn border border-line-strong bg-surface px-3 text-sm focus:border-amber focus:outline-none"
-            />
-            <Button size="sm" onClick={addMotif} disabled={!motifDraft.trim()}>
-              Ajouter
-            </Button>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <Field
-              label="Durée d’affichage de la fiche (s)"
-              type="number"
-              min={3}
-              max={60}
-              value={String(settings.card_display_seconds)}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (!Number.isNaN(value)) void saveSettings({ card_display_seconds: value });
-              }}
-            />
-            <Field
-              label="Rétention des selfies (jours)"
-              type="number"
-              min={7}
-              value={String(settings.selfie_retention_days)}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (!Number.isNaN(value)) void saveSettings({ selfie_retention_days: value });
-              }}
-            />
-          </div>
-          <p className="mt-3 flex items-center gap-2 text-[12px] text-ink-faint">
-            {savingSettings ? <Spinner /> : null}
-            Chaque modification est enregistrée immédiatement et journalisée.
-          </p>
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-              <IconKey size={16} /> Terminaux de pointage
-            </h2>
-            <Button
-              size="sm"
-              variant="primary"
-              icon={<IconPlus size={16} />}
-              onClick={() => {
-                setTerminalForm({ name: '', id: '' });
-                setFormError(null);
-                setTerminalOpen(true);
-              }}
-            >
-              Enregistrer
-            </Button>
-          </div>
-          <p className="mt-1 text-[13px] text-ink-soft">
-            Seuls les terminaux actifs peuvent pointer. L’heure retenue est celle du serveur.
-          </p>
-
-          <ul className="mt-4 divide-y divide-line rounded-btn border border-line">
-            {terminals.map((terminal) => (
-              <li key={terminal.id} className="flex flex-wrap items-center gap-3 bg-surface px-3 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink">{terminal.name}</p>
-                  <p className="font-mono text-[12px] text-ink-faint num">
-                    {terminal.id}
-                    {terminal.last_used ? ` · dernier usage ${formatDateTime(terminal.last_used)}` : ''}
-                  </p>
+                      </thead>
+                      <tbody className="divide-y divide-line text-sm">
+                        {permMatrix.groups.map((group) => (
+                          <Fragment key={group.label}>
+                            <tr className="bg-paper-2/70 font-semibold text-ink text-xs uppercase tracking-wide">
+                              <td colSpan={4} className="sticky left-0 px-4 py-2 text-ink-soft bg-paper-2/90 font-bold">
+                                {group.label}
+                              </td>
+                            </tr>
+                            {group.actions.map((action) => {
+                              const meta = permMatrix.actions.find((a) => a.action === action);
+                              return (
+                                <tr key={action} className="hover:bg-paper-2/30 transition-colors group">
+                                  <td className="sticky left-0 bg-surface group-hover:bg-paper-2/40 px-4 py-2.5 border-r border-line z-10 min-w-[190px] sm:min-w-[240px]">
+                                    <div className="font-medium text-ink text-xs">{meta?.label ?? action}</div>
+                                    <div className="font-mono text-[10px] text-ink-faint">{action}</div>
+                                  </td>
+                                  {permMatrix.roles
+                                    .filter((r) => r !== 'direction')
+                                    .map((role) => {
+                                      const isChecked = !!permDraft[action]?.[role];
+                                      return (
+                                        <td key={role} className="px-4 py-2.5 text-center min-w-[110px]">
+                                          <button
+                                            type="button"
+                                            role="checkbox"
+                                            aria-checked={isChecked}
+                                            onClick={() => togglePerm(action, role)}
+                                            className={cx(
+                                              'inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs font-bold transition-all shadow-xs active:scale-90',
+                                              isChecked
+                                                ? 'border-green bg-green text-white shadow-xs'
+                                                : 'border-line bg-surface text-ink-faint hover:bg-paper-2',
+                                            )}
+                                            title={`${isChecked ? 'Révoquer' : 'Accorder'} ${meta?.label} pour ${ROLE_LABEL[role]}`}
+                                          >
+                                            {isChecked ? <Check size={15} /> : ''}
+                                          </button>
+                                        </td>
+                                      );
+                                    })}
+                                </tr>
+                              );
+                            })}
+                          </Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <Chip tone={terminal.active ? 'green' : 'grey'}>{terminal.active ? 'Actif' : 'Inactif'}</Chip>
-                <span className="font-mono text-[12px] text-ink-soft num">{terminal.punches_today} aujourd’hui</span>
-                <Button size="sm" variant={terminal.active ? 'danger' : 'secondary'} onClick={() => void toggleTerminal(terminal)}>
-                  {terminal.active ? 'Désactiver' : 'Activer'}
+              ) : (
+                <div className="p-8 text-center text-xs text-ink-faint">
+                  Chargement de la matrice des autorisations…
+                </div>
+              )}
+            </CardContent>
+
+            <CardFooter className="flex items-center justify-between border-t border-line bg-paper-2/30 px-5 py-3">
+              <span className="text-xs text-ink-soft">
+                La direction dispose de façon permanente de 100% des privilèges sur l’ensemble du système.
+              </span>
+              {hasUnsavedPerms ? (
+                <Button size="sm" variant="primary" disabled={busy} onClick={() => void savePermissions()}>
+                  {busy ? <Spinner /> : 'Enregistrer les permissions'}
                 </Button>
-              </li>
-            ))}
-            {terminals.length === 0 ? (
-              <li className="bg-surface px-3 py-4 text-sm text-ink-soft">Aucun terminal enregistré.</li>
-            ) : null}
-          </ul>
-        </Card>
-      </div>
+              ) : null}
+            </CardFooter>
+          </Card>
+        </TabsContent>
 
-      <Card className="mt-4 p-5">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-          <IconKey size={16} /> Mon mot de passe
-        </h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <Field
-            label="Mot de passe actuel"
-            type="password"
-            value={pw.current}
-            onChange={(event) => setPw({ ...pw, current: event.target.value })}
-          />
-          <Field
-            label="Nouveau mot de passe"
-            type="password"
-            value={pw.next}
-            onChange={(event) => setPw({ ...pw, next: event.target.value })}
-          />
-          <Field
-            label="Confirmation"
-            type="password"
-            value={pw.confirm}
-            onChange={(event) => setPw({ ...pw, confirm: event.target.value })}
-          />
-        </div>
-        <div className="mt-3 flex items-center gap-3">
-          <Button
-            variant="primary"
-            disabled={busy || !pw.current || pw.next.length < 6}
-            onClick={() => void changeMyPassword()}
-          >
-            {busy ? <Spinner /> : 'Changer mon mot de passe'}
-          </Button>
-          {formError ? <p className="text-sm text-red">{formError}</p> : null}
-        </div>
-      </Card>
+        {/* =========================================================================
+            TAB 3: KIOSQUE & POINTAGE
+        ========================================================================= */}
+        <TabsContent value="kiosk" className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Kiosk Rules Card */}
+            <Card className="shadow-card">
+              <CardHeader className="border-b border-line pb-4">
+                <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <Clock size={18} className="text-amber" /> Horaires &amp; Règles de pointage
+                </CardTitle>
+                <CardDescription className="text-xs text-ink-soft">
+                  Paramètres de l’atelier appliqués en temps réel sur les bornes et tablettes de pointage.
+                </CardDescription>
+              </CardHeader>
 
-      {user.role === 'direction' ? (
-        <Card className="mt-4 p-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <IconBox size={16} /> Sauvegardes &amp; maintenance
-          </h2>
-          <p className="mt-1 text-[13px] text-ink-soft">
-            Sauvegarde automatique quotidienne à 03:00 UTC vers le stockage cloud, conservée{' '}
-            {retentionDays} jours. L’export manuel fonctionne depuis n’importe quel appareil connecté.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button variant="primary" disabled={backupBusy} onClick={() => void saveBackupNow()}>
-              {backupBusy ? <Spinner /> : 'Sauvegarder maintenant'}
-            </Button>
-            <Button variant="secondary" onClick={() => void downloadExport()}>
-              Télécharger l’export (.gz)
-            </Button>
-          </div>
+              <CardContent className="space-y-5 p-5">
+                {/* Heures d'ouverture / fermeture */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-ink-soft">Ouverture atelier</label>
+                    <input
+                      type="time"
+                      value={settings.opening_time}
+                      onChange={(e) => void saveSettings({ opening_time: e.target.value })}
+                      className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-ink-soft">Fermeture atelier</label>
+                    <input
+                      type="time"
+                      value={settings.closing_time}
+                      onChange={(e) => void saveSettings({ closing_time: e.target.value })}
+                      className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+                    />
+                  </div>
+                </div>
 
-          <div className="mt-4">
-            <h3 className="text-[13px] font-semibold text-ink">
-              Sauvegardes cloud ({backups.length})
-            </h3>
-            {backups.length === 0 ? (
-              <p className="mt-1 text-[13px] text-ink-faint">
-                Aucune sauvegarde pour l’instant — la première est créée automatiquement à 03:00 UTC,
-                ou cliquez sur « Sauvegarder maintenant ».
-              </p>
-            ) : (
-              <div className="mt-2 divide-y divide-line rounded-card border border-line">
-                {backups.map((backup) => (
-                  <div
-                    key={backup.pathname}
-                    className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[13px]"
-                  >
-                    <span className="font-mono text-ink-soft">
-                      {backup.pathname.replace('backups/', '')}
-                    </span>
-                    <span className="flex items-center gap-3 text-ink-faint">
-                      <span>
-                        {formatDateTime(backup.uploadedAt)} · {formatBytes(backup.size)}
-                      </span>
-                      <Button size="sm" variant="quiet" onClick={() => void downloadBackup(backup.pathname)}>
-                        Télécharger
-                      </Button>
+                {/* Tolérance */}
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-ink-soft">Tolérance de retard autorisée</label>
+                    <span className="font-mono text-xs font-semibold text-amber">
+                      {settings.tolerance_minutes} min
                     </span>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={120}
+                    step={5}
+                    value={settings.tolerance_minutes}
+                    onChange={(e) => void saveSettings({ tolerance_minutes: Number(e.target.value) })}
+                    className="mt-2 w-full accent-[#d9480f]"
+                  />
+                  <p className="mt-1 text-[11px] text-ink-faint">
+                    Au-delà de cette tolérance, le kiosque impose la sélection d’un motif explicatif.
+                  </p>
+                </div>
 
-          <div className="mt-5 border-t border-line pt-4">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-red">
-              <IconAlert size={15} /> Purger les données de démonstration
-            </h3>
-            <p className="mt-1 text-[13px] text-ink-soft">
-              Supprime pointages, absences, stocks, outils, magasins, terminaux, employés et journaux.
-              Les comptes de connexion, les paramètres et votre session sont conservés. Action
-              irréversible : téléchargez d’abord un export si vous hésitez.
-            </p>
-            <div className="mt-3 flex flex-wrap items-end gap-3">
-              <div className="w-64">
-                <Field
-                  label="Tapez RESET pour confirmer"
-                  placeholder="RESET"
-                  value={resetText}
-                  onChange={(event) => setResetText(event.target.value)}
-                />
-              </div>
-              <Button
-                variant="danger"
-                disabled={resetText.trim() !== 'RESET' || resetBusy}
-                onClick={() => void resetDemo()}
-              >
-                {resetBusy ? <Spinner /> : 'Purger les données de démo'}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ) : null}
+                <Separator />
 
+                {/* Jours ouvrés */}
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-ink-soft">Jours de travail ouvrés</label>
+                  <div className="grid grid-cols-7 gap-1.5">
+                    {WEEKDAYS_ORDER.map((day) => {
+                      const isWork = settings.workdays.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => toggleWorkday(day)}
+                          className={cx(
+                            'flex flex-col items-center justify-center rounded-btn border py-2 text-xs font-medium transition-all shadow-xs',
+                            isWork
+                              ? 'border-amber bg-amber-wash text-amber font-semibold'
+                              : 'border-line-strong bg-surface text-ink-faint hover:bg-paper-2',
+                          )}
+                        >
+                          <span className="text-[11px]">{(WORKDAY_LABEL[day] ?? '').slice(0, 3)}</span>
+                          <span className={cx('mt-0.5 h-1 w-1 rounded-full', isWork ? 'bg-amber' : 'bg-transparent')} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Motifs de retard */}
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-ink-soft">Motifs de retard configurés</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {settings.late_motifs.map((motif) => (
+                      <span
+                        key={motif}
+                        className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-paper-2 px-2.5 py-1 text-xs text-ink font-medium"
+                      >
+                        {motif}
+                        <button
+                          type="button"
+                          onClick={() => removeMotif(motif)}
+                          className="rounded-full text-ink-faint hover:bg-red-wash hover:text-red p-0.5 transition-colors"
+                          title={`Retirer « ${motif} »`}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="text"
+                      value={motifDraft}
+                      onChange={(e) => setMotifDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addMotif();
+                        }
+                      }}
+                      placeholder="Nouveau motif (ex: Panne de transport)…"
+                      className="h-9 flex-1 rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none"
+                    />
+                    <Button size="sm" variant="ghost" onClick={addMotif} disabled={!motifDraft.trim()}>
+                      Ajouter
+                    </Button>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Affichage & Rétention */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-ink-soft">Affichage fiche (sec)</label>
+                    <input
+                      type="number"
+                      min={3}
+                      max={60}
+                      value={settings.card_display_seconds}
+                      onChange={(e) => void saveSettings({ card_display_seconds: Number(e.target.value) })}
+                      className="h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-ink-soft">Rétention selfies (jours)</label>
+                    <input
+                      type="number"
+                      min={7}
+                      max={365}
+                      value={settings.selfie_retention_days}
+                      onChange={(e) => void saveSettings({ selfie_retention_days: Number(e.target.value) })}
+                      className="h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+
+              <CardFooter className="flex items-center justify-between border-t border-line bg-paper-2/30 px-5 py-3 text-[11px] text-ink-faint">
+                <span className="flex items-center gap-1.5">
+                  {savingSettings ? <Spinner className="h-3 w-3 text-amber" /> : <CheckCircle2 size={13} className="text-green" />}
+                  Synchronisation automatique vers la base de données
+                </span>
+              </CardFooter>
+            </Card>
+
+            {/* Terminals Card */}
+            <Card className="shadow-card">
+              <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
+                    <Smartphone size={18} className="text-blue" /> Bornes &amp; Terminaux d’atelier
+                  </CardTitle>
+                  <CardDescription className="text-xs text-ink-soft">
+                    Tablettes et points d’accès autorisés à enregistrer les pointages.
+                  </CardDescription>
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<Plus size={16} />}
+                  onClick={() => {
+                    setTerminalForm({ name: '', id: '' });
+                    setFormError(null);
+                    setTerminalOpen(true);
+                  }}
+                >
+                  Ajouter terminal
+                </Button>
+              </CardHeader>
+
+              <CardContent className="p-0">
+                <ul className="divide-y divide-line">
+                  {terminals.map((terminal) => (
+                    <li key={terminal.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between hover:bg-paper-2/30 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-sm text-ink">{terminal.name}</p>
+                          <span
+                            className={cx(
+                              'inline-flex items-center gap-1 rounded-chip border px-2 py-0.5 text-[11px] font-medium',
+                              terminal.active
+                                ? 'border-green/20 bg-green-wash text-green'
+                                : 'border-line-strong bg-grey-wash text-ink-faint',
+                            )}
+                          >
+                            <span className={cx('h-1.5 w-1.5 rounded-full', terminal.active ? 'bg-green' : 'bg-ink-faint')} />
+                            {terminal.active ? 'Actif' : 'Inactif'}
+                          </span>
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(terminal.id, terminal.id)}
+                            className="inline-flex items-center gap-1 font-mono text-[11px] text-ink font-semibold bg-paper-2 px-1.5 py-0.5 rounded hover:bg-line transition-colors"
+                            title="Cliquer pour copier l'identifiant"
+                          >
+                            {terminal.id}
+                            {copiedTerminalId === terminal.id ? (
+                              <CheckCheck size={12} className="text-green" />
+                            ) : (
+                              <Copy size={12} className="text-ink-faint" />
+                            )}
+                          </button>
+                          <span>•</span>
+                          <span className="font-mono text-ink-soft">{terminal.punches_today} pointage(s) aujourd’hui</span>
+                          {terminal.last_used ? (
+                            <>
+                              <span>•</span>
+                              <span className="text-ink-faint">Dernier usage : {formatDateTime(terminal.last_used)}</span>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={terminal.active ? 'outline-danger' : 'secondary'}
+                          onClick={() => void toggleTerminal(terminal)}
+                        >
+                          {terminal.active ? 'Désactiver' : 'Activer'}
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+
+                  {terminals.length === 0 ? (
+                    <li className="p-8 text-center text-xs text-ink-faint">
+                      Aucun terminal de pointage configuré. Cliquez sur « Ajouter terminal » pour en associer un.
+                    </li>
+                  ) : null}
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* =========================================================================
+            TAB 4: SECURITE & PROFIL
+        ========================================================================= */}
+        <TabsContent value="securite" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Identity Card */}
+            <Card className="shadow-card">
+              <CardHeader className="border-b border-line pb-4">
+                <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <ShieldCheck size={18} className="text-blue" /> Profil actif
+                </CardTitle>
+                <CardDescription className="text-xs text-ink-soft">
+                  Informations de sécurité relatives à la session courante.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 p-5">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-12 w-12 place-items-center rounded-full bg-blue-wash text-blue font-bold text-sm border border-blue/20">
+                    {roleInitials(user.display_name)}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm text-ink">{user.display_name}</h3>
+                    <p className="font-mono text-xs text-ink-soft">@{user.login}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-card border border-line bg-paper-2/40 p-4 space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-ink-soft">Rôle applicatif</span>
+                    <strong className="text-blue">{ROLE_LABEL[user.role]}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-soft">Niveau de privilèges</span>
+                    <span className="font-semibold text-green">Super-Administrateur</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-soft">Accès aux sauvegardes</span>
+                    <span className="font-semibold text-ink">Complet (Vercel Blob + Neon)</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Password Change Card */}
+            <Card className="shadow-card">
+              <CardHeader className="border-b border-line pb-4">
+                <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <KeyRound size={18} className="text-amber" /> Modifier mon mot de passe
+                </CardTitle>
+                <CardDescription className="text-xs text-ink-soft">
+                  Recommandation de sécurité : utilisez au moins 8 caractères incluant des symboles.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="space-y-4 p-5">
+                {formError ? <Banner tone="error">{formError}</Banner> : null}
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">Mot de passe actuel</label>
+                  <input
+                    type="password"
+                    value={pw.current}
+                    onChange={(e) => setPw({ ...pw, current: e.target.value })}
+                    className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">Nouveau mot de passe</label>
+                  <input
+                    type="password"
+                    value={pw.next}
+                    onChange={(e) => setPw({ ...pw, next: e.target.value })}
+                    className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">Confirmer le nouveau mot de passe</label>
+                  <input
+                    type="password"
+                    value={pw.confirm}
+                    onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
+                    className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+                  />
+                </div>
+              </CardContent>
+
+              <CardFooter className="flex items-center justify-between border-t border-line bg-paper-2/30 px-5 py-3">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={busy || !pw.current || pw.next.length < 6 || pw.next !== pw.confirm}
+                  onClick={() => void changeMyPassword()}
+                >
+                  {busy ? <Spinner /> : 'Mettre à jour mon mot de passe'}
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* =========================================================================
+            TAB 5: SAUVEGARDES & SYSTEME
+        ========================================================================= */}
+        <TabsContent value="sauvegardes" className="space-y-6">
+          {/* Cloud Backups Card */}
+          <Card className="shadow-card">
+            <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <Database size={18} className="text-blue" /> Sauvegardes automatisées &amp; Stockage Cloud
+                </CardTitle>
+                <CardDescription className="text-xs text-ink-soft">
+                  Tâche automatisée quotidienne à 03:00 UTC vers Vercel Blob. Conservation paramétrée sur {retentionDays} jours.
+                </CardDescription>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={backupBusy}
+                  icon={backupBusy ? <Spinner /> : <Database size={15} />}
+                  onClick={() => void saveBackupNow()}
+                >
+                  {backupBusy ? 'Sauvegarde…' : 'Sauvegarder maintenant'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Download size={15} />}
+                  onClick={() => void downloadExport()}
+                >
+                  Export complet (.gz)
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-0">
+              <div className="px-5 py-3 border-b border-line bg-paper-2/40 text-xs font-semibold text-ink flex items-center justify-between">
+                <span>Historique des instantanés cloud ({backups.length})</span>
+                <span className="text-[11px] text-ink-faint">Rétention {retentionDays} jours</span>
+              </div>
+
+              {backups.length === 0 ? (
+                <div className="p-8 text-center text-xs text-ink-faint">
+                  Aucun instantané disponible pour le moment. Cliquez sur « Sauvegarder maintenant » pour créer le premier.
+                </div>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {backups.map((backup) => (
+                    <li
+                      key={backup.pathname}
+                      className="flex flex-col gap-2 px-5 py-3 text-xs sm:flex-row sm:items-center sm:justify-between hover:bg-paper-2/30 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-mono font-medium text-ink truncate block">
+                          {backup.pathname.replace('backups/', '')}
+                        </span>
+                        <span className="text-ink-faint text-[11px]">
+                          Créé le {formatDateTime(backup.uploadedAt)}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-ink-soft font-semibold">{formatBytes(backup.size)}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<Download size={13} />}
+                          onClick={() => void downloadBackup(backup.pathname)}
+                        >
+                          Télécharger
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Danger Zone: Purge Demo */}
+          <Card className="border-red/30 shadow-card bg-surface overflow-hidden">
+            <CardHeader className="bg-red-wash/40 border-b border-red/20 pb-4">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold text-red">
+                <AlertTriangle size={18} /> Zone critique : Purge des données de démonstration
+              </CardTitle>
+              <CardDescription className="text-xs text-ink-soft">
+                Réinitialise la base de données opérationnelle tout en préservant les comptes utilisateurs et réglages.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="p-5 space-y-4">
+              <p className="text-xs text-ink-soft leading-relaxed">
+                Cette action supprimera l’intégralité des pointages, des fiches de stock, des outils et matériels enregistrés,
+                des magasins, des terminaux et des fiches employés. <strong>Vos comptes de connexion, mots de passe et paramètres système seront conservés intacts.</strong>
+              </p>
+
+              <div className="rounded-btn border border-red/20 bg-red-wash/30 p-3 text-xs text-red">
+                ⚠️ Cette opération est irréversible. Téléchargez un export compressé (.gz) avant de poursuivre.
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="w-full max-w-xs">
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">
+                    Tapez <strong className="font-mono text-red">RESET</strong> pour débloquer :
+                  </label>
+                  <input
+                    type="text"
+                    value={resetText}
+                    placeholder="RESET"
+                    onChange={(e) => setResetText(e.target.value)}
+                    className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm uppercase text-ink focus:border-red focus:outline-none"
+                  />
+                </div>
+
+                <Button
+                  variant="danger"
+                  size="md"
+                  disabled={resetText.trim() !== 'RESET' || resetBusy}
+                  onClick={() => void resetDemo()}
+                >
+                  {resetBusy ? <Spinner /> : 'Purger les données de démonstration'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* =========================================================================
+          MODALS / DIALOGS
+      ========================================================================= */}
+
+      {/* Modal: Enregistrer un terminal */}
       <Modal
         open={terminalOpen}
-        title="Enregistrer un terminal"
+        title="Enregistrer un nouveau terminal"
         onClose={() => setTerminalOpen(false)}
         footer={
           <>
-            <Button onClick={() => setTerminalOpen(false)}>Annuler</Button>
-            <Button variant="primary" disabled={busy || terminalForm.name.trim().length < 3} onClick={() => void createTerminal()}>
-              {busy ? <Spinner /> : 'Enregistrer'}
+            <Button variant="ghost" onClick={() => setTerminalOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              disabled={busy || terminalForm.name.trim().length < 3}
+              onClick={() => void createTerminal()}
+            >
+              {busy ? <Spinner /> : 'Enregistrer le terminal'}
             </Button>
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           {formError ? <Banner tone="error">{formError}</Banner> : null}
-          <Field
-            label="Nom du terminal"
-            value={terminalForm.name}
-            placeholder="Tablette de l’atelier — pointage arrivée"
-            onChange={(event) => setTerminalForm({ ...terminalForm, name: event.target.value })}
-          />
-          <Field
-            label="Identifiant (facultatif)"
-            value={terminalForm.id}
-            placeholder="TERM-ATELIER"
-            hint="Laissez vide pour générer TERM-XXXX. Une seule saisie : notez-le pour le coller dans le navigateur du terminal."
-            onChange={(event) => setTerminalForm({ ...terminalForm, id: event.target.value.toUpperCase() })}
-          />
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Nom de la borne ou tablette</label>
+            <input
+              type="text"
+              value={terminalForm.name}
+              placeholder="Ex : Tablette Atelier Débitage"
+              onChange={(e) => setTerminalForm({ ...terminalForm, name: e.target.value })}
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">
+              Identifiant machine unique (Optionnel)
+            </label>
+            <input
+              type="text"
+              value={terminalForm.id}
+              placeholder="TERM-ATELIER"
+              onChange={(e) => setTerminalForm({ ...terminalForm, id: e.target.value.toUpperCase() })}
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm uppercase text-ink focus:border-amber focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-ink-faint">
+              Laissez vide pour générer automatiquement un code TERM-XXXX.
+            </p>
+          </div>
         </div>
       </Modal>
 
+      {/* Modal: Nouveau compte utilisateur */}
       <Modal
         open={userOpen}
-        title="Nouveau compte"
+        title="Créer un compte utilisateur"
+        wide
         onClose={() => setUserOpen(false)}
         footer={
           <>
-            <Button onClick={() => setUserOpen(false)}>Annuler</Button>
+            <Button variant="ghost" onClick={() => setUserOpen(false)}>
+              Annuler
+            </Button>
             <Button
               variant="primary"
               disabled={busy || userForm.login.trim().length < 3 || userForm.password.length < 6}
@@ -960,161 +1608,204 @@ function AdminSettings({ user }: { user: User }) {
       >
         <div className="space-y-4">
           {formError ? <Banner tone="error">{formError}</Banner> : null}
+
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field
-              label="Nom affiché"
-              value={userForm.display_name}
-              placeholder="Responsable magasin"
-              onChange={(event) => setUserForm({ ...userForm, display_name: event.target.value })}
-            />
-            <Field
-              label="Identifiant de connexion"
-              value={userForm.login}
-              placeholder="resp.magasin"
-              hint="Lettres minuscules, chiffres, point ou tiret."
-              onChange={(event) => setUserForm({ ...userForm, login: event.target.value.toLowerCase() })}
-            />
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Nom complet affiché</label>
+              <input
+                type="text"
+                value={userForm.display_name}
+                placeholder="Ex : Frère Bernard"
+                onChange={(e) => setUserForm({ ...userForm, display_name: e.target.value })}
+                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Identifiant de connexion</label>
+              <input
+                type="text"
+                value={userForm.login}
+                placeholder="Ex : f.bernard"
+                onChange={(e) => setUserForm({ ...userForm, login: e.target.value.toLowerCase() })}
+                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
           </div>
-          <fieldset>
-            <legend className="mb-2 text-[13px] font-medium text-ink-soft">Rôle et privilèges</legend>
+
+          <div>
+            <label className="mb-2 block text-xs font-medium text-ink-soft">Rôle applicatif</label>
             <div className="grid gap-2 sm:grid-cols-2">
               {ROLES_OPTION.map((role) => (
                 <label
                   key={role}
                   className={cx(
-                    'flex cursor-pointer items-start gap-2.5 rounded-btn border p-3 transition-colors',
-                    userForm.role === role
-                      ? 'border-amber bg-amber-wash'
-                      : 'border-line-strong bg-surface hover:bg-surface-2',
+                    'flex cursor-pointer items-start gap-2.5 rounded-btn border p-3 transition-colors shadow-xs',
+                    userForm.role === role ? 'border-amber bg-amber-wash' : 'border-line-strong bg-surface hover:bg-paper-2',
                   )}
                 >
                   <input
                     type="radio"
-                    name="new-account-role"
+                    name="new-role"
                     checked={userForm.role === role}
                     onChange={() => setUserForm({ ...userForm, role })}
                     className="mt-0.5 h-4 w-4 shrink-0 accent-[#d9480f]"
                   />
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-ink">{ROLE_LABEL[role]}</span>
-                    <span className="block text-[12px] text-ink-soft">{ROLE_DESC[role]}</span>
+                    <span className="block text-xs font-semibold text-ink">{ROLE_LABEL[role]}</span>
+                    <span className="block text-[11px] text-ink-soft leading-snug">{ROLE_DESC[role]}</span>
                   </span>
                 </label>
               ))}
             </div>
-          </fieldset>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field
-              label="Mot de passe initial"
-              type="text"
-              value={userForm.password}
-              hint="6 caractères minimum. À communiquer en clair, puis à changer."
-              onChange={(event) => setUserForm({ ...userForm, password: event.target.value })}
-            />
-            <SelectField
-              label="Lier à un travailleur (facultatif)"
-              value={userForm.employee_id}
-              onChange={(event) => setUserForm({ ...userForm, employee_id: event.target.value })}
-            >
-              <option value="">Aucun</option>
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.full_name} — {employee.id}
-                </option>
-              ))}
-            </SelectField>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Mot de passe temporaire</label>
+              <input
+                type="text"
+                value={userForm.password}
+                placeholder="Au moins 6 caractères"
+                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Rattacher à un travailleur</label>
+              <select
+                value={userForm.employee_id}
+                onChange={(e) => setUserForm({ ...userForm, employee_id: e.target.value })}
+                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+              >
+                <option value="">Aucun profil travailleur</option>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.full_name} ({e.id})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </Modal>
 
+      {/* Modal: Modifier un compte */}
       <Modal
         open={!!editFor}
-        title={`Modifier le compte — ${editFor?.login ?? ''}`}
+        title={`Modifier le compte @${editFor?.login ?? ''}`}
+        wide
         onClose={() => setEditFor(null)}
         footer={
           <>
-            <Button onClick={() => setEditFor(null)}>Annuler</Button>
+            <Button variant="ghost" onClick={() => setEditFor(null)}>
+              Annuler
+            </Button>
             <Button
               variant="primary"
               disabled={busy || editForm.display_name.trim().length < 2}
               onClick={() => void updateAccount()}
             >
-              {busy ? <Spinner /> : 'Enregistrer'}
+              {busy ? <Spinner /> : 'Enregistrer les modifications'}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
           {formError ? <Banner tone="error">{formError}</Banner> : null}
-          <Field
-            label="Nom affiché"
-            value={editForm.display_name}
-            onChange={(event) => setEditForm({ ...editForm, display_name: event.target.value })}
-          />
-          <fieldset>
-            <legend className="mb-2 text-[13px] font-medium text-ink-soft">Rôle et privilèges</legend>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Nom complet affiché</label>
+            <input
+              type="text"
+              value={editForm.display_name}
+              onChange={(e) => setEditForm({ ...editForm, display_name: e.target.value })}
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-medium text-ink-soft">Rôle applicatif</label>
             <div className="grid gap-2 sm:grid-cols-2">
               {ROLES_OPTION.map((role) => (
                 <label
                   key={role}
                   className={cx(
-                    'flex cursor-pointer items-start gap-2.5 rounded-btn border p-3 transition-colors',
-                    editForm.role === role
-                      ? 'border-amber bg-amber-wash'
-                      : 'border-line-strong bg-surface hover:bg-surface-2',
+                    'flex cursor-pointer items-start gap-2.5 rounded-btn border p-3 transition-colors shadow-xs',
+                    editForm.role === role ? 'border-amber bg-amber-wash' : 'border-line-strong bg-surface hover:bg-paper-2',
                   )}
                 >
                   <input
                     type="radio"
-                    name="edit-account-role"
+                    name="edit-role"
                     checked={editForm.role === role}
                     onChange={() => setEditForm({ ...editForm, role })}
                     className="mt-0.5 h-4 w-4 shrink-0 accent-[#d9480f]"
                   />
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-ink">{ROLE_LABEL[role]}</span>
-                    <span className="block text-[12px] text-ink-soft">{ROLE_DESC[role]}</span>
+                    <span className="block text-xs font-semibold text-ink">{ROLE_LABEL[role]}</span>
+                    <span className="block text-[11px] text-ink-soft leading-snug">{ROLE_DESC[role]}</span>
                   </span>
                 </label>
               ))}
             </div>
-          </fieldset>
-          <SelectField
-            label="Lier à un travailleur (facultatif)"
-            value={editForm.employee_id}
-            onChange={(event) => setEditForm({ ...editForm, employee_id: event.target.value })}
-          >
-            <option value="">Aucun</option>
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.full_name} — {employee.id}
-              </option>
-            ))}
-          </SelectField>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Rattacher à un travailleur</label>
+            <select
+              value={editForm.employee_id}
+              onChange={(e) => setEditForm({ ...editForm, employee_id: e.target.value })}
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+            >
+              <option value="">Aucun profil travailleur</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.full_name} ({e.id})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </Modal>
 
+      {/* Modal: Réinitialiser mot de passe utilisateur */}
       <Modal
         open={!!resetFor}
-        title={`Réinitialiser le mot de passe — ${resetFor?.login ?? ''}`}
+        title={`Réinitialiser le mot de passe — @${resetFor?.login ?? ''}`}
         onClose={() => setResetFor(null)}
         footer={
           <>
-            <Button onClick={() => setResetFor(null)}>Annuler</Button>
-            <Button variant="primary" disabled={busy || resetPassword.length < 6} onClick={() => void resetUserPassword()}>
-              {busy ? <Spinner /> : 'Réinitialiser'}
+            <Button variant="ghost" onClick={() => setResetFor(null)}>
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              disabled={busy || resetPassword.length < 6}
+              onClick={() => void resetUserPassword()}
+            >
+              {busy ? <Spinner /> : 'Définir ce mot de passe'}
             </Button>
           </>
         }
       >
-        <Field
-          label="Nouveau mot de passe"
-          type="text"
-          value={resetPassword}
-          hint="6 caractères minimum."
-          onChange={(event) => setResetPassword(event.target.value)}
-        />
+        <div className="space-y-3">
+          <p className="text-xs text-ink-soft">
+            Définissez un nouveau mot de passe temporaire pour <strong>{resetFor?.display_name}</strong> (@{resetFor?.login}).
+          </p>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Nouveau mot de passe</label>
+            <input
+              type="text"
+              value={resetPassword}
+              placeholder="Minimum 6 caractères"
+              onChange={(e) => setResetPassword(e.target.value)}
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+        </div>
       </Modal>
-    </>
+    </div>
   );
 }

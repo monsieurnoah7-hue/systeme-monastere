@@ -29,15 +29,21 @@ import {
   EmptyState,
   Field,
   Modal,
-  PageHeader,
   SelectField,
   Spinner,
   TextArea,
   cx,
   useToast,
 } from '../components/ui';
-import { IconChevronRight, IconPlus, IconPrinter, IconQr, IconSearch, IconWrench } from '../components/Icons';
-import { DataTable, type DataTableColumn } from '../components/DataTable';
+import {
+  IconChevronRight,
+  IconPlus,
+  IconPrinter,
+  IconQr,
+  IconSearch,
+  IconWrench,
+  IconBox,
+} from '../components/Icons';
 
 type ToolDetail = { tool: Tool; events: ToolEvent[]; loan: ToolLoan | null };
 type Facets = { categories: string[]; locations: string[] };
@@ -106,6 +112,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ToolDetail | null>(null);
@@ -203,68 +210,22 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
     }
   }, [scan]);
 
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { tous: tools.length };
-    for (const tool of tools) counts[tool.status] = (counts[tool.status] ?? 0) + 1;
+  const stats = useMemo(() => {
+    const counts = {
+      total: tools.length,
+      disponible: 0,
+      en_pret: 0,
+      maintenance: 0,
+      manquant: 0,
+      reforme: 0,
+    };
+    for (const tool of tools) {
+      if (tool.status in counts) {
+        counts[tool.status as keyof typeof counts]++;
+      }
+    }
     return counts;
   }, [tools]);
-
-  const toolColumns = useMemo<DataTableColumn<Tool>[]>(
-    () => [
-      {
-        accessorKey: 'id',
-        header: 'ID',
-        sortFn: 'alphanumeric',
-        cell: ({ row }) => <span className="font-mono text-[13px] font-medium num">{row.original.id}</span>,
-      },
-      {
-        accessorKey: 'name',
-        header: 'Désignation',
-        sortFn: 'alphanumeric',
-        meta: { cellClassName: 'whitespace-normal min-w-44' },
-        cell: ({ row }) => (
-          <div>
-            <p className="text-sm font-medium text-ink">{row.original.name}</p>
-            <p className="text-[12px] text-ink-faint">{row.original.category}</p>
-          </div>
-        ),
-      },
-      {
-        accessorKey: 'location',
-        header: 'Emplacement',
-        meta: { headerClassName: 'hidden md:table-cell', cellClassName: 'hidden md:table-cell text-sm text-ink-soft' },
-        cell: ({ row }) => row.original.location,
-      },
-      {
-        id: 'condition',
-        accessorKey: 'condition',
-        header: 'État',
-        meta: { headerClassName: 'hidden sm:table-cell', cellClassName: 'hidden sm:table-cell' },
-        cell: ({ row }) => (
-          <Chip tone={row.original.condition === 'bon' ? 'neutral' : 'amber'}>{CONDITION_LABEL[row.original.condition]}</Chip>
-        ),
-      },
-      {
-        id: 'status',
-        accessorKey: 'status',
-        header: 'Statut',
-        sortFn: 'alphanumeric',
-        cell: ({ row }) => <Chip tone={STATUS_TONE[row.original.status]}>{STATUS_LABEL[row.original.status]}</Chip>,
-      },
-      {
-        id: 'actions',
-        enableSorting: false,
-        header: '',
-        meta: { headerClassName: 'w-10', cellClassName: 'w-10' },
-        cell: () => (
-          <span className="flex justify-end text-ink-faint" aria-hidden>
-            <IconChevronRight size={18} />
-          </span>
-        ),
-      },
-    ],
-    [],
-  );
 
   async function createTool() {
     setBusy(true);
@@ -279,7 +240,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
           observations: newForm.observations || undefined,
         }),
       });
-      toast(`Outil ${res.tool.id} créé.`, 'success');
+      toast(`Outil ${res.tool.id} créé avec succès.`, 'success');
       setNewOpen(false);
       setNewForm({ name: '', category: 'Divers', location: 'Magasin', magasin_id: '', observations: '' });
       refresh();
@@ -318,7 +279,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         method: 'POST',
         body: JSON.stringify({ toolId: loanFor.id, employeeId: loanForm.employeeId, motive: loanForm.motive }),
       });
-      toast(`${loanFor.id} sorti en prêt.`, 'success');
+      toast(`Sortie validée pour ${loanFor.name} (${loanFor.id}).`, 'success');
       setLoanFor(null);
       setLoanForm({ employeeId: '', motive: '' });
       refresh();
@@ -371,110 +332,218 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
   }
 
   return (
-    <>
-      <PageHeader
-        title="Outils & QR codes"
-        hint="Parc d’outils, statuts en direct et étiquettes QR à imprimer."
-        actions={
-          <>
-            <Button
-              icon={<IconPrinter size={18} />}
-              onClick={() => {
-                setPrintPick(Object.fromEntries(tools.map((tool) => [tool.id, false])));
-                setPrintOpen(true);
-              }}
-            >
-              Planche A4
-            </Button>
-            {canManage ? (
-              <Button variant="primary" icon={<IconPlus size={18} />} onClick={() => setNewOpen(true)}>
-                Nouvel outil
-              </Button>
-            ) : null}
-          </>
-        }
-      />
+    <div className="space-y-4 pb-12">
+      {/* Jibble Header Banner */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-[12px] font-medium text-ink-faint">
+            <span>Atelier & Quincaillerie</span>
+            <span>/</span>
+            <span className="text-amber font-semibold">Parc Outils</span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink mt-0.5">
+            Gestion du Matériel & Outils
+          </h1>
+          <p className="text-xs text-ink-soft">
+            Traçabilité des emprunts, planches de QR codes et inventaire temps réel.
+          </p>
+        </div>
 
-      <Card className="mb-4 p-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
-          <div className="relative">
-            <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            icon={<IconPrinter size={16} />}
+            onClick={() => {
+              setPrintPick(Object.fromEntries(tools.map((tool) => [tool.id, false])));
+              setPrintOpen(true);
+            }}
+          >
+            Planche A4 QR
+          </Button>
+          {canManage ? (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<IconPlus size={16} />}
+              onClick={() => setNewOpen(true)}
+            >
+              Nouvel Outil
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Jibble KPI Dashboard Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Total Parc</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-ink-faint" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-ink tabular-nums">{stats.total}</span>
+            <span className="text-[11px] text-ink-faint">unités</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Disponibles</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-green" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-ink tabular-nums">{stats.disponible}</span>
+            <span className="text-[11px] text-ink-faint">en rayon</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">En Prêt</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-amber" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-ink tabular-nums">{stats.en_pret}</span>
+            <span className="text-[11px] text-ink-faint">sur chantier</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Maintenance</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-ink tabular-nums">{stats.maintenance}</span>
+            <span className="text-[11px] text-ink-faint">à réparer</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Manquants</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-red" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-ink tabular-nums">{stats.manquant + stats.reforme}</span>
+            <span className="text-[11px] text-ink-faint">perdus/rebut</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Jibble Filters & Search Bar */}
+      <div className="rounded-xl border border-line bg-surface p-3 shadow-xs space-y-3">
+        <div className="grid gap-2.5 sm:grid-cols-[1fr_auto_auto_auto_auto]">
+          <div className="relative min-w-44">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
               <IconSearch size={16} />
             </span>
             <input
               value={filters.q}
-              onChange={(event) => setFilters((f) => ({ ...f, q: event.target.value }))}
-              placeholder="Rechercher un identifiant, un nom, une catégorie…"
-              className="h-11 w-full rounded-btn border border-line-strong bg-surface pr-3 pl-9 text-sm placeholder:text-ink-faint focus:border-amber focus:outline-none"
+              onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+              placeholder="Rechercher désignation, code QR, marque..."
+              className="h-10 w-full rounded-lg border border-line bg-paper pl-9 pr-3 text-xs sm:text-sm focus:border-amber focus:bg-surface focus:outline-none transition-all"
             />
           </div>
-          <SelectField value={filters.status} onChange={(event) => setFilters((f) => ({ ...f, status: event.target.value }))}>
-            <option value="">Tous les statuts</option>
-            {(Object.keys(STATUS_LABEL) as ToolStatus[]).map((status) => (
-              <option key={status} value={status}>
-                {STATUS_LABEL[status]}
+
+          <select
+            value={filters.category}
+            onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}
+            className="h-10 rounded-lg border border-line bg-paper px-3 text-xs font-medium text-ink focus:border-amber focus:bg-surface focus:outline-none"
+          >
+            <option value="">Toutes catégories ({facets.categories.length})</option>
+            {facets.categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
               </option>
             ))}
-          </SelectField>
-          <SelectField value={filters.category} onChange={(event) => setFilters((f) => ({ ...f, category: event.target.value }))}>
-            <option value="">Toutes catégories</option>
-            {facets.categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField value={filters.location} onChange={(event) => setFilters((f) => ({ ...f, location: event.target.value }))}>
-            <option value="">Tous emplacements</option>
-            {facets.locations.map((location) => (
-              <option key={location} value={location}>
-                {location}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField value={filters.magasin_id} onChange={(event) => setFilters((f) => ({ ...f, magasin_id: event.target.value }))}>
-            <option value="">Tous magasins</option>
+          </select>
+
+          <select
+            value={filters.magasin_id}
+            onChange={(e) => setFilters((f) => ({ ...f, magasin_id: e.target.value }))}
+            className="h-10 rounded-lg border border-line bg-paper px-3 text-xs font-medium text-ink focus:border-amber focus:bg-surface focus:outline-none"
+          >
+            <option value="">Tous magasins ({magasins.length})</option>
             {magasins.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
               </option>
             ))}
-          </SelectField>
-        </div>
+          </select>
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          {['tous', 'disponible', 'en_pret', 'maintenance', 'manquant', 'reforme'].map((key) => (
+          {/* View mode toggle */}
+          <div className="hidden sm:flex items-center rounded-lg border border-line bg-paper p-0.5">
             <button
-              key={key}
-              onClick={() => setFilters((f) => ({ ...f, status: key === 'tous' ? '' : key }))}
+              onClick={() => setViewMode('table')}
               className={cx(
-                'rounded-chip border px-2.5 py-1 text-[12px] font-medium',
-                (key === 'tous' && !filters.status) || filters.status === key
-                  ? 'border-amber bg-amber-wash text-amber'
-                  : 'border-line-strong bg-surface-2 text-ink-soft hover:border-amber/50',
+                'rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all',
+                viewMode === 'table' ? 'bg-surface text-ink shadow-xs' : 'text-ink-soft hover:text-ink',
               )}
             >
-              {key === 'tous' ? 'Tous' : STATUS_LABEL[key as ToolStatus]}
-              <span className="ml-1.5 font-mono num">{statusCounts[key] ?? 0}</span>
+              Tableur Pro
+            </button>
+            <button
+              onClick={() => setViewMode('cards')}
+              className={cx(
+                'rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all',
+                viewMode === 'cards' ? 'bg-surface text-ink shadow-xs' : 'text-ink-soft hover:text-ink',
+              )}
+            >
+              Cartes
+            </button>
+          </div>
+        </div>
+
+        {/* Status Pills */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-line/60">
+          {[
+            { key: '', label: 'Tous', count: stats.total },
+            { key: 'disponible', label: 'Disponibles', count: stats.disponible },
+            { key: 'en_pret', label: 'En prêt', count: stats.en_pret },
+            { key: 'maintenance', label: 'Maintenance', count: stats.maintenance },
+            { key: 'manquant', label: 'Manquants', count: stats.manquant },
+            { key: 'reforme', label: 'Réformés', count: stats.reforme },
+          ].map(({ key, label, count }) => (
+            <button
+              key={key}
+              onClick={() => setFilters((f) => ({ ...f, status: key }))}
+              className={cx(
+                'rounded-full px-3 py-1 text-xs font-medium transition-all flex items-center gap-1.5',
+                filters.status === key
+                  ? 'bg-amber text-white shadow-xs'
+                  : 'bg-paper text-ink-soft hover:bg-paper-2 hover:text-ink border border-line',
+              )}
+            >
+              <span>{label}</span>
+              <span
+                className={cx(
+                  'rounded-full px-1.5 py-0.2 text-[10px] tabular-nums font-semibold',
+                  filters.status === key ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
+                )}
+              >
+                {count}
+              </span>
             </button>
           ))}
         </div>
-      </Card>
+      </div>
 
       {error ? (
-        <div className="mb-4">
+        <div>
           <Banner tone="error">{error}</Banner>
         </div>
       ) : null}
 
+      {/* Main Content: Tableur or Cards */}
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-16 text-sm text-ink-soft">
-          <Spinner /> Chargement des outils…
+          <Spinner /> Chargement du parc d’outils…
         </div>
       ) : tools.length === 0 ? (
         <EmptyState
-          title="Aucun outil ne correspond à ces filtres"
-          hint="Modifiez la recherche ou créez la fiche d’un nouvel outil."
+          title="Aucun outil ne correspond à vos filtres"
+          hint="Essayez de modifier vos filtres ou créez la fiche d’un nouvel équipement."
           action={
             canManage ? (
               <Button variant="primary" onClick={() => setNewOpen(true)}>
@@ -484,36 +553,195 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
           }
         />
       ) : (
-        <DataTable
-          data={tools}
-          columns={toolColumns}
-          onRowClick={(tool) => setSelectedId(tool.id)}
-          caption="Liste des outils — cliquez une ligne pour ouvrir la fiche"
-          minWidth="min-w-[46rem]"
-          empty={<EmptyState title="Aucun outil ne correspond" />}
-          renderCard={(tool) => (
-            <div className="flex items-center gap-3 px-4 py-3.5">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[12px] font-medium num text-ink-faint">{tool.id}</span>
-                  <Chip tone={STATUS_TONE[tool.status]}>{STATUS_LABEL[tool.status]}</Chip>
-                  <Chip tone={tool.condition === 'bon' ? 'neutral' : 'amber'}>
-                    {CONDITION_LABEL[tool.condition]}
-                  </Chip>
-                </div>
-                <p className="mt-1 truncate text-sm font-semibold text-ink">{tool.name}</p>
-                <p className="truncate text-[12px] text-ink-faint">
-                  {tool.category} · {tool.location}
-                </p>
-              </div>
-              <span className="flex shrink-0 text-ink-faint" aria-hidden>
-                <IconChevronRight size={18} />
+        <>
+          {/* Tableur Google Sheets Style */}
+          <div className={cx('rounded-xl border border-line bg-surface shadow-xs overflow-hidden', viewMode === 'cards' ? 'hidden' : 'hidden sm:block')}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-24 border-r border-line">
+                      Réf / Code QR
+                    </th>
+                    <th className="px-3 py-2.5 min-w-44 border-r border-line">Désignation</th>
+                    <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
+                    <th className="px-3 py-2.5 min-w-36 border-r border-line">Emplacement / Magasin</th>
+                    <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
+                    <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Statut</th>
+                    <th className="px-3 py-2.5 min-w-32 text-right">Actions Rapides</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {tools.map((tool) => (
+                    <tr
+                      key={tool.id}
+                      onClick={() => setSelectedId(tool.id)}
+                      className="hover:bg-amber-wash/30 cursor-pointer transition-colors group"
+                    >
+                      {/* Sticky ID */}
+                      <td className="sticky left-0 z-10 bg-surface group-hover:bg-surface-2 px-3 py-2 font-mono font-bold text-amber border-r border-line">
+                        <div className="flex items-center gap-1.5">
+                          <IconQr size={13} className="text-ink-faint shrink-0" />
+                          <span>{tool.id}</span>
+                        </div>
+                      </td>
+
+                      {/* Designation */}
+                      <td className="px-3 py-2 font-medium text-ink border-r border-line">
+                        <div className="font-semibold">{tool.name}</div>
+                        {tool.observations ? (
+                          <div className="text-[10px] text-ink-faint truncate max-w-xs">{tool.observations}</div>
+                        ) : null}
+                      </td>
+
+                      {/* Catégorie */}
+                      <td className="px-3 py-2 text-ink-soft border-r border-line">
+                        <span className="inline-block rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium border border-line text-ink-soft">
+                          {tool.category}
+                        </span>
+                      </td>
+
+                      {/* Magasin & Location */}
+                      <td className="px-3 py-2 text-ink-soft border-r border-line">
+                        <div className="font-medium text-ink">{tool.magasin_name ?? 'Magasin Central'}</div>
+                        <div className="text-[10px] text-ink-faint">{tool.location}</div>
+                      </td>
+
+                      {/* État */}
+                      <td className="px-3 py-2 text-center border-r border-line">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft">
+                          <span
+                            className={cx(
+                              'h-1.5 w-1.5 rounded-full shrink-0',
+                              tool.condition === 'bon' ? 'bg-green' : tool.condition === 'a_reparer' ? 'bg-amber' : 'bg-red',
+                            )}
+                          />
+                          {CONDITION_LABEL[tool.condition]}
+                        </span>
+                      </td>
+
+                      {/* Statut Chip */}
+                      <td className="px-3 py-2 text-center border-r border-line">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium text-ink-soft">
+                          <span
+                            className={cx(
+                              'h-1.5 w-1.5 rounded-full shrink-0',
+                              tool.status === 'disponible'
+                                ? 'bg-green'
+                                : tool.status === 'en_pret'
+                                  ? 'bg-amber'
+                                  : tool.status === 'maintenance'
+                                    ? 'bg-amber-500'
+                                    : 'bg-red',
+                            )}
+                          />
+                          {STATUS_LABEL[tool.status]}
+                        </span>
+                      </td>
+
+                      {/* Actions Rapides */}
+                      <td className="px-3 py-2 text-right">
+                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          {canManage && tool.status === 'disponible' ? (
+                            <button
+                              onClick={() => {
+                                setLoanFor(tool);
+                                setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
+                              }}
+                              className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs hover:bg-[#E05A02] active:scale-95 transition-all"
+                            >
+                              Prêter
+                            </button>
+                          ) : null}
+
+                          <button
+                            onClick={() => setSelectedId(tool.id)}
+                            className="rounded border border-line bg-paper px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-paper-2 hover:text-ink active:scale-95 transition-all"
+                          >
+                            Détails ›
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Tableur Footer Total */}
+            <div className="bg-paper border-t border-line px-4 py-2 text-xs flex items-center justify-between font-semibold text-ink-soft">
+              <span>Total : {tools.length} référence(s)</span>
+              <span className="text-[11px] text-ink-faint">
+                Cliquez sur n’importe quelle ligne pour voir l’historique ou imprimer le QR code
               </span>
             </div>
-          )}
-        />
+          </div>
+
+          {/* Cards View (pour Mobile) */}
+          <div className={cx('space-y-2.5', viewMode === 'cards' ? 'block' : 'sm:hidden')}>
+            {tools.map((tool) => (
+              <div
+                key={tool.id}
+                onClick={() => setSelectedId(tool.id)}
+                className="rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper-2 cursor-pointer transition-all space-y-2.5"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-amber">{tool.id}</span>
+                      <span className="rounded bg-paper px-1.5 py-0.5 text-[10px] font-medium text-ink-soft border border-line">
+                        {tool.category}
+                      </span>
+                    </div>
+                    <p className="font-semibold text-sm text-ink mt-0.5">{tool.name}</p>
+                  </div>
+
+                  <span
+                    className={cx(
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                      tool.status === 'disponible'
+                        ? 'bg-green-wash text-green'
+                        : tool.status === 'en_pret'
+                          ? 'bg-amber-wash text-amber'
+                          : 'bg-red-wash text-red',
+                    )}
+                  >
+                    <span
+                      className={cx(
+                        'h-1.5 w-1.5 rounded-full',
+                        tool.status === 'disponible' ? 'bg-green' : 'bg-amber',
+                      )}
+                    />
+                    {STATUS_LABEL[tool.status]}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-ink-faint pt-2 border-t border-line/60">
+                  <span>{tool.magasin_name ?? tool.location}</span>
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    {canManage && tool.status === 'disponible' ? (
+                      <button
+                        onClick={() => {
+                          setLoanFor(tool);
+                          setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
+                        }}
+                        className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white"
+                      >
+                        Prêter
+                      </button>
+                    ) : null}
+                    <span className="text-ink-soft font-medium flex items-center">
+                      Fiche <IconChevronRight size={14} />
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
+      {/* Detail Drawer (Jibble Style) */}
       <Drawer
         open={!!selectedId}
         onClose={() => setSelectedId(null)}
@@ -547,12 +775,12 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               </Banner>
             ) : null}
 
-            <Card className="flex items-center gap-4 p-4">
+            <Card className="flex items-center gap-4 p-4 border border-line">
               <ToolQr id={detail.tool.id} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-ink">QR de l’outil</p>
-                <p className="mt-1 text-[13px] text-ink-soft">
-                  Scannez-le pour ouvrir la fiche de l’outil.
+                <p className="text-sm font-semibold text-ink">QR Code d’identification</p>
+                <p className="mt-0.5 text-xs text-ink-soft">
+                  Ce code permet le pointage rapide et le scan instantané à l’atelier.
                 </p>
                 <Button
                   className="mt-3"
@@ -568,7 +796,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
             </Card>
 
             {canManage ? (
-              <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {detail.tool.status === 'disponible' ? (
                   <Button
                     variant="primary"
@@ -577,7 +805,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                       setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
                     }}
                   >
-                    Prêter l’outil
+                    Prêter cet outil
                   </Button>
                 ) : null}
                 {detail.loan ? (
@@ -612,31 +840,31 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
 
             {detail.tool.observations ? (
               <div>
-                <p className="mb-1 text-[13px] font-medium text-ink-soft">Observations</p>
-                <p className="rounded-btn border border-line bg-surface-2 px-3 py-2 text-sm">{detail.tool.observations}</p>
+                <p className="mb-1 text-xs font-semibold text-ink-soft uppercase tracking-wider">Observations</p>
+                <p className="rounded-lg border border-line bg-paper p-3 text-xs text-ink">{detail.tool.observations}</p>
               </div>
             ) : null}
 
             <div>
-              <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
-                <IconWrench size={16} /> Historique
+              <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                <IconWrench size={15} /> Historique des événements
               </p>
-              <ol className="relative ml-1 space-y-3 border-l border-line pl-4">
+              <ol className="relative ml-2 space-y-3 border-l-2 border-line pl-4">
                 {detail.events.map((event) => (
                   <li key={event.id} className="relative">
                     <span
                       aria-hidden
-                      className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-line-strong"
+                      className="absolute -left-[23px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-amber"
                     />
-                    <div className="rounded-btn border border-line bg-surface px-3 py-2.5">
+                    <div className="rounded-lg border border-line bg-surface p-2.5 shadow-xs">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-ink">
+                        <p className="text-xs font-semibold text-ink">
                           {EVENT_LABEL[event.event_type] ?? event.event_type}
                         </p>
-                        <p className="font-mono text-[12px] text-ink-faint num">{formatDateTime(event.created_at)}</p>
+                        <p className="font-mono text-[11px] text-ink-faint tabular-nums">{formatDateTime(event.created_at)}</p>
                       </div>
                       {event.from_status || event.to_status ? (
-                        <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                           {event.from_status ? (
                             <Chip tone={STATUS_TONE[event.from_status as ToolStatus] ?? 'grey'}>
                               {STATUS_LABEL[event.from_status as ToolStatus] ?? event.from_status}
@@ -652,8 +880,8 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                           ) : null}
                         </p>
                       ) : null}
-                      {event.note ? <p className="mt-1 text-[13px] text-ink-soft">{event.note}</p> : null}
-                      <p className="mt-1 text-[12px] text-ink-faint">Par {event.actor}</p>
+                      {event.note ? <p className="mt-1 text-xs text-ink-soft">{event.note}</p> : null}
+                      <p className="mt-1 text-[10px] text-ink-faint">Par {event.actor}</p>
                     </div>
                   </li>
                 ))}
@@ -663,6 +891,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         )}
       </Drawer>
 
+      {/* Modal Nouvel Outil */}
       <Modal
         open={newOpen}
         title="Nouvel outil"
@@ -688,7 +917,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               label="Catégorie"
               value={newForm.category}
               onChange={(event) => setNewForm((f) => ({ ...f, category: event.target.value }))}
-              hint="Utilisée pour préfixer l’identifiant (RBT, SCI, PER…)"
+              hint="Préfixe généré (ex: RBT, SCI, PER...)"
             />
             <Field
               label="Emplacement normal"
@@ -714,9 +943,10 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         </div>
       </Modal>
 
+      {/* Modal Prêt */}
       <Modal
         open={!!loanFor}
-        title={loanFor ? `Prêt — ${loanFor.id}` : 'Prêt'}
+        title={loanFor ? `Prêter : ${loanFor.id} — ${loanFor.name}` : 'Prêt'}
         onClose={() => setLoanFor(null)}
         footer={
           <>
@@ -726,14 +956,14 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               disabled={busy || !loanForm.employeeId || loanForm.motive.trim().length < 2}
               onClick={() => void createLoan()}
             >
-              {busy ? <Spinner /> : 'Valider la sortie'}
+              {busy ? <Spinner /> : 'Confirmer le prêt'}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
           <SelectField
-            label="Travailleur"
+            label="Travailleur bénéficiaire"
             value={loanForm.employeeId}
             onChange={(event) => setLoanForm((f) => ({ ...f, employeeId: event.target.value }))}
           >
@@ -744,20 +974,21 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
             ))}
           </SelectField>
           <Field
-            label="Motif / travail"
+            label="Motif / Chantier"
             value={loanForm.motive}
             onChange={(event) => setLoanForm((f) => ({ ...f, motive: event.target.value }))}
-            placeholder="ex. Pose du plafond salle paroissiale"
+            placeholder="ex. Pose des portes chapelle nord"
           />
-          <p className="text-[12px] text-ink-faint">
-            La date et l’heure sont relevées sur le serveur au moment de la validation (PRE-01).
+          <p className="text-xs text-ink-faint">
+            L’horodatage officiel sera consigné au serveur lors de la validation.
           </p>
         </div>
       </Modal>
 
+      {/* Modal Retour */}
       <Modal
         open={!!returnFor}
-        title={returnFor ? `Retour — prêt n° ${returnFor.id}` : 'Retour'}
+        title={returnFor ? `Retour prêt #${returnFor.id}` : 'Retour'}
         onClose={() => setReturnFor(null)}
         footer={
           <>
@@ -776,25 +1007,23 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               setReturnForm((f) => ({ ...f, condition: event.target.value as ToolCondition | 'endommage' }))
             }
           >
-            <option value="bon">Bon état</option>
-            <option value="a_reparer">À réparer</option>
-            <option value="endommage">Endommagé</option>
+            <option value="bon">Bon état (opérationnel)</option>
+            <option value="a_reparer">À réparer (maintenance)</option>
+            <option value="endommage">Endommagé (incident)</option>
           </SelectField>
           <TextArea
             label="Observations"
             value={returnForm.observations}
             onChange={(event) => setReturnForm((f) => ({ ...f, observations: event.target.value }))}
-            placeholder="Usure constatée, pièce manquante…"
+            placeholder="Usure anormale, pièces manquantes…"
           />
-          <p className="text-[12px] text-ink-faint">
-            Un outil rendu « à réparer » passe automatiquement en maintenance (PRE-03).
-          </p>
         </div>
       </Modal>
 
+      {/* Modal Statut */}
       <Modal
         open={!!statusFor}
-        title={statusFor ? `Statut — ${statusFor.id}` : 'Statut'}
+        title={statusFor ? `Statut de l'outil ${statusFor.id}` : 'Statut'}
         onClose={() => setStatusFor(null)}
         footer={
           <>
@@ -824,20 +1053,18 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               ))}
           </SelectField>
           <Field
-            label="Motif"
+            label="Motif du changement"
             value={statusForm.reason}
             onChange={(event) => setStatusForm((f) => ({ ...f, reason: event.target.value }))}
-            placeholder="ex. Constaté à l’inventaire du 14/10"
+            placeholder="ex. Révision périodique, pièce commandée"
           />
-          <p className="text-[12px] text-ink-faint">
-            Aucune modification n’est effacée : l’entrée reste visible dans l’historique et le journal d’audit.
-          </p>
         </div>
       </Modal>
 
+      {/* Modal Affectation */}
       <Modal
         open={!!assignFor}
-        title={assignFor ? `Affecter — ${assignFor.id}` : 'Affectation'}
+        title={assignFor ? `Affecter : ${assignFor.id}` : 'Affectation'}
         onClose={() => setAssignFor(null)}
         footer={
           <>
@@ -850,7 +1077,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
       >
         <div className="space-y-4">
           <SelectField
-            label="Magasin / atelier"
+            label="Magasin / Atelier d'affectation"
             value={assignMagasinId}
             onChange={(event) => setAssignMagasinId(event.target.value)}
           >
@@ -859,15 +1086,13 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
           </SelectField>
-          <p className="text-[12px] text-ink-faint">
-            L’outil sera rattaché au magasin sélectionné. L’emplacement historique est conservé.
-          </p>
         </div>
       </Modal>
 
+      {/* Modal Planche A4 */}
       <Modal
         open={printOpen}
-        title="Planches d’étiquettes (A4)"
+        title="Planches d’étiquettes QR (A4)"
         onClose={() => setPrintOpen(false)}
         footer={
           <>
@@ -886,30 +1111,42 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
           </>
         }
       >
-        <p className="mb-3 text-sm text-ink-soft">
-          Chaque étiquette comporte le QR code, l’identifiant et le nom. Sélectionnez les outils à imprimer.
-        </p>
-        <div className="space-y-1">
-          {tools.map((tool) => (
-            <label
-              key={tool.id}
-              className="flex cursor-pointer items-center gap-3 rounded-btn border border-line bg-surface px-3 py-2 hover:bg-surface-2"
+        <div className="space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-line">
+            <span className="text-xs text-ink-soft">Cochez les outils à imprimer sur la planche</span>
+            <button
+              onClick={() => {
+                const allSelected = tools.every((t) => printPick[t.id]);
+                setPrintPick(Object.fromEntries(tools.map((t) => [t.id, !allSelected])));
+              }}
+              className="text-xs font-semibold text-amber hover:underline"
             >
-              <input
-                type="checkbox"
-                checked={!!printPick[tool.id]}
-                onChange={(event) => setPrintPick((p) => ({ ...p, [tool.id]: event.target.checked }))}
-                className="h-4 w-4 accent-[#b4530a]"
-              />
-              <span className="font-mono text-[13px] num">{tool.id}</span>
-              <span className="min-w-0 flex-1 truncate text-sm">{tool.name}</span>
-            </label>
-          ))}
+              Tout cocher / décocher
+            </button>
+          </div>
+          <div className="max-h-80 overflow-y-auto space-y-1 pr-1">
+            {tools.map((tool) => (
+              <label
+                key={tool.id}
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2 hover:bg-paper"
+              >
+                <input
+                  type="checkbox"
+                  checked={!!printPick[tool.id]}
+                  onChange={(event) => setPrintPick((p) => ({ ...p, [tool.id]: event.target.checked }))}
+                  className="h-4 w-4 rounded accent-amber"
+                />
+                <span className="font-mono text-xs font-bold text-amber">{tool.id}</span>
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-ink">{tool.name}</span>
+                <span className="text-[11px] text-ink-faint">{tool.category}</span>
+              </label>
+            ))}
+          </div>
         </div>
       </Modal>
 
       {portal}
-    </>
+    </div>
   );
 }
 
@@ -925,8 +1162,8 @@ function ToolQr({ id }: { id: string }) {
     };
   }, [id]);
   return (
-    <span className="grid h-24 w-24 shrink-0 place-items-center rounded-btn border border-line bg-white">
-      {src ? <img src={src} alt={`QR ${id}`} className="h-20 w-20" /> : <IconQr size={28} className="text-ink-faint" />}
+    <span className="grid h-24 w-24 shrink-0 place-items-center rounded-xl border border-line bg-white shadow-xs">
+      {src ? <img src={src} alt={`QR ${id}`} className="h-20 w-20" /> : <IconBox size={28} className="text-ink-faint" />}
     </span>
   );
 }

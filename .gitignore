@@ -13,3 +13,5 @@ apps/web/dev-dist/
 .vercel
 data/pglite/
 .env*
+*.tsbuildinfo
+persona_audit_reports/

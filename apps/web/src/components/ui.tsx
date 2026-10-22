@@ -89,39 +89,40 @@ export function Button({
 
 type Tone = 'green' | 'blue' | 'amber' | 'red' | 'grey' | 'neutral' | 'purple';
 
-const TONE_CLASS: Record<Tone, string> = {
-  green: 'bg-green-wash text-green border-green/20',
-  blue: 'bg-blue-wash text-blue border-blue/20',
-  amber: 'bg-amber-wash text-amber border-amber/20',
-  red: 'bg-red-wash text-red border-red/20',
-  grey: 'bg-grey-wash text-ink-soft border-line-strong/60',
-  neutral: 'bg-surface-2 text-ink-soft border-line',
-  purple: 'bg-[#f3eefb] text-[#6b4fa0] border-[#6b4fa0]/20',
+const TONE_CLASS: Record<Tone, { chip: string; dot: string }> = {
+  green: { chip: 'bg-[#18181f] text-[#d4d4d8] border-[#272732]', dot: 'bg-[#10b981]' },
+  blue: { chip: 'bg-[#18181f] text-[#d4d4d8] border-[#272732]', dot: 'bg-[#3b82f6]' },
+  amber: { chip: 'bg-[#18181f] text-[#d4d4d8] border-[#272732]', dot: 'bg-[#ff5500]' },
+  red: { chip: 'bg-[#18181f] text-[#d4d4d8] border-[#272732]', dot: 'bg-[#ef4444]' },
+  grey: { chip: 'bg-[#18181f] text-[#a1a1aa] border-[#272732]', dot: 'bg-[#71717a]' },
+  neutral: { chip: 'bg-[#18181f] text-[#a1a1aa] border-[#272732]', dot: 'bg-[#71717a]' },
+  purple: { chip: 'bg-[#18181f] text-[#d4d4d8] border-[#272732]', dot: 'bg-[#8b5cf6]' },
 };
 
 export function Chip({
   tone = 'neutral',
   children,
   className,
-  dot,
+  dot = true,
 }: {
   tone?: Tone;
   children: ReactNode;
   className?: string;
   dot?: boolean;
 }) {
+  const conf = TONE_CLASS[tone] ?? TONE_CLASS.neutral;
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1.5 rounded-chip border px-2 py-0.5 text-[12px] font-medium whitespace-nowrap',
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap',
         'transition-colors duration-[120ms]',
-        TONE_CLASS[tone],
+        conf.chip,
         className,
       )}
     >
       {dot ? (
         <span
-          className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-70"
+          className={cx('inline-block h-1.5 w-1.5 rounded-full shrink-0', conf.dot)}
           aria-hidden
         />
       ) : null}
@@ -324,10 +325,10 @@ export function Banner({
   className?: string;
 }) {
   const styles = {
-    info: 'border-blue/20 bg-blue-wash text-blue',
-    error: 'border-red/20 bg-red-wash text-red',
-    success: 'border-green/20 bg-green-wash text-green',
-    warning: 'border-amber/25 bg-amber-wash text-amber',
+    info: 'border-[#272732] bg-[#141419] text-[#e4e4e7]',
+    error: 'border-red/30 bg-red-wash text-[#fca5a5]',
+    success: 'border-green/30 bg-green-wash text-[#86efac]',
+    warning: 'border-amber/30 bg-amber-wash text-[#fdba74]',
   }[tone];
   return (
     <div

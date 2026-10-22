@@ -10,19 +10,27 @@ import {
   Chip,
   Drawer,
   EmptyState,
-  Field,
   Modal,
   PageHeader,
-  SelectField,
-  Skeleton,
   Spinner,
-  TextArea,
   cx,
   useToast,
 } from '../components/ui';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { QrCode } from '../components/QrCode';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
-import { IconPlus, IconPrinter, IconRefresh, IconSearch } from '../components/Icons';
+import {
+  Calendar as CalendarIcon,
+  Clock,
+  Plus,
+  Printer,
+  RefreshCw,
+  Search,
+  UserPlus,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'Tous' },
@@ -42,9 +50,219 @@ const STATUS_CHIP: Record<string, { tone: 'green' | 'amber' | 'red' | 'blue' | '
   permission: { tone: 'blue', label: 'Permission' },
 };
 
+/**
+ * Jibble Time-off Calendar View Component
+ */
+function TimeOffCalendarView({
+  leaves,
+  employees,
+  onOpenLeave,
+  onReview,
+  canManage,
+}: {
+  leaves: Leave[];
+  employees: Employee[];
+  onOpenLeave: () => void;
+  onReview: (leave: Leave, status: 'approved' | 'rejected') => void;
+  canManage: boolean;
+}) {
+  const [currentMonth, setCurrentMonth] = useState(() => new Date());
+
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+
+  const monthLabel = currentMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayIndex = (new Date(year, month, 1).getDay() + 6) % 7; // Lundi = 0
+
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanks = Array.from({ length: firstDayIndex }, (_, i) => i);
+
+  // Filter leaves that touch this month
+  const monthLeaves = useMemo(() => {
+    return leaves.filter((l) => {
+      const from = new Date(l.from_date);
+      const to = new Date(l.to_date);
+      const startOfMonth = new Date(year, month, 1);
+      const endOfMonth = new Date(year, month + 1, 0);
+      return (from <= endOfMonth && to >= startOfMonth);
+    });
+  }, [leaves, year, month]);
+
+  return (
+    <div className="space-y-6">
+      {/* Pending Approvals Bar (Jibble Approvals) */}
+      {leaves.filter((l) => l.status === 'pending').length > 0 && (
+        <Card className="border-amber/30 bg-amber-wash/40 p-4 shadow-card">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-ink flex items-center gap-2">
+              <Clock size={16} className="text-amber" /> Demandes de congés &amp; permissions en attente ({leaves.filter((l) => l.status === 'pending').length})
+            </span>
+            <span className="text-[11px] text-amber font-semibold">Validation requise</span>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            {leaves.filter((l) => l.status === 'pending').map((l) => (
+              <div key={l.id} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3 text-xs shadow-xs">
+                <div className="min-w-0">
+                  <p className="font-bold text-ink">{l.full_name}</p>
+                  <p className="text-ink-soft">
+                    <span className="capitalize font-semibold text-amber">{l.kind}</span> : {formatDate(l.from_date)} → {formatDate(l.to_date)}
+                  </p>
+                  {l.note ? <p className="text-[11px] text-ink-faint italic truncate">{l.note}</p> : null}
+                </div>
+                {canManage && (
+                  <div className="flex gap-1.5 shrink-0">
+                    <button
+                      onClick={() => onReview(l, 'approved')}
+                      className="rounded bg-green px-2.5 py-1 text-[11px] font-bold text-white hover:bg-green-2 active:scale-95"
+                    >
+                      Accepter
+                    </button>
+                    <button
+                      onClick={() => onReview(l, 'rejected')}
+                      className="rounded bg-grey-wash border border-line px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-red-wash hover:text-red active:scale-95"
+                    >
+                      Refuser
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Calendar Header */}
+      <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-ink capitalize">{monthLabel}</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentMonth(new Date(year, month - 1, 1))}
+              className="rounded-lg border border-line p-1 hover:bg-paper-2"
+              aria-label="Mois précédent"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={() => setCurrentMonth(new Date())}
+              className="rounded-lg border border-line px-2 py-1 text-xs font-semibold hover:bg-paper-2"
+            >
+              Aujourd'hui
+            </button>
+            <button
+              onClick={() => setCurrentMonth(new Date(year, month + 1, 1))}
+              className="rounded-lg border border-line p-1 hover:bg-paper-2"
+              aria-label="Mois suivant"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
+          <span className="hidden md:inline text-ink-faint font-medium">({employees.length} salariés)</span>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-blue" />
+            <span className="text-ink-soft">Congé payé</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-[#8b5cf6]" />
+            <span className="text-ink-soft">Permission</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-red" />
+            <span className="text-ink-soft">Absence</span>
+          </div>
+          <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={onOpenLeave} className="ml-auto sm:ml-0">
+            Poser congé
+          </Button>
+        </div>
+      </div>
+
+      {/* Monthly Grid with responsive horizontal scroll */}
+      <Card className="overflow-x-auto scroll-thin shadow-card p-0">
+        <div className="min-w-[580px]">
+          <div className="grid grid-cols-7 border-b border-line bg-paper-2 text-center text-xs font-semibold text-ink-soft">
+            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d) => (
+              <div key={d} className="py-2.5 border-r border-line last:border-r-0">
+                {d}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 sheet-grid">
+          {blanks.map((b) => (
+            <div key={`blank-${b}`} className="min-h-24 bg-paper/40 p-2 border-r border-b border-line" />
+          ))}
+
+          {days.map((d) => {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const activeOnDay = monthLeaves.filter((l) => dateStr >= l.from_date && dateStr <= l.to_date);
+            const isToday = new Date().toDateString() === new Date(year, month, d).toDateString();
+
+            return (
+              <div
+                key={`day-${d}`}
+                className={cx(
+                  'min-h-24 p-2 border-r border-b border-line transition-colors hover:bg-paper-2/20',
+                  isToday && 'bg-amber-wash/30',
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span
+                    className={cx(
+                      'font-mono text-xs font-bold tabular-nums',
+                      isToday ? 'grid h-6 w-6 place-items-center rounded-full bg-amber text-white' : 'text-ink-soft',
+                    )}
+                  >
+                    {d}
+                  </span>
+                  {activeOnDay.length > 0 && (
+                    <span className="text-[10px] text-ink-faint font-semibold">{activeOnDay.length} abs.</span>
+                  )}
+                </div>
+
+                <div className="mt-1.5 space-y-1">
+                  {activeOnDay.slice(0, 3).map((leave) => (
+                    <div
+                      key={leave.id}
+                      className="flex items-center gap-1 truncate rounded bg-surface-2 border border-line px-1.5 py-0.5 text-[10px] font-medium text-ink-soft shadow-xs"
+                      title={`${leave.full_name} (${leave.kind}) : ${leave.from_date} au ${leave.to_date}`}
+                    >
+                      <span
+                        className={cx(
+                          'h-1.5 w-1.5 rounded-full shrink-0',
+                          leave.kind === 'conge'
+                            ? 'bg-blue'
+                            : leave.kind === 'permission'
+                            ? 'bg-[#8b5cf6]'
+                            : 'bg-red',
+                        )}
+                      />
+                      <span className="truncate">{(leave.full_name ?? 'Employé').split(' ')[0]}</span>
+                    </div>
+                  ))}
+                  {activeOnDay.length > 3 && (
+                    <span className="text-[10px] text-ink-faint block text-center">+{activeOnDay.length - 3} autres</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </Card>
+    </div>
+  );
+}
+
 export function Employees({ user, scan }: { user: User; scan?: ScanResult | null }) {
   const toast = useToast();
   const canManage = user.role === 'direction';
+
+  const [activeTab, setActiveTab] = useState<'people' | 'timeoff'>('people');
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [todayStatus, setTodayStatus] = useState<TodayEmployee[]>([]);
@@ -107,7 +325,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     Promise.all([
       api<{ employees: Employee[] }>('/api/employees'),
       api<{ employees: TodayEmployee[] }>('/api/employees/today-status').catch(() => ({ employees: [] })),
-      api<{ leaves: Leave[] }>('/api/leaves?status=pending').catch(() => ({ leaves: [] })),
+      api<{ leaves: Leave[] }>('/api/leaves?status=all').catch(() => ({ leaves: [] })),
     ])
       .then(([empRes, statusRes, leaveRes]) => {
         if (!cancelled) {
@@ -134,10 +352,17 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     return m;
   }, [todayStatus]);
 
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: employees.length, present: 0, late: 0, absent: 0, conge: 0, permission: 0 };
+  const counts = useMemo<{
+    all: number;
+    present: number;
+    late: number;
+    absent: number;
+    conge: number;
+    permission: number;
+  }>(() => {
+    const c = { all: employees.length, present: 0, late: 0, absent: 0, conge: 0, permission: 0 };
     for (const s of todayStatus) {
-      if (s.status in c) c[s.status] = (c[s.status] ?? 0) + 1;
+      if (s.status in c) (c as Record<string, number>)[s.status] = ((c as Record<string, number>)[s.status] ?? 0) + 1;
     }
     return c;
   }, [todayStatus, employees.length]);
@@ -173,74 +398,29 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     );
   }
 
-  const viewColumns = useMemo<DataTableColumn<Employee>[]>(
-    () => [
-      {
-        accessorKey: 'full_name',
-        header: 'Nom',
-        sortFn: 'alphanumeric',
-        meta: { cellClassName: 'whitespace-normal min-w-40' },
-        cell: ({ row }) => (
-          <div>
-            <p className="font-medium text-ink">{row.original.full_name}</p>
-            <p className="text-xs text-ink-faint">{row.original.id}</p>
-          </div>
-        ),
-      },
-      {
-        accessorKey: 'job_title',
-        header: 'Métier',
-        sortFn: 'alphanumeric',
-        cell: ({ row }) => <span className="text-ink-soft">{row.original.job_title}</span>,
-      },
-      {
-        id: 'day',
-        accessorKey: 'id',
-        enableSorting: false,
-        header: 'État du jour',
-        cell: ({ row }) => dayChip(row.original),
-      },
-      {
-        id: 'in',
-        accessorKey: 'id',
-        enableSorting: false,
-        header: 'Arrivée',
-        cell: ({ row }) => <span className="font-mono num">{statusMap.get(row.original.id)?.inAt ?? '—'}</span>,
-      },
-      {
-        id: 'out',
-        accessorKey: 'id',
-        enableSorting: false,
-        header: 'Départ',
-        cell: ({ row }) => <span className="font-mono num">{statusMap.get(row.original.id)?.outAt ?? '—'}</span>,
-      },
-    ],
-    [statusMap],
-  );
-
   const employeeColumns = useMemo<DataTableColumn<Employee>[]>(
     () => [
       {
         accessorKey: 'full_name',
-        header: 'Nom',
+        header: 'Nom du travailleur',
         sortFn: 'alphanumeric',
-        meta: { cellClassName: 'whitespace-normal min-w-52' },
+        meta: { cellClassName: 'whitespace-normal min-w-56' },
         cell: ({ row }) => {
           const employee = row.original;
           return (
             <div className="flex items-center gap-3">
               <span
                 className={cx(
-                  'grid h-9 w-9 shrink-0 place-items-center rounded-btn text-[13px] font-semibold',
-                  employee.active ? 'bg-charcoal text-white' : 'bg-grey-wash text-ink-faint',
+                  'grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs',
+                  employee.active ? 'bg-amber-wash text-amber border-amber/20' : 'bg-grey-wash text-ink-faint border-line',
                 )}
               >
                 {initials(employee.full_name)}
               </span>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-ink">{employee.full_name}</p>
-                <p className="truncate text-[13px] text-ink-soft">
-                  {employee.job_title} · <span className="font-mono num">{employee.id}</span>
+                <p className="truncate text-xs font-bold text-ink">{employee.full_name}</p>
+                <p className="truncate text-[11px] text-ink-soft">
+                  {employee.job_title} · <span className="font-mono">{employee.id}</span>
                 </p>
               </div>
             </div>
@@ -251,54 +431,74 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
         id: 'day',
         accessorKey: 'id',
         enableSorting: false,
-        header: 'État du jour',
+        header: 'État d’aujourd’hui',
         cell: ({ row }) => dayChip(row.original),
       },
       {
         id: 'badge',
         accessorKey: 'badge_token',
-        header: 'Badge',
+        header: 'Badge QR',
         enableSorting: false,
         meta: { headerClassName: 'hidden sm:table-cell', cellClassName: 'hidden sm:table-cell' },
-        cell: ({ row }) => <span className="font-mono text-[13px] num">{row.original.badge_token ?? '—'}</span>,
+        cell: ({ row }) => (
+          <span className="font-mono text-xs tabular-nums text-ink font-semibold">
+            {row.original.badge_token ?? '—'}
+          </span>
+        ),
       },
       {
         id: 'active',
         accessorKey: 'active',
-        header: 'Compte',
-        cell: ({ row }) => <Chip tone={row.original.active ? 'green' : 'grey'}>{row.original.active ? 'Actif' : 'Inactif'}</Chip>,
+        header: 'Statut',
+        cell: ({ row }) => (
+          <span
+            className={cx(
+              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
+              row.original.active
+                ? 'border-green/20 bg-green-wash text-green'
+                : 'border-line bg-grey-wash text-ink-faint',
+            )}
+          >
+            <span className={cx('h-1.5 w-1.5 rounded-full', row.original.active ? 'bg-green' : 'bg-ink-faint')} />
+            {row.original.active ? 'Actif' : 'Inactif'}
+          </span>
+        ),
       },
       {
         id: 'actions',
         enableSorting: false,
         header: '',
-        meta: { cellClassName: 'whitespace-nowrap' },
+        meta: { cellClassName: 'whitespace-nowrap text-right' },
         cell: ({ row }) => {
           const employee = row.original;
           return (
             <div className="flex items-center justify-end gap-1">
-              <Button size="sm" variant="quiet" onClick={() => setDetailFor(employee)}>
-                Fiche
+              <Button size="sm" variant="ghost" onClick={() => setDetailFor(employee)}>
+                Détail
               </Button>
-              <Button size="sm" variant="quiet" onClick={() => openEdit(employee)}>
-                Modifier
-              </Button>
-              <Button size="sm" variant="quiet" onClick={() => setBadgeFor(employee)}>
-                Badge
-              </Button>
-              <Button
-                size="sm"
-                variant={employee.active ? 'outline-danger' : 'quiet'}
-                onClick={() => void toggleActive(employee)}
-              >
-                {employee.active ? 'Désactiver' : 'Réactiver'}
-              </Button>
+              {canManage && (
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => openEdit(employee)}>
+                    Modifier
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setBadgeFor(employee)}>
+                    Badge
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={employee.active ? 'outline-danger' : 'secondary'}
+                    onClick={() => void toggleActive(employee)}
+                  >
+                    {employee.active ? 'Désactiver' : 'Activer'}
+                  </Button>
+                </>
+              )}
             </div>
           );
         },
       },
     ],
-    [canManage],
+    [canManage, statusMap],
   );
 
   function openCreate() {
@@ -327,7 +527,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
         toast('Fiche mise à jour.', 'success');
       } else {
         await api('/api/employees', { method: 'POST', body: JSON.stringify(form) });
-        toast('Travailleur créé.', 'success');
+        toast('Nouveau travailleur créé avec badge automatique.', 'success');
       }
       setFormOpen(false);
       setReload((value) => value + 1);
@@ -356,7 +556,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     setBusy(true);
     try {
       const res = await api<{ employee: Employee }>(`/api/employees/${badgeFor.id}/badge`, { method: 'POST' });
-      toast(`Nouveau badge : ${res.employee.badge_token}`, 'success');
+      toast(`Nouveau badge généré : ${res.employee.badge_token}`, 'success');
       setBadgeFor(null);
       setReload((value) => value + 1);
     } catch (err) {
@@ -382,7 +582,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     setLeaveError(null);
     try {
       await api('/api/leaves', { method: 'POST', body: JSON.stringify(leaveForm) });
-      toast('Demande de congé / permission enregistrée (en attente d’approbation).', 'success');
+      toast('Demande de congé enregistrée.', 'success');
       setLeaveOpen(false);
       setReload((v) => v + 1);
     } catch (e) {
@@ -402,94 +602,31 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     }
   }
 
-  if (!canManage) {
-    return (
-      <>
-        <PageHeader title="Travailleurs" hint="Présences de l’équipe (lecture seule)." />
-        {error ? (
-          <div className="mb-4">
-            <Banner tone="error">{error}</Banner>
-          </div>
-        ) : null}
-        <Card className="mb-4 flex flex-wrap items-center gap-3 p-3">
-          <div className="relative min-w-56 flex-1">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
-              <IconSearch size={16} />
-            </span>
-            <input
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-              placeholder="Rechercher un nom, un métier…"
-              className="h-11 w-full rounded-btn border border-line-strong bg-surface pl-9 pr-3 text-sm focus:border-amber focus:outline-none"
-            />
-          </div>
-          <p className="text-[13px] text-ink-faint">{filtered.length} fiche{filtered.length > 1 ? 's' : ''}</p>
-        </Card>
-        <div className="mb-4 flex flex-wrap gap-2">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setStatusFilter(f.value)}
-              className={cx(
-                'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all duration-150',
-                statusFilter === f.value
-                  ? 'border-charcoal bg-charcoal text-white shadow-card'
-                  : 'border-line-strong bg-surface text-ink-soft hover:bg-paper-2',
-              )}
-            >
-              {f.label}
-              <span className={cx('rounded-full px-1.5 text-[11px] font-semibold num', statusFilter === f.value ? 'bg-white/20 text-white' : 'bg-paper-2 text-ink-faint')}>
-                {counts[f.value] ?? 0}
-              </span>
-            </button>
-          ))}
-        </div>
-        {loading ? (
-          <Skeleton className="h-64 rounded-xl" />
-        ) : (
-          <DataTable
-            data={filtered}
-            columns={viewColumns}
-            caption="Présences du jour"
-            empty={<span className="text-sm text-ink-faint">Aucune fiche trouvée.</span>}
-            renderCard={(employee) => (
-              <div className="px-4 py-3.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-ink">{employee.full_name}</p>
-                    <p className="truncate text-[13px] text-ink-soft">
-                      {employee.job_title} · <span className="font-mono num">{employee.id}</span>
-                    </p>
-                  </div>
-                  {dayChip(employee)}
-                </div>
-                <div className="mt-2 flex gap-4 font-mono text-[13px] num text-ink-soft">
-                  <span>Arr. {statusMap.get(employee.id)?.inAt ?? '—'}</span>
-                  <span>Dép. {statusMap.get(employee.id)?.outAt ?? '—'}</span>
-                </div>
-              </div>
-            )}
-          />
-        )}
-      </>
-    );
-  }
-
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
-        title="Travailleurs"
-        hint="Fiches du personnel, badges de pointage et activation."
+        eyebrow="Jibble Workforce"
+        title="Travailleurs &amp; Congés"
+        hint="Répertoire de l’équipe de menuiserie, badges de pointage et calendrier des absences."
         actions={
-          <>
-            <Button icon={<IconRefresh size={18} />} onClick={() => setReload((value) => value + 1)}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<RefreshCw size={14} />}
+              onClick={() => setReload((value) => value + 1)}
+            >
               Actualiser
             </Button>
-            <Button onClick={openLeave}>Congé / Permission</Button>
-            <Button variant="primary" icon={<IconPlus size={18} />} onClick={openCreate}>
-              Nouveau travailleur
+            <Button size="sm" onClick={openLeave} icon={<CalendarIcon size={14} />}>
+              Congé / Permission
             </Button>
-          </>
+            {canManage && (
+              <Button size="sm" variant="primary" icon={<UserPlus size={15} />} onClick={openCreate}>
+                Nouveau travailleur
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -499,142 +636,208 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
         </div>
       ) : null}
 
-      <Card className="mb-4 flex flex-wrap items-center gap-3 p-3">
-        <div className="relative min-w-56 flex-1">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
-            <IconSearch size={16} />
-          </span>
-          <input
-            value={q}
-            onChange={(event) => setQ(event.target.value)}
-            placeholder="Rechercher un nom, un métier, un identifiant…"
-            className="h-11 w-full rounded-btn border border-line-strong bg-surface pl-9 pr-3 text-sm focus:border-amber focus:outline-none"
-          />
-        </div>
-        <button
-          onClick={() => setShowInactive((value) => !value)}
-          className={cx(
-            'h-11 rounded-btn border px-3 text-sm font-medium',
-            showInactive ? 'border-amber bg-amber-wash text-amber' : 'border-line-strong bg-surface text-ink-soft hover:bg-surface-2',
-          )}
-        >
-          Afficher les inactifs
-        </button>
-        <p className="text-[13px] text-ink-faint">{filtered.length} fiche{filtered.length > 1 ? 's' : ''}</p>
-      </Card>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        {STATUS_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setStatusFilter(f.value)}
-            className={cx(
-              'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all duration-150',
-              statusFilter === f.value
-                ? 'border-charcoal bg-charcoal text-white shadow-card'
-                : 'border-line-strong bg-surface text-ink-soft hover:bg-paper-2',
-            )}
-          >
-            {f.label}
-            <span className={cx('rounded-full px-1.5 text-[11px] font-semibold num', statusFilter === f.value ? 'bg-white/20 text-white' : 'bg-paper-2 text-ink-faint')}>
-              {counts[f.value] ?? 0}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {leaves.length > 0 && (
-        <Card className="mb-4 border-amber/30 bg-amber-wash/50">
-          <p className="mb-2 text-sm font-semibold text-ink">Demandes en attente d’approbation ({leaves.length})</p>
-          <ul className="space-y-2">
-            {leaves.map((l) => (
-              <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink">{l.full_name} — {l.kind === 'conge' ? 'Congé' : l.kind === 'permission' ? 'Permission' : 'Absence'}</p>
-                  <p className="text-xs text-ink-soft">{formatDate(l.from_date)} → {formatDate(l.to_date)}{l.note ? ` · ${l.note}` : ''}</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="success" onClick={() => reviewLeave(l, 'approved')}>Approuver</Button>
-                  <Button size="sm" variant="danger" onClick={() => reviewLeave(l, 'rejected')}>Refuser</Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
       {loading && employees.length === 0 ? (
         <div className="flex items-center justify-center gap-2 py-24 text-sm text-ink-soft">
-          <Spinner /> Chargement…
+          <Spinner /> Chargement des effectifs et du planning…
         </div>
-      ) : (
-        <DataTable
-          data={filtered}
-          columns={employeeColumns}
-          caption="Fiches du personnel — boutons d’action par ligne"
-          renderCard={(employee) => (
-            <div className="px-4 py-3.5">
-              <div className="flex items-center gap-3">
-                <span
-                  className={cx(
-                    'grid h-9 w-9 shrink-0 place-items-center rounded-btn text-[13px] font-semibold',
-                    employee.active ? 'bg-charcoal text-white' : 'bg-grey-wash text-ink-faint',
-                  )}
-                >
-                  {initials(employee.full_name)}
+      ) : null}
+
+      {/* Tabs Switcher: Équipe vs Calendrier Time-Off */}
+      <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-6">
+        <div className="border-b border-line pb-px overflow-x-auto scroll-thin">
+          <TabsList variant="line" className="flex gap-2 bg-transparent p-0 w-max min-w-full">
+            <TabsTrigger
+              value="people"
+              className="gap-2 px-3 py-2 text-xs sm:text-sm font-semibold shrink-0 data-active:border-b-2 data-active:border-amber data-active:text-ink"
+            >
+              <Users size={16} />
+              <span>Répertoire de l’Équipe</span>
+              <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
+                {employees.length}
+              </span>
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="timeoff"
+              className="gap-2 px-3 py-2 text-xs sm:text-sm font-semibold shrink-0 data-active:border-b-2 data-active:border-amber data-active:text-ink"
+            >
+              <CalendarIcon size={16} />
+              <span>Planning des Congés</span>
+              {leaves.filter((l) => l.status === 'pending').length > 0 && (
+                <span className="ml-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-bold text-amber">
+                  {leaves.filter((l) => l.status === 'pending').length} attente
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink">{employee.full_name}</p>
-                  <p className="truncate text-[13px] text-ink-soft">
-                    {employee.job_title} · <span className="font-mono num">{employee.id}</span>
-                  </p>
-                </div>
-              </div>
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                {dayChip(employee)}
-                <Chip tone={employee.active ? 'green' : 'grey'}>
-                  {employee.active ? 'Actif' : 'Inactif'}
-                </Chip>
-                <span className="font-mono text-[13px] num text-ink-soft">
-                  Badge {employee.badge_token ?? '—'}
-                </span>
-              </div>
-              {canManage ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" variant="quiet" onClick={() => setDetailFor(employee)}>
-                    Fiche
-                  </Button>
-                  <Button size="sm" variant="quiet" onClick={() => openEdit(employee)}>
-                    Modifier
-                  </Button>
-                  <Button size="sm" variant="quiet" onClick={() => setBadgeFor(employee)}>
-                    Badge
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={employee.active ? 'outline-danger' : 'quiet'}
-                    onClick={() => void toggleActive(employee)}
-                  >
-                    {employee.active ? 'Désactiver' : 'Réactiver'}
-                  </Button>
-                </div>
-              ) : null}
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        {/* =========================================================================
+            TAB 1: PEOPLE / EQUIPE
+        ========================================================================= */}
+        <TabsContent value="people" className="space-y-4">
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Card className="p-3.5 shadow-card">
+              <span className="text-[10px] uppercase font-bold text-ink-faint">Effectif total</span>
+              <p className="mt-1 font-mono text-2xl font-bold text-ink tabular-nums">{employees.length}</p>
+            </Card>
+            <Card className="p-3.5 shadow-card">
+              <span className="text-[10px] uppercase font-bold text-ink-faint flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-green" /> Présents aujourd’hui
+              </span>
+              <p className="mt-1 font-mono text-2xl font-bold text-ink tabular-nums">{counts.present + counts.late}</p>
+            </Card>
+            <Card className="p-3.5 shadow-card">
+              <span className="text-[10px] uppercase font-bold text-ink-faint flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber" /> En retard
+              </span>
+              <p className="mt-1 font-mono text-2xl font-bold text-ink tabular-nums">{counts.late}</p>
+            </Card>
+            <Card className="p-3.5 shadow-card">
+              <span className="text-[10px] uppercase font-bold text-ink-faint flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-blue" /> Congés &amp; Absents
+              </span>
+              <p className="mt-1 font-mono text-2xl font-bold text-ink tabular-nums">{counts.conge + counts.permission}</p>
+            </Card>
+          </div>
+
+          {/* Search & Filter Toolbar */}
+          <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative min-w-0 flex-1">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
+              <input
+                value={q}
+                onChange={(event) => setQ(event.target.value)}
+                placeholder="Rechercher par nom, métier ou matricule…"
+                className="h-9 w-full rounded-lg border border-line bg-paper-2/60 pl-9 pr-3 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:bg-surface focus:outline-none"
+              />
             </div>
-          )}
-          empty={
-            <EmptyState
-              title="Aucun travailleur"
-              hint="Créez la première fiche : l’identifiant EMP-XXX et le badge sont générés automatiquement."
-              action={
-                <Button variant="primary" onClick={openCreate}>
-                  Nouveau travailleur
-                </Button>
+
+            <div className="flex items-center gap-2 overflow-x-auto scroll-thin max-w-full pb-1 sm:pb-0">
+              <div className="flex items-center shrink-0 rounded-lg border border-line bg-paper-2 p-0.5 text-xs">
+                {STATUS_FILTERS.map((f) => (
+                  <button
+                    key={f.value}
+                    onClick={() => setStatusFilter(f.value)}
+                    className={cx(
+                      'rounded-md px-2.5 py-1 font-medium transition-colors shrink-0',
+                      statusFilter === f.value ? 'bg-surface font-semibold text-ink shadow-xs' : 'text-ink-soft',
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setShowInactive((v) => !v)}
+                className={cx(
+                  'shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors',
+                  showInactive ? 'border-amber bg-amber-wash text-amber' : 'border-line text-ink-soft hover:bg-paper-2',
+                )}
+              >
+                Inactifs
+              </button>
+            </div>
+          </div>
+
+          {/* DataTable with Mobile Card View */}
+          <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+            <DataTable
+              data={filtered}
+              columns={employeeColumns}
+              caption="Effectif de l’atelier de menuiserie"
+              renderCard={(employee) => (
+                <div
+                  key={employee.id}
+                  className="rounded-xl border border-line bg-surface p-3.5 shadow-xs space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span
+                        className={cx(
+                          'grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs',
+                          employee.active ? 'bg-amber-wash text-amber border-amber/20' : 'bg-grey-wash text-ink-faint border-line',
+                        )}
+                      >
+                        {initials(employee.full_name)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-ink">{employee.full_name}</p>
+                        <p className="truncate text-xs text-ink-soft">
+                          {employee.job_title} · <span className="font-mono text-ink-faint">{employee.id}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="shrink-0">{dayChip(employee)}</div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/60 pt-2.5 text-xs">
+                    <span
+                      className={cx(
+                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
+                        employee.active
+                          ? 'border-green/20 bg-green-wash text-green'
+                          : 'border-line bg-grey-wash text-ink-faint',
+                      )}
+                    >
+                      <span className={cx('h-1.5 w-1.5 rounded-full', employee.active ? 'bg-green' : 'bg-ink-faint')} />
+                      {employee.active ? 'Actif' : 'Inactif'}
+                    </span>
+
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => setDetailFor(employee)}>
+                        Détail
+                      </Button>
+                      {canManage && (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(employee)}>
+                            Modifier
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setBadgeFor(employee)}>
+                            Badge
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              empty={
+                <EmptyState
+                  title="Aucun travailleur trouvé"
+                  hint="Ajustez vos filtres de recherche ou enregistrez un collaborateur."
+                  action={
+                    canManage ? (
+                      <Button variant="primary" onClick={openCreate}>
+                        Nouveau travailleur
+                      </Button>
+                    ) : undefined
+                  }
+                />
               }
             />
-          }
-        />
-      )}
+          </div>
+        </TabsContent>
 
+        {/* =========================================================================
+            TAB 2: TIME-OFF CALENDAR
+        ========================================================================= */}
+        <TabsContent value="timeoff" className="space-y-4">
+          <TimeOffCalendarView
+            leaves={leaves}
+            employees={employees}
+            onOpenLeave={openLeave}
+            onReview={reviewLeave}
+            canManage={canManage}
+          />
+        </TabsContent>
+      </Tabs>
+
+      {/* =========================================================================
+          DRAWER : FICHE DETAILLEE TRAVAILLEUR (JIBBLE PROFILE)
+      ========================================================================= */}
       <Drawer
         open={!!detailFor}
         title={detailFor?.full_name ?? ''}
@@ -649,19 +852,30 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
         ) : detail ? (
           <div className="space-y-5">
             <div className="flex items-start gap-4">
-              {detail.employee.photo_path ? (
-                <img src={detail.employee.photo_path} alt="" className="h-20 w-20 rounded-xl border border-line object-cover" />
-              ) : (
-                <span className="grid h-20 w-20 place-items-center rounded-xl bg-charcoal text-xl font-semibold text-amber">
-                  {initials(detail.employee.full_name)}
-                </span>
-              )}
+              <span className="grid h-16 w-16 place-items-center rounded-2xl bg-amber-wash text-xl font-bold text-amber border border-amber/20 shadow-xs">
+                {initials(detail.employee.full_name)}
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <Chip tone={detail.employee.active ? 'green' : 'grey'}>{detail.employee.active ? 'Actif' : 'Inactif'}</Chip>
-                  {detail.employee.badge_token ? <Chip tone="blue">Badge actif</Chip> : null}
+                  <span
+                    className={cx(
+                      'rounded-full px-2 py-0.5 text-[10px] font-bold border',
+                      detail.employee.active
+                        ? 'border-green/20 bg-green-wash text-green'
+                        : 'border-line bg-grey-wash text-ink-faint',
+                    )}
+                  >
+                    {detail.employee.active ? 'Actif' : 'Inactif'}
+                  </span>
+                  {detail.employee.badge_token && (
+                    <span className="rounded-full border border-blue/20 bg-blue-wash px-2 py-0.5 text-[10px] font-bold text-blue">
+                      Badge QR actif
+                    </span>
+                  )}
                 </div>
-                <p className="mt-2 text-[13px] text-ink-soft">Badge : <span className="font-mono num">{detail.employee.badge_token ?? '—'}</span></p>
+                <p className="mt-1 text-xs text-ink-soft">
+                  Code badge de pointage : <span className="font-mono font-bold text-ink">{detail.employee.badge_token ?? '—'}</span>
+                </p>
               </div>
             </div>
 
@@ -671,50 +885,62 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
               <StatBox label="Pauses" value={String(detail.month.breaks)} />
             </div>
 
-            {detail.openLoans.length > 0 ? (
+            {detail.openLoans.length > 0 && (
               <section>
-                <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-faint">Outils détenus</h3>
-                <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
+                <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-faint">
+                  Outils détenus en cours ({detail.openLoans.length})
+                </h3>
+                <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
                   {detail.openLoans.map((loan) => (
-                    <li key={loan.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <li key={loan.id} className="flex items-center justify-between gap-3 p-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-ink">{loan.tool_name}</p>
-                        <p className="text-[12px] text-ink-soft">{loan.category} · depuis le {String(loan.out_at).slice(0, 10)}</p>
+                        <p className="truncate text-xs font-semibold text-ink">{loan.tool_name}</p>
+                        <p className="text-[11px] text-ink-soft">
+                          {loan.category} · sorti le {String(loan.out_at).slice(0, 10)}
+                        </p>
                       </div>
-                      <Chip tone="amber">En prêt</Chip>
+                      <span className="rounded-full bg-amber-wash border border-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber">
+                        En prêt
+                      </span>
                     </li>
                   ))}
                 </ul>
               </section>
-            ) : null}
+            )}
 
             <section>
-              <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-faint">30 derniers jours</h3>
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-faint">Historique 30 derniers jours</h3>
               {detail.history.length === 0 ? (
-                <p className="text-sm text-ink-soft">Aucun pointage enregistré.</p>
+                <p className="text-xs text-ink-soft">Aucun pointage enregistré.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                <div className="overflow-hidden rounded-xl border border-line bg-surface">
+                  <table className="w-full text-left sheet-grid text-xs">
                     <thead>
-                      <tr className="border-b border-line text-[12px] uppercase tracking-wide text-ink-faint">
-                        <th className="py-2 pr-3 font-medium">Date</th>
-                        <th className="py-2 pr-3 font-medium">Arrivée</th>
-                        <th className="py-2 pr-3 font-medium">Pause</th>
-                        <th className="py-2 pr-3 font-medium">Départ</th>
-                        <th className="py-2 font-medium">Retard</th>
+                      <tr>
+                        <th className="sheet-th">Date</th>
+                        <th className="sheet-th text-center">Arrivée</th>
+                        <th className="sheet-th text-center">Pause</th>
+                        <th className="sheet-th text-center">Départ</th>
+                        <th className="sheet-th text-center">Retard</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-line">
                       {detail.history.map((row) => (
-                        <tr key={row.date} className="border-b border-line last:border-b-0">
-                          <td className="py-2 pr-3 font-mono num">{row.date}</td>
-                          <td className="py-2 pr-3 font-mono num">{row.inAt ?? '—'}</td>
-                          <td className="py-2 pr-3 font-mono num text-ink-soft">
-                            {row.breakIn ? `${row.breakIn}${row.breakOut ? ` → ${row.breakOut}` : ' …'}` : '—'}
+                        <tr key={row.date} className="hover:bg-paper-2/40">
+                          <td className="sheet-cell font-mono tabular-nums">{row.date}</td>
+                          <td className="sheet-cell text-center font-mono tabular-nums text-green font-semibold">
+                            {row.inAt ?? '—'}
                           </td>
-                          <td className="py-2 pr-3 font-mono num">{row.outAt ?? '—'}</td>
-                          <td className={cx('py-2 font-mono num', row.lateMinutes > 0 ? 'text-amber' : 'text-ink-soft')}>
-                            {row.lateMinutes > 0 ? `${row.lateMinutes} min` : '—'}
+                          <td className="sheet-cell text-center font-mono tabular-nums text-ink-faint">
+                            {row.breakIn ? `${row.breakIn} → ${row.breakOut ?? '…'}` : '—'}
+                          </td>
+                          <td className="sheet-cell text-center font-mono tabular-nums text-ink-soft">{row.outAt ?? '—'}</td>
+                          <td className="sheet-cell text-center font-mono tabular-nums">
+                            {row.lateMinutes > 0 ? (
+                              <span className="text-amber font-bold">+{row.lateMinutes}m</span>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -723,38 +949,22 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                 </div>
               )}
             </section>
-
-            {detail.loanHistory.length > 0 ? (
-              <section>
-                <h3 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-faint">Historique des prêts</h3>
-                <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
-                  {detail.loanHistory.map((loan) => (
-                    <li key={loan.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-ink">{loan.tool_name}</p>
-                        <p className="text-[12px] text-ink-soft">Sorti le {String(loan.out_at).slice(0, 10)}</p>
-                      </div>
-                      <Chip tone={loan.returned_at ? (loan.return_condition === 'bon' ? 'green' : 'amber') : 'grey'}>
-                        {loan.returned_at ? (loan.return_condition === 'bon' ? 'Retourné' : loan.return_condition) : 'En prêt'}
-                      </Chip>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
           </div>
         ) : (
           <Banner tone="error">Fiche introuvable.</Banner>
         )}
       </Drawer>
 
+      {/* =========================================================================
+          MODALS
+      ========================================================================= */}
       <Modal
         open={formOpen}
         title={editing ? `Modifier ${editing.id}` : 'Nouveau travailleur'}
         onClose={() => setFormOpen(false)}
         footer={
           <>
-            <Button onClick={() => setFormOpen(false)}>Annuler</Button>
+            <Button variant="ghost" onClick={() => setFormOpen(false)}>Annuler</Button>
             <Button variant="primary" disabled={busy || form.full_name.trim().length < 3} onClick={() => void save()}>
               {busy ? <Spinner /> : 'Enregistrer'}
             </Button>
@@ -763,47 +973,45 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       >
         <div className="space-y-3">
           {formError ? <Banner tone="error">{formError}</Banner> : null}
-          <Field
-            label="Nom complet"
-            value={form.full_name}
-            placeholder="Landry ONANA"
-            onChange={(event) => setForm({ ...form, full_name: event.target.value })}
-          />
-          <Field
-            label="Métier / fonction"
-            value={form.job_title}
-            placeholder="Menuisier, Apprenti, Chef d’atelier…"
-            onChange={(event) => setForm({ ...form, job_title: event.target.value })}
-          />
-          {!editing ? (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Nom complet</label>
+            <input
+              type="text"
+              value={form.full_name}
+              placeholder="Ex : Landry ONANA"
+              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Fonction / Spécialité</label>
+            <input
+              type="text"
+              value={form.job_title}
+              placeholder="Ex : Menuisier débitage, Apprenti…"
+              onChange={(e) => setForm({ ...form, job_title: e.target.value })}
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+          {!editing && (
             <Banner tone="info">
-              L’identifiant (EMP-XXX) et le badge de pointage sont générés automatiquement à la création.
+              L’identifiant (EMP-XXX) et le badge QR sont automatiquement générés.
             </Banner>
-          ) : null}
+          )}
         </div>
       </Modal>
 
+      {/* Badge QR Modal */}
       <Modal
         open={!!badgeFor}
         title={`Badge — ${badgeFor?.full_name ?? ''}`}
         onClose={() => setBadgeFor(null)}
         footer={
           <>
-            <Button onClick={() => setBadgeFor(null)}>Fermer</Button>
-            <Button
-              onClick={() => {
-                const active = employees.filter((employee) => employee.active && employee.badge_token);
-                if (active.length === 0) return;
-                print(<BadgeSheet employees={active} />);
-                setBadgeFor(null);
-              }}
-              icon={<IconPrinter size={16} />}
-            >
-              Planche A4 des actifs
-            </Button>
+            <Button variant="ghost" onClick={() => setBadgeFor(null)}>Fermer</Button>
             <Button
               variant="primary"
-              icon={<IconPrinter size={16} />}
+              icon={<Printer size={15} />}
               disabled={!badgeFor?.badge_token}
               onClick={() => {
                 if (badgeFor) print(<BadgeSheet employees={[badgeFor]} />);
@@ -815,111 +1023,141 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           {badgeFor?.badge_token ? (
-            <div
-              className="mx-auto flex w-full max-w-[340px] items-center gap-4 rounded-card border border-line bg-surface p-4"
-              style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}
-            >
+            <div className="mx-auto flex w-full max-w-[340px] items-center gap-4 rounded-xl border border-line bg-surface p-4 shadow-xs">
               <QrCode value={`${QR_PREFIX.badge}${badgeFor.badge_token}`} size={96} />
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber">
-                  Menuiserie · Mont Fèbè
-                </p>
-                <p className="mt-1 truncate text-sm font-semibold text-ink">{badgeFor.full_name}</p>
-                <p className="truncate text-[12px] text-ink-soft">{badgeFor.job_title}</p>
-                <p className="mt-1 font-mono text-[12px] text-ink num">{badgeFor.id}</p>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber">
+                  Menuiserie Fèbè
+                </span>
+                <p className="mt-1 truncate text-sm font-bold text-ink">{badgeFor.full_name}</p>
+                <p className="truncate text-xs text-ink-soft">{badgeFor.job_title}</p>
+                <p className="mt-1 font-mono text-xs font-semibold text-ink">{badgeFor.id}</p>
               </div>
             </div>
           ) : (
-            <Banner tone="info">Ce travailleur n’a pas encore de badge. Cliquez sur « Badge » pour le créer.</Banner>
+            <Banner tone="info">Badge non encore créé.</Banner>
           )}
-          <p className="text-[13px] text-ink-soft">
-              Le QR code ne contient qu’un jeton aléatoire : il ne donne aucun accès aux données. Aperçu
-            imprimable au format carte (85,6 × 54 mm).
-          </p>
+
           <Button
             variant="danger"
             className="w-full"
             disabled={busy || !badgeFor}
             onClick={() => void regenBadge()}
           >
-            {busy ? <Spinner /> : 'Révoquer l’ancien badge et en regénérer un'}
+            {busy ? <Spinner /> : 'Régénérer un nouveau badge'}
           </Button>
         </div>
       </Modal>
 
+      {/* Leave Request Modal */}
       <Modal
         open={leaveOpen}
-        title="Nouvelle demande de congé / permission"
+        title="Nouvelle demande de congé ou permission"
         onClose={() => setLeaveOpen(false)}
         footer={
           <>
-            <Button onClick={() => setLeaveOpen(false)}>Annuler</Button>
-            <Button variant="primary" loading={leaveBusy} onClick={() => void submitLeave()}>Enregistrer</Button>
+            <Button variant="ghost" onClick={() => setLeaveOpen(false)}>Annuler</Button>
+            <Button variant="primary" disabled={leaveBusy} onClick={() => void submitLeave()}>
+              {leaveBusy ? <Spinner /> : 'Enregistrer la demande'}
+            </Button>
           </>
         }
       >
         <div className="space-y-3">
           {leaveError ? <Banner tone="error">{leaveError}</Banner> : null}
-          <SelectField
-            label="Travailleur"
-            value={leaveForm.employee_id}
-            onChange={(e) => setLeaveForm((f) => ({ ...f, employee_id: e.target.value }))}
-          >
-            <option value="">— Choisir —</option>
-            {employees.filter((emp) => emp.active).map((emp) => (
-              <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.id})</option>
-            ))}
-          </SelectField>
-          <SelectField
-            label="Type"
-            value={leaveForm.kind}
-            onChange={(e) => setLeaveForm((f) => ({ ...f, kind: e.target.value as typeof f.kind }))}
-          >
-            <option value="conge">Congé</option>
-            <option value="permission">Permission (courte durée)</option>
-            <option value="absence">Absence déclarée</option>
-          </SelectField>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Du" type="date" value={leaveForm.from_date} onChange={(e) => setLeaveForm((f) => ({ ...f, from_date: e.target.value }))} />
-            <Field label="Au" type="date" value={leaveForm.to_date} onChange={(e) => setLeaveForm((f) => ({ ...f, to_date: e.target.value }))} />
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Travailleur</label>
+            <select
+              value={leaveForm.employee_id}
+              onChange={(e) => setLeaveForm((f) => ({ ...f, employee_id: e.target.value }))}
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+            >
+              <option value="">— Sélectionner un ouvrier —</option>
+              {employees.filter((emp) => emp.active).map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.full_name} ({emp.id})
+                </option>
+              ))}
+            </select>
           </div>
-          <TextArea label="Motif / note" value={leaveForm.note} onChange={(e) => setLeaveForm((f) => ({ ...f, note: e.target.value }))} placeholder="Congé familial, permission médicale…" />
-          <Banner tone="info">La demande sera en attente d’approbation par la direction ou le magasinier autorisé.</Banner>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Type d'absence</label>
+            <select
+              value={leaveForm.kind}
+              onChange={(e) => setLeaveForm((f) => ({ ...f, kind: e.target.value as typeof f.kind }))}
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+            >
+              <option value="conge">Congé annuel payé</option>
+              <option value="permission">Permission exceptionnelle</option>
+              <option value="absence">Absence autorisée</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ink-soft">Date de début</label>
+              <input
+                type="date"
+                value={leaveForm.from_date}
+                onChange={(e) => setLeaveForm((f) => ({ ...f, from_date: e.target.value }))}
+                className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-ink-soft">Date de fin</label>
+              <input
+                type="date"
+                value={leaveForm.to_date}
+                onChange={(e) => setLeaveForm((f) => ({ ...f, to_date: e.target.value }))}
+                className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Motif / Justification</label>
+            <textarea
+              value={leaveForm.note}
+              onChange={(e) => setLeaveForm((f) => ({ ...f, note: e.target.value }))}
+              placeholder="Ex : Événement familial, rendez-vous médical…"
+              rows={2}
+              className="w-full rounded-lg border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
         </div>
       </Modal>
+
       {portal}
-    </>
+    </div>
   );
 }
 
 function StatBox({ label, value, tone }: { label: string; value: string; tone?: 'amber' }) {
   return (
-    <div className="rounded-xl border border-line bg-surface px-3 py-2.5 text-center">
-      <p className={cx('font-mono text-xl font-semibold num', tone === 'amber' ? 'text-amber' : 'text-ink')}>{value}</p>
-      <p className="mt-0.5 text-[11px] uppercase tracking-wide text-ink-faint">{label}</p>
+    <div className="rounded-xl border border-line bg-surface px-3 py-2.5 text-center shadow-xs">
+      <p className={cx('font-mono text-xl font-bold tabular-nums', tone === 'amber' ? 'text-amber' : 'text-ink')}>{value}</p>
+      <p className="mt-0.5 text-[10px] uppercase font-bold text-ink-faint tracking-wider">{label}</p>
     </div>
   );
 }
 
 function BadgeCard({ employee }: { employee: Employee }) {
   return (
-    <div
-      className="badge-card"
-      style={{ fontFamily: '"IBM Plex Sans", sans-serif', background: '#ffffff', color: '#17181b' }}
-    >
+    <div className="badge-card" style={{ fontFamily: '"IBM Plex Sans", sans-serif', background: '#ffffff', color: '#111827' }}>
       {employee.badge_token ? (
         <QrCode value={`${QR_PREFIX.badge}${employee.badge_token}`} size={83} alt={`QR badge ${employee.id}`} />
       ) : (
-        <div style={{ width: '22mm', height: '22mm', border: '1px dashed #d3cabd' }} />
+        <div style={{ width: '22mm', height: '22mm', border: '1px dashed #d1d5db' }} />
       )}
       <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ fontSize: '6.5pt', fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#b4530a', margin: 0 }}>
+        <p style={{ fontSize: '6.5pt', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#ff6603', margin: 0 }}>
           Menuiserie · Mont Fèbè
         </p>
-        <p style={{ fontSize: '11pt', fontWeight: 600, margin: '1.5mm 0 0', lineHeight: 1.15 }}>{employee.full_name}</p>
-        <p style={{ fontSize: '8pt', color: '#5b5651', margin: '0.5mm 0 0' }}>{employee.job_title}</p>
+        <p style={{ fontSize: '11pt', fontWeight: 700, margin: '1.5mm 0 0', lineHeight: 1.15 }}>{employee.full_name}</p>
+        <p style={{ fontSize: '8pt', color: '#4b5563', margin: '0.5mm 0 0' }}>{employee.job_title}</p>
         <p style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: '8pt', margin: '1.5mm 0 0' }}>{employee.id}</p>
       </div>
     </div>
@@ -929,12 +1167,12 @@ function BadgeCard({ employee }: { employee: Employee }) {
 function BadgeSheet({ employees }: { employees: Employee[] }) {
   return (
     <div className="a4-page" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
-      <div style={{ marginBottom: '6mm', borderBottom: '1px solid #d3cabd', paddingBottom: '3mm' }}>
-        <p style={{ fontSize: '12pt', fontWeight: 600, color: '#17181b', margin: 0 }}>
+      <div style={{ marginBottom: '6mm', borderBottom: '1px solid #e5e7eb', paddingBottom: '3mm' }}>
+        <p style={{ fontSize: '12pt', fontWeight: 700, color: '#ff6603', margin: 0 }}>
           Menuiserie — Monastère du Mont Fèbè
         </p>
-        <p style={{ fontSize: '9pt', color: '#5b5651', margin: '1mm 0 0' }}>
-          Badges de pointage — {employees.length} carte(s) — format 85,6 × 54 mm, découpe manuelle
+        <p style={{ fontSize: '8.5pt', color: '#6b7280', margin: '1mm 0 0' }}>
+          Badges d’atelier — {employees.length} carte(s) format standard (85,6 × 54 mm)
         </p>
       </div>
       <div className="badge-grid">

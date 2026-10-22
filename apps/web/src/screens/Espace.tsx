@@ -115,7 +115,7 @@ export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User |
 
       {openLoans.length > 0 && (
         <Card>
-          <p className="mb-3 text-sm font-semibold text-ink">Outils que je détient</p>
+          <p className="mb-3 text-sm font-semibold text-ink">Outils que je détiens</p>
           <ul className="divide-y divide-line rounded-xl border border-line">
             {openLoans.map((l) => (
               <li key={l.id} className="flex items-center justify-between gap-3 px-3 py-2.5">

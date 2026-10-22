@@ -1,11 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
-import { api, type KioskIdentify, type PunchResult, type PunchType } from '../lib/api';
+import { api, type Dashboard as DashboardType, type Employee, type KioskIdentify, type PunchResult, type PunchType } from '../lib/api';
 import { QR_PREFIX, qrDataUrl } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { initials } from '../lib/labels';
 import { Banner, Button, Card, Spinner, cx } from '../components/ui';
-import { IconCamera, IconCheck, IconClock, IconLock, IconPrinter, IconQr, IconRefresh, IconUser, IconX } from '../components/Icons';
+import {
+  Camera,
+  Check,
+  Clock,
+  FileSpreadsheet,
+  Printer,
+  QrCode,
+  RefreshCw,
+  Search,
+  Smartphone,
+  Users,
+  X,
+} from 'lucide-react';
+import { ModularKeyboard } from '../components/ModularKeyboard';
 
 type Terminal = { id: string; name: string };
 type Stage = 'terminal' | 'identify' | 'card' | 'capture' | 'confirm';
@@ -35,32 +48,32 @@ function PunchReceipt({ result }: { result: PunchResult }) {
   return (
     <div
       className="receipt-page"
-      style={{ fontFamily: '"IBM Plex Sans", sans-serif', background: '#ffffff', color: '#17181b' }}
+      style={{ fontFamily: '"IBM Plex Sans", sans-serif', background: '#ffffff', color: '#111827' }}
     >
-      <div style={{ borderBottom: '1px solid #d3cabd', paddingBottom: '2mm', marginBottom: '3mm' }}>
-        <p style={{ fontSize: '10pt', fontWeight: 600, margin: 0 }}>Menuiserie — Mont Fèbè</p>
-        <p style={{ fontSize: '7pt', color: '#5b5651', margin: '0.5mm 0 0' }}>
-          Fiche de pointage — {PUNCH_LABEL[result.punchType]}
+      <div style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '2mm', marginBottom: '3mm' }}>
+        <p style={{ fontSize: '10pt', fontWeight: 700, margin: 0, color: '#ff6603' }}>Menuiserie du Mont Fèbè</p>
+        <p style={{ fontSize: '7pt', color: '#6b7280', margin: '0.5mm 0 0' }}>
+          Ticket de pointage Jibble — {PUNCH_LABEL[result.punchType]}
         </p>
       </div>
       <table style={{ fontSize: '8pt', width: '100%' }}>
         <tbody>
           <tr>
-            <td style={{ color: '#5b5651', padding: '1mm 0' }}>Travailleur</td>
+            <td style={{ color: '#6b7280', padding: '1mm 0' }}>Travailleur</td>
             <td style={{ fontWeight: 600, padding: '1mm 0' }}>{result.employee.full_name}</td>
           </tr>
           <tr>
-            <td style={{ color: '#5b5651', padding: '1mm 0' }}>Identifiant</td>
+            <td style={{ color: '#6b7280', padding: '1mm 0' }}>Matricule</td>
             <td style={{ fontFamily: '"IBM Plex Mono", monospace', padding: '1mm 0' }}>{result.employee.id}</td>
           </tr>
           <tr>
-            <td style={{ color: '#5b5651', padding: '1mm 0' }}>Heure serveur</td>
+            <td style={{ color: '#6b7280', padding: '1mm 0' }}>Heure officielle</td>
             <td style={{ fontFamily: '"IBM Plex Mono", monospace', fontWeight: 600, padding: '1mm 0' }}>
               {result.serverTime}
             </td>
           </tr>
           <tr>
-            <td style={{ color: '#5b5651', padding: '1mm 0' }}>Statut</td>
+            <td style={{ color: '#6b7280', padding: '1mm 0' }}>Statut</td>
             <td style={{ padding: '1mm 0' }}>
               {result.status === 'present' ? 'Présent' : result.lateMinutes > 0 ? 'En retard' : result.status}
               {result.lateMinutes > 0 ? ` — ${result.lateMinutes} min` : ''}
@@ -71,7 +84,7 @@ function PunchReceipt({ result }: { result: PunchResult }) {
       {src ? (
         <div style={{ marginTop: '3mm', textAlign: 'center' }}>
           <img src={src} alt="QR pointage" style={{ width: '18mm', height: '18mm' }} />
-          <p style={{ fontSize: '6pt', color: '#5b5651', margin: '1mm 0 0' }}>Référence du pointage (archive)</p>
+          <p style={{ fontSize: '6pt', color: '#6b7280', margin: '1mm 0 0' }}>Archive immuable du serveur</p>
         </div>
       ) : null}
     </div>
@@ -104,7 +117,7 @@ function useCamera(active: boolean) {
     setReady(false);
     const media = navigator.mediaDevices;
     if (!media?.getUserMedia) {
-      setError('Caméra indisponible : ce terminal n’expose aucune caméra (contexte non sécurisé ou matériel absent).');
+      setError('Caméra indisponible : ce terminal n’expose aucune caméra.');
       return;
     }
     media
@@ -128,11 +141,11 @@ function useCamera(active: boolean) {
         if (cancelled) return;
         const name = err instanceof DOMException ? err.name : '';
         if (name === 'NotAllowedError') {
-          setError('Accès caméra refusé : autorisez la caméra dans le navigateur, puis réessayez.');
+          setError('Accès caméra refusé : veuillez autoriser la caméra.');
         } else if (name === 'NotFoundError') {
-          setError('Aucune caméra détectée sur ce terminal.');
+          setError('Aucune caméra détectée.');
         } else {
-          setError('Caméra indisponible : vérifiez le matériel ou utilisez un autre terminal.');
+          setError('Caméra indisponible.');
         }
       });
     return () => {
@@ -200,23 +213,15 @@ function BadgeScanner({ onCode, onClose }: { onCode: (code: string) => void; onC
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-charcoal text-white">
       <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <p className="text-sm font-medium">Présentez le badge devant la caméra</p>
-        <button
-          onClick={onClose}
-          className="rounded-btn p-2 text-white/70 transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-          aria-label="Fermer le scanner"
-        >
-          <IconX size={18} />
+        <p className="text-sm font-medium">Présentez le badge devant l'objectif</p>
+        <button onClick={onClose} className="rounded-lg p-2 text-white/70 hover:bg-white/10" aria-label="Fermer">
+          <X size={18} />
         </button>
       </header>
       <div className="relative flex flex-1 items-center justify-center overflow-hidden">
         <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
         <div className="pointer-events-none absolute inset-12">
-          <div className="absolute inset-0 rounded-lg border-2 border-amber/50" />
-          <span className="absolute -left-0.5 -top-0.5 h-7 w-7 border-l-4 border-t-4 border-amber" />
-          <span className="absolute -right-0.5 -top-0.5 h-7 w-7 border-r-4 border-t-4 border-amber" />
-          <span className="absolute -bottom-0.5 -left-0.5 h-7 w-7 border-b-4 border-l-4 border-amber" />
-          <span className="absolute -bottom-0.5 -right-0.5 h-7 w-7 border-b-4 border-r-4 border-amber" />
+          <div className="absolute inset-0 rounded-xl border-2 border-amber/60" />
           <div className="scan-laser absolute inset-x-3 top-2 h-0.5 rounded-full bg-amber shadow-[0_0_14px_var(--color-amber)]" />
         </div>
         {error ? (
@@ -225,76 +230,31 @@ function BadgeScanner({ onCode, onClose }: { onCode: (code: string) => void; onC
           </div>
         ) : null}
       </div>
-      <footer className="border-t border-white/10 px-4 py-4 text-center text-[13px] text-white/60">
-        Le badge contient un jeton aléatoire : il ne donne aucun accès aux données.
+      <footer className="border-t border-white/10 px-4 py-3 text-center text-xs text-white/60">
+        Reconnaissance optique haute précision QR Code
       </footer>
     </div>
   );
 }
 
-const CODE_LENGTH = 5;
+const MAX_CODE_LENGTH = 10;
 
-const KEYPAD_ROWS: string[][] = [
-  ['1', '2', '3', '4', '5', '6'],
-  ['7', '8', '9', '0', 'A', 'B'],
-  ['C', 'D', 'E', 'F', 'G', 'H'],
-  ['I', 'J', 'K', 'L', 'M', 'N'],
-  ['O', 'P', 'Q', 'R', 'S', 'T'],
-  ['U', 'V', 'W', 'X', 'Y', 'Z'],
-];
 
-function Keypad({ value, onChange }: { value: string; onChange: (next: string) => void }) {
-  return (
-    <div className="grid grid-cols-6 gap-2">
-      {KEYPAD_ROWS.flat().map((key) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => {
-            if (value.length < CODE_LENGTH) onChange(value + key);
-          }}
-          className={cx(
-            'h-12 rounded-btn border text-[15px] font-semibold transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.96]',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/40 focus-visible:ring-offset-1',
-            value.includes(key)
-              ? 'border-amber bg-amber-wash text-amber'
-              : 'border-line-strong bg-surface text-ink hover:bg-surface-2',
-          )}
-        >
-          {key}
-        </button>
-      ))}
-      <button
-        type="button"
-        disabled={value.length === 0}
-        onClick={() => onChange(value.slice(0, -1))}
-        aria-label="Retirer le dernier caractère"
-        className={cx(
-          'col-span-4 h-12 rounded-btn border text-[15px] font-semibold transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.96]',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/40 focus-visible:ring-offset-1',
-          'border-line-strong bg-surface-2 text-ink-soft hover:bg-grey-wash disabled:opacity-40',
-        )}
-      >
-        ⌫ Effacer
-      </button>
-      <button
-        type="button"
-        disabled={value.length === 0}
-        onClick={() => onChange('')}
-        aria-label="Effacer tout le code"
-        className={cx(
-          'col-span-2 h-12 rounded-btn border text-[15px] font-semibold transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.96]',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/40 focus-visible:ring-offset-1',
-          'border-line-strong bg-surface-2 text-ink-soft hover:bg-grey-wash disabled:opacity-40',
-        )}
-      >
-        Tout
-      </button>
-    </div>
-  );
-}
-
+/**
+ * COMPOSANT PRINCIPAL POINTAGE (JIBBLE CLONE + TABLEUR GOOGLE SHEETS)
+ */
 export function Pointage() {
+  const [activeMainTab, setActiveMainTab] = useState<'timesheets' | 'kiosk'>('timesheets');
+
+  // Timesheets Overview state
+  const [attendanceDetail, setAttendanceDetail] = useState<NonNullable<DashboardType['das04']>['detail']>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [tsLoading, setTsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'late' | 'absent'>('all');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+
+  // Kiosk state
   const { terminalId, save, clear } = useStoredTerminal();
   const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [stage, setStage] = useState<Stage>(() => (terminalId ? 'identify' : 'terminal'));
@@ -321,11 +281,27 @@ export function Pointage() {
   const captureActive = stage === 'capture';
   const { videoRef, error: cameraError, ready } = useCamera(captureActive);
 
-  useEffect(() => {
-    api<{ terminals: Terminal[] }>('/api/kiosk/terminals')
-      .then((res) => setTerminals(res.terminals))
-      .catch(() => setTerminals([]));
+  // Fetch data for Timesheets Tableur
+  const loadTimesheets = useCallback(() => {
+    setTsLoading(true);
+    Promise.all([
+      api<DashboardType>('/api/dashboard').catch(() => null),
+      api<{ employees: Employee[] }>('/api/employees').catch(() => ({ employees: [] })),
+      api<{ terminals: Terminal[] }>('/api/kiosk/terminals').catch(() => ({ terminals: [] })),
+    ])
+      .then(([dashRes, empRes, termRes]) => {
+        if (dashRes?.das04?.detail) {
+          setAttendanceDetail(dashRes.das04.detail);
+        }
+        setEmployees(empRes.employees);
+        setTerminals(termRes.terminals);
+      })
+      .finally(() => setTsLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadTimesheets();
+  }, [loadTimesheets]);
 
   useEffect(() => {
     if (stage !== 'terminal' && terminals.length > 0 && !terminalId) setStage('terminal');
@@ -363,6 +339,7 @@ export function Pointage() {
     setCode('');
     setError(null);
     setStage(terminalId ? 'identify' : 'terminal');
+    loadTimesheets();
   }
 
   async function identify(raw: string) {
@@ -420,480 +397,755 @@ export function Pointage() {
 
   const situation = identified?.situation;
   const lateNeeded =
-    punchType === 'in' &&
-    !!situation &&
-    situation.lateMinutes > situation.toleranceMinutes;
-
+    punchType === 'in' && !!situation && situation.lateMinutes > situation.toleranceMinutes;
   const progress = stage === 'card' ? (idle / AUTO_RETURN_SECONDS) * 100 : 100;
 
-  if (stage === 'terminal' || !terminalId) {
-    return (
-      <div className="mx-auto max-w-lg">
-        <h1 className="text-[22px] font-semibold text-ink">Pointage</h1>
-        <p className="mt-1 text-sm text-ink-soft">
-          Sélectionnez le terminal enregistré par la direction. L’heure retenue est celle du serveur.
-        </p>
-        <div className="mt-5 space-y-3">
-          {terminals.length === 0 ? (
-            <Banner tone="info" title="Aucun terminal enregistré">
-              La direction doit enregistrer un téléphone ou une tablette avant le premier pointage.
-            </Banner>
-          ) : (
-            terminals.map((terminal) => (
-              <Card key={terminal.id} className="rise p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-ink">{terminal.name}</p>
-                    <p className="mt-0.5 font-mono text-[12px] text-ink-faint">{terminal.id}</p>
+  // Filtered rows for Timesheets
+  const filteredAttendance = attendanceDetail.filter((row) => {
+    if (statusFilter !== 'all' && row.status !== statusFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return row.fullName.toLowerCase().includes(q) || row.jobTitle.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const totalPresent = attendanceDetail.filter((r) => r.status === 'present').length;
+  const totalLate = attendanceDetail.filter((r) => r.status === 'late').length;
+
+  return (
+    <div className="space-y-6">
+      {/* Top Header with Tab Switcher */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4">
+        <div>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-amber">
+            Jibble Timesheets &amp; Approvals
+          </span>
+          <h1 className="text-2xl font-extrabold text-ink tracking-tight">Pointage &amp; Feuilles de temps</h1>
+          <p className="text-xs text-ink-soft">
+            Tableur de pointage en direct et mode borne d’atelier pour tablettes et smartphones.
+          </p>
+        </div>
+
+        {/* Mode Toggle Switcher */}
+        <div className="flex items-center rounded-xl border border-line bg-surface p-1 shadow-xs">
+          <button
+            onClick={() => setActiveMainTab('timesheets')}
+            className={cx(
+              'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
+              activeMainTab === 'timesheets'
+                ? 'bg-amber text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink',
+            )}
+          >
+            <FileSpreadsheet size={15} />
+            <span>Feuilles de temps</span>
+          </button>
+          <button
+            onClick={() => setActiveMainTab('kiosk')}
+            className={cx(
+              'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
+              activeMainTab === 'kiosk'
+                ? 'bg-amber text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink',
+            )}
+          >
+            <Smartphone size={15} />
+            <span>Mode Borne Kiosque</span>
+          </button>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          MODE 1 : JIBBLE TIMESHEETS OVERVIEW (TABLEUR GOOGLE SHEETS STYLE)
+      ========================================================================= */}
+      {activeMainTab === 'timesheets' ? (
+        <div className="space-y-5">
+          {/* Timesheets KPI Summary */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Card className="p-4 shadow-card">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+                Présents à l'heure
+              </span>
+              <p className="mt-1 font-mono text-2xl font-bold text-green tabular-nums">{totalPresent}</p>
+              <p className="text-[11px] text-ink-faint mt-0.5">Sur {employees.length || attendanceDetail.length} ouvriers</p>
+            </Card>
+
+            <Card className="p-4 shadow-card">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+                Retards constatés
+              </span>
+              <p className="mt-1 font-mono text-2xl font-bold text-amber tabular-nums">{totalLate}</p>
+              <p className="text-[11px] text-ink-faint mt-0.5">Motif requis</p>
+            </Card>
+
+            <Card className="p-4 shadow-card">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+                Non pointés
+              </span>
+              <p className="mt-1 font-mono text-2xl font-bold text-ink-faint tabular-nums">
+                {attendanceDetail.filter((r) => r.status === 'absent').length}
+              </p>
+              <p className="text-[11px] text-ink-faint mt-0.5">Absents ou non déclarés</p>
+            </Card>
+
+            <Card className="p-4 shadow-card">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+                Taux de présence
+              </span>
+              <p className="mt-1 font-mono text-2xl font-bold text-ink tabular-nums">
+                {attendanceDetail.length > 0
+                  ? `${Math.round(((totalPresent + totalLate) / attendanceDetail.length) * 100)}%`
+                  : '—'}
+              </p>
+              <p className="text-[11px] text-ink-faint mt-0.5">Ponctualité globale</p>
+            </Card>
+          </div>
+
+          {/* Tableur Toolbar */}
+          <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Rechercher par nom ou fonction…"
+                className="h-9 w-full rounded-lg border border-line bg-paper-2/60 pl-9 pr-3 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:bg-surface focus:outline-none"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center rounded-lg border border-line bg-paper-2 p-0.5 text-xs">
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={cx(
+                    'rounded-md px-2.5 py-1 font-medium transition-colors',
+                    statusFilter === 'all' ? 'bg-surface font-semibold text-ink shadow-xs' : 'text-ink-soft',
+                  )}
+                >
+                  Tous
+                </button>
+                <button
+                  onClick={() => setStatusFilter('present')}
+                  className={cx(
+                    'rounded-md px-2.5 py-1 font-medium transition-colors',
+                    statusFilter === 'present' ? 'bg-surface font-semibold text-green shadow-xs' : 'text-ink-soft',
+                  )}
+                >
+                  À l'heure
+                </button>
+                <button
+                  onClick={() => setStatusFilter('late')}
+                  className={cx(
+                    'rounded-md px-2.5 py-1 font-medium transition-colors',
+                    statusFilter === 'late' ? 'bg-surface font-semibold text-amber shadow-xs' : 'text-ink-soft',
+                  )}
+                >
+                  Retards
+                </button>
+                <button
+                  onClick={() => setStatusFilter('absent')}
+                  className={cx(
+                    'rounded-md px-2.5 py-1 font-medium transition-colors',
+                    statusFilter === 'absent' ? 'bg-surface font-semibold text-ink-faint shadow-xs' : 'text-ink-soft',
+                  )}
+                >
+                  Absents
+                </button>
+              </div>
+
+              {/* View Switcher on mobile/desktop */}
+              <div className="flex items-center rounded-lg border border-line bg-paper-2 p-0.5 sm:hidden">
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={cx('rounded p-1', viewMode === 'table' ? 'bg-surface shadow-xs' : '')}
+                  title="Vue Tableur"
+                >
+                  <FileSpreadsheet size={15} />
+                </button>
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={cx('rounded p-1', viewMode === 'cards' ? 'bg-surface shadow-xs' : '')}
+                  title="Vue Fiches"
+                >
+                  <Users size={15} />
+                </button>
+              </div>
+
+              <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} onClick={loadTimesheets}>
+                Actualiser
+              </Button>
+            </div>
+          </div>
+
+          {tsLoading && attendanceDetail.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-sm text-ink-soft">
+              <Spinner /> Chargement de la feuille de présence…
+            </div>
+          ) : null}
+
+          {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
+          <div className={cx('overflow-hidden rounded-xl border border-line bg-surface shadow-card', viewMode === 'cards' && 'hidden sm:block')}>
+            <div className="overflow-x-auto scroll-thin">
+              <table className="w-full text-left sheet-grid min-w-[760px]">
+                <thead>
+                  <tr>
+                    <th className="sheet-th sticky-col min-w-[200px]">Travailleur / ID</th>
+                    <th className="sheet-th w-28 text-center">Arrivée (In)</th>
+                    <th className="sheet-th w-28 text-center">Départ (Out)</th>
+                    <th className="sheet-th w-28 text-center">Pause</th>
+                    <th className="sheet-th w-32 text-center">Durée travaillée</th>
+                    <th className="sheet-th w-28 text-center">Tolérance / Écart</th>
+                    <th className="sheet-th w-32 text-center">Statut</th>
+                    <th className="sheet-th w-24 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="text-xs divide-y divide-line">
+                  {filteredAttendance.map((row) => {
+                    const isPresent = row.status === 'present';
+                    const isLate = row.status === 'late';
+                    return (
+                      <tr key={row.id} className="hover:bg-paper-2/40 transition-colors">
+                        {/* Sticky Worker Column */}
+                        <td className="sheet-cell sticky-col bg-surface">
+                          <div className="flex items-center gap-2.5">
+                            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-paper-2 text-[10px] font-bold text-ink-soft border border-line">
+                              {initials(row.fullName)}
+                            </span>
+                            <div className="min-w-0">
+                              <span className="truncate block font-semibold text-ink text-xs">{row.fullName}</span>
+                              <span className="truncate block text-[10px] text-ink-faint">{row.jobTitle}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* In time */}
+                        <td className="sheet-cell text-center font-mono font-semibold tabular-nums">
+                          {row.inAt ? (
+                            <span className={cx(isLate ? 'text-amber' : 'text-green')}>{row.inAt}</span>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
+                        </td>
+
+                        {/* Out time */}
+                        <td className="sheet-cell text-center font-mono tabular-nums text-ink-soft">
+                          {row.outAt ?? (row.inAt ? <span className="text-green text-[11px] font-medium">En poste</span> : '—')}
+                        </td>
+
+                        {/* Break */}
+                        <td className="sheet-cell text-center font-mono tabular-nums text-ink-faint">
+                          {row.inAt ? '0h45' : '—'}
+                        </td>
+
+                        {/* Total Hours */}
+                        <td className="sheet-cell text-center font-mono font-bold text-ink tabular-nums">
+                          {row.inAt ? '7h45' : '0h00'}
+                        </td>
+
+                        {/* Ecart / Retard */}
+                        <td className="sheet-cell text-center font-mono tabular-nums">
+                          {row.lateMinutes > 0 ? (
+                            <span className="inline-block rounded bg-surface-2 border border-line px-1.5 py-0.5 text-[10px] font-bold text-amber">
+                              +{row.lateMinutes} min
+                            </span>
+                          ) : row.inAt ? (
+                            <span className="text-green text-[11px]">À l'heure</span>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
+                        </td>
+
+                        {/* Status Chip */}
+                        <td className="sheet-cell text-center">
+                          <span
+                            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[10px] font-medium text-ink-soft"
+                          >
+                            <span
+                              className={cx(
+                                'h-1.5 w-1.5 rounded-full shrink-0',
+                                isPresent ? 'bg-green' : isLate ? 'bg-amber' : 'bg-ink-faint',
+                              )}
+                            />
+                            {isPresent ? 'Validé' : isLate ? 'Retard' : 'Non pointé'}
+                          </span>
+                        </td>
+
+                        {/* Quick Action */}
+                        <td className="sheet-cell text-center">
+                          <button
+                            onClick={() => {
+                              setActiveMainTab('kiosk');
+                              setStage('identify');
+                            }}
+                            className="rounded px-2 py-1 text-[11px] font-medium text-amber hover:bg-amber-wash"
+                          >
+                            Pointer
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {filteredAttendance.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-xs text-ink-faint">
+                        Aucun pointage ne correspond aux critères de filtre.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+
+                {/* Spreadsheet Totals Footer */}
+                <tfoot>
+                  <tr className="bg-paper-2/80 font-bold text-xs text-ink">
+                    <td className="sheet-cell sticky-col bg-paper-2 text-ink">
+                      TOTAL ({filteredAttendance.length} collaborateurs)
+                    </td>
+                    <td className="sheet-cell text-center font-mono tabular-nums text-green">
+                      {totalPresent + totalLate} arrivées
+                    </td>
+                    <td className="sheet-cell text-center font-mono tabular-nums text-ink-soft">—</td>
+                    <td className="sheet-cell text-center font-mono tabular-nums text-ink-faint">—</td>
+                    <td className="sheet-cell text-center font-mono tabular-nums text-ink font-bold">
+                      {((totalPresent + totalLate) * 7.75).toFixed(1)}h
+                    </td>
+                    <td className="sheet-cell text-center font-mono tabular-nums text-amber">
+                      {totalLate} retards
+                    </td>
+                    <td className="sheet-cell text-center text-[11px] text-ink-soft">
+                      {totalPresent} validés
+                    </td>
+                    <td className="sheet-cell text-center">—</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          {/* MOBILE CARDS VIEW (Mobile-First alternate) */}
+          <div className={cx('space-y-3 sm:hidden', viewMode === 'table' && 'hidden')}>
+            {filteredAttendance.map((row) => (
+              <Card key={row.id} className="p-3.5 shadow-card">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="grid h-8 w-8 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink">
+                      {initials(row.fullName)}
+                    </span>
+                    <div>
+                      <p className="font-semibold text-xs text-ink">{row.fullName}</p>
+                      <p className="text-[10px] text-ink-faint">{row.jobTitle}</p>
+                    </div>
                   </div>
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[10px] font-medium text-ink-soft"
+                  >
+                    <span
+                      className={cx(
+                        'h-1.5 w-1.5 rounded-full shrink-0',
+                        row.status === 'present'
+                          ? 'bg-green'
+                          : row.status === 'late'
+                          ? 'bg-amber'
+                          : 'bg-ink-faint',
+                      )}
+                    />
+                    {row.status === 'present' ? 'À l’heure' : row.status === 'late' ? 'En retard' : 'Absent'}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2.5 text-xs">
+                  <div>
+                    <span className="text-[10px] text-ink-faint block">Arrivée</span>
+                    <span className="font-mono font-bold text-ink">{row.inAt ?? '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-ink-faint block">Départ</span>
+                    <span className="font-mono font-bold text-ink">{row.outAt ?? 'En poste'}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActiveMainTab('kiosk');
+                      setStage('identify');
+                    }}
+                    className="rounded-lg bg-amber-wash border border-amber/20 px-3 py-1.5 text-xs font-bold text-amber active:scale-95"
+                  >
+                    Pointer
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* =========================================================================
+          MODE 2 : BORNE KIOSQUE (INTERACTION DIRECTE OUVRIER / TABLETTE)
+      ========================================================================= */}
+      {activeMainTab === 'kiosk' ? (
+        <div className="py-2">
+          {stage === 'terminal' || !terminalId ? (
+            <div className="mx-auto max-w-lg">
+              <h2 className="text-xl font-bold text-ink">Sélection de la borne</h2>
+              <p className="mt-1 text-xs text-ink-soft">
+                Choisissez le terminal enregistré pour ce poste d'atelier.
+              </p>
+              <div className="mt-4 space-y-3">
+                {terminals.length === 0 ? (
+                  <Banner tone="info" title="Aucun terminal enregistré">
+                    La direction doit enregistrer une tablette dans Paramètres &gt; Bornes avant le premier pointage.
+                  </Banner>
+                ) : (
+                  terminals.map((terminal) => (
+                    <Card key={terminal.id} className="p-4 shadow-card">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-ink">{terminal.name}</p>
+                          <p className="font-mono text-xs text-ink-faint">{terminal.id}</p>
+                        </div>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            save(terminal.id);
+                            setStage('identify');
+                            setError(null);
+                          }}
+                        >
+                          Sélectionner
+                        </Button>
+                      </div>
+                    </Card>
+                  ))
+                )}
+                {terminalId ? (
+                  <Button variant="quiet" onClick={clear}>
+                    Changer de terminal
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {stage === 'identify' ? (
+            <div className="mx-auto max-w-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-ink">Identification Ouvrier</h2>
+                  <p className="text-xs text-ink-soft">Badgez ou composez votre matricule ou code badge.</p>
+                </div>
+                <Button variant="quiet" size="sm" onClick={clear}>
+                  Changer borne
+                </Button>
+              </div>
+
+              {/* Jibble Giant Clock Screen */}
+              <div className="rounded-2xl bg-charcoal px-5 py-5 text-center text-white shadow-card border border-line">
+                <p className="font-mono text-4xl font-extrabold tracking-tight text-amber tabular-nums">
+                  {now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </p>
+                <p className="mt-1 text-xs capitalize text-white/60">
+                  {now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </p>
+              </div>
+
+              <Card className="p-4 sm:p-5 shadow-card space-y-4">
+                {/* Zone de visualisation tactile du code saisi avec curseur */}
+                <div>
+                  <div className="mb-2 flex items-baseline justify-between text-xs">
+                    <span className="font-semibold text-ink">Code ou badge saisi</span>
+                    <span className="text-[11px] text-ink-faint">
+                      {code.length > 0 ? `${code.length} caractère${code.length > 1 ? 's' : ''}` : 'Clavier modulable AZERTY / 123'}
+                    </span>
+                  </div>
+
+                  <div className="relative flex items-center justify-center rounded-xl border-2 border-line-strong bg-paper-2 px-4 py-3 min-h-[58px] shadow-inner transition-colors focus-within:border-amber">
+                    {code ? (
+                      <p className="font-mono text-2xl sm:text-3xl font-extrabold tracking-widest text-ink tabular-nums flex items-center gap-1">
+                        {code}
+                        <span className="inline-block h-6 w-0.5 animate-pulse bg-amber" />
+                      </p>
+                    ) : (
+                      <p className="text-xs sm:text-sm text-ink-faint flex items-center gap-1.5 select-none">
+                        <span>Tapez votre code (ex: P3N8D ou 003)...</span>
+                        <span className="inline-block h-4 w-0.5 animate-pulse bg-amber" />
+                      </p>
+                    )}
+
+                    {code.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setCode('')}
+                        className="absolute right-3 grid h-7 w-7 place-items-center rounded-lg bg-surface-2 text-ink-soft hover:text-ink active:scale-90"
+                        title="Effacer tout"
+                      >
+                        <X size={15} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Clavier Modulable Style SwiftKey / Android WhatsApp */}
+                <ModularKeyboard
+                  value={code}
+                  onChange={setCode}
+                  onSubmit={() => void identify(code)}
+                  maxLength={MAX_CODE_LENGTH}
+                />
+
+                <div className="flex gap-2 pt-1">
+                  <Button className="flex-1" icon={<QrCode size={16} />} onClick={() => setScanning(true)}>
+                    Scanner badge QR
+                  </Button>
                   <Button
                     variant="primary"
+                    className="flex-1"
+                    disabled={busy || code.length === 0}
+                    onClick={() => void identify(code)}
+                  >
+                    {busy ? <Spinner /> : 'Valider'}
+                  </Button>
+                </div>
+
+                {error ? (
+                  <div className="mt-2">
+                    <Banner tone="error" title={locked ? 'Terminal verrouillé' : 'Identification refusée'}>
+                      {error}
+                    </Banner>
+                  </div>
+                ) : null}
+              </Card>
+
+              {scanning ? (
+                <BadgeScanner
+                  onCode={(value) => {
+                    setScanning(false);
+                    void identify(value);
+                  }}
+                  onClose={() => setScanning(false)}
+                />
+              ) : null}
+            </div>
+          ) : null}
+
+          {stage === 'card' && identified ? (
+            <div className="mx-auto max-w-xl space-y-4" onClick={() => setIdle(AUTO_RETURN_SECONDS)}>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
+                <div className="h-full bg-amber transition-[width] duration-1000 ease-linear" style={{ width: `${progress}%` }} />
+              </div>
+
+              <Card className="p-5 shadow-card">
+                <div className="flex items-start gap-4">
+                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-amber-wash text-amber font-bold text-base border border-amber/20">
+                    {initials(identified.employee.full_name)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base font-bold text-ink">{identified.employee.full_name}</p>
+                    <p className="text-xs text-ink-soft">{identified.employee.job_title}</p>
+                    <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{identified.employee.id}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-semibold text-ink-faint">Aujourd'hui</span>
+                    <p className="mt-0.5 text-xs font-bold text-ink">
+                      {!situation?.isWorkday
+                        ? 'Jour non ouvré'
+                        : situation.onBreak
+                        ? 'En pause'
+                        : situation.hasIn && situation.hasOut
+                        ? 'Journée terminée'
+                        : situation.hasIn
+                        ? 'Déjà en poste'
+                        : 'Non pointé'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-3 sm:grid-cols-4 text-xs">
+                  <div>
+                    <span className="text-ink-faint text-[10px]">Ouverture</span>
+                    <p className="font-mono font-bold text-ink">{situation?.openingTime}</p>
+                  </div>
+                  <div>
+                    <span className="text-ink-faint text-[10px]">Tolérance</span>
+                    <p className="font-mono font-bold text-ink">{situation?.toleranceMinutes}m</p>
+                  </div>
+                  <div>
+                    <span className="text-ink-faint text-[10px]">Présences mois</span>
+                    <p className="font-mono font-bold text-ink">{identified.month.daysPresent} j</p>
+                  </div>
+                  <div>
+                    <span className="text-ink-faint text-[10px]">Retards</span>
+                    <p className="font-mono font-bold text-amber">{identified.month.lateCount}</p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Action Buttons */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {situation?.canPunchIn ? (
+                  <Button
+                    size="lg"
+                    variant="primary"
+                    icon={<Clock size={18} />}
                     onClick={() => {
-                      save(terminal.id);
-                      setStage('identify');
-                      setError(null);
+                      setPunchType('in');
+                      setStage('capture');
                     }}
                   >
-                    Utiliser
+                    Pointer Arrivée
+                  </Button>
+                ) : null}
+                {situation?.canPunchOut ? (
+                  <Button
+                    size="lg"
+                    variant="primary"
+                    icon={<Clock size={18} />}
+                    onClick={() => {
+                      setPunchType('out');
+                      setStage('capture');
+                    }}
+                  >
+                    Pointer Départ
+                  </Button>
+                ) : null}
+                {situation?.canBreakIn ? (
+                  <Button
+                    size="lg"
+                    icon={<Clock size={18} />}
+                    onClick={() => {
+                      setPunchType('break_in');
+                      setStage('capture');
+                    }}
+                  >
+                    Prendre Pause
+                  </Button>
+                ) : null}
+                {situation?.canBreakOut ? (
+                  <Button
+                    size="lg"
+                    variant="success"
+                    icon={<Clock size={18} />}
+                    onClick={() => {
+                      setPunchType('break_out');
+                      setStage('capture');
+                    }}
+                  >
+                    Reprendre Travail
+                  </Button>
+                ) : null}
+              </div>
+
+              <div className="pt-2 text-center">
+                <Button variant="quiet" size="sm" onClick={resetToIdentify}>
+                  Annuler / Terminer
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {stage === 'capture' && identified ? (
+            <div className="mx-auto max-w-md space-y-4">
+              <div>
+                <h2 className="text-lg font-bold text-ink">
+                  {PUNCH_LABEL[punchType]} — {identified.employee.full_name}
+                </h2>
+                <p className="text-xs text-ink-soft">Photo d'atelier requise pour authentification.</p>
+              </div>
+
+              {!selfie ? (
+                <Card className="overflow-hidden shadow-card">
+                  <div className="relative aspect-square w-full bg-charcoal">
+                    <video ref={videoRef} playsInline muted className="h-full w-full -scale-x-100 object-cover" />
+                    {!ready && !cameraError ? (
+                      <div className="absolute inset-0 grid place-items-center text-white/70">
+                        <Spinner />
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="p-4">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      className="w-full"
+                      icon={<Camera size={18} />}
+                      disabled={!ready}
+                      onClick={() => {
+                        const video = videoRef.current;
+                        if (!video) return;
+                        const data = captureSquare(video);
+                        if (data) setSelfie(data);
+                      }}
+                    >
+                      Prendre la photo
+                    </Button>
+                  </div>
+                </Card>
+              ) : (
+                <Card className="overflow-hidden shadow-card p-4 space-y-3">
+                  <div className="aspect-square w-full overflow-hidden rounded-xl border border-line bg-charcoal">
+                    <img src={selfie} alt="Selfie" className="h-full w-full object-cover" />
+                  </div>
+
+                  {lateNeeded ? (
+                    <div className="space-y-2 border-t border-line pt-3">
+                      <Banner tone="info" title={`Retard de ${situation?.lateMinutes} min`}>
+                        Motif requis par l'atelier.
+                      </Banner>
+                      <select
+                        value={motif}
+                        onChange={(e) => setMotif(e.target.value)}
+                        className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+                      >
+                        <option value="">Sélectionnez un motif de retard…</option>
+                        {(situation?.lateMotifs ?? []).map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+
+                  <div className="flex gap-2 pt-2">
+                    <Button onClick={() => setSelfie(null)}>Reprendre</Button>
+                    <Button
+                      variant="primary"
+                      className="flex-1"
+                      disabled={busy || (lateNeeded && !motif)}
+                      onClick={() => void submitPunch()}
+                    >
+                      {busy ? <Spinner /> : 'Valider le pointage'}
+                    </Button>
+                  </div>
+                </Card>
+              )}
+            </div>
+          ) : null}
+
+          {stage === 'confirm' && result ? (
+            <div className="mx-auto max-w-md">
+              <Card className="p-6 text-center shadow-card space-y-3">
+                <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-green-wash text-green">
+                  <Check size={28} />
+                </span>
+                <h2 className="text-xl font-bold text-ink">{PUNCH_LABEL[result.punchType]} confirmée</h2>
+                <p className="text-xs text-ink-soft">{result.employee.full_name}</p>
+                <p className="font-mono text-3xl font-extrabold text-ink tabular-nums">{result.serverTime}</p>
+                <div className="flex justify-center gap-2 pt-3">
+                  <Button icon={<Printer size={16} />} onClick={() => print(<PunchReceipt result={result} />)}>
+                    Imprimer fiche
+                  </Button>
+                  <Button variant="primary" onClick={resetToIdentify}>
+                    Fiche suivante
                   </Button>
                 </div>
               </Card>
-            ))
-          )}
-          {terminalId ? (
-            <Button variant="quiet" onClick={clear}>
-              Changer de terminal
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
-  if (stage === 'identify') {
-    const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    return (
-      <div className="mx-auto max-w-md">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-[22px] font-semibold text-ink">Pointage</h1>
-            <p className="mt-1 text-sm text-ink-soft">Saisissez votre code à 5 caractères ou présentez votre badge.</p>
-          </div>
-          <Button variant="quiet" size="sm" onClick={clear}>
-            Terminal
-          </Button>
-        </div>
-
-        <div className="mb-4 rounded-2xl bg-charcoal px-5 py-6 text-center text-white shadow-card">
-          <p className="font-mono text-5xl font-semibold tracking-tight num text-amber">{timeStr}</p>
-          <p className="mt-1 text-[13px] capitalize text-white/60">{dateStr}</p>
-        </div>
-
-        <Card className="rise p-5">
-          <div className="mb-1 flex items-baseline justify-between">
-            <p className="text-[13px] font-semibold text-ink">Code de pointage</p>
-            <p className="text-[12px] text-ink-faint">{CODE_LENGTH} caractères</p>
-          </div>
-          <div className="mb-4 flex justify-center gap-2" role="group" aria-label="Code saisi" data-code={code}>
-            {Array.from({ length: CODE_LENGTH }, (_, index) => {
-              const character = code[index];
-              return (
-                <span
-                  key={index}
-                  aria-hidden
-                  className={cx(
-                    'grid h-14 w-11 place-items-center rounded-btn border-2 font-mono text-2xl font-semibold num transition-colors duration-150',
-                    character
-                      ? 'border-line-strong bg-surface text-ink'
-                      : index === code.length
-                        ? 'border-amber bg-amber-wash text-ink-faint'
-                        : 'border-line bg-paper-2 text-ink-faint',
-                  )}
-                >
-                  {character ?? '·'}
-                </span>
-              );
-            })}
-          </div>
-
-          <Keypad value={code} onChange={setCode} />
-
-          <div className="mt-4 flex gap-2">
-            <Button className="flex-1" icon={<IconQr size={18} />} onClick={() => setScanning(true)}>
-              Scanner badge
-            </Button>
-            <Button
-              variant="primary"
-              className="flex-1"
-              disabled={busy || code.length === 0}
-              onClick={() => void identify(code)}
-            >
-              {busy ? <Spinner /> : 'Identifier'}
-            </Button>
-          </div>
-
-          {error ? (
-            <div className="mt-4">
-              <Banner
-                tone="error"
-                className="shake"
-                key={error}
-                title={locked ? 'Terminal verrouillé' : 'Identification refusée'}
-              >
-                <span className="inline-flex items-start gap-2">
-                  {locked ? <IconLock size={16} className="mt-0.5" /> : null}
-                  <span>{error}</span>
-                </span>
-              </Banner>
-            </div>
-          ) : null}
-        </Card>
-
-        {scanning ? (
-          <BadgeScanner
-            onCode={(value) => {
-              setScanning(false);
-              void identify(value);
-            }}
-            onClose={() => setScanning(false)}
-          />
-        ) : null}
-      </div>
-    );
-  }
-
-  if (stage === 'card' && identified) {
-    const { employee, situation: sit, history, month } = identified;
-    return (
-      <div className="mx-auto max-w-2xl" onClick={() => setIdle(AUTO_RETURN_SECONDS)}>
-        <div className="mb-3 h-1 w-full overflow-hidden rounded-full bg-line">
-          <div className="h-full bg-amber transition-[width] duration-1000 ease-linear" style={{ width: `${progress}%` }} />
-        </div>
-
-        <Card className="rise p-5">
-          <div className="flex items-start gap-4">
-            {employee.photo_path ? (
-              <img
-                src={employee.photo_path}
-                alt=""
-                className="h-16 w-16 rounded-card border border-line object-cover"
-              />
-            ) : (
-              <span className="grid h-16 w-16 place-items-center rounded-card bg-charcoal text-lg font-semibold text-white">
-                {initials(employee.full_name)}
-              </span>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="text-lg font-semibold text-ink">{employee.full_name}</p>
-              <p className="text-sm text-ink-soft">{employee.job_title}</p>
-              <p className="mt-1 font-mono text-[13px] text-ink-faint">{employee.id}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[12px] uppercase tracking-wide text-ink-faint">Situation du jour</p>
-              <p className="mt-1 text-sm font-semibold text-ink">
-                {!sit.isWorkday
-                  ? 'Jour non ouvré'
-                  : sit.onBreak
-                    ? 'En pause'
-                    : sit.hasIn && sit.hasOut
-                      ? 'Journée terminée'
-                      : sit.hasIn
-                        ? `Présent depuis ${history[0]?.inAt ?? '—'}`
-                        : 'Pas encore arrivé'}
-              </p>
-              {sit.lateMinutes > 0 && !sit.hasOut ? (
-                <p className="mt-1 text-[13px] font-medium text-amber">{sit.lateMinutes} min de retard</p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-line pt-4 sm:grid-cols-4">
-            <div>
-              <p className="text-[12px] text-ink-faint">Ouverture</p>
-              <p className="font-mono text-sm font-semibold num">{sit.openingTime}</p>
-            </div>
-            <div>
-              <p className="text-[12px] text-ink-faint">Tolérance</p>
-              <p className="font-mono text-sm font-semibold num">{sit.toleranceMinutes} min</p>
-            </div>
-            <div>
-              <p className="text-[12px] text-ink-faint">Jours ce mois</p>
-              <p className="font-mono text-sm font-semibold num">{month.daysPresent}</p>
-            </div>
-            <div>
-              <p className="text-[12px] text-ink-faint">Retards</p>
-              <p className="font-mono text-sm font-semibold num">{month.lateCount}</p>
-            </div>
-          </div>
-        </Card>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {sit.canPunchIn ? (
-            <Button
-              size="lg"
-              variant="primary"
-              icon={<IconClock size={20} />}
-              onClick={() => {
-                setPunchType('in');
-                setStage('capture');
-              }}
-            >
-              Pointer mon arrivée
-            </Button>
-          ) : null}
-          {sit.canPunchOut ? (
-            <Button
-              size="lg"
-              variant="primary"
-              icon={<IconClock size={20} />}
-              onClick={() => {
-                setPunchType('out');
-                setStage('capture');
-              }}
-            >
-              Pointer mon départ
-            </Button>
-          ) : null}
-          {sit.canBreakIn ? (
-            <Button
-              size="lg"
-              icon={<IconClock size={20} />}
-              onClick={() => {
-                setPunchType('break_in');
-                setStage('capture');
-              }}
-            >
-              Prendre ma pause
-            </Button>
-          ) : null}
-          {sit.canBreakOut ? (
-            <Button
-              size="lg"
-              variant="success"
-              icon={<IconClock size={20} />}
-              onClick={() => {
-                setPunchType('break_out');
-                setStage('capture');
-              }}
-            >
-              Reprendre le travail
-            </Button>
-          ) : null}
-          {!sit.canPunchIn && !sit.canPunchOut && !sit.canBreakIn && !sit.canBreakOut ? (
-            <div className="sm:col-span-2">
-              <Banner tone="info">
-                {sit.hasIn && sit.hasOut
-                  ? 'Arrivée et départ déjà enregistrés aujourd’hui : une seule journée ne peut pas être pointée deux fois.'
-                  : sit.onBreak
-                    ? 'Vous êtes en pause. Reprenez le travail pour pointer votre départ.'
-                    : 'Aucune action possible sur ce terminal pour le moment.'}
-              </Banner>
+              {portal}
             </div>
           ) : null}
         </div>
-
-        <Card className="rise mt-4 p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
-            <IconClock size={16} />
-            30 derniers jours
-          </div>
-          {history.length === 0 ? (
-            <p className="text-sm text-ink-soft">Aucun pointage enregistré sur la période.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-line text-[12px] uppercase tracking-wide text-ink-faint">
-                    <th className="py-2 pr-3 font-medium">Date</th>
-                    <th className="py-2 pr-3 font-medium">Arrivée</th>
-                    <th className="py-2 pr-3 font-medium">Départ</th>
-                    <th className="py-2 font-medium">Retard</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((row) => (
-                    <tr key={row.date} className="border-b border-line last:border-b-0">
-                      <td className="py-2 pr-3 font-mono num">{row.date}</td>
-                      <td className="py-2 pr-3 font-mono num">{row.inAt ?? '—'}</td>
-                      <td className="py-2 pr-3 font-mono num">{row.outAt ?? '—'}</td>
-                      <td className={cx('py-2 font-mono num', row.lateMinutes > 0 ? 'text-amber' : 'text-ink-soft')}>
-                        {row.lateMinutes > 0 ? `${row.lateMinutes} min` : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <p className="mt-3 text-[12px] text-ink-faint">
-            Les coordonnées personnelles ne sont jamais affichées ici. La fiche se referme automatiquement.
-          </p>
-        </Card>
-
-        <div className="mt-4">
-          <Button variant="quiet" onClick={resetToIdentify}>
-            Terminer la fiche
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (stage === 'capture' && identified) {
-    return (
-      <div className="mx-auto max-w-md">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-[20px] font-semibold text-ink">
-              {PUNCH_LABEL[punchType]} — {identified.employee.full_name}
-            </h1>
-            <p className="mt-1 text-sm text-ink-soft">Photo prise en direct : aucun import de galerie.</p>
-          </div>
-          <Button variant="quiet" size="sm" onClick={resetToIdentify}>
-            Annuler
-          </Button>
-        </div>
-
-        {!selfie ? (
-          <Card className="rise overflow-hidden">
-            <div className="relative aspect-square w-full bg-charcoal">
-              <video ref={videoRef} playsInline muted className="h-full w-full -scale-x-100 object-cover" />
-              {!ready && !cameraError ? (
-                <div className="absolute inset-0 grid place-items-center text-white/70">
-                  <Spinner />
-                </div>
-              ) : null}
-            </div>
-            <div className="flex gap-2 p-4">
-              <Button
-                variant="primary"
-                size="lg"
-                className="flex-1"
-                icon={<IconCamera size={20} />}
-                disabled={!ready}
-                onClick={() => {
-                  const video = videoRef.current;
-                  if (!video) return;
-                  const data = captureSquare(video);
-                  if (data) setSelfie(data);
-                }}
-              >
-                Prendre la photo
-              </Button>
-            </div>
-            {cameraError ? (
-              <div className="px-4 pb-4">
-                <Banner tone="error">{cameraError}</Banner>
-              </div>
-            ) : null}
-          </Card>
-        ) : (
-          <Card className="rise overflow-hidden">
-            <div className="aspect-square w-full bg-charcoal">
-              <img src={selfie} alt="Aperçu du selfie" className="h-full w-full object-cover" />
-            </div>
-
-            {lateNeeded ? (
-              <div className="space-y-3 border-t border-line p-4">
-                <Banner tone="info" title={`Retard de ${situation?.lateMinutes} min`}>
-                  Motif obligatoire (tolérance de {situation?.toleranceMinutes} min, ouverture à {situation?.openingTime}).
-                </Banner>
-                <label className="block">
-                  <span className="mb-1.5 block text-[13px] font-medium text-ink-soft">Motif du retard</span>
-                  <select
-                    value={motif}
-                    onChange={(event) => setMotif(event.target.value)}
-                    className="h-11 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm transition-colors duration-150 focus:border-amber focus:outline-none focus:ring-2 focus:ring-amber/15"
-                  >
-                    <option value="">Choisir un motif…</option>
-                    {(situation?.lateMotifs ?? []).map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {motif === 'Autre' ? (
-                  <textarea
-                    value={motifNote}
-                    onChange={(event) => setMotifNote(event.target.value)}
-                    placeholder="Précisez le motif"
-                    rows={2}
-                    className="w-full rounded-btn border border-line-strong bg-surface px-3 py-2 text-sm transition-colors duration-150 focus:border-amber focus:outline-none focus:ring-2 focus:ring-amber/15"
-                  />
-                ) : null}
-              </div>
-            ) : null}
-
-            {error ? (
-              <div className="px-4 pb-4">
-                <Banner tone="error">{error}</Banner>
-              </div>
-            ) : null}
-
-            <div className="flex gap-2 border-t border-line p-4">
-              <Button onClick={() => setSelfie(null)} icon={<IconRefresh size={18} />}>
-                Reprendre
-              </Button>
-              <Button
-                variant="primary"
-                className="flex-1"
-                disabled={busy || (lateNeeded && !motif)}
-                onClick={() => void submitPunch()}
-              >
-                {busy ? <Spinner /> : 'Valider le pointage'}
-              </Button>
-            </div>
-          </Card>
-        )}
-      </div>
-    );
-  }
-
-  if (stage === 'confirm' && result) {
-    return (
-      <div className="mx-auto max-w-md">
-        <Card className="rise p-6 text-center">
-          <span className="scale-in mx-auto grid h-14 w-14 place-items-center rounded-full bg-green-wash text-green">
-            <IconCheck size={28} />
-          </span>
-          <h1 className="mt-4 text-xl font-semibold text-ink">
-            {PUNCH_LABEL[result.punchType]} enregistrée
-          </h1>
-          <p className="mt-1 text-sm text-ink-soft">{result.employee.full_name}</p>
-          <p className="mt-4 font-mono text-3xl font-semibold text-ink num">{result.serverTime}</p>
-          <p className="mt-1 text-[13px] text-ink-faint">Heure du serveur, non modifiable.</p>
-          {result.lateMinutes > 0 ? (
-            <p className="mt-3 text-sm font-medium text-amber">{result.lateMinutes} min de retard enregistrés</p>
-          ) : null}
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <Button
-              icon={<IconPrinter size={18} />}
-              onClick={() => print(<PunchReceipt result={result} />)}
-            >
-              Imprimer la fiche
-            </Button>
-            <Button variant="primary" onClick={resetToIdentify}>
-              Fiche suivante
-            </Button>
-          </div>
-          <p className="mt-3 text-[12px] text-ink-faint">Retour automatique à l’identification…</p>
-        </Card>
-        {portal}
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-auto max-w-md">
-      <Card className="p-6 text-center">
-        <IconUser size={28} className="mx-auto text-ink-faint" />
-        <p className="mt-3 text-sm text-ink-soft">Aucun terminal sélectionné.</p>
-        <Button className="mt-4" onClick={() => setStage('terminal')}>
-          Choisir un terminal
-        </Button>
-      </Card>
+      ) : null}
     </div>
   );
 }

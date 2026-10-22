@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type Magasin, type ScanResult, type StockMovement, type StockRef, type User } from '../lib/api';
-import { QR_PREFIX } from '../lib/qr';
+import { QR_PREFIX, qrDataUrl } from '../lib/qr';
 import { MOVE_LABEL, MOVE_TONE, formatDateTime } from '../lib/labels';
 import {
   Banner,
@@ -11,17 +11,23 @@ import {
   EmptyState,
   Field,
   Modal,
-  PageHeader,
-  SegmentedControl,
   SelectField,
   Spinner,
   TextArea,
   cx,
   useToast,
 } from '../components/ui';
-import { QrCode } from '../components/QrCode';
-import { DataTable, type DataTableColumn } from '../components/DataTable';
-import { IconArrowIn, IconArrowOut, IconBox, IconHistory, IconPlus, IconRefresh, IconSearch } from '../components/Icons';
+import {
+  IconArrowIn,
+  IconArrowOut,
+  IconBox,
+  IconHistory,
+  IconPlus,
+  IconPrinter,
+  IconRefresh,
+  IconSearch,
+} from '../components/Icons';
+import { usePrintSheet } from '../lib/print';
 
 type RefForm = {
   name: string;
@@ -46,9 +52,9 @@ type MoveForm = {
 const EMPTY_REF: RefForm = { name: '', category: '', unit: 'u', location: '', magasin_id: '', min_qty: '0', supplier: '', initial_qty: '0' };
 
 function stockState(ref: StockRef): { label: string; tone: 'green' | 'amber' | 'red' } {
-  if (ref.qty <= 0) return { label: 'Épuisée', tone: 'red' };
-  if (ref.qty <= ref.min_qty) return { label: 'Sous le seuil', tone: 'amber' };
-  return { label: 'Stock correct', tone: 'green' };
+  if (ref.qty <= 0) return { label: 'Épuisé', tone: 'red' };
+  if (ref.qty <= ref.min_qty) return { label: 'Alerte seuil', tone: 'amber' };
+  return { label: 'Normal', tone: 'green' };
 }
 
 function StockBar({ ref }: { ref: StockRef }) {
@@ -57,13 +63,13 @@ function StockBar({ ref }: { ref: StockRef }) {
   const state = stockState(ref);
   return (
     <div className="flex items-center gap-2">
-      <span className="min-w-14 whitespace-nowrap text-right font-mono text-sm font-semibold num">
-        {ref.qty} <span className="text-[11px] font-normal text-ink-faint">{ref.unit}</span>
+      <span className="min-w-16 whitespace-nowrap text-right font-mono text-xs font-bold tabular-nums">
+        {ref.qty} <span className="text-[10px] font-normal text-ink-faint">{ref.unit}</span>
       </span>
-      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-line">
+      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-line shrink-0">
         <span
           className={cx(
-            'block h-full rounded-full',
+            'block h-full rounded-full transition-all duration-300',
             state.tone === 'red' ? 'bg-red' : state.tone === 'amber' ? 'bg-amber' : 'bg-green',
           )}
           style={{ width: `${pct}%` }}
@@ -73,11 +79,30 @@ function StockBar({ ref }: { ref: StockRef }) {
   );
 }
 
+function RefQr({ id }: { id: number }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void qrDataUrl(`${QR_PREFIX.stock}${id}`, 200).then((value) => {
+      if (!cancelled) setSrc(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+  return (
+    <span className="grid h-24 w-24 shrink-0 place-items-center rounded-xl border border-line bg-white shadow-xs">
+      {src ? <img src={src} alt={`QR ${id}`} className="h-20 w-20" /> : <IconBox size={28} className="text-ink-faint" />}
+    </span>
+  );
+}
+
 export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) {
   const toast = useToast();
   const canManageRefs = user.role === 'magasinier' || user.role === 'direction';
   const canMove = ['direction', 'magasinier', 'chef_atelier'].includes(user.role);
 
+  const [activeTab, setActiveTab] = useState<'inventory' | 'journal'>('inventory');
   const [refs, setRefs] = useState<StockRef[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [magasins, setMagasins] = useState<Magasin[]>([]);
@@ -110,6 +135,8 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
     note: '',
   });
 
+  const { print, portal } = usePrintSheet();
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -126,7 +153,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
       .then(([refsRes, movesRes, magRes]) => {
         if (cancelled) return;
         setRefs(refsRes.refs);
-        setMovements(movesRes.movements.slice(0, 80));
+        setMovements(movesRes.movements.slice(0, 100));
         setMagasins(magRes.magasins.filter((m) => m.active));
         setError(null);
       })
@@ -153,6 +180,19 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
     }
   }, [scan]);
 
+  const stats = useMemo(() => {
+    let total = refs.length;
+    let normal = 0;
+    let warning = 0;
+    let empty = 0;
+    for (const r of refs) {
+      if (r.qty <= 0) empty++;
+      else if (r.qty <= r.min_qty) warning++;
+      else normal++;
+    }
+    return { total, normal, warning, empty };
+  }, [refs]);
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return refs.filter((ref) => {
@@ -169,66 +209,6 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
   }, [refs, q, lowOnly, magasinFilter]);
 
   const selected = refs.find((ref) => ref.id === selectedId) ?? null;
-
-  const stockColumns = useMemo<DataTableColumn<StockRef>[]>(
-    () => [
-      {
-        accessorKey: 'name',
-        header: 'Désignation',
-        sortFn: 'alphanumeric',
-        meta: { cellClassName: 'whitespace-normal min-w-44' },
-        cell: ({ row }) => (
-          <div>
-            <p className="text-sm font-medium text-ink">{row.original.name}</p>
-            <p className="text-[12px] text-ink-faint sm:hidden">
-              {row.original.category} · {row.original.location}
-            </p>
-          </div>
-        ),
-      },
-      {
-        accessorKey: 'category',
-        header: 'Catégorie',
-        sortFn: 'alphanumeric',
-        meta: { headerClassName: 'hidden sm:table-cell', cellClassName: 'hidden sm:table-cell text-sm text-ink-soft' },
-        cell: ({ row }) => row.original.category,
-      },
-      {
-        accessorKey: 'location',
-        header: 'Emplacement',
-        sortFn: 'alphanumeric',
-        meta: { headerClassName: 'hidden md:table-cell', cellClassName: 'hidden md:table-cell text-sm text-ink-soft' },
-        cell: ({ row }) => row.original.location,
-      },
-      {
-        id: 'qty',
-        accessorKey: 'qty',
-        header: 'Stock',
-        cell: ({ row }) => <StockBar ref={row.original} />,
-      },
-      {
-        id: 'state',
-        accessorKey: 'qty',
-        header: 'État',
-        cell: ({ row }) => {
-          const state = stockState(row.original);
-          return <Chip tone={state.tone}>{state.label}</Chip>;
-        },
-      },
-      {
-        id: 'actions',
-        enableSorting: false,
-        header: '',
-        meta: { headerClassName: 'w-10', cellClassName: 'w-10' },
-        cell: () => (
-          <span className="text-ink-faint" aria-hidden>
-            ›
-          </span>
-        ),
-      },
-    ],
-    [],
-  );
   const selectedMoves = movements.filter((move) => move.ref_id === selectedId);
 
   function openCreate() {
@@ -271,7 +251,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
             supplier: refForm.supplier,
           }),
         });
-        toast('Référence mise à jour.', 'success');
+        toast('Référence mise à jour avec succès.', 'success');
       } else {
         await api('/api/stock/refs', {
           method: 'POST',
@@ -286,7 +266,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
             initial_qty: Number(refForm.initial_qty),
           }),
         });
-        toast('Référence créée.', 'success');
+        toast('Référence créée au stock.', 'success');
       }
       setRefOpen(false);
       refresh();
@@ -302,7 +282,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
       ref_id: refId ? String(refId) : (refs[0]?.id ? String(refs[0].id) : ''),
       move_type: type,
       qty: '1',
-      beneficiary: type === 'out' ? '' : '',
+      beneficiary: '',
       doc_ref: '',
       note: '',
     });
@@ -325,7 +305,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
           note: moveForm.note || undefined,
         }),
       });
-      toast(`Mouvement enregistré · nouveau stock ${res.qty}.`, 'success');
+      toast(`Mouvement validé · Nouveau stock disponible : ${res.qty}.`, 'success');
       setMoveOpen(false);
       refresh();
     } catch (err) {
@@ -335,451 +315,761 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
     }
   }
 
-  const moveTypes: { value: MoveForm['move_type']; label: string }[] = [
-    { value: 'out', label: 'Sortie' },
-    ...(canManageRefs
-      ? ([
-          { value: 'in', label: 'Entrée' },
-          { value: 'correction', label: 'Correction (comptage)' },
-        ] as const)
-      : []),
-  ];
-
   return (
-    <>
-      <PageHeader
-        title="Stock quincaillerie"
-        hint="Inventaire, seuils minimums et journal des mouvements."
-        actions={
-          <>
-            <Button icon={<IconRefresh size={18} />} onClick={refresh}>
-              Actualiser
+    <div className="space-y-4 pb-12">
+      {/* Jibble Header Banner */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-[12px] font-medium text-ink-faint">
+            <span>Atelier & Quincaillerie</span>
+            <span>/</span>
+            <span className="text-amber font-semibold">Stock & Approvisionnement</span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink mt-0.5">
+            Inventaire & Quincaillerie
+          </h1>
+          <p className="text-xs text-ink-soft">
+            Surveillance des seuils d'alerte, traçabilité des consommations et sorties chantier.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" icon={<IconRefresh size={16} />} onClick={refresh}>
+            Actualiser
+          </Button>
+          {canMove ? (
+            <Button
+              size="sm"
+              icon={<IconArrowOut size={16} />}
+              onClick={() => openMove('out')}
+            >
+              Sortie
             </Button>
-            {canMove ? (
-              <Button icon={<IconArrowOut size={18} />} onClick={() => openMove('out')}>
-                Sortie
+          ) : null}
+          {canManageRefs ? (
+            <>
+              <Button
+                size="sm"
+                icon={<IconArrowIn size={16} />}
+                onClick={() => openMove('in')}
+              >
+                Entrée
               </Button>
-            ) : null}
-            {canManageRefs ? (
-              <>
-                <Button icon={<IconArrowIn size={18} />} onClick={() => openMove('in')}>
-                  Entrée
-                </Button>
-                <Button variant="primary" icon={<IconPlus size={18} />} onClick={openCreate}>
-                  Nouvelle référence
-                </Button>
-              </>
-            ) : null}
-          </>
-        }
-      />
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<IconPlus size={16} />}
+                onClick={openCreate}
+              >
+                Nouvelle Réf
+              </Button>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Jibble KPI Dashboard Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Total Articles</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-ink-faint" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-ink tabular-nums">{stats.total}</span>
+            <span className="text-[11px] text-ink-faint">références</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Stock Normal</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-green" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-ink tabular-nums">{stats.normal}</span>
+            <span className="text-[11px] text-ink-faint">confortable</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Sous Seuil</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-amber" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-ink tabular-nums">{stats.warning}</span>
+            <span className="text-[11px] text-ink-faint">à réapprovisionner</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">En Rupture</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-red" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-ink tabular-nums">{stats.empty}</span>
+            <span className="text-[11px] text-ink-faint">épuisées</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Jibble Main Tabs (Inventaire / Journal) */}
+      <div className="flex items-center gap-1 border-b border-line">
+        <button
+          onClick={() => setActiveTab('inventory')}
+          className={cx(
+            'flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition-all',
+            activeTab === 'inventory'
+              ? 'border-amber text-amber'
+              : 'border-transparent text-ink-soft hover:text-ink',
+          )}
+        >
+          <IconBox size={16} />
+          <span>Inventaire & Tableur</span>
+          <span className="rounded-full bg-paper px-2 py-0.5 text-[10px] text-ink-faint border border-line">
+            {filtered.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('journal')}
+          className={cx(
+            'flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition-all',
+            activeTab === 'journal'
+              ? 'border-amber text-amber'
+              : 'border-transparent text-ink-soft hover:text-ink',
+          )}
+        >
+          <IconHistory size={16} />
+          <span>Journal des Mouvements</span>
+          <span className="rounded-full bg-paper px-2 py-0.5 text-[10px] text-ink-faint border border-line">
+            {movements.length}
+          </span>
+        </button>
+      </div>
 
       {error ? (
-        <div className="mb-4">
+        <div>
           <Banner tone="error">{error}</Banner>
         </div>
       ) : null}
 
-      {loading && refs.length === 0 ? (
-        <div className="flex items-center justify-center gap-2 py-24 text-sm text-ink-soft">
-          <Spinner /> Chargement du stock…
-        </div>
-      ) : (
-        <>
-          <Card className="mb-4 flex flex-wrap items-center gap-3 p-3">
-            <div className="relative min-w-56 flex-1">
+      {/* Tab 1: Inventaire & Tableur Pro */}
+      {activeTab === 'inventory' ? (
+        <div className="space-y-3">
+          {/* Filters Bar */}
+          <div className="rounded-xl border border-line bg-surface p-3 shadow-xs flex flex-wrap items-center gap-2.5">
+            <div className="relative min-w-52 flex-1">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
                 <IconSearch size={16} />
               </span>
               <input
                 value={q}
-                onChange={(event) => setQ(event.target.value)}
-                placeholder="Rechercher une référence, un fournisseur…"
-                className="h-11 w-full rounded-btn border border-line-strong bg-surface pl-9 pr-3 text-sm focus:border-amber focus:outline-none"
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Rechercher article, visserie, colle, fournisseur..."
+                className="h-10 w-full rounded-lg border border-line bg-paper pl-9 pr-3 text-xs sm:text-sm focus:border-amber focus:bg-surface focus:outline-none transition-all"
               />
             </div>
+
             <button
-              onClick={() => setLowOnly((value) => !value)}
+              onClick={() => setLowOnly((v) => !v)}
               className={cx(
-                'h-11 rounded-btn border px-3 text-sm font-medium',
-                lowOnly ? 'border-amber bg-amber-wash text-amber' : 'border-line-strong bg-surface text-ink-soft hover:bg-surface-2',
+                'h-10 rounded-lg border px-3 text-xs font-semibold transition-all flex items-center gap-1.5',
+                lowOnly
+                  ? 'border-amber bg-amber-wash text-amber'
+                  : 'border-line bg-paper text-ink-soft hover:bg-paper-2',
               )}
             >
-              Sous le seuil uniquement
+              <span className={cx('h-2 w-2 rounded-full', lowOnly ? 'bg-amber' : 'bg-ink-faint')} />
+              <span>Sous le seuil uniquement</span>
             </button>
-            <p className="text-[13px] text-ink-faint">
-              {filtered.length} référence{filtered.length > 1 ? 's' : ''}
-            </p>
-          </Card>
 
-          {magasins.length > 0 && (
-            <div className="mb-4 flex flex-wrap gap-2">
-              <button
-                onClick={() => setMagasinFilter('')}
-                className={cx(
-                  'rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all',
-                  !magasinFilter ? 'border-charcoal bg-charcoal text-white' : 'border-line-strong bg-surface text-ink-soft hover:bg-paper-2',
-                )}
+            {magasins.length > 0 && (
+              <select
+                value={magasinFilter}
+                onChange={(e) => setMagasinFilter(e.target.value)}
+                className="h-10 rounded-lg border border-line bg-paper px-3 text-xs font-medium text-ink focus:border-amber focus:bg-surface focus:outline-none"
               >
-                Tous magasins
-              </button>
-              {magasins.map((m) => (
+                <option value="">Tous magasins ({magasins.length})</option>
+                {magasins.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-sm text-ink-soft">
+              <Spinner /> Chargement du stock…
+            </div>
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              title="Aucune référence trouvée"
+              hint="Aucun article ne correspond aux filtres appliqués."
+              action={
+                canManageRefs ? (
+                  <Button variant="primary" onClick={openCreate}>
+                    Créer un article
+                  </Button>
+                ) : null
+              }
+            />
+          ) : (
+            <>
+              {/* Tableur Google Sheets Style (Desktop & Tablette) */}
+              <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden hidden sm:block">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                        <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-44 border-r border-line">
+                          Désignation de l’article
+                        </th>
+                        <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
+                        <th className="px-3 py-2.5 min-w-32 border-r border-line">Emplacement</th>
+                        <th className="px-3 py-2.5 min-w-36 border-r border-line">Stock Disponible</th>
+                        <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Seuil Min</th>
+                        <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">État</th>
+                        <th className="px-3 py-2.5 min-w-32 text-right">Mouvements Rapides</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {filtered.map((ref) => {
+                        const state = stockState(ref);
+                        return (
+                          <tr
+                            key={ref.id}
+                            onClick={() => setSelectedId(ref.id)}
+                            className="hover:bg-amber-wash/30 cursor-pointer transition-colors group"
+                          >
+                            {/* Sticky Designation */}
+                            <td className="sticky left-0 z-10 bg-surface group-hover:bg-[#FFF9F3] px-3 py-2 font-semibold text-ink border-r border-line">
+                              <div>{ref.name}</div>
+                              {ref.supplier ? (
+                                <div className="text-[10px] text-ink-faint">Fourn. {ref.supplier}</div>
+                              ) : null}
+                            </td>
+
+                            {/* Category */}
+                            <td className="px-3 py-2 text-ink-soft border-r border-line">
+                              <span className="inline-block rounded bg-paper px-1.5 py-0.5 text-[11px] font-medium border border-line">
+                                {ref.category}
+                              </span>
+                            </td>
+
+                            {/* Emplacement / Magasin */}
+                            <td className="px-3 py-2 text-ink-soft border-r border-line">
+                              <div className="font-medium text-ink">{ref.magasin_name ?? 'Magasin Central'}</div>
+                              <div className="text-[10px] text-ink-faint">{ref.location}</div>
+                            </td>
+
+                            {/* Stock Bar Gauge */}
+                            <td className="px-3 py-2 border-r border-line">
+                              <StockBar ref={ref} />
+                            </td>
+
+                            {/* Min Qty */}
+                            <td className="px-3 py-2 text-right font-mono font-medium text-ink-faint border-r border-line tabular-nums">
+                              {ref.min_qty} {ref.unit}
+                            </td>
+
+                            {/* State Badge */}
+                            <td className="px-3 py-2 text-center border-r border-line">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft">
+                                <span
+                                  className={cx(
+                                    'h-1.5 w-1.5 rounded-full shrink-0',
+                                    state.tone === 'green' ? 'bg-green' : state.tone === 'amber' ? 'bg-amber' : 'bg-red',
+                                  )}
+                                />
+                                {state.label}
+                              </span>
+                            </td>
+
+                            {/* Quick In / Out Buttons */}
+                            <td className="px-3 py-2 text-right">
+                              <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                {canMove ? (
+                                  <button
+                                    onClick={() => openMove('out', ref.id)}
+                                    title="Enregistrer une sortie"
+                                    className="rounded border border-line bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-line-strong active:scale-95 transition-all"
+                                  >
+                                    - Sortie
+                                  </button>
+                                ) : null}
+
+                                {canManageRefs ? (
+                                  <button
+                                    onClick={() => openMove('in', ref.id)}
+                                    title="Enregistrer une entrée"
+                                    className="rounded border border-line bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-line-strong active:scale-95 transition-all"
+                                  >
+                                    + Entrée
+                                  </button>
+                                ) : null}
+
+                                <button
+                                  onClick={() => setSelectedId(ref.id)}
+                                  className="rounded border border-line bg-paper px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-paper-2"
+                                >
+                                  ›
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Spreadsheet Summary Footer */}
+                <div className="bg-paper border-t border-line px-4 py-2 text-xs flex items-center justify-between font-semibold text-ink-soft">
+                  <span>Total : {filtered.length} référence(s)</span>
+                  <span className="text-[11px] text-ink-faint">
+                    Basculez sur l’onglet Journal pour consulter l’historique des consommations
+                  </span>
+                </div>
+              </div>
+
+              {/* Mobile Cards View */}
+              <div className="space-y-2.5 sm:hidden">
+                {filtered.map((ref) => {
+                  const state = stockState(ref);
+                  return (
+                    <div
+                      key={ref.id}
+                      onClick={() => setSelectedId(ref.id)}
+                      className="rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper cursor-pointer transition-all space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-sm text-ink">{ref.name}</p>
+                          <p className="text-xs text-ink-faint">
+                            {ref.category} · {ref.location}
+                          </p>
+                        </div>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft">
+                          <span
+                            className={cx(
+                              'h-1.5 w-1.5 rounded-full shrink-0',
+                              state.tone === 'green' ? 'bg-green' : state.tone === 'amber' ? 'bg-amber' : 'bg-red',
+                            )}
+                          />
+                          {state.label}
+                        </span>
+                      </div>
+
+                      <StockBar ref={ref} />
+
+                      <div className="flex items-center justify-between pt-2 border-t border-line/60" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs text-ink-faint">Seuil min : {ref.min_qty} {ref.unit}</span>
+                        <div className="flex items-center gap-1.5">
+                          {canMove ? (
+                            <button
+                              onClick={() => openMove('out', ref.id)}
+                              className="rounded border border-line bg-surface-2 px-2.5 py-1 text-xs font-medium text-ink-soft hover:text-ink active:scale-95"
+                            >
+                              - Sortie
+                            </button>
+                          ) : null}
+                          {canManageRefs ? (
+                            <button
+                              onClick={() => openMove('in', ref.id)}
+                              className="rounded border border-line bg-surface-2 px-2.5 py-1 text-xs font-medium text-ink-soft hover:text-ink active:scale-95"
+                            >
+                              + Entrée
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {/* Tab 2: Journal des Mouvements (Audit Trail) */}
+      {activeTab === 'journal' ? (
+        <div className="space-y-3">
+          {/* Filters Bar */}
+          <div className="rounded-xl border border-line bg-surface p-3 shadow-xs flex flex-wrap items-center gap-2">
+            <div className="flex items-center rounded-lg border border-line bg-paper p-0.5 text-xs">
+              {[
+                { value: '', label: 'Tous' },
+                { value: 'in', label: 'Entrées' },
+                { value: 'out', label: 'Sorties' },
+                { value: 'correction', label: 'Corrections' },
+              ].map((opt) => (
                 <button
-                  key={m.id}
-                  onClick={() => setMagasinFilter(m.id)}
+                  key={opt.value}
+                  onClick={() => setJournalType(opt.value as typeof journalType)}
                   className={cx(
-                    'rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all',
-                    magasinFilter === m.id ? 'border-charcoal bg-charcoal text-white' : 'border-line-strong bg-surface text-ink-soft hover:bg-paper-2',
+                    'rounded-md px-2.5 py-1.5 font-semibold transition-all',
+                    journalType === opt.value
+                      ? 'bg-surface text-ink shadow-xs'
+                      : 'text-ink-soft hover:text-ink',
                   )}
                 >
-                  {m.name}
+                  {opt.label}
                 </button>
               ))}
             </div>
-          )}
 
-          <DataTable
-            data={filtered}
-            columns={stockColumns}
-            onRowClick={(ref) => setSelectedId(ref.id)}
-            caption="Inventaire des références de stock — cliquez une ligne pour ouvrir la fiche"
-            empty={<EmptyState title="Aucune référence" hint="Aucun article ne correspond à ce filtre." />}
-            renderCard={(ref) => {
-              const state = stockState(ref);
-              return (
-                <div className="px-4 py-3.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink">{ref.name}</p>
-                      <p className="truncate text-[12px] text-ink-faint">
-                        {ref.category} · {ref.location}
-                      </p>
-                    </div>
-                    <Chip tone={state.tone}>{state.label}</Chip>
-                  </div>
-                  <div className="mt-2.5">
-                    <StockBar ref={ref} />
-                  </div>
-                </div>
-              );
-            }}
-          />
-
-          <div className="mt-6">
-            <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
-              <IconHistory size={16} /> Journal des mouvements
-            </h2>
-            <Card className="mb-3 flex flex-wrap items-center gap-2 p-2.5">
-              <SegmentedControl
-                value={journalType}
-                onChange={(v) => setJournalType(v as typeof journalType)}
-                size="sm"
-                options={[
-                  { value: '', label: 'Tous' },
-                  { value: 'in', label: 'Entrées' },
-                  { value: 'out', label: 'Sorties' },
-                  { value: 'correction', label: 'Corrections' },
-                ]}
-              />
+            <div className="flex items-center gap-1.5 text-xs text-ink-soft">
               <input
                 type="date"
                 value={journalFrom}
                 onChange={(e) => setJournalFrom(e.target.value)}
-                className="h-9 rounded-btn border border-line-strong bg-surface px-2 text-[13px] text-ink focus:border-amber focus:outline-none"
-                aria-label="Du"
+                className="h-9 rounded-lg border border-line bg-paper px-2 text-xs text-ink focus:border-amber focus:outline-none"
               />
-              <span className="text-ink-faint">→</span>
+              <span>→</span>
               <input
                 type="date"
                 value={journalTo}
                 onChange={(e) => setJournalTo(e.target.value)}
-                className="h-9 rounded-btn border border-line-strong bg-surface px-2 text-[13px] text-ink focus:border-amber focus:outline-none"
-                aria-label="Au"
+                className="h-9 rounded-lg border border-line bg-paper px-2 text-xs text-ink focus:border-amber focus:outline-none"
               />
+            </div>
+
+            <div className="relative min-w-40 flex-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
+                <IconSearch size={15} />
+              </span>
               <input
                 value={journalQ}
                 onChange={(e) => setJournalQ(e.target.value)}
-                placeholder="Rechercher (article, bénéficiaire, agent)…"
-                className="h-9 min-w-40 flex-1 rounded-btn border border-line-strong bg-surface px-3 text-[13px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none"
+                placeholder="Filtrer article, bénéficiaire, agent..."
+                className="h-9 w-full rounded-lg border border-line bg-paper pl-8 pr-3 text-xs text-ink focus:border-amber focus:outline-none"
               />
-            </Card>
-            {movements.length === 0 ? (
-              <EmptyState title="Aucun mouvement enregistré" hint="Les entrées, sorties et corrections apparaîtront ici." />
-            ) : (
-              <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
-                {movements.map((move) => (
-                  <li key={move.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <span
-                      className={cx(
-                        'grid h-7 w-7 shrink-0 place-items-center rounded-chip',
-                        move.move_type === 'in'
-                          ? 'bg-green-wash text-green'
-                          : move.move_type === 'out'
-                            ? 'bg-red-wash text-red'
-                            : 'bg-amber-wash text-amber',
-                      )}
-                    >
-                      {move.move_type === 'in' ? <IconArrowIn size={15} /> : <IconArrowOut size={15} />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-ink">{move.ref_name}</p>
-                      <p className="truncate text-[12px] text-ink-soft">
-                        {MOVE_LABEL[move.move_type]} · {move.beneficiary ?? '—'}
-                        {move.note ? ` · ${move.note}` : ''}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-mono text-sm font-semibold num">
-                        {move.move_type === 'in' ? '+' : move.move_type === 'correction' ? (move.qty >= 0 ? '+' : '−') : '−'}
-                        {Math.abs(move.qty)} {move.unit}
-                      </p>
-                      <p className="font-mono text-[11px] text-ink-faint num">{formatDateTime(move.created_at)}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            </div>
           </div>
-        </>
-      )}
 
+          {movements.length === 0 ? (
+            <EmptyState
+              title="Aucun mouvement consigné"
+              hint="Les entrées, sorties et ajustements d'inventaire apparaîtront dans cette table d'audit."
+            />
+          ) : (
+            <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                      <th className="px-3 py-2.5 min-w-36 border-r border-line">Date & Heure</th>
+                      <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Type</th>
+                      <th className="px-3 py-2.5 min-w-44 border-r border-line">Article</th>
+                      <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Quantité</th>
+                      <th className="px-3 py-2.5 min-w-36 border-r border-line">Bénéficiaire / Motif</th>
+                      <th className="px-3 py-2.5 min-w-28 text-right">Agent</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {movements.map((move) => (
+                      <tr key={move.id} className="hover:bg-paper-2 transition-colors">
+                        <td className="px-3 py-2 font-mono text-ink-faint tabular-nums border-r border-line">
+                          {formatDateTime(move.created_at)}
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-line">
+                          <Chip tone={MOVE_TONE[move.move_type]}>{MOVE_LABEL[move.move_type]}</Chip>
+                        </td>
+                        <td className="px-3 py-2 font-semibold text-ink border-r border-line">
+                          {move.ref_name}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono font-bold text-ink border-r border-line tabular-nums">
+                          {move.move_type === 'out' ? `-${move.qty}` : `+${move.qty}`} {move.unit ?? 'u'}
+                        </td>
+                        <td className="px-3 py-2 text-ink-soft border-r border-line">
+                          <div>{move.beneficiary ?? '—'}</div>
+                          {move.note ? <div className="text-[10px] text-ink-faint">{move.note}</div> : null}
+                        </td>
+                        <td className="px-3 py-2 text-right text-ink-faint">
+                          {move.actor}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* Drawer Fiche Référence */}
       <Drawer
         open={!!selected}
         onClose={() => setSelectedId(null)}
-        title={selected?.name ?? 'Référence'}
-        subtitle={selected ? `${selected.category} · ${selected.location}` : undefined}
+        title={selected ? selected.name : 'Détail référence'}
+        subtitle={selected ? `${selected.category} · ${selected.magasin_name ?? selected.location}` : undefined}
+        wide
       >
         {selected ? (
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Chip tone={stockState(selected).tone}>{stockState(selected).label}</Chip>
-              {canManageRefs ? (
-                <Button size="sm" onClick={() => openEdit(selected)}>
-                  Modifier la fiche
-                </Button>
-              ) : null}
+              {selected.magasin_name ? <Chip tone="blue">{selected.magasin_name}</Chip> : null}
             </div>
 
-            <Card className="p-4">
-              <div className="flex items-baseline justify-between">
-                <span className="text-[13px] text-ink-soft">Stock théorique</span>
-                <span className="font-mono text-2xl font-semibold num">
-                  {selected.qty} <span className="text-sm font-normal text-ink-faint">{selected.unit}</span>
-                </span>
-              </div>
-              <div className="mt-2">
-                <StockBar ref={selected} />
-              </div>
-              <div className="mt-3 space-y-0">
-                <div className="flex items-baseline justify-between border-b border-line py-2">
-                  <span className="text-[13px] text-ink-soft">Seuil minimum</span>
-                  <span className="font-mono text-sm font-medium num">
-                    {selected.min_qty} {selected.unit}
-                  </span>
+            <Card className="p-4 border border-line">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-ink-faint font-semibold">Stock en rayon</p>
+                  <p className="mt-1 text-2xl font-bold text-ink tabular-nums">
+                    {selected.qty} <span className="text-sm font-normal text-ink-soft">{selected.unit}</span>
+                  </p>
+                  <p className="text-xs text-ink-faint mt-1">Seuil minimal d'alerte : {selected.min_qty} {selected.unit}</p>
                 </div>
-                <div className="flex items-baseline justify-between border-b border-line py-2">
-                  <span className="text-[13px] text-ink-soft">Fournisseur</span>
-                  <span className="text-sm font-medium text-ink">{selected.supplier ?? '—'}</span>
-                </div>
+                <RefQr id={selected.id} />
               </div>
-            </Card>
 
-            <Card className="flex items-center gap-4 p-4">
-              <QrCode value={`${QR_PREFIX.stock}${selected.id}`} size={96} />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-ink">Étiquette de stock</p>
-                <p className="mt-1 text-[13px] text-ink-soft">
-                  Scannez ce QR avec le bouton global pour ouvrir directement l’entrée, la sortie ou la correction de
-                  cette référence.
-                </p>
-                <p className="mt-1 font-mono text-[12px] text-ink-faint num">montfebe:stock:{selected.id}</p>
+              <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-line">
+                {canMove ? (
+                  <Button
+                    size="sm"
+                    icon={<IconArrowOut size={16} />}
+                    onClick={() => {
+                      openMove('out', selected.id);
+                    }}
+                  >
+                    Sortie
+                  </Button>
+                ) : null}
+                {canManageRefs ? (
+                  <>
+                    <Button
+                      size="sm"
+                      icon={<IconArrowIn size={16} />}
+                      onClick={() => {
+                        openMove('in', selected.id);
+                      }}
+                    >
+                      Entrée
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        openMove('correction', selected.id);
+                      }}
+                    >
+                      Ajuster inventaire
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        openEdit(selected);
+                      }}
+                    >
+                      Modifier la fiche
+                    </Button>
+                  </>
+                ) : null}
+                <Button
+                  size="sm"
+                  icon={<IconPrinter size={16} />}
+                  onClick={() => {
+                    print(
+                      <div className="a4-page p-6 text-center">
+                        <h2 className="text-lg font-bold">{selected.name}</h2>
+                        <p className="text-xs text-ink-soft">{selected.category} · {selected.location}</p>
+                        <div className="my-4 flex justify-center">
+                          <RefQr id={selected.id} />
+                        </div>
+                        <p className="font-mono text-sm font-bold">REF-{selected.id}</p>
+                      </div>,
+                    );
+                  }}
+                >
+                  Étiquette
+                </Button>
               </div>
             </Card>
 
             <div>
-              <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
-                <IconBox size={16} /> Mouvements de cette référence
+              <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                <IconHistory size={15} /> Derniers mouvements sur cette référence
               </p>
               {selectedMoves.length === 0 ? (
-                <p className="text-sm text-ink-soft">Aucun mouvement enregistré.</p>
+                <p className="text-xs text-ink-faint italic">Aucun mouvement récent enregistré sur cette référence.</p>
               ) : (
-                <ul className="space-y-2">
-                  {selectedMoves.map((move) => (
-                    <li key={move.id} className="rounded-btn border border-line bg-surface px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <Chip tone={MOVE_TONE[move.move_type] ?? 'neutral'}>{MOVE_LABEL[move.move_type]}</Chip>
-                        <span className="font-mono text-sm font-semibold num">
-                          {move.move_type === 'in' ? '+' : '−'}
-                          {Math.abs(move.qty)} {move.unit}
-                        </span>
+                <div className="rounded-xl border border-line bg-surface overflow-hidden divide-y divide-line">
+                  {selectedMoves.map((m) => (
+                    <div key={m.id} className="p-3 text-xs flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Chip tone={MOVE_TONE[m.move_type]}>{MOVE_LABEL[m.move_type]}</Chip>
+                          <span className="font-bold text-ink">
+                            {m.move_type === 'out' ? `-${m.qty}` : `+${m.qty}`} {m.unit ?? selected?.unit ?? 'u'}
+                          </span>
+                        </div>
+                        <p className="text-ink-faint mt-1 text-[11px]">
+                          {m.beneficiary ? `Pour : ${m.beneficiary} · ` : ''}{formatDateTime(m.created_at)}
+                        </p>
                       </div>
-                      <p className="mt-1 text-[13px] text-ink-soft">
-                        {move.beneficiary ?? '—'}
-                        {move.note ? ` · ${move.note}` : ''}
-                      </p>
-                      <p className="mt-1 font-mono text-[11px] text-ink-faint num">
-                        {formatDateTime(move.created_at)} · {move.actor}
-                      </p>
-                    </li>
+                      <span className="text-[11px] text-ink-faint">Par {m.actor}</span>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </div>
           </div>
         ) : null}
       </Drawer>
 
+      {/* Modal Création / Édition Référence */}
       <Modal
         open={refOpen}
-        title={editing ? 'Modifier la référence' : 'Nouvelle référence'}
+        title={editing ? `Modifier : ${editing.name}` : 'Nouvelle référence de quincaillerie'}
         onClose={() => setRefOpen(false)}
         footer={
           <>
             <Button onClick={() => setRefOpen(false)}>Annuler</Button>
             <Button variant="primary" disabled={busy || refForm.name.trim().length < 2} onClick={() => void saveRef()}>
-              {busy ? <Spinner /> : 'Enregistrer'}
+              {busy ? <Spinner /> : editing ? 'Enregistrer' : 'Créer l’article'}
             </Button>
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           {formError ? <Banner tone="error">{formError}</Banner> : null}
           <Field
             label="Désignation"
             value={refForm.name}
-            placeholder="ex. Vis inox 5×60 (boîte 200)"
-            onChange={(event) => setRefForm({ ...refForm, name: event.target.value })}
+            onChange={(e) => setRefForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="ex. Vis bois tête fraisée 4x40 inox"
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field
               label="Catégorie"
               value={refForm.category}
-              placeholder="Visserie"
-              onChange={(event) => setRefForm({ ...refForm, category: event.target.value })}
+              onChange={(e) => setRefForm((f) => ({ ...f, category: e.target.value }))}
+              placeholder="ex. Visserie, Colle, Abrasif..."
             />
             <Field
-              label="Unité"
+              label="Unité de comptage"
               value={refForm.unit}
-              placeholder="boîte, m, L…"
-              onChange={(event) => setRefForm({ ...refForm, unit: event.target.value })}
+              onChange={(e) => setRefForm((f) => ({ ...f, unit: e.target.value }))}
+              placeholder="u, kg, boîte, l..."
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field
-              label="Emplacement"
+              label="Emplacement / Casier"
               value={refForm.location}
-              placeholder="Magasin"
-              onChange={(event) => setRefForm({ ...refForm, location: event.target.value })}
+              onChange={(e) => setRefForm((f) => ({ ...f, location: e.target.value }))}
+              placeholder="ex. Casier B-12"
             />
-            <Field
-              label="Seuil minimum"
-              type="number"
-              min={0}
-              value={refForm.min_qty}
-              onChange={(event) => setRefForm({ ...refForm, min_qty: event.target.value })}
-            />
+            <SelectField
+              label="Magasin / Atelier"
+              value={refForm.magasin_id}
+              onChange={(e) => setRefForm((f) => ({ ...f, magasin_id: e.target.value }))}
+            >
+              <option value="">— Aucun —</option>
+              {magasins.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </SelectField>
           </div>
-          <SelectField
-            label="Magasin / quincaillerie"
-            value={refForm.magasin_id}
-            onChange={(event) => setRefForm({ ...refForm, magasin_id: event.target.value })}
-          >
-            <option value="">— Aucun —</option>
-            {magasins.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </SelectField>
-          <Field
-            label="Fournisseur"
-            value={refForm.supplier}
-            placeholder="Quincaillerie Wouri"
-            onChange={(event) => setRefForm({ ...refForm, supplier: event.target.value })}
-          />
-          {!editing ? (
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field
-              label="Stock initial"
+              label="Seuil d'alerte minimal"
               type="number"
-              min={0}
-              hint="Enregistré comme première entrée au journal."
-              value={refForm.initial_qty}
-              onChange={(event) => setRefForm({ ...refForm, initial_qty: event.target.value })}
+              value={refForm.min_qty}
+              onChange={(e) => setRefForm((f) => ({ ...f, min_qty: e.target.value }))}
             />
-          ) : null}
+            {!editing ? (
+              <Field
+                label="Stock initial"
+                type="number"
+                value={refForm.initial_qty}
+                onChange={(e) => setRefForm((f) => ({ ...f, initial_qty: e.target.value }))}
+              />
+            ) : (
+              <Field
+                label="Fournisseur habituel"
+                value={refForm.supplier}
+                onChange={(e) => setRefForm((f) => ({ ...f, supplier: e.target.value }))}
+              />
+            )}
+          </div>
         </div>
       </Modal>
 
+      {/* Modal Mouvement de Stock (In / Out / Correction) */}
       <Modal
         open={moveOpen}
-        title="Nouveau mouvement de stock"
+        title={
+          moveForm.move_type === 'out'
+            ? 'Sortie de matériel / Quincaillerie'
+            : moveForm.move_type === 'in'
+              ? 'Entrée de marchandises'
+              : 'Ajustement d’inventaire (Correction)'
+        }
         onClose={() => setMoveOpen(false)}
         footer={
           <>
             <Button onClick={() => setMoveOpen(false)}>Annuler</Button>
-            <Button variant="primary" disabled={busy || !moveForm.ref_id || !moveForm.qty} onClick={() => void saveMove()}>
-              {busy ? <Spinner /> : 'Enregistrer'}
+            <Button variant="primary" disabled={busy || !moveForm.ref_id || Number(moveForm.qty) <= 0} onClick={() => void saveMove()}>
+              {busy ? <Spinner /> : 'Valider l’opération'}
             </Button>
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           {formError ? <Banner tone="error">{formError}</Banner> : null}
           <SelectField
-            label="Référence"
+            label="Article concerné"
             value={moveForm.ref_id}
-            onChange={(event) => setMoveForm({ ...moveForm, ref_id: event.target.value })}
+            onChange={(e) => setMoveForm((f) => ({ ...f, ref_id: e.target.value }))}
           >
-            <option value="">Choisir…</option>
-            {refs.map((ref) => (
-              <option key={ref.id} value={ref.id}>
-                {ref.name} — {ref.qty} {ref.unit}
+            {refs.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name} (en rayon : {r.qty} {r.unit})
               </option>
             ))}
           </SelectField>
-          <SelectField
-            label="Type de mouvement"
-            value={moveForm.move_type}
-            onChange={(event) =>
-              setMoveForm({ ...moveForm, move_type: event.target.value as MoveForm['move_type'] })
-            }
-          >
-            {moveTypes.map((type) => (
-              <option key={type.value} value={type.value}>
-                {type.label}
-              </option>
-            ))}
-          </SelectField>
-          <div className="grid grid-cols-2 gap-3">
+
+          <Field
+            label={moveForm.move_type === 'correction' ? 'Nouveau stock réel compté' : 'Quantité'}
+            type="number"
+            value={moveForm.qty}
+            onChange={(e) => setMoveForm((f) => ({ ...f, qty: e.target.value }))}
+          />
+
+          {moveForm.move_type === 'out' ? (
             <Field
-              label={moveForm.move_type === 'correction' ? 'Écart (signé)' : 'Quantité'}
-              type="number"
-              step="any"
-              value={moveForm.qty}
-              hint={moveForm.move_type === 'correction' ? 'ex. -2 si manquant, +1 si trouvé' : undefined}
-              onChange={(event) => setMoveForm({ ...moveForm, qty: event.target.value })}
-            />
-            <Field
-              label="N° de bon / document"
-              value={moveForm.doc_ref}
-              placeholder="BC-1042"
-              onChange={(event) => setMoveForm({ ...moveForm, doc_ref: event.target.value })}
-            />
-          </div>
-          {moveForm.move_type !== 'correction' ? (
-            <Field
-              label={moveForm.move_type === 'out' ? 'Bénéficiaire' : 'Provenance'}
+              label="Bénéficiaire / Chantier"
               value={moveForm.beneficiary}
-              placeholder={moveForm.move_type === 'out' ? 'Atelier B — chantier…' : 'Quincaillerie Wouri'}
-              onChange={(event) => setMoveForm({ ...moveForm, beneficiary: event.target.value })}
+              onChange={(e) => setMoveForm((f) => ({ ...f, beneficiary: e.target.value }))}
+              placeholder="ex. Frère Économe / Portes réfectoire"
             />
           ) : null}
+
+          <Field
+            label="N° bon / Référence document (optionnel)"
+            value={moveForm.doc_ref}
+            onChange={(e) => setMoveForm((f) => ({ ...f, doc_ref: e.target.value }))}
+            placeholder="ex. Facture FAC-2024-88"
+          />
+
           <TextArea
-            label={moveForm.move_type === 'correction' ? 'Motif (obligatoire)' : 'Note'}
+            label="Motif / Observations"
             value={moveForm.note}
-            placeholder={moveForm.move_type === 'correction' ? 'Comptage tiroir 12' : 'Facultatif'}
-            onChange={(event) => setMoveForm({ ...moveForm, note: event.target.value })}
+            onChange={(e) => setMoveForm((f) => ({ ...f, note: e.target.value }))}
+            placeholder="Précisions utiles sur le mouvement…"
           />
         </div>
       </Modal>
-    </>
+
+      {portal}
+    </div>
   );
 }
