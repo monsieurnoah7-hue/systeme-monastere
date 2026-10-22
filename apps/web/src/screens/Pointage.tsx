@@ -50,11 +50,14 @@ function PunchReceipt({ result }: { result: PunchResult }) {
       className="receipt-page"
       style={{ fontFamily: '"IBM Plex Sans", sans-serif', background: '#ffffff', color: '#111827' }}
     >
-      <div style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '2mm', marginBottom: '3mm' }}>
-        <p style={{ fontSize: '10pt', fontWeight: 700, margin: 0, color: '#ff6603' }}>Menuiserie du Mont Fèbè</p>
-        <p style={{ fontSize: '7pt', color: '#6b7280', margin: '0.5mm 0 0' }}>
-          Ticket de pointage Jibble — {PUNCH_LABEL[result.punchType]}
-        </p>
+      <div style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '2mm', marginBottom: '3mm' }} className="flex items-center justify-between">
+        <div>
+          <p style={{ fontSize: '10pt', fontWeight: 700, margin: 0, color: '#ff6603' }}>Menuiserie du Mont Fèbè</p>
+          <p style={{ fontSize: '7pt', color: '#6b7280', margin: '0.5mm 0 0' }}>
+            Ticket de pointage — {PUNCH_LABEL[result.punchType]}
+          </p>
+        </div>
+        <img src="/logo.png" alt="Logo" style={{ height: '7mm', objectFit: 'contain' }} />
       </div>
       <table style={{ fontSize: '8pt', width: '100%' }}>
         <tbody>
@@ -831,9 +834,14 @@ export function Pointage() {
           {stage === 'identify' ? (
             <div className="mx-auto max-w-xl space-y-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-ink">Identification Ouvrier</h2>
-                  <p className="text-xs text-ink-soft">Badgez ou composez votre matricule ou code badge.</p>
+                <div className="flex items-center gap-3">
+                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-charcoal border border-line p-1.5 shadow-xs">
+                    <img src="/emblem-white.png" alt="Croix" className="h-7 w-7 object-contain" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-ink leading-tight">Identification Ouvrier</h2>
+                    <p className="text-xs text-ink-soft">Menuiserie du Monastère Mont Fèbè</p>
+                  </div>
                 </div>
                 <Button variant="quiet" size="sm" onClick={clear}>
                   Changer borne

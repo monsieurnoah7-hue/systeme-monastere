@@ -283,27 +283,42 @@
   .a4-page {
     width: 190mm;
     margin: 0 auto;
+    padding: 5mm 0;
   }
   .a4-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 3.5mm;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4mm;
   }
   .badge-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 5mm;
+    grid-template-columns: repeat(2, 85.6mm);
+    justify-content: center;
+    gap: 6mm 8mm;
   }
   .badge-card {
     width: 85.6mm;
     height: 54mm;
     border: 1px solid #d3cabd;
-    border-radius: 3mm;
-    padding: 3mm 4mm;
-    display: flex;
-    align-items: center;
-    gap: 4mm;
+    border-radius: 2.5mm;
+    padding: 3mm;
+    box-sizing: border-box;
     break-inside: avoid;
+    background: #ffffff;
+    color: #111827;
+    position: relative;
+    overflow: hidden;
+  }
+  .tool-label-card {
+    width: 100%;
+    min-height: 38mm;
+    border: 1.2px solid #374151;
+    border-radius: 2mm;
+    padding: 2.5mm;
+    box-sizing: border-box;
+    break-inside: avoid;
+    background: #ffffff;
+    color: #111827;
   }
   .receipt-page {
     width: 105mm;

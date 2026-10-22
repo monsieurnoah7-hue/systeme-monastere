@@ -48,6 +48,65 @@ import {
 type ToolDetail = { tool: Tool; events: ToolEvent[]; loan: ToolLoan | null };
 type Facets = { categories: string[]; locations: string[] };
 
+function ToolLabelCard({ tool, qrSrc }: { tool: Tool; qrSrc?: string }) {
+  return (
+    <div
+      className="tool-label-card relative flex flex-col justify-between overflow-hidden rounded-lg border-2 border-gray-800 bg-white p-2 text-gray-900 shadow-xs"
+      style={{
+        fontFamily: '"IBM Plex Sans", -apple-system, sans-serif',
+        breakInside: 'avoid',
+      }}
+    >
+      {/* En-tête officiel du Monastère */}
+      <div className="flex items-center justify-between border-b border-gray-300 pb-1">
+        <div className="flex items-center gap-1.5">
+          <img src="/logo.png" alt="Logo" className="h-4 object-contain" />
+          <span className="text-[6pt] font-extrabold uppercase tracking-wider text-gray-900">
+            Monastère Mont Fèbè
+          </span>
+        </div>
+        <span className="rounded bg-orange-100 px-1 py-0.2 text-[5pt] font-bold text-[#ff5500] uppercase tracking-wider">
+          Atelier
+        </span>
+      </div>
+
+      {/* Corps : QR Code + Données Outil */}
+      <div className="flex items-center gap-2 py-1.5">
+        <div className="grid h-[24mm] w-[24mm] shrink-0 place-items-center rounded border border-gray-300 bg-white p-0.5">
+          {qrSrc ? (
+            <img src={qrSrc} alt={`QR ${tool.id}`} className="h-full w-full object-contain" />
+          ) : (
+            <div className="h-full w-full bg-gray-100" />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="font-mono text-[11pt] font-black tracking-tight text-gray-950">
+            {tool.id}
+          </p>
+          <p className="truncate text-[7.5pt] font-bold text-gray-900 leading-snug">
+            {tool.name}
+          </p>
+          <p className="mt-0.5 truncate text-[6pt] text-gray-600">
+            {tool.category} · {tool.location}
+          </p>
+          <div className="mt-1 flex items-center gap-1">
+            <span className="text-[5.5pt] text-gray-500 font-mono">
+              MAGASIN : {tool.magasin_id ?? 'Central'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Pied de sécurité */}
+      <div className="flex items-center justify-between border-t border-gray-200 pt-0.5 text-[4.8pt] font-semibold uppercase tracking-wider text-gray-500">
+        <span>PROPRIÉTÉ DU MONASTÈRE</span>
+        <span>SCAN RETOUR OBLIGATOIRE</span>
+      </div>
+    </div>
+  );
+}
+
 function A4Sheet({ tools }: { tools: Tool[] }) {
   const [codes, setCodes] = useState<Record<string, string>>({});
 
@@ -65,36 +124,20 @@ function A4Sheet({ tools }: { tools: Tool[] }) {
 
   return (
     <div className="a4-page" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
-      <div style={{ marginBottom: '6mm', borderBottom: '1px solid #d3cabd', paddingBottom: '3mm' }}>
-        <p style={{ fontSize: '12pt', fontWeight: 600, color: '#17181b', margin: 0 }}>
-          Menuiserie — Monastère du Mont Fèbè
-        </p>
-        <p style={{ fontSize: '9pt', color: '#5b5651', margin: '1mm 0 0' }}>
-          Planche d’étiquettes — {tools.length} référence(s) — imprimer sur papier A4 avec découpe
-        </p>
+      <div style={{ marginBottom: '6mm', borderBottom: '1px solid #d3cabd', paddingBottom: '3mm' }} className="flex items-center justify-between">
+        <div>
+          <p style={{ fontSize: '12pt', fontWeight: 700, color: '#ff6603', margin: 0 }}>
+            Menuiserie — Monastère du Mont Fèbè
+          </p>
+          <p style={{ fontSize: '8.5pt', color: '#5b5651', margin: '1mm 0 0' }}>
+            Planche d’étiquettes outillage & machines — {tools.length} référence(s) — format d’atelier avec découpe
+          </p>
+        </div>
+        <img src="/logo.png" alt="Logo" style={{ height: '10mm', objectFit: 'contain' }} />
       </div>
       <div className="a4-grid">
         {tools.map((tool) => (
-          <div
-            key={tool.id}
-            style={{
-              border: '1px solid #d3cabd',
-              borderRadius: '2mm',
-              padding: '2mm',
-              breakInside: 'avoid',
-              textAlign: 'center',
-            }}
-          >
-            {codes[tool.id] ? (
-              <img src={codes[tool.id]} alt={`QR ${tool.id}`} style={{ width: '100%', maxWidth: '22mm', margin: '0 auto' }} />
-            ) : (
-              <div style={{ height: '22mm' }} />
-            )}
-            <p style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: '8pt', fontWeight: 600, margin: '1.5mm 0 0' }}>
-              {tool.id}
-            </p>
-            <p style={{ fontSize: '7pt', color: '#5b5651', margin: '0.5mm 0 0', lineHeight: 1.2 }}>{tool.name}</p>
-          </div>
+          <ToolLabelCard key={tool.id} tool={tool} qrSrc={codes[tool.id]} />
         ))}
       </div>
     </div>

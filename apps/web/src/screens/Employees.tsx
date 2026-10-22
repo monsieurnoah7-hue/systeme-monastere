@@ -1024,17 +1024,9 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
         }
       >
         <div className="space-y-4">
-          {badgeFor?.badge_token ? (
-            <div className="mx-auto flex w-full max-w-[340px] items-center gap-4 rounded-xl border border-line bg-surface p-4 shadow-xs">
-              <QrCode value={`${QR_PREFIX.badge}${badgeFor.badge_token}`} size={96} />
-              <div className="min-w-0">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber">
-                  Menuiserie Fèbè
-                </span>
-                <p className="mt-1 truncate text-sm font-bold text-ink">{badgeFor.full_name}</p>
-                <p className="truncate text-xs text-ink-soft">{badgeFor.job_title}</p>
-                <p className="mt-1 font-mono text-xs font-semibold text-ink">{badgeFor.id}</p>
-              </div>
+          {badgeFor ? (
+            <div className="flex justify-center p-1">
+              <BadgeCard employee={badgeFor} isPreview />
             </div>
           ) : (
             <Banner tone="info">Badge non encore créé.</Banner>
@@ -1144,21 +1136,80 @@ function StatBox({ label, value, tone }: { label: string; value: string; tone?: 
   );
 }
 
-function BadgeCard({ employee }: { employee: Employee }) {
+function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: boolean }) {
   return (
-    <div className="badge-card" style={{ fontFamily: '"IBM Plex Sans", sans-serif', background: '#ffffff', color: '#111827' }}>
-      {employee.badge_token ? (
-        <QrCode value={`${QR_PREFIX.badge}${employee.badge_token}`} size={83} alt={`QR badge ${employee.id}`} />
-      ) : (
-        <div style={{ width: '22mm', height: '22mm', border: '1px dashed #d1d5db' }} />
+    <div
+      className={cx(
+        'badge-card relative flex flex-col justify-between overflow-hidden rounded-xl border border-gray-300 bg-white text-gray-900 shadow-sm',
+        isPreview ? 'h-[200px] w-full max-w-[340px] p-3 text-[13px]' : 'h-[54mm] w-[85.6mm] p-[3mm] text-[8pt]',
       )}
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ fontSize: '6.5pt', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#ff6603', margin: 0 }}>
-          Menuiserie · Mont Fèbè
-        </p>
-        <p style={{ fontSize: '11pt', fontWeight: 700, margin: '1.5mm 0 0', lineHeight: 1.15 }}>{employee.full_name}</p>
-        <p style={{ fontSize: '8pt', color: '#4b5563', margin: '0.5mm 0 0' }}>{employee.job_title}</p>
-        <p style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: '8pt', margin: '1.5mm 0 0' }}>{employee.id}</p>
+      style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif' }}
+    >
+      {/* Ligne accent ambre monastique */}
+      <div className="absolute inset-x-0 top-0 h-[3px] bg-[#ff5500]" />
+
+      {/* En-tête officiel avec le vrai logo du Monastère */}
+      <div className="flex items-center gap-2 border-b border-gray-200 pb-1.5">
+        <img
+          src="/logo.png"
+          alt="Monastère Mont Fèbè"
+          className={cx('object-contain shrink-0', isPreview ? 'h-8' : 'h-[7.5mm]')}
+        />
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="text-[7pt] font-extrabold uppercase tracking-wider text-gray-950">
+            Monastère du Mont Fèbè
+          </p>
+          <p className="text-[5.5pt] font-bold tracking-wider text-[#ff5500] uppercase">
+            Formation Technique · Menuiserie
+          </p>
+        </div>
+      </div>
+
+      {/* Corps : Identité à gauche, QR Code à droite */}
+      <div className="flex flex-1 items-center justify-between gap-3 py-1">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="rounded bg-gray-100 border border-gray-300 px-1 py-0.2 font-mono text-[6pt] font-bold text-gray-800">
+              {employee.id}
+            </span>
+            <span className="rounded bg-orange-50 text-[#ff5500] border border-orange-200 px-1 py-0.2 text-[5.5pt] font-bold uppercase tracking-wider">
+              {employee.active ? 'Actif' : 'Inactif'}
+            </span>
+          </div>
+
+          <div>
+            <p className="truncate text-[9.5pt] font-extrabold leading-tight text-gray-950">
+              {employee.full_name}
+            </p>
+            <p className="truncate text-[7pt] font-medium text-gray-600">
+              {employee.job_title}
+            </p>
+          </div>
+        </div>
+
+        {/* QR Code haute précision pour pointage et prêt */}
+        <div className="flex shrink-0 flex-col items-center justify-center rounded-lg border border-gray-200 bg-white p-1 shadow-2xs">
+          {employee.badge_token ? (
+            <QrCode
+              value={`${QR_PREFIX.badge}${employee.badge_token}`}
+              size={isPreview ? 84 : 72}
+              alt={`QR badge ${employee.id}`}
+            />
+          ) : (
+            <div className="grid h-[18mm] w-[18mm] place-items-center border border-dashed border-gray-300 text-[6pt] text-gray-400">
+              Sans code
+            </div>
+          )}
+          <span className="mt-0.5 font-mono text-[6pt] font-bold tracking-widest text-gray-500">
+            {employee.badge_token ?? '------'}
+          </span>
+        </div>
+      </div>
+
+      {/* Bandeau de sécurité inférieur */}
+      <div className="flex items-center justify-between border-t border-gray-200 pt-1 text-[5pt] font-medium text-gray-400 uppercase tracking-widest">
+        <span>CARTE PROFESSIONNELLE D'ATELIER</span>
+        <span>POINTAGE & OUTILLAGE</span>
       </div>
     </div>
   );
@@ -1167,13 +1218,16 @@ function BadgeCard({ employee }: { employee: Employee }) {
 function BadgeSheet({ employees }: { employees: Employee[] }) {
   return (
     <div className="a4-page" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
-      <div style={{ marginBottom: '6mm', borderBottom: '1px solid #e5e7eb', paddingBottom: '3mm' }}>
-        <p style={{ fontSize: '12pt', fontWeight: 700, color: '#ff6603', margin: 0 }}>
-          Menuiserie — Monastère du Mont Fèbè
-        </p>
-        <p style={{ fontSize: '8.5pt', color: '#6b7280', margin: '1mm 0 0' }}>
-          Badges d’atelier — {employees.length} carte(s) format standard (85,6 × 54 mm)
-        </p>
+      <div style={{ marginBottom: '6mm', borderBottom: '1px solid #e5e7eb', paddingBottom: '3mm' }} className="flex items-center justify-between">
+        <div>
+          <p style={{ fontSize: '12pt', fontWeight: 700, color: '#ff6603', margin: 0 }}>
+            Menuiserie — Monastère du Mont Fèbè
+          </p>
+          <p style={{ fontSize: '8.5pt', color: '#6b7280', margin: '1mm 0 0' }}>
+            Planche de badges professionnels — {employees.length} carte(s) format ISO CR-80 (85,6 × 54 mm)
+          </p>
+        </div>
+        <img src="/logo.png" alt="Logo" style={{ height: '10mm', objectFit: 'contain' }} />
       </div>
       <div className="badge-grid">
         {employees.map((employee) => (

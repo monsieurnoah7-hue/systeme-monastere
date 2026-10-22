@@ -38,12 +38,16 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
   return (
     <div className="flex min-h-full items-center justify-center bg-charcoal px-4 py-10">
       <div className="w-full max-w-[26rem]">
-        <div className="mb-6 flex items-center gap-3 text-white">
-          <span className="grid h-11 w-11 place-items-center rounded-btn bg-amber text-lg font-semibold">M</span>
-          <div className="leading-tight">
-            <p className="text-[15px] font-semibold">Menuiserie du Mont Fèbè</p>
-            <p className="text-[13px] text-white/55">Monastère des Bénédictins — Yaoundé</p>
+        <div className="mb-6 flex flex-col items-center text-center text-white">
+          <div className="mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-surface border border-white/10 p-2.5 shadow-pop">
+            <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-11 w-11 object-contain" />
           </div>
+          <h2 className="text-sm font-bold tracking-tight text-white uppercase">
+            Monastère des Bénédictins du Mont Fèbè
+          </h2>
+          <p className="mt-0.5 text-xs text-amber font-semibold tracking-wide">
+            Centre de Formation Technique · Menuiserie
+          </p>
         </div>
 
         <div className="rise rounded-card border border-white/10 bg-surface p-6 shadow-pop">

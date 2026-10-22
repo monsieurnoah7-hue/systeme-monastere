@@ -97,6 +97,62 @@ function RefQr({ id }: { id: number }) {
   );
 }
 
+function StockBinLabel({ refItem }: { refItem: StockRef }) {
+  return (
+    <div className="a4-page py-6" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
+      <div
+        className="mx-auto flex flex-col justify-between overflow-hidden rounded-xl border-2 border-gray-900 bg-white p-5 text-gray-900 shadow-md"
+        style={{ width: '130mm', minHeight: '80mm', boxSizing: 'border-box' }}
+      >
+        {/* En-tête officiel Monastère */}
+        <div className="flex items-center justify-between border-b-2 border-gray-900 pb-2">
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="Logo" className="h-8 object-contain" />
+            <div>
+              <p className="text-[8.5pt] font-extrabold uppercase tracking-wider text-gray-950">
+                Monastère du Mont Fèbè
+              </p>
+              <p className="text-[6.5pt] font-bold text-[#ff5500] uppercase tracking-wider">
+                Magasin & Gestion des Stocks
+              </p>
+            </div>
+          </div>
+          <span className="rounded bg-gray-100 border border-gray-300 px-2 py-0.5 font-mono text-[8pt] font-bold text-gray-800">
+            REF-{refItem.id}
+          </span>
+        </div>
+
+        {/* Corps : Grand QR Code + Détails Article */}
+        <div className="flex items-center gap-5 py-3">
+          <div className="grid h-[32mm] w-[32mm] shrink-0 place-items-center rounded-lg border border-gray-300 bg-white p-1">
+            <RefQr id={refItem.id} />
+          </div>
+
+          <div className="min-w-0 flex-1 space-y-1">
+            <h2 className="text-[13pt] font-black leading-tight text-gray-950">
+              {refItem.name}
+            </h2>
+            <p className="text-[8.5pt] font-semibold text-gray-700">
+              {refItem.category}
+            </p>
+            <div className="pt-1 text-[7.5pt] text-gray-600 space-y-0.5">
+              <p><span className="font-semibold text-gray-900">Emplacement :</span> {refItem.location || 'Non spécifié'}</p>
+              <p><span className="font-semibold text-gray-900">Unité de mesure :</span> {refItem.unit}</p>
+              <p><span className="font-semibold text-gray-900">Seuil alerte :</span> {refItem.min_qty} {refItem.unit}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Pied : Mention officielle */}
+        <div className="flex items-center justify-between border-t border-gray-300 pt-1.5 text-[6pt] font-bold uppercase tracking-wider text-gray-500">
+          <span>ÉTIQUETTE DE RAYONNAGE / CASIER</span>
+          <span>SCAN INVENTAIRE RAPIDE</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) {
   const toast = useToast();
   const canManageRefs = user.role === 'magasinier' || user.role === 'direction';
@@ -876,16 +932,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                   size="sm"
                   icon={<IconPrinter size={16} />}
                   onClick={() => {
-                    print(
-                      <div className="a4-page p-6 text-center">
-                        <h2 className="text-lg font-bold">{selected.name}</h2>
-                        <p className="text-xs text-ink-soft">{selected.category} · {selected.location}</p>
-                        <div className="my-4 flex justify-center">
-                          <RefQr id={selected.id} />
-                        </div>
-                        <p className="font-mono text-sm font-bold">REF-{selected.id}</p>
-                      </div>,
-                    );
+                    print(<StockBinLabel refItem={selected} />);
                   }}
                 >
                   Étiquette

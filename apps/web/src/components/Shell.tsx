@@ -162,18 +162,18 @@ export function Shell({
         ========================================================================= */}
         <aside className="no-print hidden w-64 shrink-0 flex-col border-r border-line bg-surface lg:flex">
           {/* Logo Brand Header */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-line">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-surface-2 border border-line text-ink font-bold text-sm tracking-wider">
-              M<span className="text-amber">.</span>
-            </span>
-            <div className="leading-tight">
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-line">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-charcoal border border-line p-1.5 shadow-xs">
+              <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-7 w-7 object-contain" />
+            </div>
+            <div className="leading-tight min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-bold tracking-tight text-ink">Menuiserie</span>
+                <span className="text-sm font-bold tracking-tight text-ink truncate">Menuiserie</span>
                 <span className="rounded bg-amber-wash border border-amber/20 px-1.5 py-0.2 text-[10px] font-bold text-amber uppercase">
-                  Studio
+                  Fèbè
                 </span>
               </div>
-              <p className="text-[11px] text-ink-faint">Monastère Mont Fèbè</p>
+              <p className="text-[11px] text-ink-faint truncate">Monastère Bénédictin</p>
             </div>
           </div>
 
@@ -247,10 +247,10 @@ export function Shell({
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Mobile Top Header */}
           <header className="no-print sticky top-0 z-20 flex items-center justify-between border-b border-line bg-surface/95 px-4 py-2.5 backdrop-blur lg:hidden">
-            <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-surface-2 border border-line text-ink font-bold text-sm tracking-wider shadow-xs">
-                M<span className="text-amber">.</span>
-              </span>
+            <div className="flex items-center gap-2.5">
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-charcoal border border-line p-1 shadow-xs">
+                <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-5 w-5 object-contain" />
+              </div>
               <div className="leading-tight">
                 <span className="text-xs font-bold text-ink">Menuiserie Fèbè</span>
                 <span className="block text-[10px] text-ink-soft">{ROLE_LABEL[user.role]}</span>
