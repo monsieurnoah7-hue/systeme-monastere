@@ -6,7 +6,6 @@ import {
   Menu,
   Package,
   QrCode,
-  Search,
   Settings,
   User as UserIcon,
   Users,
@@ -182,21 +181,6 @@ export function Shell({
 
           {/* Quick Punch Tracker Widget */}
           <LiveClockWidget onTrack={() => onView('pointage')} isDirection={user.role === 'direction'} />
-
-          {/* Search Trigger */}
-          <div className="px-3 py-1">
-            <button
-              onClick={() => setPaletteOpen(true)}
-              className="flex h-9 w-full items-center gap-2 rounded-lg border border-line bg-paper px-2.5 text-xs text-ink-faint transition-colors duration-150 hover:border-line-strong hover:text-ink-soft"
-              aria-label="Rechercher"
-            >
-              <Search size={14} className="shrink-0" />
-              <span className="flex-1 text-left">Recherche rapide…</span>
-              <kbd className="rounded border border-line bg-surface px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-faint">
-                ⌘K
-              </kbd>
-            </button>
-          </div>
 
           {/* Main Navigation */}
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2 scroll-thin">

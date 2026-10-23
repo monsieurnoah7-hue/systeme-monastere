@@ -53,10 +53,20 @@ export function Scanner({ open, onClose, onResult }: Props) {
   const start = useCallback(async () => {
     setError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      });
+      let stream: MediaStream;
+      try {
+        // Priorité absolue caméra arrière sur smartphone et tablette
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+      } catch {
+        // Secours pour ordinateurs sans caméra arrière
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
       streamRef.current = stream;
       const video = videoRef.current;
       if (video) {

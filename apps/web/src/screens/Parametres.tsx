@@ -8,6 +8,7 @@ import {
   type KioskSettings,
   type PermissionMatrix,
   type Role,
+  type RoleInfo,
   type TerminalInfo,
   type User,
 } from '../lib/api';
@@ -38,11 +39,14 @@ import {
   HardDrive,
   KeyRound,
   Lock,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
+  Shield,
   ShieldCheck,
   Smartphone,
+  Trash2,
   UserPlus,
   Users,
   UserX,
@@ -220,6 +224,14 @@ function AdminSettings({ user }: { user: User }) {
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | Role>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+
+  // Role management states (Direction control)
+  const [roleModalOpen, setRoleModalOpen] = useState(false);
+  const [roleModalMode, setRoleModalMode] = useState<'create' | 'edit'>('create');
+  const [roleForm, setRoleForm] = useState({ id: '', name: '', description: '' });
+  const [roleError, setRoleError] = useState<string | null>(null);
+  const [roleBusy, setRoleBusy] = useState(false);
+  const [deleteRoleConfirm, setDeleteRoleConfirm] = useState<RoleInfo | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -552,6 +564,98 @@ function AdminSettings({ user }: { user: User }) {
     }
   }
 
+  // Role management actions (Direction)
+  function openCreateRoleModal() {
+    setRoleForm({ id: '', name: '', description: '' });
+    setRoleModalMode('create');
+    setRoleError(null);
+    setRoleModalOpen(true);
+  }
+
+  function openEditRoleModal(r: RoleInfo) {
+    setRoleForm({ id: r.id, name: r.name, description: r.description ?? '' });
+    setRoleModalMode('edit');
+    setRoleError(null);
+    setRoleModalOpen(true);
+  }
+
+  async function handleSaveRole() {
+    const trimmedId = roleForm.id.trim().toLowerCase();
+    const trimmedName = roleForm.name.trim();
+    if (roleModalMode === 'create' && !trimmedId) {
+      setRoleError('L’identifiant technique du rôle est requis.');
+      return;
+    }
+    if (!trimmedName) {
+      setRoleError('Le libellé officiel du rôle est requis.');
+      return;
+    }
+
+    setRoleBusy(true);
+    setRoleError(null);
+    try {
+      if (roleModalMode === 'create') {
+        await api('/api/permissions/roles', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: trimmedId,
+            name: trimmedName,
+            description: roleForm.description.trim() || undefined,
+          }),
+        });
+        toast(`Rôle « ${trimmedName} » créé avec succès.`, 'success');
+      } else {
+        await api(`/api/permissions/roles/${roleForm.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: trimmedName,
+            description: roleForm.description.trim() || undefined,
+          }),
+        });
+        toast(`Rôle « ${trimmedName} » mis à jour.`, 'success');
+      }
+      setRoleModalOpen(false);
+      setReload((v) => v + 1);
+    } catch (err) {
+      setRoleError(err instanceof Error ? err.message : 'Impossible d’enregistrer le rôle.');
+    } finally {
+      setRoleBusy(false);
+    }
+  }
+
+  async function handleDeleteRole(role: RoleInfo) {
+    setRoleBusy(true);
+    try {
+      await api(`/api/permissions/roles/${role.id}`, {
+        method: 'DELETE',
+      });
+      toast(`Rôle « ${role.name} » supprimé avec succès.`, 'success');
+      setDeleteRoleConfirm(null);
+      setReload((v) => v + 1);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Suppression impossible.', 'error');
+    } finally {
+      setRoleBusy(false);
+    }
+  }
+
+  // Dynamic available roles list with user count
+  const availableRoles = useMemo<RoleInfo[]>(() => {
+    if (permMatrix?.rolesDetail && permMatrix.rolesDetail.length > 0) {
+      return permMatrix.rolesDetail.map((r) => ({
+        ...r,
+        user_count: users.filter((u) => u.role === r.id).length,
+      }));
+    }
+    return ROLES_OPTION.map((r) => ({
+      id: r,
+      name: ROLE_LABEL[r] ?? r,
+      description: ROLE_DESC[r] ?? null,
+      is_system: r === 'direction',
+      user_count: users.filter((u) => u.role === r).length,
+    }));
+  }, [permMatrix?.rolesDetail, users]);
+
   // Mappings & Filtered Data
   const employeesById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
 
@@ -772,9 +876,9 @@ function AdminSettings({ user }: { user: User }) {
                   className="h-9 rounded-btn border border-line-strong bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
                 >
                   <option value="all">Tous les rôles</option>
-                  {ROLES_OPTION.map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_LABEL[r]}
+                  {availableRoles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
                     </option>
                   ))}
                 </select>
@@ -825,7 +929,7 @@ function AdminSettings({ user }: { user: User }) {
                                 theme.bg,
                               )}
                             >
-                              {ROLE_LABEL[account.role]}
+                              {availableRoles.find((r) => r.id === account.role)?.name ?? ROLE_LABEL[account.role] ?? account.role}
                             </span>
                             <span
                               className={cx(
@@ -903,6 +1007,117 @@ function AdminSettings({ user }: { user: User }) {
             TAB 2: ROLES & PERMISSIONS (RBAC)
         ========================================================================= */}
         <TabsContent value="permissions" className="space-y-6">
+          {/* Card: Rôles Applicatifs CFT */}
+          <Card className="shadow-card">
+            <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <Shield size={18} className="text-amber" /> Rôles applicatifs &amp; Métiers
+                </CardTitle>
+                <CardDescription className="text-xs text-ink-soft">
+                  Gouvernance des accès du C.F.T. : créez, renommez, configurez ou supprimez les rôles opérationnels selon les besoins de l’atelier.
+                </CardDescription>
+              </div>
+
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<Plus size={15} />}
+                onClick={openCreateRoleModal}
+              >
+                Nouveau rôle
+              </Button>
+            </CardHeader>
+
+            <CardContent className="p-0">
+              <div className="divide-y divide-line">
+                {availableRoles.map((r) => {
+                  const theme = ROLE_THEME[r.id] ?? DEFAULT_ROLE_THEME;
+                  const isRootDirection = r.id === 'direction';
+                  const userCount = Number(r.user_count ?? 0);
+
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between hover:bg-paper-2/20 transition-colors"
+                    >
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div
+                          className={cx(
+                            'grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xs font-bold border shadow-xs',
+                            theme.bg,
+                          )}
+                        >
+                          {roleInitials(r.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-ink">{r.name}</span>
+                            <code className="rounded bg-paper-2 px-1.5 py-0.5 font-mono text-[11px] text-ink-faint">
+                              {r.id}
+                            </code>
+                            {isRootDirection ? (
+                              <span className="inline-flex items-center rounded-chip border border-amber/30 bg-amber-wash px-2 py-0.5 text-[10px] font-semibold text-amber">
+                                Super-Admin racine
+                              </span>
+                            ) : r.is_system ? (
+                              <span className="inline-flex items-center rounded-chip border border-line-strong bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft">
+                                Rôle standard
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-chip border border-green/30 bg-green-wash px-2 py-0.5 text-[10px] font-semibold text-green">
+                                Rôle personnalisé
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-xs text-ink-soft line-clamp-2">
+                            {r.description || 'Aucune description spécifique.'}
+                          </p>
+                          <div className="mt-1 flex items-center gap-3 text-[11px] text-ink-faint">
+                            <span>
+                              {userCount === 0
+                                ? 'Aucun utilisateur affecté'
+                                : `${userCount} collaborateur${userCount > 1 ? 's' : ''} affecté${userCount > 1 ? 's' : ''}`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<Pencil size={13} />}
+                          onClick={() => openEditRoleModal(r)}
+                          title="Modifier le libellé ou la description du rôle"
+                        >
+                          Modifier
+                        </Button>
+                        {!isRootDirection && !r.is_system ? (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            disabled={userCount > 0 || roleBusy}
+                            icon={<Trash2 size={13} />}
+                            onClick={() => setDeleteRoleConfirm(r)}
+                            title={
+                              userCount > 0
+                                ? 'Impossible de supprimer un rôle assigné à des collaborateurs'
+                                : 'Supprimer définitivement ce rôle applicatif'
+                            }
+                          >
+                            Supprimer
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card: Matrice RBAC */}
           <Card className="shadow-card">
             <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -968,7 +1183,7 @@ function AdminSettings({ user }: { user: User }) {
                                     (ROLE_THEME[role] ?? DEFAULT_ROLE_THEME).bg,
                                   )}
                                 >
-                                  {ROLE_LABEL[role] ?? role}
+                                  {availableRoles.find((ar) => ar.id === role)?.name ?? ROLE_LABEL[role] ?? role}
                                 </span>
                               </th>
                             ))}
@@ -1007,7 +1222,7 @@ function AdminSettings({ user }: { user: User }) {
                                                 ? 'border-green bg-green text-white shadow-xs'
                                                 : 'border-line bg-surface text-ink-faint hover:bg-paper-2',
                                             )}
-                                            title={`${isChecked ? 'Révoquer' : 'Accorder'} ${meta?.label} pour ${ROLE_LABEL[role]}`}
+                                            title={`${isChecked ? 'Révoquer' : 'Accorder'} ${meta?.label} pour ${availableRoles.find((ar) => ar.id === role)?.name ?? ROLE_LABEL[role] ?? role}`}
                                           >
                                             {isChecked ? <Check size={15} /> : ''}
                                           </button>
@@ -1644,24 +1859,26 @@ function AdminSettings({ user }: { user: User }) {
           <div>
             <label className="mb-2 block text-xs font-medium text-ink-soft">Rôle applicatif</label>
             <div className="grid gap-2 sm:grid-cols-2">
-              {ROLES_OPTION.map((role) => (
+              {availableRoles.map((r) => (
                 <label
-                  key={role}
+                  key={r.id}
                   className={cx(
                     'flex cursor-pointer items-start gap-2.5 rounded-btn border p-3 transition-colors shadow-xs',
-                    userForm.role === role ? 'border-amber bg-amber-wash' : 'border-line-strong bg-surface hover:bg-paper-2',
+                    userForm.role === r.id ? 'border-amber bg-amber-wash' : 'border-line-strong bg-surface hover:bg-paper-2',
                   )}
                 >
                   <input
                     type="radio"
                     name="new-role"
-                    checked={userForm.role === role}
-                    onChange={() => setUserForm({ ...userForm, role })}
+                    checked={userForm.role === r.id}
+                    onChange={() => setUserForm({ ...userForm, role: r.id })}
                     className="mt-0.5 h-4 w-4 shrink-0 accent-[#d9480f]"
                   />
                   <span className="min-w-0">
-                    <span className="block text-xs font-semibold text-ink">{ROLE_LABEL[role]}</span>
-                    <span className="block text-[11px] text-ink-soft leading-snug">{ROLE_DESC[role]}</span>
+                    <span className="block text-xs font-semibold text-ink">{r.name}</span>
+                    <span className="block text-[11px] text-ink-soft leading-snug">
+                      {r.description || ROLE_DESC[r.id] || ''}
+                    </span>
                   </span>
                 </label>
               ))}
@@ -1736,24 +1953,26 @@ function AdminSettings({ user }: { user: User }) {
           <div>
             <label className="mb-2 block text-xs font-medium text-ink-soft">Rôle applicatif</label>
             <div className="grid gap-2 sm:grid-cols-2">
-              {ROLES_OPTION.map((role) => (
+              {availableRoles.map((r) => (
                 <label
-                  key={role}
+                  key={r.id}
                   className={cx(
                     'flex cursor-pointer items-start gap-2.5 rounded-btn border p-3 transition-colors shadow-xs',
-                    editForm.role === role ? 'border-amber bg-amber-wash' : 'border-line-strong bg-surface hover:bg-paper-2',
+                    editForm.role === r.id ? 'border-amber bg-amber-wash' : 'border-line-strong bg-surface hover:bg-paper-2',
                   )}
                 >
                   <input
                     type="radio"
                     name="edit-role"
-                    checked={editForm.role === role}
-                    onChange={() => setEditForm({ ...editForm, role })}
+                    checked={editForm.role === r.id}
+                    onChange={() => setEditForm({ ...editForm, role: r.id })}
                     className="mt-0.5 h-4 w-4 shrink-0 accent-[#d9480f]"
                   />
                   <span className="min-w-0">
-                    <span className="block text-xs font-semibold text-ink">{ROLE_LABEL[role]}</span>
-                    <span className="block text-[11px] text-ink-soft leading-snug">{ROLE_DESC[role]}</span>
+                    <span className="block text-xs font-semibold text-ink">{r.name}</span>
+                    <span className="block text-[11px] text-ink-soft leading-snug">
+                      {r.description || ROLE_DESC[r.id] || ''}
+                    </span>
                   </span>
                 </label>
               ))}
@@ -1812,6 +2031,112 @@ function AdminSettings({ user }: { user: User }) {
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
             />
           </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Nouveau / Modifier rôle applicatif */}
+      <Modal
+        open={roleModalOpen}
+        title={roleModalMode === 'create' ? 'Créer un nouveau rôle applicatif' : `Modifier le rôle « ${roleForm.name} »`}
+        onClose={() => setRoleModalOpen(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRoleModalOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              disabled={roleBusy || !roleForm.name.trim() || (roleModalMode === 'create' && !roleForm.id.trim())}
+              onClick={() => void handleSaveRole()}
+            >
+              {roleBusy ? <Spinner /> : roleModalMode === 'create' ? 'Créer le rôle' : 'Enregistrer les modifications'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {roleError ? <Banner tone="error">{roleError}</Banner> : null}
+
+          {roleModalMode === 'create' ? (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">
+                Identifiant technique (Code unique sans espace)
+              </label>
+              <input
+                type="text"
+                value={roleForm.id}
+                placeholder="Ex: superviseur_scie, adjoint_magasin"
+                onChange={(e) => setRoleForm({ ...roleForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
+                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none"
+              />
+              <p className="mt-1 text-[11px] text-ink-faint">
+                Minuscules, chiffres et tirets uniquement. Non modifiable une fois créé.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Identifiant technique</label>
+              <input
+                type="text"
+                value={roleForm.id}
+                disabled
+                className="h-10 w-full rounded-btn border border-line bg-paper-2 px-3 font-mono text-sm text-ink-soft opacity-80"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Intitulé officiel du rôle</label>
+            <input
+              type="text"
+              value={roleForm.name}
+              placeholder="Ex: Responsable Menuiserie & Scierie"
+              onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Description des responsabilités (Optionnel)</label>
+            <textarea
+              rows={3}
+              value={roleForm.description}
+              placeholder="Décrivez brièvement les missions et responsabilités attachées à ce rôle…"
+              onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
+              className="w-full rounded-btn border border-line-strong bg-surface p-3 text-xs text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Confirmation suppression de rôle */}
+      <Modal
+        open={!!deleteRoleConfirm}
+        title={deleteRoleConfirm ? `Supprimer le rôle « ${deleteRoleConfirm.name} »` : 'Supprimer le rôle'}
+        onClose={() => setDeleteRoleConfirm(null)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeleteRoleConfirm(null)}>
+              Annuler
+            </Button>
+            <Button
+              variant="danger"
+              disabled={roleBusy}
+              onClick={() => deleteRoleConfirm && void handleDeleteRole(deleteRoleConfirm)}
+            >
+              {roleBusy ? <Spinner /> : 'Confirmer la suppression'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-ink">
+            Êtes-vous certain de vouloir supprimer définitivement le rôle applicatif{' '}
+            <strong className="text-red font-semibold">{deleteRoleConfirm?.name}</strong> (<code>{deleteRoleConfirm?.id}</code>) ?
+          </p>
+          <p className="text-xs text-ink-soft">
+            Cette action effacera également toutes les autorisations associées dans la matrice des permissions.
+          </p>
         </div>
       </Modal>
     </div>

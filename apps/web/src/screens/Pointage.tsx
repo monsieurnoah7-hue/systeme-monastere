@@ -109,7 +109,7 @@ function useStoredTerminal() {
   return { terminalId, save, clear };
 }
 
-function useCamera(active: boolean) {
+function useCamera(active: boolean, facingMode: 'user' | 'environment' = 'user') {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,7 +126,10 @@ function useCamera(active: boolean) {
       return;
     }
     media
-      .getUserMedia({ video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 960 } }, audio: false })
+      .getUserMedia({
+        video: { facingMode: { ideal: facingMode }, width: { ideal: 960 }, height: { ideal: 960 } },
+        audio: false,
+      })
       .then((stream) => {
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop());
@@ -158,7 +161,7 @@ function useCamera(active: boolean) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     };
-  }, [active]);
+  }, [active, facingMode]);
 
   return { videoRef, error, ready };
 }
@@ -178,7 +181,7 @@ function captureSquare(video: HTMLVideoElement): string | null {
 }
 
 function BadgeScanner({ onCode, onClose }: { onCode: (code: string) => void; onClose: () => void }) {
-  const { videoRef, error, ready } = useCamera(true);
+  const { videoRef, error, ready } = useCamera(true, 'environment');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -284,7 +287,7 @@ export function Pointage() {
   }, []);
 
   const captureActive = stage === 'capture';
-  const { videoRef, error: cameraError, ready } = useCamera(captureActive);
+  const { videoRef, error: cameraError, ready } = useCamera(captureActive, 'user');
 
   // Fetch data for Timesheets Tableur
   const loadTimesheets = useCallback(() => {
@@ -661,7 +664,6 @@ export function Pointage() {
                     <th className="sheet-th w-32 text-center">Durée travaillée</th>
                     <th className="sheet-th w-28 text-center">Tolérance / Écart</th>
                     <th className="sheet-th w-32 text-center">Statut</th>
-                    <th className="sheet-th w-24 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="text-xs divide-y divide-line">
@@ -734,26 +736,13 @@ export function Pointage() {
                             {isPresent ? 'Validé' : isLate ? 'Retard' : 'Non pointé'}
                           </span>
                         </td>
-
-                        {/* Quick Action */}
-                        <td className="sheet-cell text-center">
-                          <button
-                            onClick={() => {
-                              setActiveMainTab('kiosk');
-                              setStage('identify');
-                            }}
-                            className="rounded px-2 py-1 text-[11px] font-medium text-amber hover:bg-amber-wash"
-                          >
-                            Pointer
-                          </button>
-                        </td>
                       </tr>
                     );
                   })}
 
                   {filteredAttendance.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-xs text-ink-faint">
+                      <td colSpan={7} className="py-12 text-center text-xs text-ink-faint">
                         Aucun pointage ne correspond aux critères de filtre.
                       </td>
                     </tr>
@@ -827,15 +816,12 @@ export function Pointage() {
                     <span className="text-[10px] text-ink-faint block">Départ</span>
                     <span className="font-mono font-bold text-ink">{row.outAt ?? 'En poste'}</span>
                   </div>
-                  <button
-                    onClick={() => {
-                      setActiveMainTab('kiosk');
-                      setStage('identify');
-                    }}
-                    className="rounded-lg bg-amber-wash border border-amber/20 px-3 py-1.5 text-xs font-bold text-amber active:scale-95"
-                  >
-                    Pointer
-                  </button>
+                  <div className="text-right">
+                    <span className="text-[10px] text-ink-faint block">Tolérance</span>
+                    <span className={cx('font-mono font-bold', row.lateMinutes > 0 ? 'text-amber' : 'text-green')}>
+                      {row.lateMinutes > 0 ? `+${row.lateMinutes} min` : row.inAt ? 'À l’heure' : '—'}
+                    </span>
+                  </div>
                 </div>
               </Card>
             ))}

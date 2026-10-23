@@ -56,15 +56,47 @@ const STATUS_COLOR: Record<ToolStatusKey, string> = {
   reforme: '#71717a',
 };
 
-const TOOLTIP_STYLE: React.CSSProperties = {
-  border: '1px solid #222228',
-  borderRadius: 8,
-  boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-  background: '#141419',
-  fontSize: 12,
-  color: '#f4f4f6',
-  padding: '6px 10px',
-};
+function ChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: { value?: number; name?: string; color?: string }[];
+  label?: string;
+}) {
+  if (!active || !payload || !payload.length) return null;
+  const item = payload[0];
+  if (!item) return null;
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs shadow-xl">
+      <p className="font-semibold text-slate-300">{label ?? item.name}</p>
+      <p className="mt-0.5 font-mono text-sm font-bold text-white">
+        {item.value} <span className="text-xs font-normal text-slate-400">mouvements</span>
+      </p>
+    </div>
+  );
+}
+
+function DonutTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: { value?: number; name?: string }[];
+}) {
+  if (!active || !payload || !payload.length) return null;
+  const item = payload[0];
+  if (!item) return null;
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs shadow-xl">
+      <p className="font-semibold text-slate-300 capitalize">{item.name}</p>
+      <p className="mt-0.5 font-mono text-sm font-bold text-white">
+        {item.value} <span className="text-xs font-normal text-slate-400">outils</span>
+      </p>
+    </div>
+  );
+}
 
 /**
  * Live Punch Clock Hero Banner
@@ -176,7 +208,7 @@ function ToolsDonut({
                 />
               ))}
             </Pie>
-            <Tooltip cursor={false} contentStyle={TOOLTIP_STYLE} formatter={(value) => [String(value), 'Outils']} />
+            <Tooltip cursor={false} content={<DonutTooltip />} />
           </PieChart>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -638,9 +670,8 @@ export function Dashboard() {
                     tick={{ fontSize: 11, fill: '#6b7280' }}
                   />
                   <Tooltip
-                    cursor={{ fill: '#f3f4f6' }}
-                    contentStyle={TOOLTIP_STYLE}
-                    formatter={(value) => [String(value), 'Mouvements']}
+                    cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                    content={<ChartTooltip />}
                   />
                   <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48} isAnimationActive={false}>
                     {dailyMoves.map((bar) => (
