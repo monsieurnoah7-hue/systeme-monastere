@@ -35,7 +35,7 @@ export function CommandPalette({
     <CommandDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Menuiserie Mont Fèbè"
+      title="C.F.T. des Bénédictins du Mont Fébé"
       description="Rechercher une page ou une action"
       className="sm:max-w-lg"
     >

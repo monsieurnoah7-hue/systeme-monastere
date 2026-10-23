@@ -152,9 +152,7 @@ export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User |
     return (
       <div className="space-y-6">
         <PageHeader
-          eyebrow="Gouvernance C.F.T."
-          title={`Espace Exécutif · ${displayName || 'Direction'}`}
-          hint="Compte Super-Administrateur permanent du Monastère des Bénédictins"
+          title={`Espace Direction · ${displayName || 'Direction'}`}
         />
 
         <div className="rounded-xl border border-amber/30 bg-amber-wash/30 p-4">
@@ -349,8 +347,7 @@ export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User |
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Espace personnel du travailleur"
-        title={`Bonjour, ${employee.full_name}`}
+        title={`Espace Personnel · ${employee.full_name}`}
         hint={`Matricule ${employee.id} · ${employee.job_title}`}
       />
 

@@ -64,7 +64,7 @@ function ToolLabelCard({ tool, qrSrc }: { tool: Tool; qrSrc?: string }) {
         <div className="flex items-center gap-1.5">
           <img src="/logo.png" alt="Logo" className="h-4 object-contain" />
           <span className="text-[6pt] font-extrabold uppercase tracking-wider text-gray-900">
-            Monastère Mont Fèbè
+            C.F.T. Bénédictins Mont Fébé
           </span>
         </div>
         <span className="rounded bg-orange-100 px-1 py-0.2 text-[5pt] font-bold text-[#ff5500] uppercase tracking-wider">
@@ -129,10 +129,10 @@ function A4Sheet({ tools }: { tools: Tool[] }) {
       <div style={{ marginBottom: '6mm', borderBottom: '1px solid #d3cabd', paddingBottom: '3mm' }} className="flex items-center justify-between">
         <div>
           <p style={{ fontSize: '12pt', fontWeight: 700, color: '#ff6603', margin: 0 }}>
-            Menuiserie — Monastère du Mont Fèbè
+            C.F.T. des Bénédictins du Mont Fébé
           </p>
           <p style={{ fontSize: '8.5pt', color: '#5b5651', margin: '1mm 0 0' }}>
-            Planche d’étiquettes outillage & machines — {tools.length} référence(s) — format d’atelier avec découpe
+            Planche d’étiquettes outillage &amp; machines · {tools.length} référence(s) · format d’atelier avec découpe
           </p>
         </div>
         <img src="/logo.png" alt="Logo" style={{ height: '10mm', objectFit: 'contain' }} />
@@ -418,20 +418,12 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
 
   return (
     <div className="space-y-4 pb-12">
-      {/* Jibble Header Banner */}
+      {/* Header Banner */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-[12px] font-medium text-ink-faint">
-            <span>Atelier & Quincaillerie</span>
-            <span>/</span>
-            <span className="text-amber font-semibold">Parc Outils</span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink mt-0.5">
-            Gestion du Matériel & Outils
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
+            Outils &amp; Machines
           </h1>
-          <p className="text-xs text-ink-soft">
-            Traçabilité des emprunts, planches de QR codes et inventaire temps réel.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -474,7 +466,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         </div>
       </div>
 
-      {/* Jibble KPI Dashboard Cards */}
+      {/* KPI Dashboard Cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
           <div className="flex items-center justify-between">
@@ -532,7 +524,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         </div>
       </div>
 
-      {/* Jibble Filters & Search Bar */}
+      {/* Filters & Search Bar */}
       <div className="rounded-xl border border-line bg-surface p-3 shadow-xs space-y-3">
         <div className="grid gap-2.5 sm:grid-cols-[1fr_auto_auto_auto_auto]">
           <div className="relative min-w-44">
@@ -842,11 +834,11 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         </>
       )}
 
-      {/* Detail Drawer (Jibble Style) */}
+      {/* Detail Drawer */}
       <Drawer
         open={!!selectedId}
         onClose={() => setSelectedId(null)}
-        title={detail ? `${detail.tool.id} — ${detail.tool.name}` : 'Fiche outil'}
+        title={detail ? `${detail.tool.id} · ${detail.tool.name}` : 'Fiche outil'}
         subtitle={detail ? `${detail.tool.category} · ${detail.tool.magasin_name ?? detail.tool.location}` : undefined}
         wide
       >
@@ -871,7 +863,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
             ) : null}
 
             {detail.loan ? (
-              <Banner tone="info" title={`En prêt — ${detail.loan.full_name}`}>
+              <Banner tone="info" title={`En prêt · ${detail.loan.full_name}`}>
                 Sorti le {formatDateTime(detail.loan.out_at)} · {detail.loan.motive ?? 'motif non précisé'}
               </Banner>
             ) : null}
@@ -1047,7 +1039,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
       {/* Modal Prêt */}
       <Modal
         open={!!loanFor}
-        title={loanFor ? `Prêter : ${loanFor.id} — ${loanFor.name}` : 'Prêt'}
+        title={loanFor ? `Prêter : ${loanFor.id} · ${loanFor.name}` : 'Prêt'}
         onClose={() => setLoanFor(null)}
         footer={
           <>

@@ -53,7 +53,7 @@ const STATUS_CHIP: Record<string, { tone: 'green' | 'amber' | 'red' | 'blue' | '
 };
 
 /**
- * Jibble Time-off Calendar View Component
+ * Time-off Calendar View Component
  */
 function TimeOffCalendarView({
   leaves,
@@ -93,7 +93,7 @@ function TimeOffCalendarView({
 
   return (
     <div className="space-y-6">
-      {/* Pending Approvals Bar (Jibble Approvals) */}
+      {/* Pending Approvals Bar */}
       {leaves.filter((l) => l.status === 'pending').length > 0 && (
         <Card className="border-amber/30 bg-amber-wash/40 p-4 shadow-card">
           <div className="flex items-center justify-between mb-3">
@@ -663,9 +663,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Jibble Workforce"
-        title="Travailleurs &amp; Congés"
-        hint="Répertoire de l’équipe de menuiserie, badges de pointage et calendrier des absences."
+        title="Registre des Travailleurs"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -910,7 +908,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       </Tabs>
 
       {/* =========================================================================
-          DRAWER : FICHE DETAILLEE TRAVAILLEUR (JIBBLE PROFILE)
+          DRAWER : FICHE DETAILLEE TRAVAILLEUR
       ========================================================================= */}
       <Drawer
         open={!!detailFor}
@@ -1078,7 +1076,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       {/* Badge QR Modal */}
       <Modal
         open={!!badgeFor}
-        title={`Badge — ${badgeFor?.full_name ?? ''}`}
+        title={badgeFor ? `Badge · ${badgeFor.full_name}` : 'Badge'}
         onClose={() => setBadgeFor(null)}
         footer={
           <>
@@ -1226,15 +1224,15 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
       <div className="flex items-center gap-2 border-b border-gray-200 pb-1.5">
         <img
           src="/logo.png"
-          alt="Monastère Mont Fèbè"
+          alt="C.F.T. Bénédictins Mont Fébé"
           className={cx('object-contain shrink-0', isPreview ? 'h-8' : 'h-[7.5mm]')}
         />
         <div className="min-w-0 flex-1 leading-tight">
           <p className="text-[7pt] font-extrabold uppercase tracking-wider text-gray-950">
-            Monastère du Mont Fèbè
+            C.F.T. des Bénédictins du Mont Fébé
           </p>
           <p className="text-[5.5pt] font-bold tracking-wider text-[#ff5500] uppercase">
-            Formation Technique · Menuiserie
+            Centre de Formation Technique · Menuiserie
           </p>
         </div>
       </div>
@@ -1295,10 +1293,10 @@ function BadgeSheet({ employees }: { employees: Employee[] }) {
       <div style={{ marginBottom: '6mm', borderBottom: '1px solid #e5e7eb', paddingBottom: '3mm' }} className="flex items-center justify-between">
         <div>
           <p style={{ fontSize: '12pt', fontWeight: 700, color: '#ff6603', margin: 0 }}>
-            Menuiserie — Monastère du Mont Fèbè
+            C.F.T. des Bénédictins du Mont Fébé
           </p>
           <p style={{ fontSize: '8.5pt', color: '#6b7280', margin: '1mm 0 0' }}>
-            Planche de badges professionnels — {employees.length} carte(s) format ISO CR-80 (85,6 × 54 mm)
+            Planche de badges professionnels · {employees.length} carte(s) format ISO CR-80 (85,6 × 54 mm)
           </p>
         </div>
         <img src="/logo.png" alt="Logo" style={{ height: '10mm', objectFit: 'contain' }} />

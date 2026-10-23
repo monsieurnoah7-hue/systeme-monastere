@@ -112,7 +112,7 @@ function StockBinLabel({ refItem }: { refItem: StockRef }) {
             <img src="/logo.png" alt="Logo" className="h-8 object-contain" />
             <div>
               <p className="text-[8.5pt] font-extrabold uppercase tracking-wider text-gray-950">
-                Monastère du Mont Fèbè
+                C.F.T. des Bénédictins du Mont Fébé
               </p>
               <p className="text-[6.5pt] font-bold text-[#ff5500] uppercase tracking-wider">
                 Magasin & Gestion des Stocks
@@ -417,20 +417,12 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
 
   return (
     <div className="space-y-4 pb-12">
-      {/* Jibble Header Banner */}
+      {/* Header Banner */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-[12px] font-medium text-ink-faint">
-            <span>Atelier & Quincaillerie</span>
-            <span>/</span>
-            <span className="text-amber font-semibold">Stock & Approvisionnement</span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink mt-0.5">
-            Inventaire & Quincaillerie
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
+            Stock &amp; Matières
           </h1>
-          <p className="text-xs text-ink-soft">
-            Surveillance des seuils d'alerte, traçabilité des consommations et sorties chantier.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -474,7 +466,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
         </div>
       </div>
 
-      {/* Jibble KPI Dashboard Cards */}
+      {/* KPI Dashboard Cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
           <div className="flex items-center justify-between">
@@ -521,7 +513,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
         </div>
       </div>
 
-      {/* Jibble Main Tabs (Inventaire / Journal) */}
+      {/* Main Tabs (Inventaire / Journal) */}
       <div className="flex items-center gap-1 border-b border-line">
         <button
           onClick={() => setActiveTab('inventory')}

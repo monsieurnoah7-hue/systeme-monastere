@@ -67,9 +67,9 @@ const TOOLTIP_STYLE: React.CSSProperties = {
 };
 
 /**
- * Jibble Live Punch Clock Hero Banner
+ * Live Punch Clock Hero Banner
  */
-function JibbleLiveTrackerHero({
+function LiveTrackerHero({
   presentCount,
   totalTeam,
   onOpenPointage,
@@ -100,14 +100,14 @@ function JibbleLiveTrackerHero({
             <div className="flex items-center gap-2 text-xs font-semibold text-ink-soft">
               <span className="flex h-2 w-2 rounded-full bg-green animate-pulse" />
               <span className="capitalize">{dateStr}</span>
-              <span>•</span>
+              <span>·</span>
               <span className="text-amber">Suivi en direct</span>
             </div>
             <div className="mt-1 font-mono text-3xl font-extrabold tracking-tight text-ink tabular-nums">
               {timeStr}
             </div>
             <p className="mt-0.5 text-xs text-ink-faint">
-              Menuiserie Monastère du Mont Fèbè • Atelier Central
+              C.F.T. des Bénédictins du Mont Fébé · Atelier Central
             </p>
           </div>
         </div>
@@ -247,7 +247,7 @@ function KpiCard({
 }
 
 /**
- * Jibble "Who's In" Widget
+ * Widget Présences Équipe
  */
 function WhosInWidget({
   details,
@@ -269,12 +269,12 @@ function WhosInWidget({
       <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-sm font-bold text-ink">
-            <Users size={16} className="text-amber" /> Qui est présent en atelier ? (Who’s in)
+            <Users size={16} className="text-amber" /> Présences en atelier
           </h2>
           <p className="text-xs text-ink-faint">Suivi en direct des entrées et départs de l’équipe.</p>
         </div>
 
-        {/* Jibble Segmented Filter Pills */}
+        {/* Segmented Filter Pills */}
         <div className="flex items-center rounded-lg bg-paper-2 p-1 text-xs">
           <button
             onClick={() => setFilter('all')}
@@ -452,7 +452,7 @@ export function Dashboard() {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-24 text-sm text-ink-soft">
         <Spinner className="h-6 w-6 text-amber" />
-        <p className="font-medium">Chargement du tableau de bord Jibble…</p>
+        <p className="font-medium">Chargement du tableau de bord…</p>
       </div>
     );
   }
@@ -492,8 +492,8 @@ export function Dashboard() {
         </div>
       ) : null}
 
-      {/* Jibble Live Punch Clock Hero Banner */}
-      <JibbleLiveTrackerHero
+      {/* Live Punch Clock Hero Banner */}
+      <LiveTrackerHero
         presentCount={das04?.present ?? 0}
         totalTeam={das04 ? (das04.present + das04.absent + das04.late + das04.conge + das04.permission) : 0}
         onOpenPointage={() => setDrawer({ kind: 'attendance' })}
@@ -540,7 +540,7 @@ export function Dashboard() {
         />
       </section>
 
-      {/* Main Grid: Who's in (Jibble) & Analytics */}
+      {/* Main Grid: Présences & Analytics */}
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)]">
         {/* Left Column: Who's in Live Feed */}
         <div className="flex flex-col gap-6 min-w-0">

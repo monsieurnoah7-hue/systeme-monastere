@@ -609,9 +609,7 @@ function AdminSettings({ user }: { user: User }) {
     <div className="space-y-6">
       {/* Top Header */}
       <PageHeader
-        eyebrow="Console d’administration"
         title="Paramètres"
-        hint="Contrôle d’accès, gestion des rôles RBAC, règles de pointage et sauvegardes cloud."
         actions={
           <Button
             variant="ghost"
@@ -1783,7 +1781,7 @@ function AdminSettings({ user }: { user: User }) {
       {/* Modal: Réinitialiser mot de passe utilisateur */}
       <Modal
         open={!!resetFor}
-        title={`Réinitialiser le mot de passe — @${resetFor?.login ?? ''}`}
+        title={resetFor ? `Réinitialiser le mot de passe · @${resetFor.login}` : 'Réinitialiser le mot de passe'}
         onClose={() => setResetFor(null)}
         footer={
           <>

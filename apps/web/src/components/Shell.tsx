@@ -83,7 +83,7 @@ function NavButton({
 }
 
 /**
- * Widget Jibble Live Clock Tracker
+ * Widget Live Clock Tracker
  */
 function LiveClockWidget({ onTrack, isDirection }: { onTrack: () => void; isDirection: boolean }) {
   const [time, setTime] = useState(new Date());
@@ -164,7 +164,7 @@ export function Shell({
     <TooltipProvider delayDuration={200}>
       <div className="flex h-full min-h-0 bg-paper">
         {/* =========================================================================
-            DESKTOP SIDEBAR (JIBBLE WHITE STYLE)
+            DESKTOP SIDEBAR
         ========================================================================= */}
         <aside className="no-print hidden w-64 shrink-0 flex-col border-r border-line bg-surface lg:flex">
           {/* Logo Brand Header */}
@@ -174,12 +174,9 @@ export function Shell({
             </div>
             <div className="leading-tight min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-bold tracking-tight text-ink truncate">Menuiserie</span>
-                <span className="rounded bg-amber-wash border border-amber/20 px-1.5 py-0.2 text-[10px] font-bold text-amber uppercase">
-                  C.F.T.
-                </span>
+                <span className="text-sm font-bold tracking-tight text-ink truncate">C.F.T. Menuiserie</span>
               </div>
-              <p className="text-[11px] text-ink-faint truncate">Bénédictins Mont Fébé</p>
+              <p className="text-[10px] text-ink-faint truncate font-medium">Bénédictins du Mont Fébé</p>
             </div>
           </div>
 
@@ -258,7 +255,7 @@ export function Shell({
                 <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-5 w-5 object-contain" />
               </div>
               <div className="leading-tight">
-                <span className="text-xs font-bold text-ink">Menuiserie Fèbè</span>
+                <span className="text-xs font-bold text-ink">C.F.T. Bénédictins Mont Fébé</span>
                 <span className="block text-[10px] text-ink-soft">{ROLE_LABEL[user.role]}</span>
               </div>
             </div>
@@ -336,7 +333,7 @@ export function Shell({
           </main>
 
           {/* =========================================================================
-              MOBILE BOTTOM NAVIGATION BAR (JIBBLE PUNCH ACTION STYLE)
+              MOBILE BOTTOM NAVIGATION BAR
           ========================================================================= */}
           <nav className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/98 shadow-pop backdrop-blur lg:hidden pb-[env(safe-area-inset-bottom)]">
             <div className="relative mx-auto flex max-w-md items-center justify-around px-2 h-16">

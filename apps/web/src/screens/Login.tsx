@@ -43,7 +43,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
             <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-11 w-11 object-contain" />
           </div>
           <h2 className="text-sm font-bold tracking-tight text-white uppercase">
-            Monastère des Bénédictins du Mont Fèbè
+            C.F.T. des Bénédictins du Mont Fébé
           </h2>
           <p className="mt-0.5 text-xs text-amber font-semibold tracking-wide">
             Centre de Formation Technique · Menuiserie

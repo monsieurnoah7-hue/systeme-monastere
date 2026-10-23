@@ -54,9 +54,9 @@ function PunchReceipt({ result }: { result: PunchResult }) {
     >
       <div style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '2mm', marginBottom: '3mm' }} className="flex items-center justify-between">
         <div>
-          <p style={{ fontSize: '10pt', fontWeight: 700, margin: 0, color: '#ff6603' }}>Menuiserie du Mont Fèbè</p>
+          <p style={{ fontSize: '10pt', fontWeight: 700, margin: 0, color: '#ff6603' }}>C.F.T. des Bénédictins du Mont Fébé</p>
           <p style={{ fontSize: '7pt', color: '#6b7280', margin: '0.5mm 0 0' }}>
-            Ticket de pointage — {PUNCH_LABEL[result.punchType]}
+            Ticket de pointage · {PUNCH_LABEL[result.punchType]}
           </p>
         </div>
         <img src="/logo.png" alt="Logo" style={{ height: '7mm', objectFit: 'contain' }} />
@@ -246,7 +246,7 @@ const MAX_CODE_LENGTH = 10;
 
 
 /**
- * COMPOSANT PRINCIPAL POINTAGE (JIBBLE CLONE + TABLEUR GOOGLE SHEETS)
+ * COMPOSANT PRINCIPAL POINTAGE
  */
 export function Pointage() {
   const [activeMainTab, setActiveMainTab] = useState<'timesheets' | 'kiosk'>('timesheets');
@@ -421,15 +421,9 @@ export function Pointage() {
   return (
     <div className="space-y-6">
       {/* Top Header with Tab Switcher */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-amber">
-            Jibble Timesheets &amp; Approvals
-          </span>
-          <h1 className="text-2xl font-extrabold text-ink tracking-tight">Pointage &amp; Feuilles de temps</h1>
-          <p className="text-xs text-ink-soft">
-            Tableur de pointage en direct et mode borne d’atelier pour tablettes et smartphones.
-          </p>
+          <h1 className="text-xl sm:text-2xl font-bold text-ink tracking-tight">Pointage</h1>
         </div>
 
         {/* Mode Toggle Switcher */}
@@ -444,7 +438,7 @@ export function Pointage() {
             )}
           >
             <FileSpreadsheet size={15} />
-            <span>Feuilles de temps</span>
+            <span>Présences</span>
           </button>
           <button
             onClick={() => setActiveMainTab('kiosk')}
@@ -456,13 +450,13 @@ export function Pointage() {
             )}
           >
             <Smartphone size={15} />
-            <span>Mode Borne Kiosque</span>
+            <span>Borne Kiosque</span>
           </button>
         </div>
       </div>
 
       {/* =========================================================================
-          MODE 1 : JIBBLE TIMESHEETS OVERVIEW (TABLEUR GOOGLE SHEETS STYLE)
+          MODE 1 : FEUILLES DE PRÉSENCE (VUE TABLEUR)
       ========================================================================= */}
       {activeMainTab === 'timesheets' ? (
         <div className="space-y-5">
@@ -906,7 +900,7 @@ export function Pointage() {
                   </div>
                   <div>
                     <h2 className="text-lg font-bold text-ink leading-tight">Identification Ouvrier</h2>
-                    <p className="text-xs text-ink-soft">Menuiserie du Monastère Mont Fèbè</p>
+                    <p className="text-xs text-ink-soft">C.F.T. des Bénédictins du Mont Fébé</p>
                   </div>
                 </div>
                 <Button variant="quiet" size="sm" onClick={clear}>
@@ -914,7 +908,7 @@ export function Pointage() {
                 </Button>
               </div>
 
-              {/* Jibble Giant Clock Screen */}
+              {/* Horloge Kiosque */}
               <div className="rounded-2xl bg-charcoal px-5 py-5 text-center text-white shadow-card border border-line">
                 <p className="font-mono text-4xl font-extrabold tracking-tight text-amber tabular-nums">
                   {now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}

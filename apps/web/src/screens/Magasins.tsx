@@ -99,9 +99,7 @@ export function Magasins({ user, scan }: { user: { role: string }; scan?: ScanRe
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Inventaire"
-        title="Magasins"
-        hint="Magasins, ateliers et quincaillerie : rattachement des outils et du stock"
+        title="Magasins &amp; Dépôts"
         actions={
           canManage ? (
             <Button variant="primary" icon={<IconPlus size={16} />} onClick={openNew}>Nouveau magasin</Button>

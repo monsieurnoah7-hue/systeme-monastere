@@ -1,7 +1,7 @@
 {
-  "name": "Menuiserie du Mont Fèbè",
-  "short_name": "Menuiserie",
-  "description": "Gestion des outils, des stocks, des prêts et des présences de l’atelier de menuiserie.",
+  "name": "C.F.T. des Bénédictins du Mont Fébé",
+  "short_name": "C.F.T. Menuiserie",
+  "description": "Système de gestion du C.F.T. (Centre de Formation Technique) des Bénédictins du Mont Fébé.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

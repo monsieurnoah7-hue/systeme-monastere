@@ -172,7 +172,7 @@ export function exportToPdf(
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>${title} - C.F.T. Monastère Mont Fébé</title>
+  <title>${title} · C.F.T. des Bénédictins du Mont Fébé</title>
   <style>
     @page { size: A4 landscape; margin: 12mm 15mm; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 16px; }
