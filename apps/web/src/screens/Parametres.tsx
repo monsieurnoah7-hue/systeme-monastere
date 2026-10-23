@@ -170,7 +170,18 @@ function AdminSettings({ user }: { user: User }) {
   const toast = useToast();
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'comptes' | 'permissions' | 'kiosk' | 'securite' | 'sauvegardes'>('comptes');
+  const [activeTab, setActiveTab] = useState<'comptes' | 'permissions' | 'kiosk' | 'securite' | 'sauvegardes'>(() => {
+    try {
+      const saved = sessionStorage.getItem('parametres_active_tab');
+      if (saved && ['comptes', 'permissions', 'kiosk', 'securite', 'sauvegardes'].includes(saved)) {
+        sessionStorage.removeItem('parametres_active_tab');
+        return saved as 'comptes' | 'permissions' | 'kiosk' | 'securite' | 'sauvegardes';
+      }
+    } catch {
+      /* ignore storage error */
+    }
+    return 'comptes';
+  });
 
   // Core data states
   const [settings, setSettings] = useState<KioskSettings | null>(null);

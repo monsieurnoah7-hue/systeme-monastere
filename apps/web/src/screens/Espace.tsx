@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError, type Catalog, type MyOverview, type ScanResult, type User } from '../lib/api';
+import type { ViewId } from '../components/Shell';
 import {
   Button,
   Card,
@@ -48,7 +49,15 @@ const LOAN_COND_LABEL: Record<string, string> = {
   hors_service: 'Hors service',
 };
 
-export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User | null }) {
+export function Espace({
+  scan,
+  user,
+  onNavigate,
+}: {
+  scan?: ScanResult | null;
+  user?: User | null;
+  onNavigate?: (view: ViewId) => void;
+}) {
   const [overview, setOverview] = useState<MyOverview | null>(null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [loading, setLoading] = useState(true);
@@ -238,7 +247,7 @@ export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User |
             <p className="text-xs text-ink-soft">Accès direct aux modules de configuration maîtres</p>
 
             <div className="mt-4 space-y-3">
-              <div className="rounded-xl border border-line bg-surface p-3.5 flex items-center justify-between">
+              <div className="rounded-xl border border-line bg-surface p-3.5 flex items-center justify-between hover:border-amber/40 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="grid h-9 w-9 place-items-center rounded-lg bg-amber-wash text-amber">
                     <KeyRound size={18} />
@@ -248,20 +257,24 @@ export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User |
                     <p className="text-[11px] text-ink-soft">Créer des rôles sur-mesure et allouer les privilèges</p>
                   </div>
                 </div>
-                <a
-                  href="#parametres"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    window.location.hash = 'parametres';
-                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'parametres' }));
+                <button
+                  type="button"
+                  onClick={() => {
+                    sessionStorage.setItem('parametres_active_tab', 'permissions');
+                    if (onNavigate) {
+                      onNavigate('parametres');
+                    } else {
+                      window.location.hash = 'parametres';
+                      window.dispatchEvent(new CustomEvent('nav-view', { detail: 'parametres' }));
+                    }
                   }}
-                  className="rounded-lg bg-paper-2 hover:bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink flex items-center gap-1.5"
+                  className="rounded-lg bg-paper-2 hover:bg-amber-wash hover:text-amber active:scale-95 transition-all px-3 py-1.5 text-xs font-semibold text-ink flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   Gérer <ExternalLink size={12} />
-                </a>
+                </button>
               </div>
 
-              <div className="rounded-xl border border-line bg-surface p-3.5 flex items-center justify-between">
+              <div className="rounded-xl border border-line bg-surface p-3.5 flex items-center justify-between hover:border-blue/40 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="grid h-9 w-9 place-items-center rounded-lg bg-blue-wash text-blue">
                     <Warehouse size={18} />
@@ -271,20 +284,23 @@ export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User |
                     <p className="text-[11px] text-ink-soft">Créer les magasins et allouer les outils de chaque pôle</p>
                   </div>
                 </div>
-                <a
-                  href="#magasins"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    window.location.hash = 'magasins';
-                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'magasins' }));
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onNavigate) {
+                      onNavigate('magasins');
+                    } else {
+                      window.location.hash = 'magasins';
+                      window.dispatchEvent(new CustomEvent('nav-view', { detail: 'magasins' }));
+                    }
                   }}
-                  className="rounded-lg bg-paper-2 hover:bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink flex items-center gap-1.5"
+                  className="rounded-lg bg-paper-2 hover:bg-blue-wash hover:text-blue active:scale-95 transition-all px-3 py-1.5 text-xs font-semibold text-ink flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   Voir <ExternalLink size={12} />
-                </a>
+                </button>
               </div>
 
-              <div className="rounded-xl border border-line bg-surface p-3.5 flex items-center justify-between">
+              <div className="rounded-xl border border-line bg-surface p-3.5 flex items-center justify-between hover:border-green/40 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="grid h-9 w-9 place-items-center rounded-lg bg-green-wash text-green">
                     <Users size={18} />
@@ -294,17 +310,20 @@ export function Espace({ scan, user }: { scan?: ScanResult | null; user?: User |
                     <p className="text-[11px] text-ink-soft">Assigner les responsabilités aux collaborateurs</p>
                   </div>
                 </div>
-                <a
-                  href="#employes"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    window.location.hash = 'employes';
-                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'employes' }));
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onNavigate) {
+                      onNavigate('employes');
+                    } else {
+                      window.location.hash = 'employes';
+                      window.dispatchEvent(new CustomEvent('nav-view', { detail: 'employes' }));
+                    }
                   }}
-                  className="rounded-lg bg-paper-2 hover:bg-paper px-2.5 py-1.5 text-xs font-semibold text-ink flex items-center gap-1.5"
+                  className="rounded-lg bg-paper-2 hover:bg-green-wash hover:text-green active:scale-95 transition-all px-3 py-1.5 text-xs font-semibold text-ink flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   Équipe <ExternalLink size={12} />
-                </a>
+                </button>
               </div>
             </div>
           </Card>

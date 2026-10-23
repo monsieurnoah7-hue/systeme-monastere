@@ -97,6 +97,28 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     return () => window.clearTimeout(t);
   }, [scanMessage, toast]);
 
+  // Global view navigation listener (custom events & hash navigation)
+  useEffect(() => {
+    const handleNav = (e: Event) => {
+      const targetView = (e as CustomEvent<ViewId>).detail;
+      if (targetView && allowed.includes(targetView)) {
+        setView(targetView);
+      }
+    };
+    const handleHash = () => {
+      const raw = window.location.hash.replace(/^#/, '') as ViewId;
+      if (raw && allowed.includes(raw)) {
+        setView(raw);
+      }
+    };
+    window.addEventListener('nav-view', handleNav as EventListener);
+    window.addEventListener('hashchange', handleHash);
+    return () => {
+      window.removeEventListener('nav-view', handleNav as EventListener);
+      window.removeEventListener('hashchange', handleHash);
+    };
+  }, [allowed]);
+
   const activeView: ViewId | null = allowed.includes(view) ? view : (allowed[0] ?? null);
   const canScan = activeView !== null && activeView !== 'pointage';
 
@@ -130,7 +152,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
                 stock: <Stock user={user} scan={scan} />,
                 employes: <Employees user={user} scan={scan} />,
                 magasins: <Magasins user={user} scan={scan} />,
-                espace: <Espace scan={scan} user={user} />,
+                espace: <Espace scan={scan} user={user} onNavigate={setView} />,
                 parametres: <Parametres user={user} />,
               }[activeView]
             }
