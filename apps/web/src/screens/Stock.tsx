@@ -27,6 +27,8 @@ import {
   IconRefresh,
   IconSearch,
 } from '../components/Icons';
+import { Download, Printer } from 'lucide-react';
+import { exportToExcel, exportToPdf } from '../lib/export';
 import { usePrintSheet } from '../lib/print';
 
 type RefForm = {
@@ -371,6 +373,48 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
     }
   }
 
+  function handleExportExcel() {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const headers = ['Code', 'Désignation', 'Catégorie', 'Magasin / Dépôt', 'Quantité', 'Unité', 'Seuil Alerte', 'Statut Stock'];
+    const rows = filtered.map((r) => [
+      r.id,
+      r.name,
+      r.category,
+      r.magasin_name ?? r.location ?? '-',
+      r.qty,
+      r.unit,
+      r.min_qty,
+      r.qty === 0 ? 'Rupture' : r.qty <= r.min_qty ? 'Alerte Seuil' : 'Normal',
+    ]);
+    exportToExcel(`Inventaire_Stock_${dateStr}`, 'Stock', headers, rows);
+  }
+
+  function handleExportPdf() {
+    const headers = ['Code', 'Désignation', 'Catégorie', 'Dépôt', 'Quantité', 'Unité', 'Seuil', 'État'];
+    const rows = filtered.map((r) => [
+      r.id,
+      r.name,
+      r.category,
+      r.magasin_name ?? r.location ?? '-',
+      r.qty,
+      r.unit,
+      r.min_qty,
+      r.qty === 0 ? 'Rupture' : r.qty <= r.min_qty ? 'Alerte' : 'Normal',
+    ]);
+    exportToPdf(
+      'État d’Inventaire & Stocks de Quincaillerie',
+      'Registre physique certifié du stock et consommables de menuiserie C.F.T.',
+      headers,
+      rows,
+      [
+        { label: 'Références Totales', value: stats.total },
+        { label: 'Stock Normal', value: stats.normal },
+        { label: 'Sous Seuil Alerte', value: stats.warning },
+        { label: 'En Rupture', value: stats.empty },
+      ],
+    );
+  }
+
   return (
     <div className="space-y-4 pb-12">
       {/* Jibble Header Banner */}
@@ -392,6 +436,12 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" icon={<IconRefresh size={16} />} onClick={refresh}>
             Actualiser
+          </Button>
+          <Button size="sm" variant="secondary" icon={<Download size={14} />} onClick={handleExportExcel}>
+            Excel
+          </Button>
+          <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={handleExportPdf}>
+            Imprimer
           </Button>
           {canMove ? (
             <Button

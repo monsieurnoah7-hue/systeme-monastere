@@ -36,12 +36,12 @@ const ALL_STAFF: Role[] = ['direction', 'magasinier', 'chef_atelier'];
 
 export const NAV: NavItem[] = [
   { id: 'dashboard', label: 'Tableau de bord', short: 'Bord', icon: Gauge, roles: ALL_STAFF },
-  { id: 'pointage', label: 'Pointage & Feuilles', short: 'Pointage', icon: Clock, roles: ALL_STAFF },
-  { id: 'employes', label: 'Travailleurs & Congés', short: 'Équipe', icon: Users, roles: ['direction', 'magasinier', 'chef_atelier'] },
-  { id: 'outils', label: 'Outils & QR', short: 'Outils', icon: Wrench, roles: ALL_STAFF },
-  { id: 'stock', label: 'Stock & Matières', short: 'Stock', icon: Package, roles: ALL_STAFF },
-  { id: 'magasins', label: 'Magasins & Dépôts', short: 'Magasin', icon: Warehouse, roles: ALL_STAFF },
-  { id: 'espace', label: 'Mon espace', short: 'Espace', icon: UserIcon, roles: ['direction', 'magasinier', 'chef_atelier', 'travailleur'] },
+  { id: 'pointage', label: 'Pointage', short: 'Pointage', icon: Clock, roles: ALL_STAFF },
+  { id: 'employes', label: 'Travailleurs', short: 'Équipe', icon: Users, roles: ['direction', 'magasinier', 'chef_atelier'] },
+  { id: 'outils', label: 'Outils', short: 'Outils', icon: Wrench, roles: ALL_STAFF },
+  { id: 'stock', label: 'Stock', short: 'Stock', icon: Package, roles: ALL_STAFF },
+  { id: 'magasins', label: 'Magasins', short: 'Magasins', icon: Warehouse, roles: ALL_STAFF },
+  { id: 'espace', label: 'Mon Espace', short: 'Espace', icon: UserIcon, roles: ['direction', 'magasinier', 'chef_atelier', 'travailleur'] },
   { id: 'parametres', label: 'Paramètres', short: 'Réglages', icon: Settings, roles: ['direction'] },
 ];
 
@@ -85,7 +85,7 @@ function NavButton({
 /**
  * Widget Jibble Live Clock Tracker
  */
-function LiveClockWidget({ onTrack }: { onTrack: () => void }) {
+function LiveClockWidget({ onTrack, isDirection }: { onTrack: () => void; isDirection: boolean }) {
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -110,13 +110,19 @@ function LiveClockWidget({ onTrack }: { onTrack: () => void }) {
         {timeStr}
       </div>
 
-      <button
-        onClick={onTrack}
-        className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg bg-amber px-3 py-2 text-xs font-semibold text-white shadow-xs transition-all hover:bg-amber-2 active:scale-[0.98]"
-      >
-        <Fingerprint size={15} />
-        Pointer maintenant
-      </button>
+      {!isDirection ? (
+        <button
+          onClick={onTrack}
+          className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg bg-amber px-3 py-2 text-xs font-semibold text-white shadow-xs transition-all hover:bg-amber-2 active:scale-[0.98]"
+        >
+          <Fingerprint size={15} />
+          Pointer maintenant
+        </button>
+      ) : (
+        <div className="mt-2 text-center text-[11px] font-medium text-ink-faint">
+          Super-Admin · Gouvernance C.F.T.
+        </div>
+      )}
     </div>
   );
 }
@@ -170,15 +176,15 @@ export function Shell({
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-bold tracking-tight text-ink truncate">Menuiserie</span>
                 <span className="rounded bg-amber-wash border border-amber/20 px-1.5 py-0.2 text-[10px] font-bold text-amber uppercase">
-                  Fèbè
+                  C.F.T.
                 </span>
               </div>
-              <p className="text-[11px] text-ink-faint truncate">Monastère Bénédictin</p>
+              <p className="text-[11px] text-ink-faint truncate">Bénédictins Mont Fébé</p>
             </div>
           </div>
 
           {/* Quick Punch Tracker Widget */}
-          <LiveClockWidget onTrack={() => onView('pointage')} />
+          <LiveClockWidget onTrack={() => onView('pointage')} isDirection={user.role === 'direction'} />
 
           {/* Search Trigger */}
           <div className="px-3 py-1">

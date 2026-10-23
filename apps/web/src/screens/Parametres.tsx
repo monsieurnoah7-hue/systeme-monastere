@@ -51,9 +51,17 @@ import {
 
 const WEEKDAYS_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Lundi -> Dimanche
 
-const ROLE_ORDER: Record<Role, number> = { direction: 0, magasinier: 1, chef_atelier: 2, travailleur: 3 };
+const ROLE_ORDER: Record<string, number> = { direction: 0, magasinier: 1, chef_atelier: 2, travailleur: 3 };
 
-const ROLE_THEME: Record<Role, { badgeVariant: 'default' | 'secondary' | 'outline'; tone: 'blue' | 'amber' | 'green' | 'neutral'; bg: string; text: string; border: string }> = {
+const DEFAULT_ROLE_THEME = {
+  badgeVariant: 'outline' as const,
+  tone: 'neutral' as const,
+  bg: 'bg-surface-2 text-ink-soft border-line',
+  text: 'text-ink-soft',
+  border: 'border-line',
+};
+
+const ROLE_THEME: Record<string, { badgeVariant: 'default' | 'secondary' | 'outline'; tone: 'blue' | 'amber' | 'green' | 'neutral'; bg: string; text: string; border: string }> = {
   direction: {
     badgeVariant: 'default',
     tone: 'blue',
@@ -550,7 +558,9 @@ function AdminSettings({ user }: { user: User }) {
   const sortedUsers = useMemo(
     () =>
       [...users].sort(
-        (a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || a.display_name.localeCompare(b.display_name, 'fr'),
+        (a, b) =>
+          (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99) ||
+          a.display_name.localeCompare(b.display_name, 'fr'),
       ),
     [users],
   );
@@ -788,7 +798,7 @@ function AdminSettings({ user }: { user: User }) {
               <ul className="divide-y divide-line">
                 {filteredUsers.map((account) => {
                   const employee = account.employee_id ? employeesById.get(account.employee_id) : undefined;
-                  const theme = ROLE_THEME[account.role];
+                  const theme = ROLE_THEME[account.role] ?? DEFAULT_ROLE_THEME;
                   return (
                     <li
                       key={account.id}
@@ -957,10 +967,10 @@ function AdminSettings({ user }: { user: User }) {
                                 <span
                                   className={cx(
                                     'inline-flex items-center rounded-chip border px-2 py-0.5 text-[11px] font-semibold',
-                                    ROLE_THEME[role].bg,
+                                    (ROLE_THEME[role] ?? DEFAULT_ROLE_THEME).bg,
                                   )}
                                 >
-                                  {ROLE_LABEL[role]}
+                                  {ROLE_LABEL[role] ?? role}
                                 </span>
                               </th>
                             ))}

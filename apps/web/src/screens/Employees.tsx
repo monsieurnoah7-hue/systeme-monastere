@@ -22,6 +22,7 @@ import { DataTable, type DataTableColumn } from '../components/DataTable';
 import {
   Calendar as CalendarIcon,
   Clock,
+  Download,
   Plus,
   Printer,
   RefreshCw,
@@ -31,6 +32,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { exportToExcel, exportToPdf } from '../lib/export';
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'Tous' },
@@ -602,6 +604,62 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     }
   }
 
+  function handleExportExcel() {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Badge QR', 'Statut Aujourd’hui', 'Compte Actif'];
+    const rows = filtered.map((e) => {
+      const s = statusMap.get(e.id);
+      return [
+        e.id,
+        e.full_name,
+        e.job_title,
+        e.badge_token ?? '-',
+        s
+          ? `${STATUS_CHIP[s.status]?.label ?? s.status}${s.status === 'late' && s.lateMinutes > 0 ? ` (+${s.lateMinutes}m)` : ''}`
+          : 'Non pointé',
+        e.active ? 'Oui' : 'Non',
+      ];
+    });
+    exportToExcel(`Registre_Personnel_${dateStr}`, 'Personnel', headers, rows);
+  }
+
+  function handleExportPdf() {
+    const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Badge QR', 'Statut Jour', 'Actif'];
+    const rows = filtered.map((e) => {
+      const s = statusMap.get(e.id);
+      return [
+        e.id,
+        e.full_name,
+        e.job_title,
+        e.badge_token ?? '-',
+        s
+          ? `${STATUS_CHIP[s.status]?.label ?? s.status}${s.status === 'late' && s.lateMinutes > 0 ? ` (+${s.lateMinutes}m)` : ''}`
+          : 'Non pointé',
+        e.active ? 'Actif' : 'Inactif',
+      ];
+    });
+    exportToPdf(
+      'Registre du Personnel & Effectifs de Menuiserie',
+      'Liste officielle des maîtres-artisans, compagnons et apprentis du Centre de Formation Technique',
+      headers,
+      rows,
+      [
+        { label: 'Effectif Total', value: employees.length },
+        { label: 'Ouvriers Actifs', value: employees.filter((e) => e.active).length },
+        {
+          label: 'En Poste Aujourd’hui',
+          value: todayStatus.filter((s) => s.status === 'present' || s.status === 'late').length,
+        },
+        {
+          label: 'En Congé / Absence',
+          value: todayStatus.filter(
+            (s) => s.status === 'conge' || s.status === 'permission' || s.status === 'absent',
+          ).length,
+        },
+      ],
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -617,6 +675,22 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
               onClick={() => setReload((value) => value + 1)}
             >
               Actualiser
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Download size={14} />}
+              onClick={handleExportExcel}
+            >
+              Excel
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Printer size={14} />}
+              onClick={handleExportPdf}
+            >
+              Imprimer
             </Button>
             <Button size="sm" onClick={openLeave} icon={<CalendarIcon size={14} />}>
               Congé / Permission

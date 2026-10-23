@@ -15,13 +15,13 @@ const createBody = z.object({
   login: z.string().min(3).max(32).regex(/^[a-z0-9._-]+$/, 'Identifiant : lettres minuscules, chiffres, point, tiret.'),
   password: z.string().min(6),
   display_name: z.string().min(2),
-  role: z.enum(ROLES),
+  role: z.string().min(2),
   employee_id: z.string().optional(),
 });
 
 const patchBody = z.object({
   display_name: z.string().min(2).optional(),
-  role: z.enum(ROLES).optional(),
+  role: z.string().min(2).optional(),
   active: z.boolean().optional(),
   password: z.string().min(6).optional(),
   employee_id: z.string().nullable().optional(),
@@ -57,6 +57,9 @@ usersRoutes.post('/', requirePerm('users.manage'), async (c) => {
 
   const existing = await db.one('SELECT id FROM users WHERE login = $1', [data.login]);
   if (existing) return c.json({ error: `L’identifiant « ${data.login} » est déjà utilisé.` }, 409);
+
+  const roleExists = await db.one('SELECT id FROM roles WHERE id = $1', [data.role]);
+  if (!roleExists) return c.json({ error: `Le rôle « ${data.role} » n’existe pas.` }, 400);
 
   if (data.employee_id) {
     const employee = await db.one('SELECT id FROM employees WHERE id = $1', [data.employee_id]);
@@ -94,6 +97,11 @@ usersRoutes.patch('/:id', requirePerm('users.manage'), async (c) => {
 
   if (patch.active === false && before.id === actorId(c)) {
     return c.json({ error: 'Vous ne pouvez pas désactiver votre propre compte.' }, 409);
+  }
+
+  if (patch.role) {
+    const roleExists = await db.one('SELECT id FROM roles WHERE id = $1', [patch.role]);
+    if (!roleExists) return c.json({ error: `Le rôle « ${patch.role} » n’existe pas.` }, 400);
   }
 
   if (patch.employee_id) {

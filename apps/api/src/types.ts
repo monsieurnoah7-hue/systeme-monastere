@@ -1,5 +1,6 @@
-export const ROLES = ['direction', 'magasinier', 'chef_atelier', 'travailleur'] as const;
-export type Role = (typeof ROLES)[number];
+export const DEFAULT_ROLES = ['direction', 'magasinier', 'chef_atelier', 'travailleur'] as const;
+export const ROLES = DEFAULT_ROLES;
+export type Role = string;
 
 export const TOOL_STATUSES = ['disponible', 'en_pret', 'maintenance', 'manquant', 'reforme'] as const;
 export type ToolStatus = (typeof TOOL_STATUSES)[number];

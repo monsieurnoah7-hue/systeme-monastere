@@ -9,11 +9,13 @@ const createBody = z.object({
   toolId: z.string().min(1),
   employeeId: z.string().min(1),
   motive: z.string().min(2),
+  outCondition: z.enum(['bon', 'passable', 'usure_normale']).optional().default('bon'),
 });
 
 const returnBody = z.object({
-  condition: z.enum(['bon', 'a_reparer', 'endommage']),
+  condition: z.enum(['bon', 'lame_a_affuter', 'a_reparer', 'endommage', 'hors_service']),
   observations: z.string().optional(),
+  magasinId: z.string().optional(),
 });
 
 export const loansRoutes = new Hono();
@@ -55,20 +57,20 @@ loansRoutes.post('/', requirePerm('loans.create'), async (c) => {
     if (!employee || !employee.active) return { error: 'Travailleur introuvable ou inactif.' } as const;
 
     const loan = await tx.one<{ id: number }>(
-      `INSERT INTO loans (tool_id, employee_id, motive) VALUES ($1, $2, $3) RETURNING id`,
-      [tool.id, employee.id, body.data.motive.trim()],
+      `INSERT INTO loans (tool_id, employee_id, motive, out_condition) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [tool.id, employee.id, body.data.motive.trim(), body.data.outCondition],
     );
     await tx.query(`UPDATE tools SET status = 'en_pret' WHERE id = $1`, [tool.id]);
     await tx.query(
       `INSERT INTO tool_events (tool_id, event_type, from_status, to_status, actor, note)
        VALUES ($1, 'loan', 'disponible', 'en_pret', $2, $3)`,
-      [tool.id, actorName(c), `Prêt à ${employee.id} — ${body.data.motive.trim()}`],
+      [tool.id, actorName(c), `Prêt à ${employee.id} (État sortie: ${body.data.outCondition}) — ${body.data.motive.trim()}`],
     );
     await writeAudit(tx, {
       entity: 'loan',
       entityId: String(loan?.id ?? ''),
       action: 'loan',
-      after: { toolId: tool.id, employeeId: employee.id, motive: body.data.motive },
+      after: { toolId: tool.id, employeeId: employee.id, motive: body.data.motive, outCondition: body.data.outCondition },
       actorId: actorId(c),
       actorName: actorName(c),
     });
@@ -91,16 +93,30 @@ loansRoutes.post('/:id/return', requirePerm('loans.return'), async (c) => {
     if (!loan) return { error: 'Prêt introuvable.' } as const;
     if (loan.status !== 'out') return { error: 'Ce prêt est déjà clôturé.' } as const;
 
-    const nextStatus = body.data.condition === 'bon' ? 'disponible' : 'maintenance';
+    const isDefective = ['a_reparer', 'endommage', 'hors_service'].includes(body.data.condition);
+    const nextStatus = isDefective ? 'maintenance' : 'disponible';
+    const toolCondition = isDefective ? 'a_reparer' : 'bon';
+
     await tx.query(
-      `UPDATE loans SET returned_at = now(), status = 'returned', return_condition = $2 WHERE id = $1`,
-      [id, body.data.condition],
+      `UPDATE loans SET returned_at = now(), status = 'returned', return_condition = $2, return_notes = $3 WHERE id = $1`,
+      [id, body.data.condition, body.data.observations?.trim() || null],
     );
-    await tx.query('UPDATE tools SET status = $2, condition = $3 WHERE id = $1', [
-      loan.tool_id,
-      nextStatus,
-      body.data.condition === 'bon' ? 'bon' : 'a_reparer',
-    ]);
+
+    if (body.data.magasinId) {
+      await tx.query('UPDATE tools SET status = $2, condition = $3, magasin_id = $4 WHERE id = $1', [
+        loan.tool_id,
+        nextStatus,
+        toolCondition,
+        body.data.magasinId,
+      ]);
+    } else {
+      await tx.query('UPDATE tools SET status = $2, condition = $3 WHERE id = $1', [
+        loan.tool_id,
+        nextStatus,
+        toolCondition,
+      ]);
+    }
+
     await tx.query(
       `INSERT INTO tool_events (tool_id, event_type, from_status, to_status, actor, note)
        VALUES ($1, 'return', 'en_pret', $2, $3, $4)`,
@@ -108,7 +124,7 @@ loansRoutes.post('/:id/return', requirePerm('loans.return'), async (c) => {
         loan.tool_id,
         nextStatus,
         actorName(c),
-        body.data.observations?.trim() || `Retour : ${body.data.condition}`,
+        body.data.observations?.trim() || `Retour constat: ${body.data.condition}`,
       ],
     );
     await writeAudit(tx, {
@@ -116,7 +132,7 @@ loansRoutes.post('/:id/return', requirePerm('loans.return'), async (c) => {
       entityId: String(id),
       action: 'return',
       before: { status: 'out' },
-      after: { status: 'returned', condition: body.data.condition, observations: body.data.observations },
+      after: { status: 'returned', condition: body.data.condition, observations: body.data.observations, magasinId: body.data.magasinId },
       actorId: actorId(c),
       actorName: actorName(c),
     });

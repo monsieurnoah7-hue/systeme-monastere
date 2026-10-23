@@ -23,7 +23,15 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return data as T;
 }
 
-export type Role = 'direction' | 'magasinier' | 'chef_atelier' | 'travailleur';
+export type Role = string;
+
+export type RoleInfo = {
+  id: string;
+  name: string;
+  description: string | null;
+  is_system: boolean;
+  user_count?: string | number;
+};
 
 export type User = {
   id: number;
@@ -103,9 +111,22 @@ export type MyOverview = {
   situation: 'present' | 'late' | 'absent' | 'conge' | 'permission';
   situationNote: string | null;
   today: { in_at: string | null; out_at: string | null; break_in: string | null; break_out: string | null; late_minutes: number; status: string } | null;
-  history: { date: string; in_at: string | null; out_at: string | null; break_in: string | null; break_out: string | null; late_minutes: number; status: string }[];
+  history: { date: string; in_at: string | null; out_at: string | null; break_in: string | null; break_out: string | null; late_minutes: number; late_reason?: string | null; status: string }[];
   month: { daysPresent: number; lateCount: number; breaks: number };
   openLoans: { id: number; tool_id: string; out_at: string; motive: string | null; tool_name: string; category: string }[];
+  loansHistory?: {
+    id: number;
+    tool_id: string;
+    out_at: string;
+    returned_at: string | null;
+    out_condition?: string | null;
+    return_condition: string | null;
+    return_notes?: string | null;
+    motive: string | null;
+    status: string;
+    tool_name: string;
+    category?: string;
+  }[];
   leaves: Leave[];
 };
 
@@ -297,6 +318,7 @@ export type PermissionMatrix = {
   actions: { action: PermissionAction; label: string }[];
   groups: { label: string; actions: PermissionAction[] }[];
   roles: Role[];
+  rolesDetail?: RoleInfo[];
   matrix: Record<PermissionAction, Record<string, boolean>>;
 };
 

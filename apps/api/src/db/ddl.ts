@@ -24,12 +24,20 @@ CREATE TABLE IF NOT EXISTS employees (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS roles (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  description text,
+  is_system boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   login text NOT NULL UNIQUE,
   password_hash text NOT NULL,
   display_name text NOT NULL,
-  role text NOT NULL CHECK (role IN ('direction','magasinier','chef_atelier','travailleur')),
+  role text NOT NULL,
   employee_id text REFERENCES employees(id),
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
@@ -89,9 +97,11 @@ CREATE TABLE IF NOT EXISTS loans (
   tool_id text NOT NULL REFERENCES tools(id),
   employee_id text NOT NULL REFERENCES employees(id),
   out_at timestamptz NOT NULL DEFAULT now(),
+  out_condition text NOT NULL DEFAULT 'bon',
   due_at timestamptz,
   returned_at timestamptz,
   return_condition text,
+  return_notes text,
   motive text,
   status text NOT NULL DEFAULT 'out' CHECK (status IN ('out','returned'))
 );
@@ -212,8 +222,21 @@ ALTER TABLE absences ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
 ALTER TABLE absences ADD COLUMN IF NOT EXISTS review_note text;
 UPDATE users SET role = 'direction' WHERE role = 'admin';
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-ALTER TABLE users ADD CONSTRAINT users_role_check
-  CHECK (role IN ('direction','magasinier','chef_atelier','travailleur'));
+CREATE TABLE IF NOT EXISTS roles (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  description text,
+  is_system boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO roles (id, name, description, is_system) VALUES
+  ('direction', 'Direction (Super-Admin)', 'Gouvernance intégrale du monastère et du C.F.T., gestion des rôles et droits', true),
+  ('magasinier', 'Magasinier', 'Gestion de l''outillage, des dépôts, de la quincaillerie et des stocks', false),
+  ('chef_atelier', 'Chef d''atelier', 'Supervision des équipes, des plannings d''atelier et des présences', false),
+  ('travailleur', 'Travailleur / Menuisier', 'Consultation personnelle de son espace, de ses outils et de ses fiches', false)
+ON CONFLICT (id) DO NOTHING;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS out_condition text DEFAULT 'bon';
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS return_notes text;
 `;
 
-export const MIGRATION_NAME = '003_magasins_leaves';
+export const MIGRATION_NAME = '004_dynamic_roles_and_loans';

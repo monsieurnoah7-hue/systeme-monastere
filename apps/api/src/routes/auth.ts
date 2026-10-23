@@ -98,6 +98,51 @@ authRoutes.get('/me', requireAuth, async (c) => {
   return c.json({ user: c.get('auth').user });
 });
 
+const profileSchema = z.object({
+  display_name: z.string().min(2).max(100).optional(),
+  current_password: z.string().optional(),
+  new_password: z.string().min(6).max(100).optional(),
+});
+
+authRoutes.patch('/profile', requireAuth, async (c) => {
+  const body = profileSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) {
+    return c.json({ error: body.error.issues[0]?.message ?? 'Données de profil invalides.' }, 400);
+  }
+  const db = getDb();
+  const auth = c.get('auth');
+  const userId = auth.user.id;
+
+  const current = await db.one<{ id: number; password_hash: string }>(
+    'SELECT id, password_hash FROM users WHERE id = $1',
+    [userId],
+  );
+  if (!current) return c.json({ error: 'Utilisateur introuvable.' }, 404);
+
+  if (body.data.new_password) {
+    if (!body.data.current_password || !verifyPassword(body.data.current_password, current.password_hash)) {
+      return c.json({ error: 'Le mot de passe actuel est incorrect.' }, 400);
+    }
+  }
+
+  const newHash = body.data.new_password ? hashPassword(body.data.new_password) : undefined;
+  const newName = body.data.display_name?.trim() || undefined;
+
+  if (newHash && newName) {
+    await db.query('UPDATE users SET display_name = $1, password_hash = $2 WHERE id = $3', [newName, newHash, userId]);
+  } else if (newHash) {
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, userId]);
+  } else if (newName) {
+    await db.query('UPDATE users SET display_name = $1 WHERE id = $2', [newName, userId]);
+  }
+
+  const updated = await db.one<UserRow>(
+    'SELECT id, login, display_name, role, employee_id FROM users WHERE id = $1',
+    [userId],
+  );
+  return c.json({ ok: true, user: updated });
+});
+
 export async function ensureBootstrapAdmin(): Promise<void> {
   const db = getDb();
   const row = await db.one<{ count: string }>('SELECT count(*)::text AS count FROM users');

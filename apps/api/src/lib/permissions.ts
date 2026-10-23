@@ -143,16 +143,17 @@ export function defaultPermissionMap(): Record<PermissionAction, boolean> {
   return map;
 }
 
-const MATRIX_ROLES: Role[] = ['direction', 'magasinier', 'chef_atelier', 'travailleur'];
+export const DEFAULT_MATRIX_ROLES: Role[] = ['direction', 'magasinier', 'chef_atelier', 'travailleur'];
 
 export function buildMatrix(
   overrides: { role: string; action: string; allowed: boolean }[],
+  roles: string[] = DEFAULT_MATRIX_ROLES,
 ): Record<PermissionAction, Record<string, boolean>> {
   const matrix = {} as Record<PermissionAction, Record<string, boolean>>;
   for (const action of PERMISSION_ACTIONS) {
     const row = {} as Record<string, boolean>;
-    for (const role of MATRIX_ROLES) {
-      const allowed = DEFAULT_PERMISSIONS[action].includes(role);
+    for (const role of roles) {
+      const allowed = DEFAULT_PERMISSIONS[action]?.includes(role) ?? false;
       const override = overrides.find((o) => o.action === action && o.role === role);
       row[role] = override ? override.allowed : allowed;
     }

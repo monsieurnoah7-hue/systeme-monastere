@@ -44,6 +44,8 @@ import {
   IconWrench,
   IconBox,
 } from '../components/Icons';
+import { Download, Printer } from 'lucide-react';
+import { exportToExcel, exportToPdf } from '../lib/export';
 
 type ToolDetail = { tool: Tool; events: ToolEvent[]; loan: ToolLoan | null };
 type Facets = { categories: string[]; locations: string[] };
@@ -374,6 +376,46 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
     }
   }
 
+  function handleExportExcel() {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const headers = ['Identifiant', 'Désignation', 'Catégorie', 'Magasin / Dépôt', 'État Physique', 'Statut', 'Emprunteur Actuel'];
+    const rows = tools.map((t) => [
+      t.id,
+      t.name,
+      t.category,
+      t.magasin_name ?? t.location ?? '-',
+      CONDITION_LABEL[t.condition] ?? t.condition,
+      STATUS_LABEL[t.status] ?? t.status,
+      t.status === 'en_pret' ? 'Emprunté' : '-',
+    ]);
+    exportToExcel(`Parc_Outils_${dateStr}`, 'Outils', headers, rows);
+  }
+
+  function handleExportPdf() {
+    const headers = ['Identifiant', 'Désignation', 'Catégorie', 'Dépôt', 'État', 'Statut', 'Emprunteur'];
+    const rows = tools.map((t) => [
+      t.id,
+      t.name,
+      t.category,
+      t.magasin_name ?? t.location ?? '-',
+      CONDITION_LABEL[t.condition] ?? t.condition,
+      STATUS_LABEL[t.status] ?? t.status,
+      t.status === 'en_pret' ? 'Emprunté' : '-',
+    ]);
+    exportToPdf(
+      'Inventaire du Parc Outillage & Machines',
+      'Registre certifié du matériel électroportatif et outillage à main C.F.T.',
+      headers,
+      rows,
+      [
+        { label: 'Total Parc', value: stats.total },
+        { label: 'Disponibles', value: stats.disponible },
+        { label: 'En Prêt', value: stats.en_pret },
+        { label: 'En Maintenance', value: stats.maintenance },
+      ],
+    );
+  }
+
   return (
     <div className="space-y-4 pb-12">
       {/* Jibble Header Banner */}
@@ -393,6 +435,22 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Download size={14} />}
+            onClick={handleExportExcel}
+          >
+            Excel
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Printer size={14} />}
+            onClick={handleExportPdf}
+          >
+            Imprimer
+          </Button>
           <Button
             size="sm"
             icon={<IconPrinter size={16} />}

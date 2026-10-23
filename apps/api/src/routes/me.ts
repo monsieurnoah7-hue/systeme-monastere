@@ -39,7 +39,7 @@ meRoutes.get('/overview', async (c) => {
     [employeeId],
   );
 
-  const [history, monthRows, openLoans, leaves] = await Promise.all([
+  const [history, monthRows, openLoans, loansHistory, leaves] = await Promise.all([
     db.query(
       `SELECT punch_date::text AS punch_date,
               min(CASE WHEN punch_type = 'in'  THEN to_char(server_at, 'HH24:MI') END) AS in_at,
@@ -47,6 +47,7 @@ meRoutes.get('/overview', async (c) => {
               min(CASE WHEN punch_type = 'break_in'  THEN to_char(server_at, 'HH24:MI') END) AS break_in,
               max(CASE WHEN punch_type = 'break_out' THEN to_char(server_at, 'HH24:MI') END) AS break_out,
               max(late_minutes) AS late_minutes,
+              max(reason) AS late_reason,
               max(status) AS status
          FROM attendance
         WHERE employee_id = $1 AND punch_date >= CURRENT_DATE - INTERVAL '30 days'
@@ -62,14 +63,21 @@ meRoutes.get('/overview', async (c) => {
       [employeeId],
     ),
     db.query(
-      `SELECT l.id, l.tool_id, l.out_at, l.motive, t.name AS tool_name, t.category
+      `SELECT l.id, l.tool_id, l.out_at, l.out_condition, l.motive, t.name AS tool_name, t.category
          FROM loans l JOIN tools t ON t.id = l.tool_id
         WHERE l.employee_id = $1 AND l.status = 'out'
         ORDER BY l.out_at DESC`,
       [employeeId],
     ),
     db.query(
-      `SELECT * FROM absences WHERE employee_id = $1 ORDER BY created_at DESC LIMIT 10`,
+      `SELECT l.id, l.tool_id, l.out_at, l.returned_at, l.out_condition, l.return_condition, l.return_notes, l.motive, l.status, t.name AS tool_name, t.category
+         FROM loans l JOIN tools t ON t.id = l.tool_id
+        WHERE l.employee_id = $1
+        ORDER BY l.out_at DESC LIMIT 50`,
+      [employeeId],
+    ),
+    db.query(
+      `SELECT * FROM absences WHERE employee_id = $1 ORDER BY created_at DESC LIMIT 20`,
       [employeeId],
     ),
   ]);
@@ -90,6 +98,7 @@ meRoutes.get('/overview', async (c) => {
       breaks: Number(monthRows[0]?.breaks ?? 0),
     },
     openLoans,
+    loansHistory,
     leaves,
   });
 });

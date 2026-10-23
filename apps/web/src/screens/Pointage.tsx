@@ -9,6 +9,7 @@ import {
   Camera,
   Check,
   Clock,
+  Download,
   FileSpreadsheet,
   Printer,
   QrCode,
@@ -18,6 +19,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { exportToExcel, exportToPdf } from '../lib/export';
 import { ModularKeyboard } from '../components/ModularKeyboard';
 
 type Terminal = { id: string; name: string };
@@ -578,6 +580,70 @@ export function Pointage() {
 
               <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} onClick={loadTimesheets}>
                 Actualiser
+              </Button>
+
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Download size={13} />}
+                onClick={() => {
+                  const dateStr = new Date().toISOString().split('T')[0];
+                  const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Pause', 'Heures', 'Écart', 'Statut'];
+                  const rows = filteredAttendance.map((row) => [
+                    row.id,
+                    row.fullName,
+                    row.jobTitle,
+                    row.inAt || '-',
+                    row.outAt || (row.inAt ? 'En poste' : '-'),
+                    row.inAt ? '0h45' : '-',
+                    row.inAt ? '7h45' : '0h00',
+                    row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
+                    row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
+                  ]);
+                  exportToExcel(`Feuille_Presence_${dateStr}`, 'Présences', headers, rows);
+                }}
+              >
+                Excel
+              </Button>
+
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Printer size={13} />}
+                onClick={() => {
+                  const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Pause', 'Heures', 'Écart', 'Statut'];
+                  const rows = filteredAttendance.map((row) => [
+                    row.id,
+                    row.fullName,
+                    row.jobTitle,
+                    row.inAt || '-',
+                    row.outAt || (row.inAt ? 'En poste' : '-'),
+                    row.inAt ? '0h45' : '-',
+                    row.inAt ? '7h45' : '0h00',
+                    row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
+                    row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
+                  ]);
+                  exportToPdf(
+                    'Feuille de Présence & Pointage Quotidien',
+                    'Registre officiel des présences d’atelier du Centre de Formation Technique',
+                    headers,
+                    rows,
+                    [
+                      { label: 'Effectif Total', value: attendanceDetail.length },
+                      { label: 'Présents à l’heure', value: totalPresent },
+                      { label: 'Retards constatés', value: totalLate },
+                      {
+                        label: 'Ponctualité globale',
+                        value:
+                          attendanceDetail.length > 0
+                            ? `${Math.round(((totalPresent + totalLate) / attendanceDetail.length) * 100)}%`
+                            : '—',
+                      },
+                    ],
+                  );
+                }}
+              >
+                Imprimer
               </Button>
             </div>
           </div>

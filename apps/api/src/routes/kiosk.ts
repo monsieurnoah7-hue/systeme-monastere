@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
+import { verifyPassword } from '../lib/crypto.js';
 import { checkSelfie } from '../lib/images.js';
 import { loadSettings } from '../lib/settings.js';
 import { saveSelfie } from '../lib/selfie-store.js';
@@ -54,6 +55,7 @@ const punchBody = z.object({
   punchType: z.enum(['in', 'out', 'break_in', 'break_out']),
   idMode: z.enum(['manual', 'badge']),
   selfie: z.string().min(20),
+  pin: z.string().optional(),
   reason: z.string().optional(),
   reasonNote: z.string().optional(),
 });
@@ -206,11 +208,37 @@ kioskRoutes.post('/punch', async (c) => {
   const terminal = await db.one<{ id: string }>('SELECT id FROM terminals WHERE id = $1 AND active = true', [body.data.terminalId]);
   if (!terminal) return c.json({ error: 'Terminal non enregistré par la direction.' }, 403);
 
-  const employee = await db.one<{ id: string; full_name: string; active: boolean }>(
-    'SELECT id, full_name, active FROM employees WHERE id = $1 AND active = true',
+  const employee = await db.one<{ id: string; full_name: string; active: boolean; pin_hash: string | null; badge_token: string | null }>(
+    'SELECT id, full_name, active, pin_hash, badge_token FROM employees WHERE id = $1 AND active = true',
     [body.data.employeeId],
   );
   if (!employee) return c.json({ error: 'Travailleur introuvable.' }, 404);
+
+  // 1. La Direction ne pointe jamais
+  const linkedUser = await db.one<{ id: number; role: string; password_hash: string }>(
+    'SELECT id, role, password_hash FROM users WHERE employee_id = $1',
+    [employee.id],
+  );
+  if (linkedUser?.role === 'direction') {
+    return c.json({ error: 'La Direction n’est pas soumise au pointage.' }, 403);
+  }
+
+  // 2. Validation optionnelle du code secret / mot de passe si fourni
+  if (body.data.pin && body.data.pin.trim().length > 0) {
+    const inputPin = body.data.pin.trim();
+    let pinValid = false;
+    if (employee.pin_hash && verifyPassword(inputPin, employee.pin_hash)) {
+      pinValid = true;
+    } else if (linkedUser?.password_hash && verifyPassword(inputPin, linkedUser.password_hash)) {
+      pinValid = true;
+    } else if (employee.badge_token && inputPin.toUpperCase() === employee.badge_token.toUpperCase()) {
+      pinValid = true;
+    }
+
+    if (!pinValid) {
+      return c.json({ error: 'Code secret ou mot de passe de validation incorrect.' }, 401);
+    }
+  }
 
   const photo = checkSelfie(body.data.selfie);
   if (!photo.ok) return c.json({ error: photo.reason }, 400);
