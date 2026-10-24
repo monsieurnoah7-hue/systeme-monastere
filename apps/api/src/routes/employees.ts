@@ -15,6 +15,7 @@ employeesRoutes.use('*', requireAuth);
 const createBody = z.object({
   full_name: z.string().min(3),
   job_title: z.string().min(2),
+  photo_path: z.string().nullable().optional(),
   pin: z.string().min(4).max(10).optional(),
 });
 
@@ -22,6 +23,7 @@ const patchBody = z.object({
   full_name: z.string().min(3).optional(),
   job_title: z.string().min(2).optional(),
   active: z.boolean().optional(),
+  photo_path: z.string().nullable().optional(),
   pin: z.string().min(4).max(10).optional(),
 });
 
@@ -190,10 +192,10 @@ employeesRoutes.post('/', requirePerm('employees.create'), async (c) => {
   const badge = newBadgeToken();
   const pinHash = body.data.pin ? hashPassword(body.data.pin.trim()) : null;
   const employee = await db.one<EmployeeRow>(
-    `INSERT INTO employees (id, full_name, job_title, badge_token, pin_hash)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO employees (id, full_name, job_title, badge_token, pin_hash, photo_path)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id, full_name, job_title, photo_path, badge_token, active`,
-    [id, body.data.full_name.trim(), body.data.job_title.trim(), badge, pinHash],
+    [id, body.data.full_name.trim(), body.data.job_title.trim(), badge, pinHash, body.data.photo_path?.trim() || null],
   );
   await writeAudit(db, {
     entity: 'employee',
@@ -234,7 +236,8 @@ employeesRoutes.patch('/:id', requirePerm('employees.edit'), async (c) => {
        full_name = coalesce($2, full_name),
        job_title = coalesce($3, job_title),
        active = coalesce($4, active),
-       pin_hash = CASE WHEN $5::text IS NOT NULL THEN $5::text ELSE pin_hash END
+       pin_hash = CASE WHEN $5::text IS NOT NULL THEN $5::text ELSE pin_hash END,
+       photo_path = CASE WHEN $6::text IS NOT NULL THEN (CASE WHEN $6 = '' THEN NULL ELSE $6 END) ELSE photo_path END
       WHERE id = $1
       RETURNING id, full_name, job_title, photo_path, badge_token, active`,
     [
@@ -243,6 +246,7 @@ employeesRoutes.patch('/:id', requirePerm('employees.edit'), async (c) => {
       patch.job_title?.trim() ?? null,
       patch.active ?? null,
       pinHash ?? null,
+      patch.photo_path !== undefined ? (patch.photo_path ? patch.photo_path.trim() : null) : null,
     ],
   );
   await writeAudit(db, {
@@ -255,6 +259,29 @@ employeesRoutes.patch('/:id', requirePerm('employees.edit'), async (c) => {
     actorName: actorName(c),
   });
   return c.json({ employee: updated });
+});
+
+employeesRoutes.post('/:id/photo', requirePerm('employees.photo_edit'), async (c) => {
+  const id = c.req.param('id') ?? '';
+  const body = z.object({ photo_path: z.string().nullable() }).safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Photo invalide.' }, 400);
+
+  const db = getDb();
+  const updated = await db.one<EmployeeRow>(
+    'UPDATE employees SET photo_path = $2 WHERE id = $1 RETURNING id, full_name, job_title, photo_path, badge_token, active',
+    [id, body.data.photo_path || null],
+  );
+  if (!updated) return c.json({ error: 'Travailleur introuvable.' }, 404);
+
+  await writeAudit(db, {
+    entity: 'employee',
+    entityId: id,
+    action: 'photo_update',
+    actorId: actorId(c),
+    actorName: actorName(c),
+    after: { photo_path: body.data.photo_path },
+  });
+  return c.json({ ok: true, employee: updated });
 });
 
 employeesRoutes.post('/:id/pin', requirePerm('employees.edit'), async (c) => {

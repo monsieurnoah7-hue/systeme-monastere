@@ -5,7 +5,7 @@ import { fkInsertionOrder } from '../db/fk-order.js';
 import { getDb } from '../db/index.js';
 import { env } from '../env.js';
 import { writeAudit } from '../lib/audit.js';
-import { BACKUP_PREFIX, blobAuth, dumpDatabase, dumpRowCount, gzipDump, listBackups, runCloudBackup } from '../lib/backup.js';
+import { BACKUP_PREFIX, blobAuth, dumpDatabase, dumpRowCount, gzipDump, listBackups, purgeAllBackups, runCloudBackup } from '../lib/backup.js';
 import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth.js';
 
 export const adminRoutes = new Hono();
@@ -23,6 +23,7 @@ const DEMO_TABLES = [
   'loans',
   'magasins',
   'selfie_blobs',
+  'image_blobs',
   'stock_movements',
   'stock_refs',
   'terminals',
@@ -77,6 +78,20 @@ adminRoutes.get('/backups/download', async (c) => {
 adminRoutes.post('/backup/save', async (c) => {
   const result = await runCloudBackup();
   return c.json({ ok: true, ...result });
+});
+
+// Purge complète et immédiate de l'historique des instantanés cloud (Pilier Cloud Zéro-Résidu)
+adminRoutes.post('/backups/purge', async (c) => {
+  const count = await purgeAllBackups();
+  await writeAudit(getDb(), {
+    entity: 'database',
+    entityId: 'cloud_backups',
+    action: 'purge_backups',
+    actorId: actorId(c),
+    actorName: actorName(c),
+    reason: "Purge de l'historique des instantanés cloud en un clic",
+  });
+  return c.json({ ok: true, count, message: `${count} instantané(s) purgé(s) du cloud.` });
 });
 
 const resetSchema = z.object({ confirm: z.string() });

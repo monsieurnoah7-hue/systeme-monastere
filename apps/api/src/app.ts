@@ -7,6 +7,7 @@ import { cronRoutes } from './routes/cron.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { employeesRoutes } from './routes/employees.js';
 import { kioskRoutes } from './routes/kiosk.js';
+import { imagesRoutes } from './routes/images.js';
 import { leavesRoutes } from './routes/leaves.js';
 import { loansRoutes } from './routes/loans.js';
 import { magasinsRoutes } from './routes/magasins.js';
@@ -35,6 +36,7 @@ app.use(
 app.get('/api/health', (c) => c.json({ ok: true, time: new Date().toISOString() }));
 
 app.route('/api/auth', authRoutes);
+app.route('/api/images', imagesRoutes);
 app.route('/api/me', meRoutes);
 app.route('/api/kiosk', kioskRoutes);
 app.route('/api/tools', toolsRoutes);

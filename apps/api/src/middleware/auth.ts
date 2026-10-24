@@ -21,10 +21,11 @@ export async function loadSession(c: Context): Promise<AuthState | null> {
   const raw = getCookie(c, SESSION_COOKIE);
   if (!raw) return null;
   const db = getDb();
-  const row = await db.one<{ id: string; user_id: number; expires_at: string } & UserRow>(
-    `SELECT s.id, s.user_id, s.expires_at, u.id AS u_id, u.login, u.display_name, u.role, u.employee_id
+  const row = await db.one<{ id: string; user_id: number; expires_at: string; photo_path: string | null; emp_photo: string | null } & UserRow>(
+    `SELECT s.id, s.user_id, s.expires_at, u.id AS u_id, u.login, u.display_name, u.role, u.employee_id, u.photo_path, e.photo_path AS emp_photo
        FROM sessions s
        JOIN users u ON u.id = s.user_id
+       LEFT JOIN employees e ON e.id = u.employee_id
       WHERE s.id = $1 AND u.active = true`,
     [sha256(raw)],
   );
@@ -41,6 +42,7 @@ export async function loadSession(c: Context): Promise<AuthState | null> {
       display_name: row.display_name,
       role: row.role,
       employee_id: row.employee_id,
+      photo_path: row.photo_path || row.emp_photo || null,
     },
   };
 }

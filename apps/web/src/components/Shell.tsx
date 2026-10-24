@@ -205,8 +205,13 @@ export function Shell({
           {/* User Profile Footer */}
           <div className="border-t border-line p-3">
             <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 bg-paper/60">
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-amber-wash text-xs font-bold text-amber border border-amber/20">
-                {initials(user.display_name)}
+              <span className="relative grid h-8 w-8 place-items-center rounded-full bg-amber-wash text-xs font-bold text-amber border border-amber/20 overflow-hidden shrink-0">
+                {user.photo_path ? (
+                  <img src={user.photo_path} alt={user.display_name} className="h-full w-full object-cover" />
+                ) : (
+                  initials(user.display_name)
+                )}
+                <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-green ring-1 ring-surface" />
               </span>
               <div className="min-w-0 flex-1 leading-tight">
                 <p className="truncate text-xs font-semibold text-ink">{user.display_name}</p>
@@ -282,6 +287,22 @@ export function Shell({
               </DrawerHeader>
 
               <div className="flex-1 overflow-y-auto p-3">
+                {/* Mobile User Identity Card */}
+                <div className="mb-3 flex items-center gap-3 rounded-xl border border-line bg-paper/60 p-2.5">
+                  <span className="relative grid h-10 w-10 place-items-center rounded-full bg-amber-wash text-xs font-bold text-amber border border-amber/20 overflow-hidden shrink-0">
+                    {user.photo_path ? (
+                      <img src={user.photo_path} alt={user.display_name} className="h-full w-full object-cover" />
+                    ) : (
+                      initials(user.display_name)
+                    )}
+                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green ring-2 ring-surface" />
+                  </span>
+                  <div className="min-w-0 flex-1 leading-tight">
+                    <p className="truncate text-xs font-bold text-ink">{user.display_name}</p>
+                    <p className="truncate text-[11px] text-ink-faint">@{user.login} · {ROLE_LABEL[user.role]}</p>
+                  </div>
+                </div>
+
                 <nav className="space-y-1">
                   {items.map((item) => (
                     <NavButton

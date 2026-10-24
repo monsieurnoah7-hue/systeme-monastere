@@ -28,6 +28,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from '../components/ui/separator';
 import {
   AlertTriangle,
+  Camera,
   Check,
   CheckCheck,
   CheckCircle2,
@@ -52,6 +53,7 @@ import {
   UserX,
   X,
 } from 'lucide-react';
+import { ImagePickerModal } from '../components/ImagePickerModal';
 
 const WEEKDAYS_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Lundi -> Dimanche
 
@@ -224,6 +226,10 @@ function AdminSettings({ user }: { user: User }) {
   const [editFor, setEditFor] = useState<AppUserRow | null>(null);
   const [editForm, setEditForm] = useState({ display_name: '', role: 'travailleur' as Role, employee_id: '' });
 
+  // Photo modal states for profile (self / direction admin)
+  const [profilePhotoOpen, setProfilePhotoOpen] = useState(false);
+  const [profilePhotoTarget, setProfilePhotoTarget] = useState<{ type: 'self' | 'user'; userId?: number; current?: string | null; name?: string } | null>(null);
+
   // Password change for current user
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
 
@@ -352,6 +358,48 @@ function AdminSettings({ user }: { user: User }) {
       toast('Sauvegarde téléchargée.', 'success');
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Téléchargement impossible.', 'error');
+    }
+  }
+
+  async function purgeCloudBackups() {
+    setBackupBusy(true);
+    try {
+      const res = await api<{ ok: boolean; count: number; message: string }>('/api/admin/backups/purge', {
+        method: 'POST',
+      });
+      toast(res.message || 'Historique des instantanés cloud purgé avec succès.', 'success');
+      await refreshBackups();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Purge impossible.', 'error');
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function handleProfilePhotoSelect(url: string | null) {
+    if (profilePhotoTarget?.type === 'self') {
+      try {
+        await api('/api/auth/profile/photo', {
+          method: 'POST',
+          body: JSON.stringify({ photo_path: url }),
+        });
+        toast('Photo de profil mise à jour.', 'success');
+        user.photo_path = url;
+        window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: { ...user, photo_path: url } }));
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Mise à jour photo impossible.', 'error');
+      }
+    } else if (profilePhotoTarget?.type === 'user' && profilePhotoTarget.userId) {
+      try {
+        await api(`/api/users/${profilePhotoTarget.userId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ photo_path: url }),
+        });
+        toast('Photo utilisateur mise à jour.', 'success');
+        setReload((value) => value + 1);
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Mise à jour photo impossible.', 'error');
+      }
     }
   }
 
@@ -923,12 +971,24 @@ function AdminSettings({ user }: { user: User }) {
                       {/* Left: Avatar & Identity */}
                       <div className="flex min-w-0 flex-1 items-center gap-3.5">
                         <div
+                          onClick={() => {
+                            setProfilePhotoTarget({ type: 'user', userId: account.id, current: account.photo_path, name: account.display_name });
+                            setProfilePhotoOpen(true);
+                          }}
                           className={cx(
-                            'grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs',
+                            'group relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden cursor-pointer hover:border-amber transition-colors',
                             theme.bg,
                           )}
+                          title="Cliquer pour modifier la photo de profil de ce compte"
                         >
-                          {roleInitials(account.display_name)}
+                          {account.photo_path ? (
+                            <img src={account.photo_path} alt={account.display_name} className="h-full w-full object-cover" />
+                          ) : (
+                            roleInitials(account.display_name)
+                          )}
+                          <span className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Camera size={13} />
+                          </span>
                         </div>
 
                         <div className="min-w-0">
@@ -1548,13 +1608,37 @@ function AdminSettings({ user }: { user: User }) {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 p-5">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-12 w-12 place-items-center rounded-full bg-blue-wash text-blue font-bold text-sm border border-blue/20">
-                    {roleInitials(user.display_name)}
+                <div className="flex items-center gap-4">
+                  <div
+                    onClick={() => {
+                      setProfilePhotoTarget({ type: 'self', current: user.photo_path, name: user.display_name });
+                      setProfilePhotoOpen(true);
+                    }}
+                    className="group relative grid h-16 w-16 place-items-center rounded-full bg-blue-wash text-blue font-bold text-base border-2 border-blue/30 cursor-pointer overflow-hidden shadow-xs hover:border-amber transition-all"
+                    title="Cliquer pour changer votre photo de profil"
+                  >
+                    {user.photo_path ? (
+                      <img src={user.photo_path} alt={user.display_name} className="h-full w-full object-cover" />
+                    ) : (
+                      roleInitials(user.display_name)
+                    )}
+                    <span className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Camera size={20} />
+                    </span>
                   </div>
                   <div>
                     <h3 className="font-semibold text-sm text-ink">{user.display_name}</h3>
                     <p className="font-mono text-xs text-ink-soft">@{user.login}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfilePhotoTarget({ type: 'self', current: user.photo_path, name: user.display_name });
+                        setProfilePhotoOpen(true);
+                      }}
+                      className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-amber hover:underline"
+                    >
+                      <Camera size={13} /> Modifier ma photo de profil
+                    </button>
                   </div>
                 </div>
 
@@ -1672,9 +1756,21 @@ function AdminSettings({ user }: { user: User }) {
             </CardHeader>
 
             <CardContent className="p-0">
-              <div className="px-5 py-3 border-b border-line bg-paper-2/40 text-xs font-semibold text-ink flex items-center justify-between">
-                <span>Historique des instantanés cloud ({backups.length})</span>
-                <span className="text-[11px] text-ink-faint">Rétention {retentionDays} jours</span>
+              <div className="px-5 py-3 border-b border-line bg-paper-2/40 text-xs font-semibold text-ink flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span>Historique des instantanés cloud ({backups.length})</span>
+                  <span className="text-[11px] text-ink-faint">· Rétention {retentionDays} jours</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="text-red border-red/20 bg-red-wash/40 hover:bg-red-wash hover:border-red/40 transition-colors"
+                  disabled={backupBusy || backups.length === 0}
+                  icon={<Trash2 size={13} className="text-red" />}
+                  onClick={() => void purgeCloudBackups()}
+                >
+                  Purger l'historique
+                </Button>
               </div>
 
               {backups.length === 0 ? (
@@ -2150,6 +2246,17 @@ function AdminSettings({ user }: { user: User }) {
           </p>
         </div>
       </Modal>
+
+      {/* Modal Photo de Profil (Caméra ou Fichier/Galerie) */}
+      <ImagePickerModal
+        open={profilePhotoOpen}
+        title={profilePhotoTarget?.name ? `Photo de profil : ${profilePhotoTarget.name}` : 'Photo de profil (WhatsApp)'}
+        currentImage={profilePhotoTarget?.current}
+        category="profiles"
+        defaultFacingMode="user"
+        onClose={() => setProfilePhotoOpen(false)}
+        onSelect={(url) => void handleProfilePhotoSelect(url)}
+      />
     </div>
   );
 }

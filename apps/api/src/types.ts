@@ -24,6 +24,7 @@ export type UserRow = {
   display_name: string;
   role: Role;
   employee_id: string | null;
+  photo_path: string | null;
 };
 
 export type EmployeeRow = {
@@ -46,6 +47,32 @@ export type ToolRow = {
   status_reason: string | null;
   observations: string | null;
   photo_path: string | null;
+  brand: string | null;
+  model: string | null;
+  serial_number: string | null;
+  acquisition_cost: number | null;
+  acquisition_year: number | null;
+  acquisition_date: string | null;
+  lifespan_years: number | null;
+  created_at: string;
+  magasin_name?: string | null;
+  magasin_code?: string | null;
+};
+
+export type StockRefRow = {
+  id: number;
+  name: string;
+  category: string;
+  unit: string;
+  location: string;
+  magasin_id: string | null;
+  min_qty: number;
+  supplier: string | null;
+  brand: string | null;
+  unit_cost: number | null;
+  photo_path: string | null;
+  initial_qty: number;
+  qty: number;
   created_at: string;
   magasin_name?: string | null;
   magasin_code?: string | null;

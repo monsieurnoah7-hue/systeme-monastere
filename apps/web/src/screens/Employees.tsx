@@ -21,6 +21,7 @@ import { QrCode } from '../components/QrCode';
 import { DataTable, type DataTableColumn } from '../components/DataTable';
 import {
   Calendar as CalendarIcon,
+  Camera,
   Clock,
   Download,
   Plus,
@@ -32,6 +33,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { ImagePickerModal } from '../components/ImagePickerModal';
 import { exportToExcel, exportToPdf } from '../lib/export';
 
 const STATUS_FILTERS = [
@@ -283,7 +285,9 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [form, setForm] = useState({ full_name: '', job_title: '', pin: '' });
+  const [form, setForm] = useState({ full_name: '', job_title: '', pin: '', photo_path: null as string | null });
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [photoTarget, setPhotoTarget] = useState<{ id?: string; current?: string | null; name?: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -423,12 +427,30 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
           return (
             <div className="flex items-center gap-3">
               <span
+                onClick={(e) => {
+                  if (canManage) {
+                    e.stopPropagation();
+                    setPhotoTarget({ id: employee.id, current: employee.photo_path, name: employee.full_name });
+                    setPhotoModalOpen(true);
+                  }
+                }}
                 className={cx(
-                  'grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs',
+                  'group relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden transition-colors',
+                  canManage ? 'cursor-pointer hover:border-amber' : '',
                   employee.active ? 'bg-amber-wash text-amber border-amber/20' : 'bg-grey-wash text-ink-faint border-line',
                 )}
+                title={canManage ? 'Cliquer pour modifier la photo (WhatsApp)' : undefined}
               >
-                {initials(employee.full_name)}
+                {employee.photo_path ? (
+                  <img src={employee.photo_path} alt={employee.full_name} className="h-full w-full object-cover" />
+                ) : (
+                  initials(employee.full_name)
+                )}
+                {canManage && (
+                  <span className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Camera size={13} />
+                  </span>
+                )}
               </span>
               <div className="min-w-0">
                 <p className="truncate text-xs font-bold text-ink">{employee.full_name}</p>
@@ -516,16 +538,39 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   function openCreate() {
     setEditing(null);
-    setForm({ full_name: '', job_title: '', pin: '' });
+    setForm({ full_name: '', job_title: '', pin: '', photo_path: null });
     setFormError(null);
     setFormOpen(true);
   }
 
   function openEdit(employee: Employee) {
     setEditing(employee);
-    setForm({ full_name: employee.full_name, job_title: employee.job_title, pin: '' });
+    setForm({ full_name: employee.full_name, job_title: employee.job_title, pin: '', photo_path: employee.photo_path });
     setFormError(null);
     setFormOpen(true);
+  }
+
+  async function handleEmployeePhotoSelect(url: string | null) {
+    if (!photoTarget?.id) {
+      setForm((f) => ({ ...f, photo_path: url }));
+      return;
+    }
+    setBusy(true);
+    try {
+      await api<{ ok: boolean; employee: Employee }>(`/api/employees/${photoTarget.id}/photo`, {
+        method: 'POST',
+        body: JSON.stringify({ photo_path: url }),
+      });
+      toast('Photo de profil mise à jour avec succès.', 'success');
+      setReload((v) => v + 1);
+      if (detail && detail.employee.id === photoTarget.id) {
+        setDetail({ ...detail, employee: { ...detail.employee, photo_path: url } });
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Échec de mise à jour photo.', 'error');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function save() {
@@ -539,6 +584,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             full_name: form.full_name,
             job_title: form.job_title,
             pin: form.pin.trim() ? form.pin.trim() : undefined,
+            photo_path: form.photo_path,
           }),
         });
         toast('Fiche mise à jour.', 'success');
@@ -549,6 +595,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             full_name: form.full_name,
             job_title: form.job_title,
             pin: form.pin.trim() ? form.pin.trim() : undefined,
+            photo_path: form.photo_path || undefined,
           }),
         });
         toast('Nouveau travailleur créé avec badge automatique et code secret.', 'success');
@@ -874,12 +921,24 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
                       <span
+                        onClick={(e) => {
+                          if (canManage) {
+                            e.stopPropagation();
+                            setPhotoTarget({ id: employee.id, current: employee.photo_path, name: employee.full_name });
+                            setPhotoModalOpen(true);
+                          }
+                        }}
                         className={cx(
-                          'grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs',
+                          'grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden transition-colors',
+                          canManage ? 'cursor-pointer hover:border-amber' : '',
                           employee.active ? 'bg-amber-wash text-amber border-amber/20' : 'bg-grey-wash text-ink-faint border-line',
                         )}
                       >
-                        {initials(employee.full_name)}
+                        {employee.photo_path ? (
+                          <img src={employee.photo_path} alt={employee.full_name} className="h-full w-full object-cover" />
+                        ) : (
+                          initials(employee.full_name)
+                        )}
                       </span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-ink">{employee.full_name}</p>
@@ -970,9 +1029,31 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
         ) : detail ? (
           <div className="space-y-5">
             <div className="flex items-start gap-4">
-              <span className="grid h-16 w-16 place-items-center rounded-2xl bg-amber-wash text-xl font-bold text-amber border border-amber/20 shadow-xs">
-                {initials(detail.employee.full_name)}
-              </span>
+              <div
+                onClick={() => {
+                  if (canManage) {
+                    setPhotoTarget({ id: detail.employee.id, current: detail.employee.photo_path, name: detail.employee.full_name });
+                    setPhotoModalOpen(true);
+                  }
+                }}
+                className={cx(
+                  'group relative grid h-20 w-20 shrink-0 place-items-center rounded-2xl text-xl font-bold border shadow-xs overflow-hidden',
+                  canManage ? 'cursor-pointer hover:border-amber transition-colors' : '',
+                  detail.employee.photo_path ? 'border-line' : 'bg-amber-wash text-amber border-amber/20',
+                )}
+                title={canManage ? "Cliquer pour modifier la photo de profil (WhatsApp)" : undefined}
+              >
+                {detail.employee.photo_path ? (
+                  <img src={detail.employee.photo_path} alt={detail.employee.full_name} className="h-full w-full object-cover" />
+                ) : (
+                  initials(detail.employee.full_name)
+                )}
+                {canManage && (
+                  <span className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Camera size={20} />
+                  </span>
+                )}
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span
@@ -994,6 +1075,18 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                 <p className="mt-1 text-xs text-ink-soft">
                   Code badge de pointage : <span className="font-mono font-bold text-ink">{detail.employee.badge_token ?? '—'}</span>
                 </p>
+                {canManage ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoTarget({ id: detail.employee.id, current: detail.employee.photo_path, name: detail.employee.full_name });
+                      setPhotoModalOpen(true);
+                    }}
+                    className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber hover:underline"
+                  >
+                    <Camera size={13} /> {detail.employee.photo_path ? 'Modifier la photo' : 'Ajouter une photo de profil'}
+                  </button>
+                ) : null}
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span
@@ -1117,6 +1210,59 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       >
         <div className="space-y-3">
           {formError ? <Banner tone="error">{formError}</Banner> : null}
+
+          {/* Photo de profil (WhatsApp Style) */}
+          <div className="flex items-center gap-3.5 p-3 rounded-xl border border-line bg-paper">
+            <div
+              onClick={() => {
+                setPhotoTarget({ id: editing?.id, current: form.photo_path, name: form.full_name || 'Travailleur' });
+                setPhotoModalOpen(true);
+              }}
+              className="group relative grid h-16 w-16 shrink-0 place-items-center rounded-full border-2 border-dashed border-line-strong bg-surface cursor-pointer hover:border-amber overflow-hidden transition-all shadow-xs"
+              title="Cliquer pour prendre ou choisir une photo"
+            >
+              {form.photo_path ? (
+                <img src={form.photo_path} alt="Profil" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-1 text-center">
+                  <Camera size={18} className="text-amber group-hover:scale-110 transition-transform" />
+                  <span className="text-[9px] font-bold text-ink-soft mt-0.5">Photo</span>
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-ink">Photo de profil (WhatsApp)</p>
+              <p className="text-[11px] text-ink-faint">
+                Photo portrait par caméra ou importation pour le badge officiel et la fiche.
+              </p>
+              <div className="mt-1.5 flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  icon={<Camera size={13} />}
+                  onClick={() => {
+                    setPhotoTarget({ id: editing?.id, current: form.photo_path, name: form.full_name || 'Travailleur' });
+                    setPhotoModalOpen(true);
+                  }}
+                >
+                  {form.photo_path ? 'Changer la photo' : 'Prendre / Choisir photo'}
+                </Button>
+                {form.photo_path ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-red"
+                    onClick={() => setForm((f) => ({ ...f, photo_path: null }))}
+                  >
+                    Supprimer
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-soft">Nom complet</label>
             <input
@@ -1333,6 +1479,17 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
         </div>
       </Modal>
 
+      {/* Modal Photo Travailleur (Caméra Portrait / Galerie) */}
+      <ImagePickerModal
+        open={photoModalOpen}
+        title={photoTarget?.name ? `Photo : ${photoTarget.name}` : 'Photo de profil (WhatsApp)'}
+        currentImage={photoTarget?.current}
+        category="employees"
+        defaultFacingMode="user"
+        onClose={() => setPhotoModalOpen(false)}
+        onSelect={(url) => void handleEmployeePhotoSelect(url)}
+      />
+
       {portal}
     </div>
   );
@@ -1376,25 +1533,39 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
         </div>
       </div>
 
-      {/* Corps : Identité à gauche, QR Code à droite */}
-      <div className="flex flex-1 items-center justify-between gap-3 py-1">
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-center gap-1.5">
-            <span className="rounded bg-gray-100 border border-gray-300 px-1 py-0.2 font-mono text-[6pt] font-bold text-gray-800">
-              {employee.id}
-            </span>
-            <span className="rounded bg-orange-50 text-[#ff5500] border border-orange-200 px-1 py-0.2 text-[5.5pt] font-bold uppercase tracking-wider">
-              {employee.active ? 'Actif' : 'Inactif'}
-            </span>
+      {/* Corps : Identité & Photo à gauche, QR Code à droite */}
+      <div className="flex flex-1 items-center justify-between gap-2.5 py-1">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {/* Photo portrait officielle style badge professionnel */}
+          <div className={cx(
+            'shrink-0 rounded-lg overflow-hidden border border-gray-300 bg-gray-100 flex items-center justify-center font-bold text-gray-600',
+            isPreview ? 'h-16 w-14 text-sm' : 'h-[17mm] w-[14mm] text-[8pt]',
+          )}>
+            {employee.photo_path ? (
+              <img src={employee.photo_path} alt={employee.full_name} className="h-full w-full object-cover" />
+            ) : (
+              <span>{initials(employee.full_name)}</span>
+            )}
           </div>
 
-          <div>
-            <p className="truncate text-[9.5pt] font-extrabold leading-tight text-gray-950">
-              {employee.full_name}
-            </p>
-            <p className="truncate text-[7pt] font-medium text-gray-600">
-              {employee.job_title}
-            </p>
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className="rounded bg-gray-100 border border-gray-300 px-1 py-0.2 font-mono text-[6pt] font-bold text-gray-800">
+                {employee.id}
+              </span>
+              <span className="rounded bg-orange-50 text-[#ff5500] border border-orange-200 px-1 py-0.2 text-[5.5pt] font-bold uppercase tracking-wider">
+                {employee.active ? 'Actif' : 'Inactif'}
+              </span>
+            </div>
+
+            <div>
+              <p className="truncate text-[9.5pt] font-extrabold leading-tight text-gray-950">
+                {employee.full_name}
+              </p>
+              <p className="truncate text-[7pt] font-medium text-gray-600">
+                {employee.job_title}
+              </p>
+            </div>
           </div>
         </div>
 

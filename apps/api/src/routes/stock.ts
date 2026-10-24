@@ -17,6 +17,9 @@ const refBody = z.object({
   magasin_id: z.string().optional(),
   min_qty: z.number().min(0).default(0),
   supplier: z.string().optional(),
+  brand: z.string().optional(),
+  unit_cost: z.coerce.number().min(0).optional(),
+  photo_path: z.string().nullable().optional(),
   initial_qty: z.number().min(0).default(0),
 });
 
@@ -28,6 +31,9 @@ const patchRefBody = z.object({
   magasin_id: z.string().optional(),
   min_qty: z.number().min(0).optional(),
   supplier: z.string().optional(),
+  brand: z.string().optional(),
+  unit_cost: z.coerce.number().min(0).nullable().optional(),
+  photo_path: z.string().nullable().optional(),
 });
 
 const movementBody = z.object({
@@ -135,8 +141,8 @@ stockRoutes.post('/refs', requirePerm('stock.create_ref'), async (c) => {
 
   const created = await db.transaction(async (tx) => {
     const ref = await tx.one<StockRefRow>(
-      `INSERT INTO stock_refs (name, category, unit, location, magasin_id, min_qty, supplier, initial_qty)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 0) RETURNING *`,
+      `INSERT INTO stock_refs (name, category, unit, location, magasin_id, min_qty, supplier, brand, unit_cost, photo_path, initial_qty)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0) RETURNING *`,
       [
         data.name.trim(),
         data.category.trim(),
@@ -145,6 +151,9 @@ stockRoutes.post('/refs', requirePerm('stock.create_ref'), async (c) => {
         data.magasin_id || null,
         data.min_qty,
         data.supplier?.trim() || null,
+        data.brand?.trim() || null,
+        data.unit_cost ?? null,
+        data.photo_path?.trim() || null,
       ],
     );
     if (!ref) throw new Error('création référence impossible');
@@ -192,17 +201,31 @@ stockRoutes.patch('/refs/:id', requirePerm('stock.edit_ref'), async (c) => {
 
   const patch = body.data;
   const updated = await db.one<StockRefRow>(
-    `UPDATE stock_refs SET name = $2, category = $3, unit = $4, location = $5, magasin_id = $6, min_qty = $7, supplier = $8
-      WHERE id = $1 RETURNING *`,
+    `UPDATE stock_refs SET
+       name = coalesce($2, name),
+       category = coalesce($3, category),
+       unit = coalesce($4, unit),
+       location = coalesce($5, location),
+       magasin_id = CASE WHEN $6::text IS NOT NULL THEN (CASE WHEN $6 = '' THEN NULL ELSE $6 END) ELSE magasin_id END,
+       min_qty = coalesce($7, min_qty),
+       supplier = CASE WHEN $8::text IS NOT NULL THEN (CASE WHEN $8 = '' THEN NULL ELSE $8 END) ELSE supplier END,
+       brand = CASE WHEN $9::text IS NOT NULL THEN (CASE WHEN $9 = '' THEN NULL ELSE $9 END) ELSE brand END,
+       unit_cost = CASE WHEN $10::numeric IS NOT NULL THEN $10::numeric ELSE unit_cost END,
+       photo_path = CASE WHEN $11::text IS NOT NULL THEN (CASE WHEN $11 = '' THEN NULL ELSE $11 END) ELSE photo_path END
+     WHERE id = $1
+     RETURNING *`,
     [
       id,
-      patch.name?.trim() ?? before.name,
-      patch.category?.trim() ?? before.category,
-      patch.unit?.trim() ?? before.unit,
-      patch.location?.trim() ?? before.location,
-      patch.magasin_id === undefined ? (before as any).magasin_id : patch.magasin_id || null,
-      patch.min_qty ?? Number(before.min_qty),
-      patch.supplier === undefined ? before.supplier : patch.supplier.trim() || null,
+      patch.name?.trim() ?? null,
+      patch.category?.trim() ?? null,
+      patch.unit?.trim() ?? null,
+      patch.location?.trim() ?? null,
+      patch.magasin_id !== undefined ? patch.magasin_id : null,
+      patch.min_qty !== undefined ? patch.min_qty : null,
+      patch.supplier !== undefined ? patch.supplier.trim() : null,
+      patch.brand !== undefined ? patch.brand.trim() : null,
+      patch.unit_cost !== undefined ? patch.unit_cost : null,
+      patch.photo_path !== undefined ? (patch.photo_path ? patch.photo_path.trim() : null) : null,
     ],
   );
   await writeAudit(db, {
@@ -219,6 +242,30 @@ stockRoutes.patch('/refs/:id', requirePerm('stock.edit_ref'), async (c) => {
       ? { ...updated, min_qty: Number(updated.min_qty), initial_qty: Number(updated.initial_qty) }
       : updated,
   });
+});
+
+stockRoutes.post('/refs/:id/photo', requirePerm('stock.photo_edit'), async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id)) return c.json({ error: 'Référence invalide.' }, 400);
+  const body = z.object({ photo_path: z.string().nullable() }).safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Photo invalide.' }, 400);
+
+  const db = getDb();
+  const updated = await db.one<StockRefRow>(
+    'UPDATE stock_refs SET photo_path = $2 WHERE id = $1 RETURNING *',
+    [id, body.data.photo_path || null],
+  );
+  if (!updated) return c.json({ error: 'Référence introuvable.' }, 404);
+
+  await writeAudit(db, {
+    entity: 'stock_ref',
+    entityId: String(id),
+    action: 'photo_update',
+    actorId: actorId(c),
+    actorName: actorName(c),
+    after: { photo_path: body.data.photo_path },
+  });
+  return c.json({ ok: true, ref: updated });
 });
 
 stockRoutes.post(

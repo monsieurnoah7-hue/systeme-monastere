@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name text NOT NULL,
   role text NOT NULL,
   employee_id text REFERENCES employees(id),
+  photo_path text,
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -77,6 +78,13 @@ CREATE TABLE IF NOT EXISTS tools (
   status_reason text,
   observations text,
   photo_path text,
+  brand text,
+  model text,
+  serial_number text,
+  acquisition_cost numeric,
+  acquisition_year int,
+  acquisition_date date,
+  lifespan_years int NOT NULL DEFAULT 5,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -117,6 +125,9 @@ CREATE TABLE IF NOT EXISTS stock_refs (
   magasin_id text REFERENCES magasins(id),
   min_qty numeric NOT NULL DEFAULT 0,
   supplier text,
+  brand text,
+  unit_cost numeric,
+  photo_path text,
   initial_qty numeric NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -202,9 +213,16 @@ CREATE TABLE IF NOT EXISTS selfie_blobs (
   data text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS image_blobs (
+  file_name text PRIMARY KEY,
+  data text NOT NULL,
+  content_type text NOT NULL DEFAULT 'image/jpeg',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 `;
 
-// Idempotent adjustments for databases created before breaks/permissions/magasins/leaves.
+// Idempotent adjustments for databases created before breaks/permissions/magasins/leaves/tools accounting.
 export const MIGRATION_DDL = `
 ALTER TABLE attendance DROP CONSTRAINT IF EXISTS attendance_punch_type_check;
 ALTER TABLE attendance ADD CONSTRAINT attendance_punch_type_check
@@ -212,7 +230,24 @@ ALTER TABLE attendance ADD CONSTRAINT attendance_punch_type_check
 ALTER TABLE attendance DROP CONSTRAINT IF EXISTS attendance_employee_id_punch_type_punch_date_key;
 ALTER TABLE tools ADD COLUMN IF NOT EXISTS magasin_id text REFERENCES magasins(id);
 ALTER TABLE tools ADD COLUMN IF NOT EXISTS status_reason text;
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS brand text;
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS model text;
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS serial_number text;
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS acquisition_cost numeric;
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS acquisition_year int;
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS acquisition_date date;
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS lifespan_years int DEFAULT 5;
 ALTER TABLE stock_refs ADD COLUMN IF NOT EXISTS magasin_id text REFERENCES magasins(id);
+ALTER TABLE stock_refs ADD COLUMN IF NOT EXISTS photo_path text;
+ALTER TABLE stock_refs ADD COLUMN IF NOT EXISTS brand text;
+ALTER TABLE stock_refs ADD COLUMN IF NOT EXISTS unit_cost numeric;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_path text;
+CREATE TABLE IF NOT EXISTS image_blobs (
+  file_name text PRIMARY KEY,
+  data text NOT NULL,
+  content_type text NOT NULL DEFAULT 'image/jpeg',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 ALTER TABLE absences DROP CONSTRAINT IF EXISTS absences_kind_check;
 ALTER TABLE absences ADD CONSTRAINT absences_kind_check
   CHECK (kind IN ('absence','conge','permission'));
@@ -239,4 +274,4 @@ ALTER TABLE loans ADD COLUMN IF NOT EXISTS out_condition text DEFAULT 'bon';
 ALTER TABLE loans ADD COLUMN IF NOT EXISTS return_notes text;
 `;
 
-export const MIGRATION_NAME = '004_dynamic_roles_and_loans';
+export const MIGRATION_NAME = '005_tools_accounting_and_photos';

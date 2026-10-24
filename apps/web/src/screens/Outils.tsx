@@ -44,8 +44,10 @@ import {
   IconWrench,
   IconBox,
 } from '../components/Icons';
-import { Download, Printer } from 'lucide-react';
+import { Download, Printer, Camera, TrendingDown, FileSpreadsheet } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
+import { ImagePickerModal } from '../components/ImagePickerModal';
+import { computePortfolioAudit, computeToolAccounting, formatCurrency } from '../lib/accounting';
 
 type ToolDetail = { tool: Tool; events: ToolEvent[]; loan: ToolLoan | null };
 type Facets = { categories: string[]; locations: string[] };
@@ -165,7 +167,22 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
   const [employees, setEmployees] = useState<Employee[]>([]);
 
   const [newOpen, setNewOpen] = useState(false);
-  const [newForm, setNewForm] = useState({ name: '', category: 'Divers', location: 'Magasin', magasin_id: '', observations: '' });
+  const [newForm, setNewForm] = useState({
+    name: '',
+    category: 'Divers',
+    location: 'Magasin',
+    magasin_id: '',
+    observations: '',
+    brand: '',
+    model: '',
+    serial_number: '',
+    acquisition_cost: '',
+    acquisition_year: String(new Date().getFullYear()),
+    lifespan_years: '5',
+    photo_path: null as string | null,
+  });
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [photoTarget, setPhotoTarget] = useState<{ id?: string; current?: string | null; name?: string } | null>(null);
   const [loanFor, setLoanFor] = useState<Tool | null>(null);
   const [loanForm, setLoanForm] = useState({ employeeId: '', motive: '' });
   const [returnFor, setReturnFor] = useState<ToolLoan | null>(null);
@@ -272,6 +289,8 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
     return counts;
   }, [tools]);
 
+  const auditSummary = useMemo(() => computePortfolioAudit(tools), [tools]);
+
   async function createTool() {
     setBusy(true);
     try {
@@ -283,15 +302,58 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
           location: newForm.location,
           magasin_id: newForm.magasin_id || undefined,
           observations: newForm.observations || undefined,
+          brand: newForm.brand.trim() || undefined,
+          model: newForm.model.trim() || undefined,
+          serial_number: newForm.serial_number.trim() || undefined,
+          acquisition_cost: newForm.acquisition_cost ? Number(newForm.acquisition_cost) : undefined,
+          acquisition_year: newForm.acquisition_year ? Number(newForm.acquisition_year) : undefined,
+          lifespan_years: newForm.lifespan_years ? Number(newForm.lifespan_years) : 5,
+          photo_path: newForm.photo_path || undefined,
         }),
       });
       toast(`Outil ${res.tool.id} créé avec succès.`, 'success');
       setNewOpen(false);
-      setNewForm({ name: '', category: 'Divers', location: 'Magasin', magasin_id: '', observations: '' });
+      setNewForm({
+        name: '',
+        category: 'Divers',
+        location: 'Magasin',
+        magasin_id: '',
+        observations: '',
+        brand: '',
+        model: '',
+        serial_number: '',
+        acquisition_cost: '',
+        acquisition_year: String(new Date().getFullYear()),
+        lifespan_years: '5',
+        photo_path: null,
+      });
       refresh();
       setSelectedId(res.tool.id);
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Création impossible.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleToolPhotoSelect(url: string | null) {
+    if (!photoTarget?.id) {
+      setNewForm((f) => ({ ...f, photo_path: url }));
+      return;
+    }
+    setBusy(true);
+    try {
+      await api<{ ok: boolean; tool: Tool }>(`/api/tools/${photoTarget.id}/photo`, {
+        method: 'POST',
+        body: JSON.stringify({ photo_path: url }),
+      });
+      toast('Photo du matériel mise à jour.', 'success');
+      refresh();
+      if (detail && detail.tool.id === photoTarget.id) {
+        setDetail({ ...detail, tool: { ...detail.tool, photo_path: url } });
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Échec de mise à jour photo.', 'error');
     } finally {
       setBusy(false);
     }
@@ -378,17 +440,74 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
 
   function handleExportExcel() {
     const dateStr = new Date().toISOString().split('T')[0];
-    const headers = ['Identifiant', 'Désignation', 'Catégorie', 'Magasin / Dépôt', 'État Physique', 'Statut', 'Emprunteur Actuel'];
-    const rows = tools.map((t) => [
-      t.id,
-      t.name,
-      t.category,
-      t.magasin_name ?? t.location ?? '-',
-      CONDITION_LABEL[t.condition] ?? t.condition,
-      STATUS_LABEL[t.status] ?? t.status,
-      t.status === 'en_pret' ? 'Emprunté' : '-',
-    ]);
+    const headers = ['Identifiant', 'Désignation', 'Marque', 'Catégorie', 'Magasin / Dépôt', 'Coût Achat', 'VNC Résiduelle', 'État Physique', 'Statut'];
+    const rows = tools.map((t) => {
+      const acc = computeToolAccounting(t);
+      return [
+        t.id,
+        t.name,
+        t.brand || '-',
+        t.category,
+        t.magasin_name ?? t.location ?? '-',
+        acc ? formatCurrency(acc.acquisitionCost) : '-',
+        acc ? formatCurrency(acc.vnc) : '-',
+        CONDITION_LABEL[t.condition] ?? t.condition,
+        STATUS_LABEL[t.status] ?? t.status,
+      ];
+    });
     exportToExcel(`Parc_Outils_${dateStr}`, 'Outils', headers, rows);
+  }
+
+  function handleExportAuditReport() {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const headers = [
+      'ID Outil',
+      'Désignation',
+      'Marque',
+      'Catégorie',
+      'Magasin',
+      'Coût Achat (FCFA)',
+      'Année',
+      'Âge',
+      'Amortissement (FCFA)',
+      'VNC Résiduelle (FCFA)',
+      'Progression %',
+      'Statut Comptable',
+      'État Physique',
+    ];
+    const rows = tools.map((t) => {
+      const acc = computeToolAccounting(t);
+      return [
+        t.id,
+        t.name,
+        t.brand || '-',
+        t.category,
+        t.magasin_name ?? t.location ?? '-',
+        acc ? acc.acquisitionCost : (t.acquisition_cost || '-'),
+        acc ? acc.acquisitionYear : (t.acquisition_year || '-'),
+        acc ? `${acc.ageYears} an(s)` : '-',
+        acc ? acc.cumulativeAmortization : '-',
+        acc ? acc.vnc : '-',
+        acc ? `${acc.progressPercent}%` : '-',
+        acc ? acc.statusLabel : 'Non valorisé',
+        CONDITION_LABEL[t.condition] ?? t.condition,
+      ];
+    });
+
+    exportToExcel(`Audit_Patrimonial_Outils_${dateStr}`, 'Inventaire_Amortissements', headers, rows);
+
+    exportToPdf(
+      'Rapport d’Audit Patrimonial & Amortissement de l’Outillage',
+      'Centre de Formation Technique (C.F.T.) des Bénédictins du Mont Fébé — État des Immobilisations',
+      ['ID', 'Désignation', 'Marque', 'Catégorie', 'Coût Achat', 'Amortissement', 'VNC Nette', 'Statut Comptable'],
+      rows.map((r) => [r[0], r[1], r[2], r[3], typeof r[5] === 'number' ? formatCurrency(r[5]) : r[5], typeof r[8] === 'number' ? formatCurrency(r[8]) : r[8], typeof r[9] === 'number' ? formatCurrency(r[9]) : r[9], r[11]]),
+      [
+        { label: 'Valeur Brute Parc', value: formatCurrency(auditSummary.totalAcquisitionCost) },
+        { label: 'VNC Active Nette', value: formatCurrency(auditSummary.totalVnc) },
+        { label: 'Amortissements Cumulés', value: formatCurrency(auditSummary.totalAmortization) },
+        { label: 'Taux Moyen d’Amortissement', value: `${auditSummary.averageAmortizationRate}%` },
+      ],
+    );
   }
 
   function handleExportPdf() {
@@ -524,6 +643,64 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         </div>
       </div>
 
+      {/* Bandeau d'Amortissement Intelligent & Valorisation Patrimoniale */}
+      <div className="rounded-xl border border-line bg-gradient-to-r from-paper to-surface p-4 shadow-xs">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-wash border border-amber/30 text-amber shrink-0">
+              <TrendingDown size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-ink">Valorisation &amp; Amortissement Comptable</h3>
+                <span className="rounded bg-amber-wash px-2 py-0.5 text-[10px] font-bold text-amber border border-amber/20">
+                  SYSCOHADA / Pratique Atelier
+                </span>
+              </div>
+              <p className="text-xs text-ink-soft">
+                Suivi dynamique de la Valeur Nette Comptable (VNC) et vieillissement du parc d’outillage.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="border-amber/30 bg-amber-wash/30 text-amber hover:bg-amber-wash hover:border-amber/50"
+            icon={<FileSpreadsheet size={15} />}
+            onClick={handleExportAuditReport}
+          >
+            Rapport d’Audit Patrimonial
+          </Button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 border-t border-line/60 pt-3">
+          <div>
+            <span className="text-[11px] font-medium text-ink-faint">Valeur Brute d'Acquisition</span>
+            <p className="text-base font-bold text-ink">{formatCurrency(auditSummary.totalAcquisitionCost)}</p>
+          </div>
+          <div>
+            <span className="text-[11px] font-medium text-ink-faint">VNC Active (Résiduelle)</span>
+            <p className="text-base font-bold text-green">{formatCurrency(auditSummary.totalVnc)}</p>
+          </div>
+          <div>
+            <span className="text-[11px] font-medium text-ink-faint">Amortissements Cumulés</span>
+            <p className="text-base font-bold text-ink-soft">{formatCurrency(auditSummary.totalAmortization)}</p>
+          </div>
+          <div>
+            <span className="text-[11px] font-medium text-ink-faint">Usure Moyenne du Parc</span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <div className="h-2 flex-1 rounded-full bg-paper-2 overflow-hidden border border-line">
+                <div
+                  className="h-full bg-amber rounded-full"
+                  style={{ width: `${auditSummary.averageAmortizationRate}%` }}
+                />
+              </div>
+              <span className="text-xs font-bold text-ink">{auditSummary.averageAmortizationRate}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Filters & Search Bar */}
       <div className="rounded-xl border border-line bg-surface p-3 shadow-xs space-y-3">
         <div className="grid gap-2.5 sm:grid-cols-[1fr_auto_auto_auto_auto]">
@@ -653,183 +830,265 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="px-2.5 py-2.5 w-12 border-r border-line text-center">Photo</th>
                     <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-24 border-r border-line">
                       Réf / Code QR
                     </th>
-                    <th className="px-3 py-2.5 min-w-44 border-r border-line">Désignation</th>
+                    <th className="px-3 py-2.5 min-w-44 border-r border-line">Désignation &amp; Marque</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
                     <th className="px-3 py-2.5 min-w-36 border-r border-line">Emplacement / Magasin</th>
+                    <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">VNC Nette</th>
                     <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Statut</th>
                     <th className="px-3 py-2.5 min-w-32 text-right">Actions Rapides</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {tools.map((tool) => (
-                    <tr
-                      key={tool.id}
-                      onClick={() => setSelectedId(tool.id)}
-                      className="hover:bg-amber-wash/30 cursor-pointer transition-colors group"
-                    >
-                      {/* Sticky ID */}
-                      <td className="sticky left-0 z-10 bg-surface group-hover:bg-surface-2 px-3 py-2 font-mono font-bold text-amber border-r border-line">
-                        <div className="flex items-center gap-1.5">
-                          <IconQr size={13} className="text-ink-faint shrink-0" />
-                          <span>{tool.id}</span>
-                        </div>
-                      </td>
-
-                      {/* Designation */}
-                      <td className="px-3 py-2 font-medium text-ink border-r border-line">
-                        <div className="font-semibold">{tool.name}</div>
-                        {tool.observations ? (
-                          <div className="text-[10px] text-ink-faint truncate max-w-xs">{tool.observations}</div>
-                        ) : null}
-                      </td>
-
-                      {/* Catégorie */}
-                      <td className="px-3 py-2 text-ink-soft border-r border-line">
-                        <span className="inline-block rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium border border-line text-ink-soft">
-                          {tool.category}
-                        </span>
-                      </td>
-
-                      {/* Magasin & Location */}
-                      <td className="px-3 py-2 text-ink-soft border-r border-line">
-                        <div className="font-medium text-ink">{tool.magasin_name ?? 'Magasin Central'}</div>
-                        <div className="text-[10px] text-ink-faint">{tool.location}</div>
-                      </td>
-
-                      {/* État */}
-                      <td className="px-3 py-2 text-center border-r border-line">
-                        <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft">
-                          <span
-                            className={cx(
-                              'h-1.5 w-1.5 rounded-full shrink-0',
-                              tool.condition === 'bon' ? 'bg-green' : tool.condition === 'a_reparer' ? 'bg-amber' : 'bg-red',
-                            )}
-                          />
-                          {CONDITION_LABEL[tool.condition]}
-                        </span>
-                      </td>
-
-                      {/* Statut Chip */}
-                      <td className="px-3 py-2 text-center border-r border-line">
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium text-ink-soft">
-                          <span
-                            className={cx(
-                              'h-1.5 w-1.5 rounded-full shrink-0',
-                              tool.status === 'disponible'
-                                ? 'bg-green'
-                                : tool.status === 'en_pret'
-                                  ? 'bg-amber'
-                                  : tool.status === 'maintenance'
-                                    ? 'bg-amber-500'
-                                    : 'bg-red',
-                            )}
-                          />
-                          {STATUS_LABEL[tool.status]}
-                        </span>
-                      </td>
-
-                      {/* Actions Rapides */}
-                      <td className="px-3 py-2 text-right">
-                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          {canManage && tool.status === 'disponible' ? (
-                            <button
-                              onClick={() => {
-                                setLoanFor(tool);
-                                setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
-                              }}
-                              className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs hover:bg-[#E05A02] active:scale-95 transition-all"
+                  {tools.map((tool) => {
+                    const acc = computeToolAccounting(tool);
+                    return (
+                      <tr
+                        key={tool.id}
+                        onClick={() => setSelectedId(tool.id)}
+                        className="hover:bg-amber-wash/30 cursor-pointer transition-colors group"
+                      >
+                        {/* Photo Thumbnail */}
+                        <td className="px-2 py-1.5 text-center border-r border-line" onClick={(e) => {
+                          if (canManage) {
+                            e.stopPropagation();
+                            setPhotoTarget({ id: tool.id, current: tool.photo_path, name: tool.name });
+                            setPhotoModalOpen(true);
+                          }
+                        }}>
+                          {tool.photo_path ? (
+                            <img
+                              src={tool.photo_path}
+                              alt={tool.name}
+                              className="h-9 w-9 rounded-lg object-cover border border-line shadow-2xs mx-auto hover:opacity-85 transition-opacity"
+                              title="Cliquer pour changer la photo"
+                            />
+                          ) : (
+                            <span
+                              className="grid h-9 w-9 place-items-center rounded-lg bg-paper text-ink-faint border border-line/60 mx-auto hover:text-amber hover:border-amber transition-colors"
+                              title="Ajouter une photo"
                             >
-                              Prêter
-                            </button>
-                          ) : null}
+                              <IconWrench size={16} />
+                            </span>
+                          )}
+                        </td>
 
-                          <button
-                            onClick={() => setSelectedId(tool.id)}
-                            className="rounded border border-line bg-paper px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-paper-2 hover:text-ink active:scale-95 transition-all"
-                          >
-                            Détails ›
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        {/* Sticky ID */}
+                        <td className="sticky left-0 z-10 bg-surface group-hover:bg-surface-2 px-3 py-2 font-mono font-bold text-amber border-r border-line">
+                          <div className="flex items-center gap-1.5">
+                            <IconQr size={13} className="text-ink-faint shrink-0" />
+                            <span>{tool.id}</span>
+                          </div>
+                        </td>
+
+                        {/* Designation & Marque */}
+                        <td className="px-3 py-2 font-medium text-ink border-r border-line">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold">{tool.name}</span>
+                            {tool.brand ? (
+                              <span className="rounded bg-paper px-1.5 py-0.2 text-[10px] font-bold text-ink-soft border border-line">
+                                {tool.brand}
+                              </span>
+                            ) : null}
+                          </div>
+                          {tool.observations ? (
+                            <div className="text-[10px] text-ink-faint truncate max-w-xs">{tool.observations}</div>
+                          ) : null}
+                        </td>
+
+                        {/* Catégorie */}
+                        <td className="px-3 py-2 text-ink-soft border-r border-line">
+                          <span className="inline-block rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium border border-line text-ink-soft">
+                            {tool.category}
+                          </span>
+                        </td>
+
+                        {/* Magasin & Location */}
+                        <td className="px-3 py-2 text-ink-soft border-r border-line">
+                          <div className="font-medium text-ink">{tool.magasin_name ?? 'Magasin Central'}</div>
+                          <div className="text-[10px] text-ink-faint">{tool.location}</div>
+                        </td>
+
+                        {/* VNC Nette */}
+                        <td className="px-3 py-2 text-right font-mono font-semibold text-ink border-r border-line">
+                          {acc ? (
+                            <div>
+                              <span className={acc.isFullyAmortized ? 'text-purple-700' : 'text-green'}>
+                                {formatCurrency(acc.vnc)}
+                              </span>
+                              <span className="block text-[10px] text-ink-faint font-normal">{acc.progressPercent}% amorti</span>
+                            </div>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
+                        </td>
+
+                        {/* État */}
+                        <td className="px-3 py-2 text-center border-r border-line">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft">
+                            <span
+                              className={cx(
+                                'h-1.5 w-1.5 rounded-full shrink-0',
+                                tool.condition === 'bon' ? 'bg-green' : tool.condition === 'a_reparer' ? 'bg-amber' : 'bg-red',
+                              )}
+                            />
+                            {CONDITION_LABEL[tool.condition]}
+                          </span>
+                        </td>
+
+                        {/* Statut Chip */}
+                        <td className="px-3 py-2 text-center border-r border-line">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium text-ink-soft">
+                            <span
+                              className={cx(
+                                'h-1.5 w-1.5 rounded-full shrink-0',
+                                tool.status === 'disponible'
+                                  ? 'bg-green'
+                                  : tool.status === 'en_pret'
+                                    ? 'bg-amber'
+                                    : tool.status === 'maintenance'
+                                      ? 'bg-amber-500'
+                                      : 'bg-red',
+                              )}
+                            />
+                            {STATUS_LABEL[tool.status]}
+                          </span>
+                        </td>
+
+                        {/* Actions Rapides */}
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {canManage && tool.status === 'disponible' ? (
+                              <button
+                                onClick={() => {
+                                  setLoanFor(tool);
+                                  setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
+                                }}
+                                className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs hover:bg-[#E05A02] active:scale-95 transition-all"
+                              >
+                                Prêter
+                              </button>
+                            ) : null}
+
+                            <button
+                              onClick={() => setSelectedId(tool.id)}
+                              className="rounded border border-line bg-paper px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-paper-2 hover:text-ink active:scale-95 transition-all"
+                            >
+                              Détails ›
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Tableur Footer Total */}
             <div className="bg-paper border-t border-line px-4 py-2 text-xs flex items-center justify-between font-semibold text-ink-soft">
-              <span>Total : {tools.length} référence(s)</span>
+              <span>Total : {tools.length} référence(s) · VNC Globale : {formatCurrency(auditSummary.totalVnc)}</span>
               <span className="text-[11px] text-ink-faint">
-                Cliquez sur n’importe quelle ligne pour voir l’historique ou imprimer le QR code
+                Cliquez sur n’importe quelle ligne pour voir l’amortissement ou imprimer le QR code
               </span>
             </div>
           </div>
 
           {/* Cards View (pour Mobile) */}
           <div className={cx('space-y-2.5', viewMode === 'cards' ? 'block' : 'sm:hidden')}>
-            {tools.map((tool) => (
-              <div
-                key={tool.id}
-                onClick={() => setSelectedId(tool.id)}
-                className="rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper-2 cursor-pointer transition-all space-y-2.5"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-amber">{tool.id}</span>
-                      <span className="rounded bg-paper px-1.5 py-0.5 text-[10px] font-medium text-ink-soft border border-line">
-                        {tool.category}
+            {tools.map((tool) => {
+              const acc = computeToolAccounting(tool);
+              return (
+                <div
+                  key={tool.id}
+                  onClick={() => setSelectedId(tool.id)}
+                  className="rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper-2 cursor-pointer transition-all space-y-2.5"
+                >
+                  <div className="flex items-start gap-3">
+                    {tool.photo_path ? (
+                      <img
+                        src={tool.photo_path}
+                        alt={tool.name}
+                        className="h-14 w-14 shrink-0 rounded-xl object-cover border border-line shadow-xs"
+                      />
+                    ) : (
+                      <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-paper text-ink-faint border border-line">
+                        <IconWrench size={22} />
+                      </span>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs font-bold text-amber">{tool.id}</span>
+                          <span className="rounded bg-paper px-1.5 py-0.5 text-[10px] font-medium text-ink-soft border border-line">
+                            {tool.category}
+                          </span>
+                          {tool.brand ? (
+                            <span className="rounded bg-paper px-1.5 py-0.5 text-[10px] font-bold text-ink-soft border border-line">
+                              {tool.brand}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <span
+                          className={cx(
+                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0',
+                            tool.status === 'disponible'
+                              ? 'bg-green-wash text-green'
+                              : tool.status === 'en_pret'
+                                ? 'bg-amber-wash text-amber'
+                                : 'bg-red-wash text-red',
+                          )}
+                        >
+                          <span
+                            className={cx(
+                              'h-1.5 w-1.5 rounded-full',
+                              tool.status === 'disponible' ? 'bg-green' : 'bg-amber',
+                            )}
+                          />
+                          {STATUS_LABEL[tool.status]}
+                        </span>
+                      </div>
+
+                      <p className="font-semibold text-sm text-ink mt-0.5 truncate">{tool.name}</p>
+
+                      {acc ? (
+                        <div className="mt-1 flex items-center gap-2 text-[11px]">
+                          <span className="text-ink-faint">VNC:</span>
+                          <span className="font-bold text-green">{formatCurrency(acc.vnc)}</span>
+                          <span className="text-ink-faint">({acc.progressPercent}% amorti)</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-ink-faint pt-2 border-t border-line/60">
+                    <span>{tool.magasin_name ?? tool.location}</span>
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {canManage && tool.status === 'disponible' ? (
+                        <button
+                          onClick={() => {
+                            setLoanFor(tool);
+                            setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
+                          }}
+                          className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white"
+                        >
+                          Prêter
+                        </button>
+                      ) : null}
+                      <span className="text-ink-soft font-medium flex items-center">
+                        Fiche <IconChevronRight size={14} />
                       </span>
                     </div>
-                    <p className="font-semibold text-sm text-ink mt-0.5">{tool.name}</p>
-                  </div>
-
-                  <span
-                    className={cx(
-                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                      tool.status === 'disponible'
-                        ? 'bg-green-wash text-green'
-                        : tool.status === 'en_pret'
-                          ? 'bg-amber-wash text-amber'
-                          : 'bg-red-wash text-red',
-                    )}
-                  >
-                    <span
-                      className={cx(
-                        'h-1.5 w-1.5 rounded-full',
-                        tool.status === 'disponible' ? 'bg-green' : 'bg-amber',
-                      )}
-                    />
-                    {STATUS_LABEL[tool.status]}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-xs text-ink-faint pt-2 border-t border-line/60">
-                  <span>{tool.magasin_name ?? tool.location}</span>
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    {canManage && tool.status === 'disponible' ? (
-                      <button
-                        onClick={() => {
-                          setLoanFor(tool);
-                          setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
-                        }}
-                        className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white"
-                      >
-                        Prêter
-                      </button>
-                    ) : null}
-                    <span className="text-ink-soft font-medium flex items-center">
-                      Fiche <IconChevronRight size={14} />
-                    </span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
@@ -848,6 +1107,52 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Photo & Identity Hero */}
+            <div className="relative rounded-2xl border border-line bg-paper overflow-hidden">
+              {detail.tool.photo_path ? (
+                <div className="relative h-48 sm:h-56 w-full bg-black/5 flex items-center justify-center">
+                  <img
+                    src={detail.tool.photo_path}
+                    alt={detail.tool.name}
+                    className="h-full w-full object-contain"
+                  />
+                  {canManage ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoTarget({ id: detail.tool.id, current: detail.tool.photo_path, name: detail.tool.name });
+                        setPhotoModalOpen(true);
+                      }}
+                      className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-surface/90 px-3 py-1.5 text-xs font-semibold text-ink shadow-md backdrop-blur-xs hover:bg-surface border border-line"
+                    >
+                      <Camera size={14} className="text-amber" /> Modifier la photo
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 text-center">
+                  <div className="grid h-16 w-16 place-items-center rounded-2xl bg-surface border border-line text-ink-faint shadow-xs mb-2">
+                    <IconWrench size={28} />
+                  </div>
+                  <p className="text-xs text-ink-soft">Aucune photo enregistrée pour cet équipement.</p>
+                  {canManage ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="mt-3"
+                      icon={<Camera size={14} className="text-amber" />}
+                      onClick={() => {
+                        setPhotoTarget({ id: detail.tool.id, current: null, name: detail.tool.name });
+                        setPhotoModalOpen(true);
+                      }}
+                    >
+                      Prendre ou importer une photo
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <Chip tone={STATUS_TONE[detail.tool.status]}>{STATUS_LABEL[detail.tool.status]}</Chip>
               <Chip tone={detail.tool.condition === 'bon' ? 'neutral' : 'amber'}>
@@ -855,6 +1160,77 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               </Chip>
               {detail.tool.magasin_name ? <Chip tone="blue">{detail.tool.magasin_name}</Chip> : null}
             </div>
+
+            {/* Fiche Comptable & Amortissement Intelligent */}
+            {(() => {
+              const acc = computeToolAccounting(detail.tool);
+              return (
+                <div className="rounded-xl border border-line bg-surface p-4 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-line pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <TrendingDown size={16} className="text-amber" />
+                      <span className="text-xs font-bold text-ink uppercase tracking-wider">État d’Amortissement Intelligent</span>
+                    </div>
+                    {acc ? (
+                      <span className={cx(
+                        'rounded-full px-2 py-0.5 text-[10px] font-bold border',
+                        acc.statusTone === 'emerald' && 'bg-green-wash text-green border-green/20',
+                        acc.statusTone === 'blue' && 'bg-blue-wash text-blue border-blue/20',
+                        acc.statusTone === 'amber' && 'bg-amber-wash text-amber border-amber/20',
+                        acc.statusTone === 'purple' && 'bg-purple-wash text-purple-700 border-purple-200',
+                        acc.statusTone === 'red' && 'bg-red-wash text-red border-red/20'
+                      )}>
+                        {acc.statusLabel}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-ink-faint">Non valorisé</span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+                    <div>
+                      <span className="text-ink-faint block text-[11px]">Marque &amp; Modèle</span>
+                      <span className="font-semibold text-ink">{detail.tool.brand || '—'} {detail.tool.model ? `· ${detail.tool.model}` : ''}</span>
+                    </div>
+                    <div>
+                      <span className="text-ink-faint block text-[11px]">N° de Série</span>
+                      <span className="font-mono text-ink-soft">{detail.tool.serial_number || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-ink-faint block text-[11px]">Année d’Acquisition</span>
+                      <span className="font-semibold text-ink">{detail.tool.acquisition_year || '—'} {acc ? `(${acc.ageYears} an${acc.ageYears > 1 ? 's' : ''})` : ''}</span>
+                    </div>
+                    <div>
+                      <span className="text-ink-faint block text-[11px]">Coût d'Acquisition Initial</span>
+                      <span className="font-bold text-ink">{formatCurrency(detail.tool.acquisition_cost)}</span>
+                    </div>
+                    <div>
+                      <span className="text-ink-faint block text-[11px]">Amortissement Cumulé</span>
+                      <span className="font-bold text-ink-soft">{acc ? formatCurrency(acc.cumulativeAmortization) : '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-ink-faint block text-[11px]">Valeur Nette Comptable (VNC)</span>
+                      <span className="font-bold text-green">{acc ? formatCurrency(acc.vnc) : '—'}</span>
+                    </div>
+                  </div>
+
+                  {acc ? (
+                    <div className="space-y-1.5 pt-1 border-t border-line/60">
+                      <div className="flex justify-between text-[11px] text-ink-soft">
+                        <span>Progression de l’amortissement ({acc.annualRate}% / an sur {acc.lifespanYears} ans)</span>
+                        <span className="font-bold text-ink">{acc.progressPercent}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-paper overflow-hidden border border-line">
+                        <div
+                          className={cx('h-full rounded-full transition-all', acc.isFullyAmortized ? 'bg-purple-600' : 'bg-amber')}
+                          style={{ width: `${acc.progressPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })()}
 
             {detail.tool.status_reason ? (
               <Banner tone={detail.tool.status === 'maintenance' ? 'warning' : 'error'} title="Motif du statut">
@@ -987,7 +1363,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
       {/* Modal Nouvel Outil */}
       <Modal
         open={newOpen}
-        title="Nouvel outil"
+        title="Nouvel équipement / Outil"
         onClose={() => setNewOpen(false)}
         footer={
           <>
@@ -999,12 +1375,79 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         }
       >
         <div className="space-y-4">
+          {/* Sélecteur de Photo de l'Outil */}
+          <div className="flex items-center gap-4 p-3 rounded-xl border border-line bg-paper">
+            <div
+              onClick={() => {
+                setPhotoTarget({ id: undefined, current: newForm.photo_path, name: newForm.name || 'Nouvel outil' });
+                setPhotoModalOpen(true);
+              }}
+              className="relative grid h-20 w-20 shrink-0 place-items-center rounded-xl border-2 border-dashed border-line-strong bg-surface cursor-pointer hover:border-amber overflow-hidden group transition-all"
+            >
+              {newForm.photo_path ? (
+                <img src={newForm.photo_path} alt="Aperçu outil" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-1 text-center">
+                  <Camera size={18} className="text-amber group-hover:scale-110 transition-transform" />
+                  <span className="text-[9px] font-bold text-ink-soft mt-1">Photo</span>
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-ink">Photo du matériel</p>
+              <p className="text-[11px] text-ink-faint mt-0.5">
+                Prenez une photo en direct, importez un fichier ou réutilisez une photo d'un lot similaire.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  icon={<Camera size={13} />}
+                  onClick={() => {
+                    setPhotoTarget({ id: undefined, current: newForm.photo_path, name: newForm.name || 'Nouvel outil' });
+                    setPhotoModalOpen(true);
+                  }}
+                >
+                  {newForm.photo_path ? 'Changer la photo' : 'Prendre / Choisir photo'}
+                </Button>
+                {newForm.photo_path ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-red"
+                    onClick={() => setNewForm((f) => ({ ...f, photo_path: null }))}
+                  >
+                    Supprimer
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
           <Field
-            label="Désignation"
+            label="Désignation de l'outil"
             value={newForm.name}
             onChange={(event) => setNewForm((f) => ({ ...f, name: event.target.value }))}
             placeholder="ex. Rabot électrique 900 W"
           />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label="Marque"
+              value={newForm.brand}
+              onChange={(event) => setNewForm((f) => ({ ...f, brand: event.target.value }))}
+              placeholder="ex. Bosch, Makita, Festool..."
+            />
+            <Field
+              label="Modèle / Référence constructeur"
+              value={newForm.model}
+              onChange={(event) => setNewForm((f) => ({ ...f, model: event.target.value }))}
+              placeholder="ex. GHO 26-82 D"
+            />
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <Field
               label="Catégorie"
@@ -1013,21 +1456,64 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               hint="Préfixe généré (ex: RBT, SCI, PER...)"
             />
             <Field
+              label="Numéro de série (facultatif)"
+              value={newForm.serial_number}
+              onChange={(event) => setNewForm((f) => ({ ...f, serial_number: event.target.value }))}
+              placeholder="ex. SN-8849201"
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SelectField
+              label="Magasin / atelier"
+              value={newForm.magasin_id}
+              onChange={(event) => setNewForm((f) => ({ ...f, magasin_id: event.target.value }))}
+            >
+              <option value="">— Aucun —</option>
+              {magasins.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </SelectField>
+            <Field
               label="Emplacement normal"
               value={newForm.location}
               onChange={(event) => setNewForm((f) => ({ ...f, location: event.target.value }))}
             />
           </div>
-          <SelectField
-            label="Magasin / atelier"
-            value={newForm.magasin_id}
-            onChange={(event) => setNewForm((f) => ({ ...f, magasin_id: event.target.value }))}
-          >
-            <option value="">— Aucun —</option>
-            {magasins.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </SelectField>
+
+          {/* Section Amortissement & Comptabilité */}
+          <div className="rounded-xl border border-line bg-surface p-3.5 space-y-3">
+            <div className="flex items-center gap-2 border-b border-line pb-2">
+              <TrendingDown size={15} className="text-amber" />
+              <span className="text-xs font-bold text-ink uppercase tracking-wider">Valorisation &amp; Amortissement</span>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field
+                label="Coût d'acquisition (FCFA)"
+                value={newForm.acquisition_cost}
+                onChange={(event) => setNewForm((f) => ({ ...f, acquisition_cost: event.target.value }))}
+                placeholder="ex. 185000"
+                type="number"
+              />
+              <Field
+                label="Année d'acquisition"
+                value={newForm.acquisition_year}
+                onChange={(event) => setNewForm((f) => ({ ...f, acquisition_year: event.target.value }))}
+                placeholder={String(new Date().getFullYear())}
+                type="number"
+              />
+              <Field
+                label="Durée d'amortissement (ans)"
+                value={newForm.lifespan_years}
+                onChange={(event) => setNewForm((f) => ({ ...f, lifespan_years: event.target.value }))}
+                placeholder="5"
+                type="number"
+                hint="Défaut : 5 ans (20%/an)"
+              />
+            </div>
+          </div>
+
           <TextArea
             label="Observations (facultatif)"
             value={newForm.observations}
@@ -1237,6 +1723,17 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
           </div>
         </div>
       </Modal>
+
+      {/* Image Picker Modal (Caméra / Galerie / Lot) */}
+      <ImagePickerModal
+        open={photoModalOpen}
+        title={photoTarget?.name ? `Photo : ${photoTarget.name}` : 'Photo de l’outil / matériel'}
+        currentImage={photoTarget?.current}
+        category="tools"
+        defaultFacingMode="environment"
+        onClose={() => setPhotoModalOpen(false)}
+        onSelect={(url) => void handleToolPhotoSelect(url)}
+      />
 
       {portal}
     </div>

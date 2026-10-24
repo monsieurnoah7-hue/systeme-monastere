@@ -39,6 +39,7 @@ export type User = {
   display_name: string;
   role: Role;
   employee_id: string | null;
+  photo_path?: string | null;
 };
 
 export type ToolStatus = 'disponible' | 'en_pret' | 'maintenance' | 'manquant' | 'reforme';
@@ -55,6 +56,13 @@ export type Tool = {
   status_reason: string | null;
   observations: string | null;
   photo_path: string | null;
+  brand?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  acquisition_cost?: number | null;
+  acquisition_year?: number | null;
+  acquisition_date?: string | null;
+  lifespan_years?: number | null;
   created_at: string;
   magasin_name?: string | null;
   magasin_code?: string | null;
@@ -176,6 +184,9 @@ export type StockRef = {
   magasin_code?: string | null;
   min_qty: number;
   supplier: string | null;
+  brand?: string | null;
+  unit_cost?: number | null;
+  photo_path?: string | null;
   initial_qty: number;
   qty: number;
 };
@@ -346,6 +357,7 @@ export type AppUserRow = {
   employee_id: string | null;
   active: boolean;
   created_at: string;
+  photo_path?: string | null;
 };
 
 export type BackupInfo = {

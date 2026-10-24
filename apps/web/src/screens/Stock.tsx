@@ -27,9 +27,11 @@ import {
   IconRefresh,
   IconSearch,
 } from '../components/Icons';
-import { Download, Printer } from 'lucide-react';
+import { Camera, Coins, Download, Printer } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { usePrintSheet } from '../lib/print';
+import { ImagePickerModal } from '../components/ImagePickerModal';
+import { formatCurrency } from '../lib/accounting';
 
 type RefForm = {
   name: string;
@@ -39,6 +41,9 @@ type RefForm = {
   magasin_id: string;
   min_qty: string;
   supplier: string;
+  brand: string;
+  unit_cost: string;
+  photo_path: string | null;
   initial_qty: string;
 };
 
@@ -51,7 +56,19 @@ type MoveForm = {
   note: string;
 };
 
-const EMPTY_REF: RefForm = { name: '', category: '', unit: 'u', location: '', magasin_id: '', min_qty: '0', supplier: '', initial_qty: '0' };
+const EMPTY_REF: RefForm = {
+  name: '',
+  category: '',
+  unit: 'u',
+  location: '',
+  magasin_id: '',
+  min_qty: '0',
+  supplier: '',
+  brand: '',
+  unit_cost: '',
+  photo_path: null,
+  initial_qty: '0',
+};
 
 function stockState(ref: StockRef): { label: string; tone: 'green' | 'amber' | 'red' } {
   if (ref.qty <= 0) return { label: 'Épuisé', tone: 'red' };
@@ -180,6 +197,8 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
   const [refOpen, setRefOpen] = useState(false);
   const [editing, setEditing] = useState<StockRef | null>(null);
   const [refForm, setRefForm] = useState<RefForm>(EMPTY_REF);
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [photoTarget, setPhotoTarget] = useState<{ id?: number; current?: string | null; name?: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -286,10 +305,33 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
       magasin_id: ref.magasin_id ?? '',
       min_qty: String(ref.min_qty),
       supplier: ref.supplier ?? '',
+      brand: ref.brand ?? '',
+      unit_cost: ref.unit_cost ? String(ref.unit_cost) : '',
+      photo_path: ref.photo_path ?? null,
       initial_qty: '0',
     });
     setFormError(null);
     setRefOpen(true);
+  }
+
+  async function handleStockPhotoSelect(url: string | null) {
+    if (!photoTarget?.id) {
+      setRefForm((f) => ({ ...f, photo_path: url }));
+      return;
+    }
+    setBusy(true);
+    try {
+      await api<{ ok: boolean; ref: StockRef }>(`/api/stock/refs/${photoTarget.id}/photo`, {
+        method: 'POST',
+        body: JSON.stringify({ photo_path: url }),
+      });
+      toast('Photo de la référence mise à jour.', 'success');
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Échec de mise à jour photo.', 'error');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveRef() {
@@ -307,6 +349,9 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
             magasin_id: refForm.magasin_id || null,
             min_qty: Number(refForm.min_qty),
             supplier: refForm.supplier,
+            brand: refForm.brand.trim() || null,
+            unit_cost: refForm.unit_cost ? Number(refForm.unit_cost) : null,
+            photo_path: refForm.photo_path,
           }),
         });
         toast('Référence mise à jour avec succès.', 'success');
@@ -321,6 +366,9 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
             magasin_id: refForm.magasin_id || undefined,
             min_qty: Number(refForm.min_qty),
             supplier: refForm.supplier,
+            brand: refForm.brand.trim() || undefined,
+            unit_cost: refForm.unit_cost ? Number(refForm.unit_cost) : undefined,
+            photo_path: refForm.photo_path || undefined,
             initial_qty: Number(refForm.initial_qty),
           }),
         });
@@ -373,16 +421,36 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
     }
   }
 
+  const totalStockValuation = useMemo(
+    () => refs.reduce((acc, r) => acc + Number(r.qty || 0) * Number(r.unit_cost || 0), 0),
+    [refs],
+  );
+
   function handleExportExcel() {
     const dateStr = new Date().toISOString().split('T')[0];
-    const headers = ['Code', 'Désignation', 'Catégorie', 'Magasin / Dépôt', 'Quantité', 'Unité', 'Seuil Alerte', 'Statut Stock'];
+    const headers = [
+      'Code',
+      'Désignation',
+      'Marque',
+      'Catégorie',
+      'Magasin / Dépôt',
+      'Quantité',
+      'Unité',
+      'Coût Unitaire (FCFA)',
+      'Valeur Totale (FCFA)',
+      'Seuil Alerte',
+      'Statut Stock',
+    ];
     const rows = filtered.map((r) => [
       r.id,
       r.name,
+      r.brand || '-',
       r.category,
       r.magasin_name ?? r.location ?? '-',
       r.qty,
       r.unit,
+      r.unit_cost ? r.unit_cost : '-',
+      r.unit_cost ? r.qty * r.unit_cost : '-',
       r.min_qty,
       r.qty === 0 ? 'Rupture' : r.qty <= r.min_qty ? 'Alerte Seuil' : 'Normal',
     ]);
@@ -390,15 +458,17 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
   }
 
   function handleExportPdf() {
-    const headers = ['Code', 'Désignation', 'Catégorie', 'Dépôt', 'Quantité', 'Unité', 'Seuil', 'État'];
+    const headers = ['Code', 'Désignation', 'Marque', 'Catégorie', 'Dépôt', 'Quantité', 'Unité', 'Coût Unit.', 'Valeur Totale', 'État'];
     const rows = filtered.map((r) => [
       r.id,
       r.name,
+      r.brand || '-',
       r.category,
       r.magasin_name ?? r.location ?? '-',
       r.qty,
       r.unit,
-      r.min_qty,
+      r.unit_cost ? formatCurrency(r.unit_cost) : '-',
+      r.unit_cost ? formatCurrency(r.qty * r.unit_cost) : '-',
       r.qty === 0 ? 'Rupture' : r.qty <= r.min_qty ? 'Alerte' : 'Normal',
     ]);
     exportToPdf(
@@ -408,6 +478,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
       rows,
       [
         { label: 'Références Totales', value: stats.total },
+        { label: 'Valeur Totale du Stock', value: formatCurrency(totalStockValuation) },
         { label: 'Stock Normal', value: stats.normal },
         { label: 'Sous Seuil Alerte', value: stats.warning },
         { label: 'En Rupture', value: stats.empty },
@@ -467,7 +538,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
       </div>
 
       {/* KPI Dashboard Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Total Articles</span>
@@ -476,6 +547,16 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-ink tabular-nums">{stats.total}</span>
             <span className="text-[11px] text-ink-faint">références</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Valeur Stock</span>
+            <Coins size={14} className="text-amber" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-lg sm:text-xl font-bold text-green tabular-nums">{formatCurrency(totalStockValuation)}</span>
           </div>
         </div>
 
@@ -497,11 +578,11 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
           </div>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-ink tabular-nums">{stats.warning}</span>
-            <span className="text-[11px] text-ink-faint">à réapprovisionner</span>
+            <span className="text-[11px] text-ink-faint">à réappro.</span>
           </div>
         </div>
 
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs col-span-2 sm:col-span-1">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">En Rupture</span>
             <span className="h-1.5 w-1.5 rounded-full bg-red" />
@@ -624,31 +705,69 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                        <th className="px-2.5 py-2.5 w-12 border-r border-line text-center">Photo</th>
                         <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-44 border-r border-line">
-                          Désignation de l’article
+                          Désignation &amp; Marque
                         </th>
                         <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
                         <th className="px-3 py-2.5 min-w-32 border-r border-line">Emplacement</th>
                         <th className="px-3 py-2.5 min-w-36 border-r border-line">Stock Disponible</th>
-                        <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Seuil Min</th>
-                        <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">État</th>
+                        <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Coût Unit.</th>
+                        <th className="px-3 py-2.5 min-w-28 border-r border-line text-right">Valeur Stock</th>
+                        <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
                         <th className="px-3 py-2.5 min-w-32 text-right">Mouvements Rapides</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
                       {filtered.map((ref) => {
                         const state = stockState(ref);
+                        const lineValuation = Number(ref.qty || 0) * Number(ref.unit_cost || 0);
                         return (
                           <tr
                             key={ref.id}
                             onClick={() => setSelectedId(ref.id)}
                             className="hover:bg-amber-wash/30 cursor-pointer transition-colors group"
                           >
-                            {/* Sticky Designation */}
+                            {/* Photo Thumbnail */}
+                            <td
+                              className="px-2 py-1.5 text-center border-r border-line"
+                              onClick={(e) => {
+                                if (canManageRefs) {
+                                  e.stopPropagation();
+                                  setPhotoTarget({ id: ref.id, current: ref.photo_path, name: ref.name });
+                                  setPhotoModalOpen(true);
+                                }
+                              }}
+                            >
+                              {ref.photo_path ? (
+                                <img
+                                  src={ref.photo_path}
+                                  alt={ref.name}
+                                  className="h-9 w-9 rounded-lg object-cover border border-line shadow-2xs mx-auto hover:opacity-85 transition-opacity"
+                                  title="Cliquer pour modifier la photo"
+                                />
+                              ) : (
+                                <span
+                                  className="grid h-9 w-9 place-items-center rounded-lg bg-paper text-ink-faint border border-line/60 mx-auto hover:text-amber hover:border-amber transition-colors"
+                                  title="Ajouter une photo"
+                                >
+                                  <IconBox size={16} />
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Sticky Designation & Marque */}
                             <td className="sticky left-0 z-10 bg-surface group-hover:bg-[#FFF9F3] px-3 py-2 font-semibold text-ink border-r border-line">
-                              <div>{ref.name}</div>
+                              <div className="flex items-center gap-1.5">
+                                <span>{ref.name}</span>
+                                {ref.brand ? (
+                                  <span className="rounded bg-paper px-1.5 py-0.2 text-[10px] font-bold text-ink-soft border border-line">
+                                    {ref.brand}
+                                  </span>
+                                ) : null}
+                              </div>
                               {ref.supplier ? (
-                                <div className="text-[10px] text-ink-faint">Fourn. {ref.supplier}</div>
+                                <div className="text-[10px] text-ink-faint font-normal">Fourn. {ref.supplier}</div>
                               ) : null}
                             </td>
 
@@ -670,9 +789,14 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                               <StockBar ref={ref} />
                             </td>
 
-                            {/* Min Qty */}
-                            <td className="px-3 py-2 text-right font-mono font-medium text-ink-faint border-r border-line tabular-nums">
-                              {ref.min_qty} {ref.unit}
+                            {/* Coût Unitaire */}
+                            <td className="px-3 py-2 text-right font-mono text-ink-soft border-r border-line tabular-nums">
+                              {ref.unit_cost ? formatCurrency(ref.unit_cost) : '—'}
+                            </td>
+
+                            {/* Valeur Totale */}
+                            <td className="px-3 py-2 text-right font-mono font-bold text-ink border-r border-line tabular-nums">
+                              {ref.unit_cost ? formatCurrency(lineValuation) : '—'}
                             </td>
 
                             {/* State Badge */}
@@ -728,7 +852,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
 
                 {/* Spreadsheet Summary Footer */}
                 <div className="bg-paper border-t border-line px-4 py-2 text-xs flex items-center justify-between font-semibold text-ink-soft">
-                  <span>Total : {filtered.length} référence(s)</span>
+                  <span>Total : {filtered.length} référence(s) · Valeur Stock : {formatCurrency(totalStockValuation)}</span>
                   <span className="text-[11px] text-ink-faint">
                     Basculez sur l’onglet Journal pour consulter l’historique des consommations
                   </span>
@@ -739,34 +863,66 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
               <div className="space-y-2.5 sm:hidden">
                 {filtered.map((ref) => {
                   const state = stockState(ref);
+                  const lineValuation = Number(ref.qty || 0) * Number(ref.unit_cost || 0);
                   return (
                     <div
                       key={ref.id}
                       onClick={() => setSelectedId(ref.id)}
                       className="rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper cursor-pointer transition-all space-y-2.5"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-sm text-ink">{ref.name}</p>
-                          <p className="text-xs text-ink-faint">
-                            {ref.category} · {ref.location}
-                          </p>
-                        </div>
-                        <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft">
-                          <span
-                            className={cx(
-                              'h-1.5 w-1.5 rounded-full shrink-0',
-                              state.tone === 'green' ? 'bg-green' : state.tone === 'amber' ? 'bg-amber' : 'bg-red',
-                            )}
+                      <div className="flex items-start gap-3">
+                        {ref.photo_path ? (
+                          <img
+                            src={ref.photo_path}
+                            alt={ref.name}
+                            className="h-14 w-14 shrink-0 rounded-xl object-cover border border-line shadow-xs"
                           />
-                          {state.label}
-                        </span>
+                        ) : (
+                          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-paper text-ink-faint border border-line">
+                            <IconBox size={22} />
+                          </span>
+                        )}
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-1">
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="font-semibold text-sm text-ink">{ref.name}</p>
+                                {ref.brand ? (
+                                  <span className="rounded bg-paper px-1.5 py-0.2 text-[10px] font-bold text-ink-soft border border-line">
+                                    {ref.brand}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <p className="text-xs text-ink-faint mt-0.5">
+                                {ref.category} · {ref.magasin_name ?? ref.location}
+                              </p>
+                            </div>
+                            <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft shrink-0">
+                              <span
+                                className={cx(
+                                  'h-1.5 w-1.5 rounded-full shrink-0',
+                                  state.tone === 'green' ? 'bg-green' : state.tone === 'amber' ? 'bg-amber' : 'bg-red',
+                                )}
+                              />
+                              {state.label}
+                            </span>
+                          </div>
+
+                          {ref.unit_cost ? (
+                            <div className="mt-1 flex items-center gap-2 text-[11px]">
+                              <span className="text-ink-faint">Valeur:</span>
+                              <span className="font-bold text-green">{formatCurrency(lineValuation)}</span>
+                              <span className="text-ink-faint">({formatCurrency(ref.unit_cost)}/{ref.unit})</span>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
 
                       <StockBar ref={ref} />
 
                       <div className="flex items-center justify-between pt-2 border-t border-line/60" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs text-ink-faint">Seuil min : {ref.min_qty} {ref.unit}</span>
+                        <span className="text-xs text-ink-faint">Seuil : {ref.min_qty} {ref.unit}</span>
                         <div className="flex items-center gap-1.5">
                           {canMove ? (
                             <button
@@ -917,7 +1073,53 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
               {selected.magasin_name ? <Chip tone="blue">{selected.magasin_name}</Chip> : null}
             </div>
 
-            <Card className="p-4 border border-line">
+            {/* Photo & Identity Hero */}
+            <div className="relative rounded-2xl border border-line bg-paper overflow-hidden">
+              {selected.photo_path ? (
+                <div className="relative h-44 sm:h-52 w-full bg-black/5 flex items-center justify-center">
+                  <img
+                    src={selected.photo_path}
+                    alt={selected.name}
+                    className="h-full w-full object-contain"
+                  />
+                  {canManageRefs ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoTarget({ id: selected.id, current: selected.photo_path, name: selected.name });
+                        setPhotoModalOpen(true);
+                      }}
+                      className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-surface/90 px-3 py-1.5 text-xs font-semibold text-ink shadow-md backdrop-blur-xs hover:bg-surface border border-line"
+                    >
+                      <Camera size={14} className="text-amber" /> Modifier la photo
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-5 text-center">
+                  <div className="grid h-14 w-14 place-items-center rounded-2xl bg-surface border border-line text-ink-faint shadow-xs mb-2">
+                    <IconBox size={24} />
+                  </div>
+                  <p className="text-xs text-ink-soft">Aucune photo enregistrée pour cet article.</p>
+                  {canManageRefs ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="mt-2.5"
+                      icon={<Camera size={13} className="text-amber" />}
+                      onClick={() => {
+                        setPhotoTarget({ id: selected.id, current: null, name: selected.name });
+                        setPhotoModalOpen(true);
+                      }}
+                    >
+                      Prendre / Choisir photo
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            <Card className="p-4 border border-line space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-ink-faint font-semibold">Stock en rayon</p>
@@ -927,6 +1129,21 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                   <p className="text-xs text-ink-faint mt-1">Seuil minimal d'alerte : {selected.min_qty} {selected.unit}</p>
                 </div>
                 <RefQr id={selected.id} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 border-t border-line/60 pt-3 text-xs sm:grid-cols-3">
+                <div>
+                  <span className="text-ink-faint block text-[11px]">Marque</span>
+                  <span className="font-semibold text-ink">{selected.brand || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-ink-faint block text-[11px]">Coût Unitaire</span>
+                  <span className="font-semibold text-ink">{selected.unit_cost ? formatCurrency(selected.unit_cost) : '—'}</span>
+                </div>
+                <div>
+                  <span className="text-ink-faint block text-[11px]">Valeur Stock en Rayon</span>
+                  <span className="font-bold text-green">{selected.unit_cost ? formatCurrency(selected.qty * selected.unit_cost) : '—'}</span>
+                </div>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-line">
@@ -1029,26 +1246,97 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
       >
         <div className="space-y-4">
           {formError ? <Banner tone="error">{formError}</Banner> : null}
+
+          {/* Photo de la Référence / Quincaillerie (Caméra / Galerie / Même Groupe) */}
+          <div className="flex items-center gap-4 p-3 rounded-xl border border-line bg-paper">
+            <div
+              onClick={() => {
+                setPhotoTarget({ id: editing?.id, current: refForm.photo_path, name: refForm.name || 'Article quincaillerie' });
+                setPhotoModalOpen(true);
+              }}
+              className="relative grid h-20 w-20 shrink-0 place-items-center rounded-xl border-2 border-dashed border-line-strong bg-surface cursor-pointer hover:border-amber overflow-hidden group transition-all"
+            >
+              {refForm.photo_path ? (
+                <img src={refForm.photo_path} alt="Aperçu article" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-1 text-center">
+                  <Camera size={18} className="text-amber group-hover:scale-110 transition-transform" />
+                  <span className="text-[9px] font-bold text-ink-soft mt-1">Photo</span>
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-ink">Photo de l’article / quincaillerie</p>
+              <p className="text-[11px] text-ink-faint mt-0.5">
+                Prenez une photo, importez un fichier ou réutilisez une photo d'un même lot (ex. clous, vis, charnières).
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  icon={<Camera size={13} />}
+                  onClick={() => {
+                    setPhotoTarget({ id: editing?.id, current: refForm.photo_path, name: refForm.name || 'Article quincaillerie' });
+                    setPhotoModalOpen(true);
+                  }}
+                >
+                  {refForm.photo_path ? 'Changer la photo' : 'Prendre / Choisir photo'}
+                </Button>
+                {refForm.photo_path ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-red"
+                    onClick={() => setRefForm((f) => ({ ...f, photo_path: null }))}
+                  >
+                    Supprimer
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
           <Field
-            label="Désignation"
+            label="Désignation de l’article"
             value={refForm.name}
             onChange={(e) => setRefForm((f) => ({ ...f, name: e.target.value }))}
             placeholder="ex. Vis bois tête fraisée 4x40 inox"
           />
+
           <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label="Marque / Fabricant"
+              value={refForm.brand}
+              onChange={(e) => setRefForm((f) => ({ ...f, brand: e.target.value }))}
+              placeholder="ex. Spax, Wurth, Sika..."
+            />
             <Field
               label="Catégorie"
               value={refForm.category}
               onChange={(e) => setRefForm((f) => ({ ...f, category: e.target.value }))}
               placeholder="ex. Visserie, Colle, Abrasif..."
             />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field
               label="Unité de comptage"
               value={refForm.unit}
               onChange={(e) => setRefForm((f) => ({ ...f, unit: e.target.value }))}
-              placeholder="u, kg, boîte, l..."
+              placeholder="u, kg, boîte, l, m..."
+            />
+            <Field
+              label="Coût unitaire d'achat (FCFA)"
+              type="number"
+              value={refForm.unit_cost}
+              onChange={(e) => setRefForm((f) => ({ ...f, unit_cost: e.target.value }))}
+              placeholder="ex. 150"
+              hint="Pour le calcul de la valeur globale du stock"
             />
           </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <Field
               label="Emplacement / Casier"
@@ -1067,6 +1355,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
               ))}
             </SelectField>
           </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <Field
               label="Seuil d'alerte minimal"
@@ -1157,6 +1446,17 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
           />
         </div>
       </Modal>
+
+      {/* Modal Photo Quincaillerie & Matériels (Caméra / Galerie / Même Groupe) */}
+      <ImagePickerModal
+        open={photoModalOpen}
+        title={photoTarget?.name ? `Photo : ${photoTarget.name}` : 'Photo du matériel / quincaillerie'}
+        currentImage={photoTarget?.current}
+        category="stock"
+        defaultFacingMode="environment"
+        onClose={() => setPhotoModalOpen(false)}
+        onSelect={(url) => void handleStockPhotoSelect(url)}
+      />
 
       {portal}
     </div>

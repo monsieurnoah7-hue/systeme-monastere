@@ -21,6 +21,14 @@ export default function App() {
     api<{ user: User | null }>('/api/auth/me')
       .then((res) => setUser(res.user))
       .catch(() => setUser(null));
+
+    function handleUserUpdate(e: CustomEvent<User>) {
+      if (e.detail) {
+        setUser((prev) => (prev ? { ...prev, ...e.detail } : e.detail));
+      }
+    }
+    window.addEventListener('auth:user-updated' as any, handleUserUpdate);
+    return () => window.removeEventListener('auth:user-updated' as any, handleUserUpdate);
   }, []);
 
   async function logout() {

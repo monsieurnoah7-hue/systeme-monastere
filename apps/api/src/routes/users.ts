@@ -25,6 +25,7 @@ const patchBody = z.object({
   active: z.boolean().optional(),
   password: z.string().min(6).optional(),
   employee_id: z.string().nullable().optional(),
+  photo_path: z.string().nullable().optional(),
 });
 
 const passwordBody = z.object({
@@ -38,13 +39,17 @@ type UserListRow = {
   display_name: string;
   role: Role;
   employee_id: string | null;
+  photo_path?: string | null;
   active: boolean;
   created_at: string;
 };
 
 usersRoutes.get('/', requirePerm('users.view'), async (c) => {
   const users = await getDb().query<UserListRow>(
-    'SELECT id, login, display_name, role, employee_id, active, created_at FROM users ORDER BY login',
+    `SELECT u.id, u.login, u.display_name, u.role, u.employee_id, coalesce(u.photo_path, e.photo_path) AS photo_path, u.active, u.created_at
+       FROM users u
+       LEFT JOIN employees e ON e.id = u.employee_id
+      ORDER BY u.login`,
   );
   return c.json({ users });
 });
@@ -110,16 +115,23 @@ usersRoutes.patch('/:id', requirePerm('users.manage'), async (c) => {
   }
 
   const updated = await db.one<UserListRow>(
-    `UPDATE users SET display_name = $2, role = $3, active = $4, password_hash = $5, employee_id = $6
+    `UPDATE users SET
+       display_name = coalesce($2, display_name),
+       role = coalesce($3, role),
+       active = coalesce($4, active),
+       password_hash = coalesce($5, password_hash),
+       employee_id = CASE WHEN $6::text IS NOT NULL THEN (CASE WHEN $6 = '' THEN NULL ELSE $6 END) ELSE employee_id END,
+       photo_path = CASE WHEN $7::text IS NOT NULL THEN (CASE WHEN $7 = '' THEN NULL ELSE $7 END) ELSE photo_path END
       WHERE id = $1
-      RETURNING id, login, display_name, role, employee_id, active, created_at`,
+      RETURNING id, login, display_name, role, employee_id, photo_path, active, created_at`,
     [
       id,
-      patch.display_name?.trim() ?? before.display_name,
-      patch.role ?? before.role,
-      patch.active ?? before.active,
-      patch.password ? hashPassword(patch.password) : before.password_hash,
-      patch.employee_id === undefined ? before.employee_id : patch.employee_id || null,
+      patch.display_name?.trim() ?? null,
+      patch.role ?? null,
+      patch.active ?? null,
+      patch.password ? hashPassword(patch.password) : null,
+      patch.employee_id !== undefined ? patch.employee_id : null,
+      patch.photo_path !== undefined ? (patch.photo_path ? patch.photo_path.trim() : null) : null,
     ],
   );
   await writeAudit(db, {

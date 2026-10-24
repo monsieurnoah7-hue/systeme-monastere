@@ -34,6 +34,14 @@ const createBody = z.object({
   location: z.string().min(1).default('Magasin'),
   magasin_id: z.string().optional(),
   observations: z.string().optional(),
+  photo_path: z.string().nullable().optional(),
+  brand: z.string().optional(),
+  model: z.string().optional(),
+  serial_number: z.string().optional(),
+  acquisition_cost: z.coerce.number().min(0).optional(),
+  acquisition_year: z.coerce.number().int().min(1950).max(2100).optional(),
+  acquisition_date: z.string().optional(),
+  lifespan_years: z.coerce.number().int().min(1).max(50).default(5).optional(),
 });
 
 const editBody = z.object({
@@ -42,6 +50,14 @@ const editBody = z.object({
   location: z.string().min(1).optional(),
   magasin_id: z.string().optional(),
   observations: z.string().optional(),
+  photo_path: z.string().nullable().optional(),
+  brand: z.string().optional(),
+  model: z.string().optional(),
+  serial_number: z.string().optional(),
+  acquisition_cost: z.coerce.number().min(0).nullable().optional(),
+  acquisition_year: z.coerce.number().int().min(1950).max(2100).nullable().optional(),
+  acquisition_date: z.string().nullable().optional(),
+  lifespan_years: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 const statusBody = z.object({
@@ -143,10 +159,30 @@ toolsRoutes.post('/', requirePerm('tools.create'), async (c) => {
   if (!body.success) return c.json({ error: 'Nom et catégorie obligatoires.' }, 400);
   const db = getDb();
   const id = await nextToolId(body.data.category);
+  const d = body.data;
   const tool = await db.one<ToolRow>(
-    `INSERT INTO tools (id, name, category, location, magasin_id, observations)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [id, body.data.name.trim(), body.data.category.trim(), body.data.location.trim(), body.data.magasin_id || null, body.data.observations?.trim() || null],
+    `INSERT INTO tools (
+       id, name, category, location, magasin_id, observations, photo_path,
+       brand, model, serial_number, acquisition_cost, acquisition_year, acquisition_date, lifespan_years
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+     RETURNING *`,
+    [
+      id,
+      d.name.trim(),
+      d.category.trim(),
+      d.location.trim(),
+      d.magasin_id || null,
+      d.observations?.trim() || null,
+      d.photo_path?.trim() || null,
+      d.brand?.trim() || null,
+      d.model?.trim() || null,
+      d.serial_number?.trim() || null,
+      d.acquisition_cost ?? null,
+      d.acquisition_year ?? (d.acquisition_date ? new Date(d.acquisition_date).getFullYear() : new Date().getFullYear()),
+      d.acquisition_date || null,
+      d.lifespan_years ?? 5,
+    ],
   );
   await db.query(
     `INSERT INTO tool_events (tool_id, event_type, from_status, to_status, actor, note)
@@ -174,14 +210,37 @@ toolsRoutes.patch('/:id', requirePerm('tools.edit'), async (c) => {
   if (!before) return c.json({ error: 'Outil introuvable.' }, 404);
   const p = body.data;
   const updated = await db.one<ToolRow>(
-    `UPDATE tools SET name = $2, category = $3, location = $4, magasin_id = $5, observations = $6 WHERE id = $1 RETURNING *`,
+    `UPDATE tools SET
+       name = coalesce($2, name),
+       category = coalesce($3, category),
+       location = coalesce($4, location),
+       magasin_id = CASE WHEN $5::text IS NOT NULL THEN (CASE WHEN $5 = '' THEN NULL ELSE $5 END) ELSE magasin_id END,
+       observations = CASE WHEN $6::text IS NOT NULL THEN (CASE WHEN $6 = '' THEN NULL ELSE $6 END) ELSE observations END,
+       photo_path = CASE WHEN $7::text IS NOT NULL THEN (CASE WHEN $7 = '' THEN NULL ELSE $7 END) ELSE photo_path END,
+       brand = CASE WHEN $8::text IS NOT NULL THEN (CASE WHEN $8 = '' THEN NULL ELSE $8 END) ELSE brand END,
+       model = CASE WHEN $9::text IS NOT NULL THEN (CASE WHEN $9 = '' THEN NULL ELSE $9 END) ELSE model END,
+       serial_number = CASE WHEN $10::text IS NOT NULL THEN (CASE WHEN $10 = '' THEN NULL ELSE $10 END) ELSE serial_number END,
+       acquisition_cost = CASE WHEN $11::numeric IS NOT NULL THEN $11::numeric ELSE acquisition_cost END,
+       acquisition_year = CASE WHEN $12::int IS NOT NULL THEN $12::int ELSE acquisition_year END,
+       acquisition_date = CASE WHEN $13::date IS NOT NULL THEN $13::date ELSE acquisition_date END,
+       lifespan_years = CASE WHEN $14::int IS NOT NULL THEN $14::int ELSE lifespan_years END
+     WHERE id = $1
+     RETURNING *`,
     [
       id,
-      p.name?.trim() ?? before.name,
-      p.category?.trim() ?? before.category,
-      p.location?.trim() ?? before.location,
-      p.magasin_id === undefined ? before.magasin_id : p.magasin_id || null,
-      p.observations === undefined ? before.observations : p.observations?.trim() || null,
+      p.name?.trim() ?? null,
+      p.category?.trim() ?? null,
+      p.location?.trim() ?? null,
+      p.magasin_id !== undefined ? p.magasin_id : null,
+      p.observations !== undefined ? p.observations?.trim() : null,
+      p.photo_path !== undefined ? p.photo_path?.trim() : null,
+      p.brand !== undefined ? p.brand?.trim() : null,
+      p.model !== undefined ? p.model?.trim() : null,
+      p.serial_number !== undefined ? p.serial_number?.trim() : null,
+      p.acquisition_cost !== undefined ? p.acquisition_cost : null,
+      p.acquisition_year !== undefined ? p.acquisition_year : null,
+      p.acquisition_date !== undefined ? p.acquisition_date : null,
+      p.lifespan_years !== undefined ? p.lifespan_years : null,
     ],
   );
   await db.query(
@@ -199,6 +258,29 @@ toolsRoutes.patch('/:id', requirePerm('tools.edit'), async (c) => {
     actorName: actorName(c),
   });
   return c.json({ tool: updated });
+});
+
+toolsRoutes.post('/:id/photo', requirePerm('tools.photo_edit'), async (c) => {
+  const id = c.req.param('id') ?? '';
+  const body = z.object({ photo_path: z.string().nullable() }).safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Photo invalide.' }, 400);
+
+  const db = getDb();
+  const tool = await db.one<ToolRow>(
+    'UPDATE tools SET photo_path = $2 WHERE id = $1 RETURNING *',
+    [id, body.data.photo_path || null],
+  );
+  if (!tool) return c.json({ error: 'Outil introuvable.' }, 404);
+
+  await writeAudit(db, {
+    entity: 'tool',
+    entityId: id,
+    action: 'photo_update',
+    actorId: actorId(c),
+    actorName: actorName(c),
+    after: { photo_path: body.data.photo_path },
+  });
+  return c.json({ ok: true, tool });
 });
 
 toolsRoutes.patch('/:id/status', requirePerm('tools.edit_status'), async (c) => {

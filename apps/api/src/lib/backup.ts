@@ -75,6 +75,16 @@ export async function purgeOldBackups(): Promise<number> {
   return old.length;
 }
 
+export async function purgeAllBackups(): Promise<number> {
+  const backups = await listBackups();
+  if (backups.length === 0) return 0;
+  await del(
+    backups.map((b) => b.pathname),
+    blobAuth(),
+  );
+  return backups.length;
+}
+
 export async function runCloudBackup(): Promise<{
   pathname: string;
   size: number;
