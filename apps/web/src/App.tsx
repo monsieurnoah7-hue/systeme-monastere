@@ -1,6 +1,6 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type ScanResult, type User } from './lib/api';
-import { allowedViews, Shell, type ViewId } from './components/Shell';
+import { computeAllowedViews, Shell, type ViewId } from './components/Shell';
 import { Scanner } from './components/Scanner';
 import { EmptyState, Spinner, ToastHost, useToast } from './components/ui';
 import { Login } from './screens/Login';
@@ -57,9 +57,37 @@ export default function App() {
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const toast = useToast();
-  const allowed = allowedViews(user.role);
+  const [permissions, setPermissions] = useState<Record<string, boolean> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    function fetchPermissions() {
+      api<{ role: string; superAdmin: boolean; permissions: Record<string, boolean> }>('/api/permissions/me')
+        .then((res) => {
+          if (!cancelled && res?.permissions) setPermissions(res.permissions);
+        })
+        .catch(() => {});
+    }
+    fetchPermissions();
+
+    const onPermsUpdated = () => fetchPermissions();
+    window.addEventListener('permissions:updated', onPermsUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('permissions:updated', onPermsUpdated);
+    };
+  }, [user.role]);
+
+  const allowed = useMemo(() => computeAllowedViews(user.role, permissions), [user.role, permissions]);
   const defaultView: ViewId = user.role === 'travailleur' ? 'espace' : (allowed[0] ?? 'espace');
   const [view, setView] = useState<ViewId>(defaultView);
+
+  // Si la vue courante n'est plus autorisée après mise à jour des droits
+  useEffect(() => {
+    if (!allowed.includes(view)) {
+      setView(allowed[0] ?? 'espace');
+    }
+  }, [allowed, view]);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
@@ -134,10 +162,11 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     <>
       <Shell
         user={user}
-        view={activeView ?? 'dashboard'}
+        view={activeView ?? 'espace'}
         onView={setView}
         onLogout={onLogout}
         onScan={canScan ? () => setScannerOpen(true) : undefined}
+        allowedViews={allowed}
       >
         {!activeView ? (
           <EmptyState

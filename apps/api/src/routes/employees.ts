@@ -17,6 +17,10 @@ const createBody = z.object({
   job_title: z.string().min(2),
   photo_path: z.string().nullable().optional(),
   pin: z.string().min(4).max(10).optional(),
+  create_account: z.boolean().optional(),
+  account_login: z.string().optional(),
+  account_password: z.string().optional(),
+  account_role: z.string().optional(),
 });
 
 const patchBody = z.object({
@@ -197,6 +201,7 @@ employeesRoutes.post('/', requirePerm('employees.create'), async (c) => {
      RETURNING id, full_name, job_title, photo_path, badge_token, active`,
     [id, body.data.full_name.trim(), body.data.job_title.trim(), badge, pinHash, body.data.photo_path?.trim() || null],
   );
+
   await writeAudit(db, {
     entity: 'employee',
     entityId: id,
@@ -205,7 +210,46 @@ employeesRoutes.post('/', requirePerm('employees.create'), async (c) => {
     actorId: actorId(c),
     actorName: actorName(c),
   });
-  return c.json({ employee }, 201);
+
+  // Création fluide du compte utilisateur si demandée
+  let createdAccount: { id: number; login: string; role: string } | null = null;
+  if (body.data.create_account) {
+    let login = (body.data.account_login?.trim().toLowerCase() ||
+      body.data.full_name
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '.')
+        .replace(/^\.+|\.+$/g, '')).slice(0, 32);
+    if (login.length < 3) login = `${login}.${id.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+
+    const exists = await db.one('SELECT id FROM users WHERE login = $1', [login]);
+    if (exists) {
+      login = `${login}.${Math.floor(10 + Math.random() * 90)}`;
+    }
+
+    const password = body.data.account_password?.trim() || body.data.pin?.trim() || 'Monastere2026!';
+    const role = body.data.account_role?.trim() || 'travailleur';
+
+    const user = await db.one<{ id: number; login: string; role: string }>(
+      `INSERT INTO users (login, password_hash, display_name, role, employee_id, photo_path)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, login, role`,
+      [login, hashPassword(password), body.data.full_name.trim(), role, id, body.data.photo_path?.trim() || null],
+    );
+    createdAccount = user ?? null;
+    await writeAudit(db, {
+      entity: 'user',
+      entityId: String(user?.id ?? ''),
+      action: 'create',
+      after: { login, role, employee_id: id },
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  }
+
+  return c.json({ employee, account: createdAccount }, 201);
 });
 
 employeesRoutes.patch('/:id', requirePerm('employees.edit'), async (c) => {

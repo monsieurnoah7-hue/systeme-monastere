@@ -3,9 +3,11 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { writeAudit } from '../lib/audit.js';
 import {
+  DEFAULT_PERMISSIONS,
   PERMISSION_ACTIONS,
   PERMISSION_GROUPS,
   PERMISSION_LABELS,
+  ROLE_ARCHETYPES,
   buildMatrix,
   isSuperAdmin,
   type PermissionAction,
@@ -47,10 +49,25 @@ permissionsRoutes.get('/roles', requireRole('direction'), async (c) => {
   return c.json({ roles });
 });
 
+permissionsRoutes.get('/archetypes', requireRole('direction'), async (c) => {
+  return c.json({
+    archetypes: Object.entries(ROLE_ARCHETYPES).map(([id, arch]) => ({
+      id,
+      label: arch.label,
+      description: arch.description,
+      actionsCount: arch.actions.length,
+      actions: arch.actions,
+    })),
+  });
+});
+
 const createRoleSchema = z.object({
   id: z.string().min(2).max(40).regex(/^[a-z0-9_-]+$/, 'Identifiant composé de minuscules, chiffres, tirets'),
   name: z.string().min(2).max(80),
   description: z.string().max(250).optional().nullable(),
+  template: z.string().optional().nullable(),
+  copy_from: z.string().optional().nullable(),
+  permissions: z.array(z.string()).optional(),
 });
 
 permissionsRoutes.post('/roles', requireRole('direction'), async (c) => {
@@ -64,21 +81,59 @@ permissionsRoutes.post('/roles', requireRole('direction'), async (c) => {
     return c.json({ error: 'Un rôle avec cet identifiant existe déjà.' }, 409);
   }
 
-  await db.query(
-    'INSERT INTO roles (id, name, description, is_system) VALUES ($1, $2, $3, false)',
-    [body.data.id, body.data.name.trim(), body.data.description?.trim() || null],
-  );
+  // Déterminer les permissions initiales selon le template ou la copie
+  let initialActions: string[] = [];
+  if (body.data.copy_from) {
+    const copiedRows = await db.query<{ action: string; allowed: boolean }>(
+      'SELECT action, allowed FROM role_permissions WHERE role = $1 AND allowed = true',
+      [body.data.copy_from],
+    );
+    if (copiedRows.length > 0) {
+      initialActions = copiedRows.map((r) => r.action);
+    } else {
+      // Fallback si c'est un rôle système par défaut non encore écrit en table
+      initialActions = PERMISSION_ACTIONS.filter((a) =>
+        (DEFAULT_PERMISSIONS[a] as readonly string[] | undefined)?.includes(body.data.copy_from!),
+      );
+    }
+  } else if (body.data.template && body.data.template in ROLE_ARCHETYPES) {
+    const arch = ROLE_ARCHETYPES[body.data.template];
+    if (arch) initialActions = arch.actions;
+  } else if (body.data.permissions && body.data.permissions.length > 0) {
+    initialActions = body.data.permissions.filter((a) => (PERMISSION_ACTIONS as readonly string[]).includes(a));
+  } else {
+    // Par défaut pour tout rôle créé, au minimum l'édition de sa propre photo et profil
+    initialActions = ['profile.photo_edit_self'];
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.query(
+      'INSERT INTO roles (id, name, description, is_system) VALUES ($1, $2, $3, false)',
+      [body.data.id, body.data.name.trim(), body.data.description?.trim() || null],
+    );
+
+    // Initialiser les permissions en base pour ce nouveau rôle
+    for (const action of PERMISSION_ACTIONS) {
+      const allowed = initialActions.includes(action);
+      await tx.query(
+        'INSERT INTO role_permissions (role, action, allowed) VALUES ($1, $2, $3)',
+        [body.data.id, action, allowed],
+      );
+    }
+  });
+
+  invalidatePermissionCache();
 
   await writeAudit(db, {
     entity: 'roles',
     entityId: body.data.id,
     action: 'create',
-    after: body.data,
+    after: { ...body.data, initialActionsCount: initialActions.length },
     actorId: actorId(c),
     actorName: actorName(c),
   });
 
-  return c.json({ ok: true, id: body.data.id });
+  return c.json({ ok: true, id: body.data.id, permissionsCount: initialActions.length });
 });
 
 const updateRoleSchema = z.object({
@@ -164,12 +219,21 @@ permissionsRoutes.get('/me', async (c) => {
     'SELECT action, allowed FROM role_permissions WHERE role = $1',
     [role],
   );
-  const permissions = {} as Record<PermissionAction, boolean>;
-  for (const a of PERMISSION_ACTIONS) permissions[a] = false;
+  const rowsMap = new Map<string, boolean>();
   for (const r of rows) {
-    if ((PERMISSION_ACTIONS as readonly string[]).includes(r.action)) {
-      permissions[r.action as PermissionAction] = r.allowed;
+    rowsMap.set(r.action, r.allowed);
+  }
+  const permissions = {} as Record<PermissionAction, boolean>;
+  for (const a of PERMISSION_ACTIONS) {
+    if (rowsMap.has(a)) {
+      permissions[a] = rowsMap.get(a)!;
+    } else {
+      permissions[a] = (DEFAULT_PERMISSIONS[a] as readonly string[] | undefined)?.includes(role) ?? false;
     }
+  }
+  // Par défaut, tout utilisateur connecté peut modifier sa propre photo de profil
+  if (!rowsMap.has('profile.photo_edit_self')) {
+    permissions['profile.photo_edit_self'] = true;
   }
   return c.json({ role, superAdmin: false, permissions });
 });

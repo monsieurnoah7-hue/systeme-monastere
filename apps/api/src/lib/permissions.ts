@@ -174,6 +174,97 @@ export function buildMatrix(
   return matrix;
 }
 
+export const ROLE_ARCHETYPES: Record<
+  string,
+  { label: string; description: string; actions: PermissionAction[] }
+> = {
+  ouvrier: {
+    label: 'Opérateur Atelier & Chantier',
+    description: 'Accès personnel (Mon Espace, badge, pointages) et consultation du catalogue des outils.',
+    actions: ['profile.photo_edit_self', 'tools.view', 'loans.view'],
+  },
+  magasinier: {
+    label: 'Logistique, Magasins & Quincaillerie',
+    description: 'Gestion intégrale des stocks, mouvements, création de références, fiches outils et photos.',
+    actions: [
+      'profile.photo_edit_self',
+      'tools.view',
+      'tools.create',
+      'tools.edit',
+      'tools.edit_status',
+      'tools.photo_edit',
+      'loans.view',
+      'loans.create',
+      'loans.return',
+      'stock.view',
+      'stock.create_ref',
+      'stock.edit_ref',
+      'stock.photo_edit',
+      'stock.move',
+      'stock.correct',
+      'magasins.view',
+      'magasins.manage',
+      'employees.view',
+      'employees.print_badge',
+      'dashboard.view',
+    ],
+  },
+  superviseur: {
+    label: 'Supervision Terrain, Équipe & RH',
+    description: 'Pilotage des travailleurs, pointages, congés, départs de chantier et prêts d’outils.',
+    actions: [
+      'profile.photo_edit_self',
+      'dashboard.view',
+      'attendance.view',
+      'attendance.correct',
+      'leaves.view',
+      'leaves.manage',
+      'employees.view',
+      'employees.create',
+      'employees.edit',
+      'employees.photo_edit',
+      'employees.print_badge',
+      'tools.view',
+      'loans.view',
+      'loans.create',
+      'loans.return',
+      'stock.view',
+      'stock.move',
+    ],
+  },
+  auditeur: {
+    label: 'Contrôle de Gestion & Audit (Lecture Seule)',
+    description: 'Consultation complète du tableau de bord, valorisation patrimoniale et rapports d’inventaire.',
+    actions: [
+      'profile.photo_edit_self',
+      'dashboard.view',
+      'tools.view',
+      'loans.view',
+      'stock.view',
+      'magasins.view',
+      'attendance.view',
+      'leaves.view',
+      'employees.view',
+      'settings.view',
+    ],
+  },
+  maintenance: {
+    label: 'Maintenance Technique & Outillage',
+    description: 'Entretien des machines, réparation, diagnostic et mise à jour de l’état de l’outillage.',
+    actions: [
+      'profile.photo_edit_self',
+      'tools.view',
+      'tools.edit',
+      'tools.edit_status',
+      'tools.photo_edit',
+      'loans.view',
+      'loans.return',
+      'stock.view',
+      'stock.move',
+    ],
+  },
+};
+
 export function isSuperAdmin(role: Role): boolean {
   return role === 'direction';
 }

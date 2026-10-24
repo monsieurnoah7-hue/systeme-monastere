@@ -285,7 +285,16 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [form, setForm] = useState({ full_name: '', job_title: '', pin: '', photo_path: null as string | null });
+  const [form, setForm] = useState({
+    full_name: '',
+    job_title: '',
+    pin: '',
+    photo_path: null as string | null,
+    create_account: false,
+    account_login: '',
+    account_password: '',
+    account_role: 'travailleur',
+  });
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [photoTarget, setPhotoTarget] = useState<{ id?: string; current?: string | null; name?: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -538,14 +547,32 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   function openCreate() {
     setEditing(null);
-    setForm({ full_name: '', job_title: '', pin: '', photo_path: null });
+    setForm({
+      full_name: '',
+      job_title: '',
+      pin: '',
+      photo_path: null,
+      create_account: false,
+      account_login: '',
+      account_password: '',
+      account_role: 'travailleur',
+    });
     setFormError(null);
     setFormOpen(true);
   }
 
   function openEdit(employee: Employee) {
     setEditing(employee);
-    setForm({ full_name: employee.full_name, job_title: employee.job_title, pin: '', photo_path: employee.photo_path });
+    setForm({
+      full_name: employee.full_name,
+      job_title: employee.job_title,
+      pin: '',
+      photo_path: employee.photo_path,
+      create_account: false,
+      account_login: '',
+      account_password: '',
+      account_role: 'travailleur',
+    });
     setFormError(null);
     setFormOpen(true);
   }
@@ -587,18 +614,26 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             photo_path: form.photo_path,
           }),
         });
-        toast('Fiche mise à jour.', 'success');
+        toast('Fiche travailleur mise à jour.', 'success');
       } else {
-        await api('/api/employees', {
+        const res = await api<{ employee: Employee; account?: { login: string; role: string } }>('/api/employees', {
           method: 'POST',
           body: JSON.stringify({
             full_name: form.full_name,
             job_title: form.job_title,
             pin: form.pin.trim() ? form.pin.trim() : undefined,
             photo_path: form.photo_path || undefined,
+            create_account: form.create_account,
+            account_login: form.create_account ? form.account_login : undefined,
+            account_password: form.create_account ? form.account_password : undefined,
+            account_role: form.create_account ? form.account_role : undefined,
           }),
         });
-        toast('Nouveau travailleur créé avec badge automatique et code secret.', 'success');
+        if (res.account) {
+          toast(`Travailleur et compte @${res.account.login} créés avec succès !`, 'success');
+        } else {
+          toast('Nouveau travailleur créé avec badge automatique et code secret.', 'success');
+        }
       }
       setFormOpen(false);
       setReload((value) => value + 1);
@@ -1269,7 +1304,22 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
               type="text"
               value={form.full_name}
               placeholder="Ex : Landry ONANA"
-              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+              onChange={(e) => {
+                const name = e.target.value;
+                const autoLogin = name
+                  .trim()
+                  .normalize('NFD')
+                  .replace(/[\u0300-\u036f]/g, '')
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '.')
+                  .replace(/^\.+|\.+$/g, '')
+                  .slice(0, 32);
+                setForm((prev) => ({
+                  ...prev,
+                  full_name: name,
+                  account_login: prev.account_login ? prev.account_login : autoLogin,
+                }));
+              }}
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
             />
           </div>
@@ -1309,9 +1359,89 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
               Obligatoire pour valider le pointage sur la borne après scan du badge.
             </p>
           </div>
+
+          {/* Seamless Account Creation (Onboarding 1-Click) */}
+          {!editing && canManage && (
+            <div className="rounded-xl border border-line bg-paper/60 p-3.5 space-y-3">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.create_account}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    const autoLogin = form.full_name
+                      .trim()
+                      .normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '')
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, '.')
+                      .replace(/^\.+|\.+$/g, '')
+                      .slice(0, 32);
+                    setForm((f) => ({
+                      ...f,
+                      create_account: checked,
+                      account_login: f.account_login ? f.account_login : autoLogin,
+                      account_password: f.account_password ? f.account_password : (f.pin || 'Monastere2026!'),
+                    }));
+                  }}
+                  className="h-4 w-4 rounded border-line-strong text-amber accent-amber focus:ring-amber"
+                />
+                <span className="text-xs font-bold text-ink">
+                  🔑 Activer immédiatement un compte d’accès applicatif pour ce travailleur
+                </span>
+              </label>
+
+              {form.create_account && (
+                <div className="pt-2 border-t border-line space-y-3 animate-in fade-in duration-200">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-ink-soft">Identifiant de connexion</label>
+                      <input
+                        type="text"
+                        value={form.account_login}
+                        placeholder="Ex : landry.onana"
+                        onChange={(e) => setForm({ ...form, account_login: e.target.value.toLowerCase() })}
+                        className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-ink-soft">Mot de passe temporaire</label>
+                      <input
+                        type="text"
+                        value={form.account_password}
+                        placeholder="Par défaut : identique au PIN"
+                        onChange={(e) => setForm({ ...form, account_password: e.target.value })}
+                        className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-ink-soft">Rôle applicatif attribué</label>
+                    <select
+                      value={form.account_role}
+                      onChange={(e) => setForm({ ...form, account_role: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+                    >
+                      <option value="travailleur">Travailleur (Mon Espace personnel, badge & prêts)</option>
+                      {availableRoles.filter((r) => r.id !== 'travailleur' && r.id !== 'direction').map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} ({r.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-[10px] text-ink-faint">
+                    💡 Ce compte sera immédiatement actif. Le travailleur aura accès à son interface dédiée selon les droits de ce rôle.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {!editing && (
             <Banner tone="info">
-              L’identifiant (EMP-XXX) et le badge QR sont automatiquement générés.
+              L’identifiant (EMP-XXX) et le badge QR professionnel sont automatiquement générés.
             </Banner>
           )}
         </div>

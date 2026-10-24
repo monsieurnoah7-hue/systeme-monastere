@@ -44,8 +44,112 @@ export const NAV: NavItem[] = [
   { id: 'parametres', label: 'Paramètres', short: 'Réglages', icon: Settings, roles: ['direction'] },
 ];
 
-export function allowedViews(role: Role): ViewId[] {
-  return NAV.filter((item) => item.roles.includes(role)).map((item) => item.id);
+export function computeAllowedViews(
+  role: Role,
+  permissions?: Record<string, boolean> | null,
+): ViewId[] {
+  // Super-Administrateur / Direction a accès à l'ensemble des modules
+  if (role === 'direction') {
+    return ['dashboard', 'pointage', 'employes', 'outils', 'stock', 'magasins', 'espace', 'parametres'];
+  }
+
+  // Si la matrice des droits personnalisés est disponible
+  if (permissions) {
+    const views: ViewId[] = [];
+
+    // 1. Mon Espace est universellement accessible à tout compte utilisateur connecté
+    views.push('espace');
+
+    // 2. Tableau de bord pilotage
+    if (permissions['dashboard.view']) {
+      views.push('dashboard');
+    }
+
+    // 3. Module Outils & Matériels
+    if (
+      permissions['tools.view'] ||
+      permissions['loans.view'] ||
+      permissions['tools.create'] ||
+      permissions['tools.edit'] ||
+      permissions['tools.edit_status'] ||
+      permissions['loans.create'] ||
+      permissions['loans.return']
+    ) {
+      views.push('outils');
+    }
+
+    // 4. Module Stock & Quincaillerie
+    if (
+      permissions['stock.view'] ||
+      permissions['stock.move'] ||
+      permissions['stock.create_ref'] ||
+      permissions['stock.edit_ref'] ||
+      permissions['stock.correct']
+    ) {
+      views.push('stock');
+    }
+
+    // 5. Module Magasins
+    if (permissions['magasins.view'] || permissions['magasins.manage']) {
+      views.push('magasins');
+    }
+
+    // 6. Module Fiches Travailleurs
+    if (
+      permissions['employees.view'] ||
+      permissions['employees.create'] ||
+      permissions['employees.edit'] ||
+      permissions['employees.photo_edit'] ||
+      permissions['employees.print_badge']
+    ) {
+      views.push('employes');
+    }
+
+    // 7. Module Pointage & Présences
+    if (
+      permissions['attendance.view'] ||
+      permissions['attendance.correct'] ||
+      permissions['leaves.view'] ||
+      permissions['leaves.manage']
+    ) {
+      views.push('pointage');
+    }
+
+    // 8. Module Paramètres
+    if (
+      permissions['settings.view'] ||
+      permissions['settings.edit'] ||
+      permissions['users.view'] ||
+      permissions['users.manage'] ||
+      permissions['terminals.manage'] ||
+      permissions['permissions.manage']
+    ) {
+      views.push('parametres');
+    }
+
+    const ORDER: ViewId[] = [
+      'dashboard',
+      'pointage',
+      'employes',
+      'outils',
+      'stock',
+      'magasins',
+      'espace',
+      'parametres',
+    ];
+    return ORDER.filter((v) => views.includes(v));
+  }
+
+  // Fallback rétrocompatible pour les rôles historiques
+  const legacyAllowed = NAV.filter((item) => item.roles.includes(role)).map((item) => item.id);
+  if (legacyAllowed.length > 0) return legacyAllowed;
+
+  // Tout nouveau rôle dispose par défaut au minimum de son Espace Personnel
+  return ['espace'];
+}
+
+export function allowedViews(role: Role, permissions?: Record<string, boolean> | null): ViewId[] {
+  return computeAllowedViews(role, permissions);
 }
 
 function NavButton({
@@ -132,6 +236,7 @@ export function Shell({
   onView,
   onLogout,
   onScan,
+  allowedViews: allowedList,
   children,
 }: {
   user: User;
@@ -139,11 +244,13 @@ export function Shell({
   onView: (view: ViewId) => void;
   onLogout: () => void;
   onScan?: () => void;
+  allowedViews?: ViewId[];
   children: ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const items = NAV.filter((item) => item.roles.includes(user.role));
+  const effectiveAllowed = allowedList ?? allowedViews(user.role);
+  const items = NAV.filter((item) => effectiveAllowed.includes(item.id));
 
   // Quick navigation items for mobile bottom bar
   const mobileNav = items.slice(0, 4);
@@ -215,7 +322,7 @@ export function Shell({
               </span>
               <div className="min-w-0 flex-1 leading-tight">
                 <p className="truncate text-xs font-semibold text-ink">{user.display_name}</p>
-                <p className="truncate text-[11px] text-ink-faint">{ROLE_LABEL[user.role]}</p>
+                <p className="truncate text-[11px] text-ink-faint">{ROLE_LABEL[user.role] ?? user.role}</p>
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -299,7 +406,7 @@ export function Shell({
                   </span>
                   <div className="min-w-0 flex-1 leading-tight">
                     <p className="truncate text-xs font-bold text-ink">{user.display_name}</p>
-                    <p className="truncate text-[11px] text-ink-faint">@{user.login} · {ROLE_LABEL[user.role]}</p>
+                    <p className="truncate text-[11px] text-ink-faint">@{user.login} · {ROLE_LABEL[user.role] ?? user.role}</p>
                   </div>
                 </div>
 

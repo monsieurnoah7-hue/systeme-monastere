@@ -47,6 +47,7 @@ import {
   Shield,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Trash2,
   UserPlus,
   Users,
@@ -54,6 +55,67 @@ import {
   X,
 } from 'lucide-react';
 import { ImagePickerModal } from '../components/ImagePickerModal';
+import { computeAllowedViews } from '../components/Shell';
+
+export type RoleArchetypeUI = {
+  id: string;
+  name: string;
+  badge: string;
+  description: string;
+  modules: string[];
+};
+
+export const ROLE_ARCHETYPES_UI: RoleArchetypeUI[] = [
+  {
+    id: 'ouvrier',
+    name: 'Opérateur Atelier & Chantier',
+    badge: 'Atelier',
+    description: 'Accès personnel : badge QR, pointages, congés et consultation des outils.',
+    modules: ['Mon Espace', 'Outils (Lecture)'],
+  },
+  {
+    id: 'magasinier',
+    name: 'Logistique, Magasins & Quincaillerie',
+    badge: 'Magasin',
+    description: 'Gestion complète des stocks, entrées/sorties, magasins et fiches outils.',
+    modules: ['Mon Espace', 'Outils', 'Stock', 'Magasins', 'Tableau de bord'],
+  },
+  {
+    id: 'superviseur',
+    name: 'Supervision Terrain & Équipe',
+    badge: 'Supervision',
+    description: 'Pilotage des ouvriers, présences, retards, congés, équipe et prêts.',
+    modules: ['Mon Espace', 'Tableau de bord', 'Pointage', 'Travailleurs', 'Outils', 'Stock'],
+  },
+  {
+    id: 'auditeur',
+    name: 'Contrôle & Audit (Lecture Seule)',
+    badge: 'Audit',
+    description: 'Vue d’ensemble sur l’atelier, valorisation et rapports patrimoniaux.',
+    modules: ['Mon Espace', 'Tableau de bord', 'Outils (Lecture)', 'Stock (Lecture)', 'Travailleurs (Lecture)'],
+  },
+  {
+    id: 'maintenance',
+    name: 'Maintenance & Réparations',
+    badge: 'Technique',
+    description: 'Contrôle technique, changements de statut et réparations d’outils.',
+    modules: ['Mon Espace', 'Outils & Maintenance', 'Stock'],
+  },
+  {
+    id: 'clone',
+    name: 'Dupliquer un rôle existant',
+    badge: 'Copie',
+    description: 'Copie exactement les permissions accordées à un autre rôle.',
+    modules: ['Identique au rôle source'],
+  },
+  {
+    id: 'custom',
+    name: 'Personnalisé sur mesure',
+    badge: 'Libre',
+    description: 'Définissez librement les privilèges dans la matrice.',
+    modules: ['Mon Espace par défaut'],
+  },
+];
 
 const WEEKDAYS_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Lundi -> Dimanche
 
@@ -245,7 +307,7 @@ function AdminSettings({ user }: { user: User }) {
   // Role management states (Direction control)
   const [roleModalOpen, setRoleModalOpen] = useState(false);
   const [roleModalMode, setRoleModalMode] = useState<'create' | 'edit'>('create');
-  const [roleForm, setRoleForm] = useState({ id: '', name: '', description: '' });
+  const [roleForm, setRoleForm] = useState({ id: '', name: '', description: '', template: 'ouvrier', copyFrom: '' });
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleBusy, setRoleBusy] = useState(false);
   const [deleteRoleConfirm, setDeleteRoleConfirm] = useState<RoleInfo | null>(null);
@@ -608,6 +670,7 @@ function AdminSettings({ user }: { user: User }) {
     try {
       await api('/api/permissions', { method: 'PUT', body: JSON.stringify({ matrix: permDraft }) });
       toast('Matrice des permissions mise à jour.', 'success');
+      window.dispatchEvent(new CustomEvent('permissions:updated'));
       setReload((value) => value + 1);
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Enregistrement impossible.', 'error');
@@ -624,15 +687,36 @@ function AdminSettings({ user }: { user: User }) {
   }
 
   // Role management actions (Direction)
-  function openCreateRoleModal() {
-    setRoleForm({ id: '', name: '', description: '' });
+  function openCreateRoleModal(defaultArchetype = 'ouvrier') {
+    const fallbackArch = ROLE_ARCHETYPES_UI[0]!;
+    const arch = ROLE_ARCHETYPES_UI.find((a) => a.id === defaultArchetype) ?? fallbackArch;
+    const initialId = arch.id === 'clone' || arch.id === 'custom' ? '' : `${arch.id}_${Math.floor(10 + Math.random() * 90)}`;
+    setRoleForm({
+      id: initialId,
+      name: arch.id === 'clone' || arch.id === 'custom' ? '' : arch.name,
+      description: arch.description,
+      template: defaultArchetype,
+      copyFrom: '',
+    });
     setRoleModalMode('create');
     setRoleError(null);
     setRoleModalOpen(true);
   }
 
+  function selectRoleArchetype(archId: string) {
+    const arch = ROLE_ARCHETYPES_UI.find((a) => a.id === archId);
+    if (!arch) return;
+    setRoleForm((f) => ({
+      ...f,
+      template: archId,
+      name: f.name.trim() ? f.name : (arch.id === 'clone' || arch.id === 'custom' ? '' : arch.name),
+      id: f.id.trim() ? f.id : (arch.id === 'clone' || arch.id === 'custom' ? '' : `${arch.id}_${Math.floor(10 + Math.random() * 90)}`),
+      description: arch.description,
+    }));
+  }
+
   function openEditRoleModal(r: RoleInfo) {
-    setRoleForm({ id: r.id, name: r.name, description: r.description ?? '' });
+    setRoleForm({ id: r.id, name: r.name, description: r.description ?? '', template: 'custom', copyFrom: '' });
     setRoleModalMode('edit');
     setRoleError(null);
     setRoleModalOpen(true);
@@ -654,15 +738,23 @@ function AdminSettings({ user }: { user: User }) {
     setRoleError(null);
     try {
       if (roleModalMode === 'create') {
+        const payload: Record<string, unknown> = {
+          id: trimmedId,
+          name: trimmedName,
+          description: roleForm.description.trim() || undefined,
+        };
+        if (roleForm.template === 'clone' && roleForm.copyFrom) {
+          payload.copy_from = roleForm.copyFrom;
+        } else if (roleForm.template && roleForm.template !== 'custom') {
+          payload.template = roleForm.template;
+        }
+
         await api('/api/permissions/roles', {
           method: 'POST',
-          body: JSON.stringify({
-            id: trimmedId,
-            name: trimmedName,
-            description: roleForm.description.trim() || undefined,
-          }),
+          body: JSON.stringify(payload),
         });
-        toast(`Rôle « ${trimmedName} » créé avec succès.`, 'success');
+        toast(`Rôle « ${trimmedName} » créé avec privilèges initialisés.`, 'success');
+        window.dispatchEvent(new CustomEvent('permissions:updated'));
       } else {
         await api(`/api/permissions/roles/${roleForm.id}`, {
           method: 'PUT',
@@ -672,6 +764,7 @@ function AdminSettings({ user }: { user: User }) {
           }),
         });
         toast(`Rôle « ${trimmedName} » mis à jour.`, 'success');
+        window.dispatchEvent(new CustomEvent('permissions:updated'));
       }
       setRoleModalOpen(false);
       setReload((v) => v + 1);
@@ -680,6 +773,37 @@ function AdminSettings({ user }: { user: User }) {
     } finally {
       setRoleBusy(false);
     }
+  }
+
+  // Smart User Account auto-fill helper
+  function handleUserEmployeeChange(empId: string) {
+    const emp = employees.find((e) => e.id === empId);
+    if (!emp) {
+      setUserForm((f) => ({ ...f, employee_id: '' }));
+      return;
+    }
+    const normalizedLogin = emp.full_name
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '.')
+      .replace(/^\.+|\.+$/g, '')
+      .slice(0, 32);
+
+    let suggestedRole = 'travailleur';
+    const lowerJob = emp.job_title.toLowerCase();
+    if (lowerJob.includes('magasin') || lowerJob.includes('stock')) suggestedRole = 'magasinier';
+    else if (lowerJob.includes('chef') || lowerJob.includes('supervis') || lowerJob.includes('responsable')) suggestedRole = 'chef_atelier';
+
+    setUserForm((f) => ({
+      ...f,
+      employee_id: empId,
+      display_name: f.display_name.trim() ? f.display_name : emp.full_name,
+      login: f.login.trim() ? f.login : normalizedLogin,
+      password: f.password.trim() ? f.password : 'Monastere2026!',
+      role: availableRoles.some((r) => r.id === suggestedRole) ? suggestedRole : (availableRoles[0]?.id ?? 'travailleur'),
+    }));
   }
 
   async function handleDeleteRole(role: RoleInfo) {
@@ -1094,7 +1218,7 @@ function AdminSettings({ user }: { user: User }) {
                 size="sm"
                 variant="primary"
                 icon={<Plus size={15} />}
-                onClick={openCreateRoleModal}
+                onClick={() => openCreateRoleModal()}
               >
                 Nouveau rôle
               </Button>
@@ -1939,33 +2063,89 @@ function AdminSettings({ user }: { user: User }) {
         <div className="space-y-4">
           {formError ? <Banner tone="error">{formError}</Banner> : null}
 
+          {/* Quick 1-Click Worker Selection */}
+          {(() => {
+            const unlinked = employees.filter((emp) => emp.active && !users.some((u) => u.employee_id === emp.id));
+            if (unlinked.length === 0) return null;
+            return (
+              <div className="rounded-xl border border-amber/30 bg-amber-wash/30 p-3 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber">
+                  <Sparkles size={14} />
+                  <span>Remplissage automatique en 1 clic ({unlinked.length} travailleur{unlinked.length > 1 ? 's' : ''} sans compte) :</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                  {unlinked.slice(0, 8).map((emp) => (
+                    <button
+                      key={emp.id}
+                      type="button"
+                      onClick={() => handleUserEmployeeChange(emp.id)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] font-semibold text-ink hover:border-amber hover:bg-amber-wash transition-colors shadow-xs"
+                    >
+                      <span>{emp.full_name}</span>
+                      <span className="text-[10px] text-ink-faint font-mono">({emp.job_title})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Rattacher à un travailleur (Recommandé)</label>
+              <select
+                value={userForm.employee_id}
+                onChange={(e) => handleUserEmployeeChange(e.target.value)}
+                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+              >
+                <option value="">— Aucun (Compte générique / Visiteur) —</option>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.full_name} ({e.id} - {e.job_title})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Nom complet affiché</label>
               <input
                 type="text"
                 value={userForm.display_name}
-                placeholder="Ex : Frère Bernard"
+                placeholder="Ex : Landry ONANA"
                 onChange={(e) => setUserForm({ ...userForm, display_name: e.target.value })}
                 className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
               />
             </div>
+          </div>
 
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Identifiant de connexion</label>
               <input
                 type="text"
                 value={userForm.login}
-                placeholder="Ex : f.bernard"
+                placeholder="Ex : landry.onana"
                 onChange={(e) => setUserForm({ ...userForm, login: e.target.value.toLowerCase() })}
                 className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Mot de passe temporaire</label>
+              <input
+                type="text"
+                value={userForm.password}
+                placeholder="Au moins 6 caractères"
+                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-2 block text-xs font-medium text-ink-soft">Rôle applicatif</label>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <label className="mb-2 block text-xs font-medium text-ink-soft">Rôle applicatif & Privilèges</label>
+            <div className="grid gap-2 sm:grid-cols-2 max-h-48 overflow-y-auto pr-1">
               {availableRoles.map((r) => (
                 <label
                   key={r.id}
@@ -1992,34 +2172,31 @@ function AdminSettings({ user }: { user: User }) {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Mot de passe temporaire</label>
-              <input
-                type="text"
-                value={userForm.password}
-                placeholder="Au moins 6 caractères"
-                onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Rattacher à un travailleur</label>
-              <select
-                value={userForm.employee_id}
-                onChange={(e) => setUserForm({ ...userForm, employee_id: e.target.value })}
-                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
-              >
-                <option value="">Aucun profil travailleur</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.full_name} ({e.id})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          {/* Real-time Dynamic Interface Preview */}
+          {(() => {
+            const rolePerms = permMatrix?.matrix
+              ? Object.fromEntries(
+                  Object.entries(permMatrix.matrix).map(([action, roles]) => [action, Boolean(roles[userForm.role])]),
+                )
+              : null;
+            const allowed = computeAllowedViews(userForm.role, rolePerms);
+            return (
+              <div className="rounded-xl border border-line bg-surface-2/60 p-3 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-semibold text-ink">
+                  <span>Interface garantie pour ce compte :</span>
+                  <span className="text-[11px] text-amber font-mono">{allowed.length} module(s) débloqué(s)</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {allowed.map((v) => (
+                    <span key={v} className="inline-flex items-center gap-1 rounded-chip border border-line bg-surface px-2 py-0.5 text-[10px] font-semibold text-ink">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green" />
+                      {v === 'espace' ? 'Mon Espace' : v === 'employes' ? 'Travailleurs' : v === 'dashboard' ? 'Tableau de bord' : v.charAt(0).toUpperCase() + v.slice(1)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </Modal>
 
@@ -2145,6 +2322,7 @@ function AdminSettings({ user }: { user: User }) {
       <Modal
         open={roleModalOpen}
         title={roleModalMode === 'create' ? 'Créer un nouveau rôle applicatif' : `Modifier le rôle « ${roleForm.name} »`}
+        wide
         onClose={() => setRoleModalOpen(false)}
         footer={
           <>
@@ -2156,7 +2334,7 @@ function AdminSettings({ user }: { user: User }) {
               disabled={roleBusy || !roleForm.name.trim() || (roleModalMode === 'create' && !roleForm.id.trim())}
               onClick={() => void handleSaveRole()}
             >
-              {roleBusy ? <Spinner /> : roleModalMode === 'create' ? 'Créer le rôle' : 'Enregistrer les modifications'}
+              {roleBusy ? <Spinner /> : roleModalMode === 'create' ? 'Créer le rôle & Activer les privilèges' : 'Enregistrer les modifications'}
             </Button>
           </>
         }
@@ -2164,54 +2342,121 @@ function AdminSettings({ user }: { user: User }) {
         <div className="space-y-4">
           {roleError ? <Banner tone="error">{roleError}</Banner> : null}
 
-          {roleModalMode === 'create' ? (
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-ink-soft">
-                Identifiant technique (Code unique sans espace)
+          {/* Archetype Quick Selection (Create Mode) */}
+          {roleModalMode === 'create' && (
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-ink">
+                1. Choisissez un modèle de rôle pré-configuré (Archétype en 1 clic) :
               </label>
-              <input
-                type="text"
-                value={roleForm.id}
-                placeholder="Ex: superviseur_scie, adjoint_magasin"
-                onChange={(e) => setRoleForm({ ...roleForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
-                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none"
-              />
-              <p className="mt-1 text-[11px] text-ink-faint">
-                Minuscules, chiffres et tirets uniquement. Non modifiable une fois créé.
-              </p>
-            </div>
-          ) : (
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Identifiant technique</label>
-              <input
-                type="text"
-                value={roleForm.id}
-                disabled
-                className="h-10 w-full rounded-btn border border-line bg-paper-2 px-3 font-mono text-sm text-ink-soft opacity-80"
-              />
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {ROLE_ARCHETYPES_UI.map((arch) => {
+                  const isSelected = roleForm.template === arch.id;
+                  return (
+                    <div
+                      key={arch.id}
+                      onClick={() => selectRoleArchetype(arch.id)}
+                      className={cx(
+                        'flex flex-col justify-between rounded-xl border p-2.5 cursor-pointer transition-all text-left shadow-xs select-none',
+                        isSelected ? 'border-amber bg-amber-wash/60 ring-2 ring-amber/20' : 'border-line bg-surface hover:bg-paper-2 hover:border-line-strong',
+                      )}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-ink">{arch.name}</span>
+                          <span className="rounded-full bg-paper px-1.5 py-0.5 text-[9px] font-bold text-amber border border-amber/20">
+                            {arch.badge}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-ink-soft leading-snug line-clamp-2">
+                          {arch.description}
+                        </p>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {arch.modules.map((m) => (
+                          <span key={m} className="rounded bg-surface px-1.5 py-0.5 text-[9px] font-medium text-ink-faint border border-line">
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Intitulé officiel du rôle</label>
-            <input
-              type="text"
-              value={roleForm.name}
-              placeholder="Ex: Responsable Menuiserie & Scierie"
-              onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
-              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
-            />
-          </div>
+          {/* Clone source selection */}
+          {roleModalMode === 'create' && roleForm.template === 'clone' && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Dupliquer les droits à partir du rôle :</label>
+              <select
+                value={roleForm.copyFrom}
+                onChange={(e) => setRoleForm({ ...roleForm, copyFrom: e.target.value })}
+                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+              >
+                <option value="">— Sélectionner un rôle source —</option>
+                {availableRoles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Description des responsabilités (Optionnel)</label>
-            <textarea
-              rows={3}
-              value={roleForm.description}
-              placeholder="Décrivez brièvement les missions et responsabilités attachées à ce rôle…"
-              onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
-              className="w-full rounded-btn border border-line-strong bg-surface p-3 text-xs text-ink focus:border-amber focus:outline-none"
-            />
+          <div className="border-t border-line pt-3 space-y-3">
+            <span className="block text-xs font-semibold text-ink">
+              {roleModalMode === 'create' ? '2. Personnalisez l’intitulé et le code technique :' : 'Informations du rôle :'}
+            </span>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-ink-soft">Intitulé officiel du rôle</label>
+                <input
+                  type="text"
+                  value={roleForm.name}
+                  placeholder="Ex: Responsable Menuiserie & Scierie"
+                  onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                  className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+                />
+              </div>
+
+              {roleModalMode === 'create' ? (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-ink-soft">
+                    Identifiant technique unique (Minuscules/chiffres/tirets)
+                  </label>
+                  <input
+                    type="text"
+                    value={roleForm.id}
+                    placeholder="Ex: resp_scierie"
+                    onChange={(e) => setRoleForm({ ...roleForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
+                    className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-ink-soft">Identifiant technique</label>
+                  <input
+                    type="text"
+                    value={roleForm.id}
+                    disabled
+                    className="h-10 w-full rounded-btn border border-line bg-paper-2 px-3 font-mono text-sm text-ink-soft opacity-80"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Description des responsabilités</label>
+              <textarea
+                rows={2}
+                value={roleForm.description}
+                placeholder="Décrivez brièvement les missions et responsabilités attachées à ce rôle…"
+                onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
+                className="w-full rounded-btn border border-line-strong bg-surface p-3 text-xs text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
           </div>
         </div>
       </Modal>
