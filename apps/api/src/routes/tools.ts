@@ -321,6 +321,135 @@ toolsRoutes.patch('/:id/status', requirePerm('tools.edit_status'), async (c) => 
   return c.json({ tool: updated });
 });
 
+const importToolsSchema = z.object({
+  items: z.array(
+    z.object({
+      name: z.string().min(1),
+      category: z.string().optional(),
+      location: z.string().optional(),
+      magasin_id: z.string().optional(),
+      brand: z.string().optional(),
+      model: z.string().optional(),
+      serial_number: z.string().optional(),
+      acquisition_cost: z.number().nullable().optional(),
+      acquisition_year: z.number().nullable().optional(),
+      lifespan_years: z.number().optional(),
+      observations: z.string().optional(),
+    }),
+  ).min(1).max(1000),
+  default_magasin_id: z.string().optional(),
+});
+
+toolsRoutes.post('/import', requirePerm('tools.create'), async (c) => {
+  const body = importToolsSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) {
+    return c.json({ error: 'Format du fichier invalide ou vide.', details: body.error.issues }, 400);
+  }
+
+  const { items, default_magasin_id } = body.data;
+  const db = getDb();
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  await db.transaction(async (tx) => {
+    for (const item of items) {
+      const cleanName = item.name.trim();
+      const targetMagasin = item.magasin_id || default_magasin_id || null;
+      const serial = item.serial_number?.trim() || null;
+
+      let existing: ToolRow | null | undefined = null;
+      if (serial) {
+        existing = await tx.one<ToolRow>(
+          'SELECT * FROM tools WHERE lower(trim(serial_number)) = lower(trim($1)) LIMIT 1',
+          [serial],
+        );
+      }
+      if (!existing) {
+        existing = await tx.one<ToolRow>(
+          `SELECT * FROM tools 
+           WHERE lower(trim(name)) = lower(trim($1)) 
+             AND (magasin_id = $2 OR (magasin_id IS NULL AND $2 IS NULL)) 
+           LIMIT 1`,
+          [cleanName, targetMagasin],
+        );
+      }
+
+      if (existing) {
+        await tx.query(
+          `UPDATE tools SET
+             category = coalesce($2, category),
+             brand = coalesce($3, brand),
+             model = coalesce($4, model),
+             location = coalesce($5, location),
+             acquisition_cost = coalesce($6, acquisition_cost),
+             acquisition_year = coalesce($7, acquisition_year),
+             lifespan_years = coalesce($8, lifespan_years),
+             observations = coalesce($9, observations)
+           WHERE id = $1`,
+          [
+            existing.id,
+            item.category?.trim() || null,
+            item.brand?.trim() || null,
+            item.model?.trim() || null,
+            item.location?.trim() || null,
+            item.acquisition_cost !== undefined ? item.acquisition_cost : null,
+            item.acquisition_year !== undefined ? item.acquisition_year : null,
+            item.lifespan_years ?? null,
+            item.observations?.trim() || null,
+          ],
+        );
+        updatedCount += 1;
+      } else {
+        const cat = item.category?.trim() || 'Divers';
+        const prefix = PREFIX[cat] ?? 'OTL';
+        const count = await tx.one<{ count: string }>(
+          'SELECT count(*) AS count FROM tools WHERE id LIKE $1',
+          [`${prefix}-%`],
+        );
+        const seq = (Number(count?.count ?? 0) + 1).toString().padStart(3, '0');
+        const id = `${prefix}-${seq}`;
+
+        await tx.query(
+          `INSERT INTO tools (id, name, category, location, magasin_id, brand, model, serial_number, acquisition_cost, acquisition_year, lifespan_years, observations, status, condition)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'disponible', 'bon_etat')`,
+          [
+            id,
+            cleanName,
+            cat,
+            item.location?.trim() || 'Magasin',
+            targetMagasin,
+            item.brand?.trim() || null,
+            item.model?.trim() || null,
+            serial,
+            item.acquisition_cost ?? null,
+            item.acquisition_year ?? null,
+            item.lifespan_years ?? 5,
+            item.observations?.trim() || null,
+          ],
+        );
+        createdCount += 1;
+      }
+    }
+
+    await writeAudit(tx, {
+      entity: 'tools',
+      entityId: 'spreadsheet_import',
+      action: 'import',
+      after: { createdCount, updatedCount, total: items.length },
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  });
+
+  return c.json({
+    ok: true,
+    createdCount,
+    updatedCount,
+    totalProcessed: items.length,
+    message: `${createdCount} outil(s) créé(s), ${updatedCount} outil(s) mis à jour sans doublon.`,
+  });
+});
+
 export async function logToolEvent(c: Context, toolId: string, type: string, from: ToolStatus | null, to: ToolStatus, note: string) {
   await getDb().query(
     `INSERT INTO tool_events (tool_id, event_type, from_status, to_status, actor, note)

@@ -47,6 +47,7 @@ import {
 import { Download, Printer, Camera, TrendingDown, FileSpreadsheet } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { ImagePickerModal } from '../components/ImagePickerModal';
+import { ExcelImportModal } from '../components/ExcelImportModal';
 import { computePortfolioAudit, computeToolAccounting, formatCurrency } from '../lib/accounting';
 
 type ToolDetail = { tool: Tool; events: ToolEvent[]; loan: ToolLoan | null };
@@ -167,6 +168,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
   const [employees, setEmployees] = useState<Employee[]>([]);
 
   const [newOpen, setNewOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [newForm, setNewForm] = useState({
     name: '',
     category: 'Divers',
@@ -573,14 +575,25 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
             Planche A4 QR
           </Button>
           {canManage ? (
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<IconPlus size={16} />}
-              onClick={() => setNewOpen(true)}
-            >
-              Nouvel Outil
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<FileSpreadsheet size={15} />}
+                onClick={() => setImportOpen(true)}
+                title="Importer un fichier Excel (.xlsx, .xls) ou Google Sheets (.csv) sans doublon"
+              >
+                Importer Tableur
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<IconPlus size={16} />}
+                onClick={() => setNewOpen(true)}
+              >
+                Nouvel Outil
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
@@ -1734,6 +1747,17 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         onClose={() => setPhotoModalOpen(false)}
         onSelect={(url) => void handleToolPhotoSelect(url)}
       />
+
+      {/* Modal Import Tableur Excel / CSV */}
+      {importOpen && (
+        <ExcelImportModal
+          type="tools"
+          onClose={() => setImportOpen(false)}
+          onSuccess={() => {
+            refresh();
+          }}
+        />
+      )}
 
       {portal}
     </div>

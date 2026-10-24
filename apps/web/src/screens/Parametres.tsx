@@ -185,6 +185,47 @@ function formatBytes(size: number): string {
   return `${(size / 1_048_576).toFixed(1)} Mo`;
 }
 
+function formatHumanBackupLabel(pathname: string, uploadedAt?: string): { title: string; subtitle: string; isAuto: boolean } {
+  const clean = pathname.replace(/^backups\//, '');
+  const match = clean.match(/monastere-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})/);
+  if (match && match[1] && match[2] && match[3] && match[4] && match[5]) {
+    const [, y, m, d, hh, mm] = match;
+    const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm)));
+    const dayStr = new Intl.DateTimeFormat('fr-FR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(date);
+    const timeStr = new Intl.DateTimeFormat('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+    const capitalized = dayStr.charAt(0).toUpperCase() + dayStr.slice(1);
+    const isAuto = Number(hh) >= 2 && Number(hh) <= 4;
+    return {
+      title: `Instantané du ${capitalized}`,
+      subtitle: `Généré à ${timeStr} (archive ${clean})`,
+      isAuto,
+    };
+  }
+
+  const date = uploadedAt ? new Date(uploadedAt) : new Date();
+  const dayStr = new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+  return {
+    title: `Instantané du ${dayStr.charAt(0).toUpperCase() + dayStr.slice(1)}`,
+    subtitle: clean,
+    isAuto: false,
+  };
+}
+
 async function downloadFile(url: string, filename: string, init?: RequestInit): Promise<void> {
   const res = await fetch(url, { credentials: 'include', ...init });
   if (!res.ok) {
@@ -303,6 +344,16 @@ function AdminSettings({ user }: { user: User }) {
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | Role>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [kpiCardFilter, setKpiCardFilter] = useState<'all' | 'active' | 'linked' | 'direction'>('all');
+
+  // Purge confirmation modal state
+  const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
+
+  // New RBAC action modal state
+  const [newActionOpen, setNewActionOpen] = useState(false);
+  const [newActionForm, setNewActionForm] = useState({ action: '', label: '', group_label: '' });
+  const [newActionBusy, setNewActionBusy] = useState(false);
+  const [newActionError, setNewActionError] = useState<string | null>(null);
 
   // Role management states (Direction control)
   const [roleModalOpen, setRoleModalOpen] = useState(false);
@@ -686,6 +737,37 @@ function AdminSettings({ user }: { user: User }) {
     }
   }
 
+  async function handleCreateAction() {
+    if (!newActionForm.action.trim() || !newActionForm.label.trim() || !newActionForm.group_label.trim()) {
+      setNewActionError('Tous les champs sont obligatoires.');
+      return;
+    }
+    setNewActionBusy(true);
+    setNewActionError(null);
+    try {
+      const res = await api<{ ok: boolean; action: { action: string; label: string; group_label: string } }>(
+        '/api/permissions/actions',
+        {
+          method: 'POST',
+          body: JSON.stringify(newActionForm),
+        },
+      );
+      if (res.ok) {
+        toast(`Nouvelle action « ${res.action.label} » ajoutée dans le module ${res.action.group_label} !`, 'success');
+        setNewActionOpen(false);
+        const permRes = await api<PermissionMatrix>('/api/permissions').catch(() => null);
+        if (permRes) {
+          setPermMatrix(permRes);
+          setPermDraft(permRes.matrix);
+        }
+      }
+    } catch (err) {
+      setNewActionError(err instanceof Error ? err.message : 'Impossible de créer cette action.');
+    } finally {
+      setNewActionBusy(false);
+    }
+  }
+
   // Role management actions (Direction)
   function openCreateRoleModal(defaultArchetype = 'ouvrier') {
     const fallbackArch = ROLE_ARCHETYPES_UI[0]!;
@@ -854,6 +936,11 @@ function AdminSettings({ user }: { user: User }) {
 
   const filteredUsers = useMemo(() => {
     return sortedUsers.filter((u) => {
+      // Interactive KPI Card Filter
+      if (kpiCardFilter === 'active' && !u.active) return false;
+      if (kpiCardFilter === 'linked' && !u.employee_id) return false;
+      if (kpiCardFilter === 'direction' && u.role !== 'direction') return false;
+
       // Role filter
       if (roleFilter !== 'all' && u.role !== roleFilter) return false;
       // Status filter
@@ -873,7 +960,7 @@ function AdminSettings({ user }: { user: User }) {
       }
       return true;
     });
-  }, [sortedUsers, roleFilter, statusFilter, userSearch, employeesById]);
+  }, [sortedUsers, kpiCardFilter, roleFilter, statusFilter, userSearch, employeesById]);
 
   // Key performance indicators
   const activeUsersCount = useMemo(() => users.filter((u) => u.active).length, [users]);
@@ -978,27 +1065,92 @@ function AdminSettings({ user }: { user: User }) {
             TAB 1: COMPTES UTILISATEURS
         ========================================================================= */}
         <TabsContent value="comptes" className="space-y-6">
-          {/* Quick Metrics */}
+          {/* Quick Interactive Metrics */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Card className="p-4 shadow-card">
-              <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Total Comptes</p>
+            <Card
+              onClick={() => setKpiCardFilter('all')}
+              className={cx(
+                'p-4 shadow-card cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] select-none',
+                kpiCardFilter === 'all'
+                  ? 'border-amber bg-amber-wash/40 ring-2 ring-amber/50 shadow-md'
+                  : 'hover:border-line-strong hover:bg-paper-2/40',
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Total Comptes</p>
+                {kpiCardFilter === 'all' && (
+                  <span className="h-2 w-2 rounded-full bg-amber animate-pulse" />
+                )}
+              </div>
               <p className="mt-1 text-2xl font-semibold text-ink">{users.length}</p>
+              <p className="mt-1 text-[10px] text-ink-faint">Tous les profils créés</p>
             </Card>
-            <Card className="p-4 shadow-card">
-              <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Comptes Actifs</p>
+
+            <Card
+              onClick={() => setKpiCardFilter((prev) => (prev === 'active' ? 'all' : 'active'))}
+              className={cx(
+                'p-4 shadow-card cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] select-none',
+                kpiCardFilter === 'active'
+                  ? 'border-green bg-green-wash/50 ring-2 ring-green/50 shadow-md'
+                  : 'hover:border-green/40 hover:bg-paper-2/40',
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] font-medium uppercase tracking-wider text-green font-semibold">Comptes Actifs</p>
+                {kpiCardFilter === 'active' ? (
+                  <span className="h-2 w-2 rounded-full bg-green animate-pulse" />
+                ) : (
+                  <span className="text-[10px] text-ink-faint">Filtrer</span>
+                )}
+              </div>
               <p className="mt-1 text-2xl font-semibold text-green">{activeUsersCount}</p>
+              <p className="mt-1 text-[10px] text-ink-faint">Accès autorisés</p>
             </Card>
-            <Card className="p-4 shadow-card">
-              <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Rattachés Travailleurs</p>
+
+            <Card
+              onClick={() => setKpiCardFilter((prev) => (prev === 'linked' ? 'all' : 'linked'))}
+              className={cx(
+                'p-4 shadow-card cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] select-none',
+                kpiCardFilter === 'linked'
+                  ? 'border-amber bg-amber-wash/50 ring-2 ring-amber/50 shadow-md'
+                  : 'hover:border-amber/40 hover:bg-paper-2/40',
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Rattachés Travailleurs</p>
+                {kpiCardFilter === 'linked' ? (
+                  <span className="h-2 w-2 rounded-full bg-amber animate-pulse" />
+                ) : (
+                  <span className="text-[10px] text-ink-faint">Filtrer</span>
+                )}
+              </div>
               <p className="mt-1 text-2xl font-semibold text-ink">
                 {users.filter((u) => !!u.employee_id).length}
               </p>
+              <p className="mt-1 text-[10px] text-ink-faint">Liés à une fiche artisan</p>
             </Card>
-            <Card className="p-4 shadow-card">
-              <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Direction &amp; Admin</p>
+
+            <Card
+              onClick={() => setKpiCardFilter((prev) => (prev === 'direction' ? 'all' : 'direction'))}
+              className={cx(
+                'p-4 shadow-card cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] select-none',
+                kpiCardFilter === 'direction'
+                  ? 'border-blue bg-blue-wash/50 ring-2 ring-blue/50 shadow-md'
+                  : 'hover:border-blue/40 hover:bg-paper-2/40',
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] font-medium uppercase tracking-wider text-blue font-semibold">Direction &amp; Admin</p>
+                {kpiCardFilter === 'direction' ? (
+                  <span className="h-2 w-2 rounded-full bg-blue animate-pulse" />
+                ) : (
+                  <span className="text-[10px] text-ink-faint">Filtrer</span>
+                )}
+              </div>
               <p className="mt-1 text-2xl font-semibold text-blue">
                 {users.filter((u) => u.role === 'direction').length}
               </p>
+              <p className="mt-1 text-[10px] text-ink-faint">Super-utilisateurs</p>
             </Card>
           </div>
 
@@ -1077,6 +1229,28 @@ function AdminSettings({ user }: { user: User }) {
                 </select>
               </div>
             </div>
+
+            {/* Active KPI Filter Banner */}
+            {kpiCardFilter !== 'all' && (
+              <div className="flex items-center justify-between bg-amber-wash/60 border-b border-amber/30 px-5 py-2 text-xs text-amber-900 dark:text-amber font-medium">
+                <span className="flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-amber" />
+                  Filtre actif :{' '}
+                  <strong className="underline">
+                    {kpiCardFilter === 'active' && 'Comptes Actifs'}
+                    {kpiCardFilter === 'linked' && 'Rattachés aux Travailleurs'}
+                    {kpiCardFilter === 'direction' && 'Direction & Administration'}
+                  </strong>
+                  {' '}({filteredUsers.length} résultat{filteredUsers.length > 1 ? 's' : ''})
+                </span>
+                <button
+                  onClick={() => setKpiCardFilter('all')}
+                  className="text-[11px] underline font-semibold hover:text-ink transition-colors"
+                >
+                  ✕ Afficher tous les comptes
+                </button>
+              </div>
+            )}
 
             {/* Accounts List */}
             <CardContent className="p-0">
@@ -1324,22 +1498,36 @@ function AdminSettings({ user }: { user: User }) {
                 </CardDescription>
               </div>
 
-              {hasUnsavedPerms ? (
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="ghost" onClick={resetPermDraft} disabled={busy}>
-                    Annuler
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    disabled={busy}
-                    icon={busy ? <Spinner /> : <Check size={15} />}
-                    onClick={() => void savePermissions()}
-                  >
-                    Enregistrer les modifications
-                  </Button>
-                </div>
-              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Plus size={14} />}
+                  onClick={() => {
+                    setNewActionForm({ action: '', label: '', group_label: 'Opérations Générales' });
+                    setNewActionError(null);
+                    setNewActionOpen(true);
+                  }}
+                >
+                  Ajouter une action / module
+                </Button>
+                {hasUnsavedPerms ? (
+                  <>
+                    <Button size="sm" variant="ghost" onClick={resetPermDraft} disabled={busy}>
+                      Annuler
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      disabled={busy}
+                      icon={busy ? <Spinner /> : <Check size={15} />}
+                      onClick={() => void savePermissions()}
+                    >
+                      Enregistrer
+                    </Button>
+                  </>
+                ) : null}
+              </div>
             </CardHeader>
 
             {hasUnsavedPerms ? (
@@ -1846,6 +2034,42 @@ function AdminSettings({ user }: { user: User }) {
             TAB 5: SAUVEGARDES & SYSTEME
         ========================================================================= */}
         <TabsContent value="sauvegardes" className="space-y-6">
+          {/* Quick Metrics for Backups */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Card className="p-4 shadow-card">
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Instantanés Stockés</p>
+                <Database size={16} className="text-blue" />
+              </div>
+              <p className="mt-1 text-2xl font-semibold text-ink">{backups.length}</p>
+              <p className="mt-1 text-[10px] text-ink-faint">Archives cloud chiffrées</p>
+            </Card>
+
+            <Card className="p-4 shadow-card">
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Volume Cloud Total</p>
+                <span className="text-xs font-mono font-bold text-ink-soft">Ko/Mo</span>
+              </div>
+              <p className="mt-1 text-2xl font-semibold text-green">
+                {formatBytes(backups.reduce((acc, b) => acc + (b.size || 0), 0))}
+              </p>
+              <p className="mt-1 text-[10px] text-ink-faint">Stockage Vercel Blob compressé</p>
+            </Card>
+
+            <Card className="p-4 shadow-card">
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Dernier Instantané</p>
+                <span className="h-2 w-2 rounded-full bg-green" />
+              </div>
+              <p className="mt-1 text-base font-semibold text-ink truncate">
+                {backups[0] ? formatHumanBackupLabel(backups[0].pathname, backups[0].uploadedAt).title.replace('Instantané du ', '') : 'Aucun'}
+              </p>
+              <p className="mt-1 text-[10px] text-ink-faint">
+                {backups.length > 0 ? `Rétention active (${retentionDays} jours)` : 'Planifié à 03:00 UTC'}
+              </p>
+            </Card>
+          </div>
+
           {/* Cloud Backups Card */}
           <Card className="shadow-card">
             <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1876,60 +2100,83 @@ function AdminSettings({ user }: { user: User }) {
                 >
                   Export complet (.gz)
                 </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white font-semibold transition-all shadow-xs"
+                  disabled={backupBusy || backups.length === 0}
+                  icon={<Trash2 size={14} />}
+                  onClick={() => setPurgeConfirmOpen(true)}
+                >
+                  Purger l'historique
+                </Button>
               </div>
             </CardHeader>
 
             <CardContent className="p-0">
               <div className="px-5 py-3 border-b border-line bg-paper-2/40 text-xs font-semibold text-ink flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span>Historique des instantanés cloud ({backups.length})</span>
+                  <span>Archives disponibles ({backups.length})</span>
                   <span className="text-[11px] text-ink-faint">· Rétention {retentionDays} jours</span>
                 </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="text-red border-red/20 bg-red-wash/40 hover:bg-red-wash hover:border-red/40 transition-colors"
-                  disabled={backupBusy || backups.length === 0}
-                  icon={<Trash2 size={13} className="text-red" />}
-                  onClick={() => void purgeCloudBackups()}
-                >
-                  Purger l'historique
-                </Button>
+                {backups.length > 0 && (
+                  <span className="text-[11px] text-ink-soft">
+                    {backups.length} fichier(s) prêt(s) au téléchargement
+                  </span>
+                )}
               </div>
 
               {backups.length === 0 ? (
-                <div className="p-8 text-center text-xs text-ink-faint">
-                  Aucun instantané disponible pour le moment. Cliquez sur « Sauvegarder maintenant » pour créer le premier.
+                <div className="p-12 text-center text-xs text-ink-faint space-y-2">
+                  <div className="text-3xl">🗄️</div>
+                  <div className="font-medium text-ink">Aucun instantané disponible pour le moment</div>
+                  <p>Cliquez sur « Sauvegarder maintenant » pour créer le premier instantané du monastère.</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-line">
-                  {backups.map((backup) => (
-                    <li
-                      key={backup.pathname}
-                      className="flex flex-col gap-2 px-5 py-3 text-xs sm:flex-row sm:items-center sm:justify-between hover:bg-paper-2/30 transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <span className="font-mono font-medium text-ink truncate block">
-                          {backup.pathname.replace('backups/', '')}
-                        </span>
-                        <span className="text-ink-faint text-[11px]">
-                          Créé le {formatDateTime(backup.uploadedAt)}
-                        </span>
-                      </div>
+                  {backups.map((backup) => {
+                    const info = formatHumanBackupLabel(backup.pathname, backup.uploadedAt);
+                    return (
+                      <li
+                        key={backup.pathname}
+                        className="flex flex-col gap-2 px-5 py-3.5 text-xs sm:flex-row sm:items-center sm:justify-between hover:bg-paper-2/30 transition-colors"
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-ink text-sm">
+                              {info.title}
+                            </span>
+                            {info.isAuto ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-blue/10 px-2 py-0.5 text-[10px] font-semibold text-blue border border-blue/20">
+                                ⏰ Automatique Quotidienne
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-green/10 px-2 py-0.5 text-[10px] font-semibold text-green border border-green/20">
+                                👤 Instantané Manuel
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-ink-faint text-[11px] font-mono">
+                            {info.subtitle}
+                          </p>
+                        </div>
 
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-ink-soft font-semibold">{formatBytes(backup.size)}</span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          icon={<Download size={13} />}
-                          onClick={() => void downloadBackup(backup.pathname)}
-                        >
-                          Télécharger
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
+                        <div className="flex items-center gap-3">
+                          <span className="rounded-md bg-paper-2 border border-line px-2 py-1 font-mono text-xs text-ink font-semibold">
+                            {formatBytes(backup.size)}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<Download size={13} />}
+                            onClick={() => void downloadBackup(backup.pathname)}
+                          >
+                            Télécharger
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </CardContent>
@@ -2489,6 +2736,146 @@ function AdminSettings({ user }: { user: User }) {
           <p className="text-xs text-ink-soft">
             Cette action effacera également toutes les autorisations associées dans la matrice des permissions.
           </p>
+        </div>
+      </Modal>
+
+      {/* Modal Confirmation de Purge des Sauvegardes Cloud */}
+      <Modal
+        open={purgeConfirmOpen}
+        title="Purger l'historique des instantanés cloud"
+        onClose={() => setPurgeConfirmOpen(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPurgeConfirmOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="danger"
+              disabled={backupBusy}
+              onClick={async () => {
+                setPurgeConfirmOpen(false);
+                await purgeCloudBackups();
+              }}
+            >
+              {backupBusy ? <Spinner /> : 'Oui, purger tous les instantanés'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-red-wash/50 border border-red/20 text-red text-xs">
+            <span className="text-xl">⚠️</span>
+            <div>
+              <strong>Action irréversible :</strong> Vous êtes sur le point de supprimer l’intégralité des{' '}
+              <strong>{backups.length}</strong> fichier(s) d'instantanés archivés dans le Cloud Vercel Blob.
+            </div>
+          </div>
+          <p className="text-xs text-ink-soft">
+            Cette purge libère l'espace de stockage cloud. Les données opérationnelles actuellement en base de données resteront quant à elles intactes.
+          </p>
+        </div>
+      </Modal>
+
+      {/* Modal: Ajouter une Action / Module dans la Matrice RBAC */}
+      <Modal
+        open={newActionOpen}
+        title="Ajouter une Action / Module dans la Matrice RBAC"
+        onClose={() => setNewActionOpen(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setNewActionOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              disabled={newActionBusy || !newActionForm.label.trim() || !newActionForm.action.trim()}
+              onClick={() => void handleCreateAction()}
+            >
+              {newActionBusy ? <Spinner /> : 'Enregistrer dans la matrice'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {newActionError && (
+            <div className="p-3 rounded-xl bg-red-wash/50 border border-red/20 text-xs text-red">
+              {newActionError}
+            </div>
+          )}
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-ink">
+              Module applicatif (Groupe) <span className="text-red">*</span>
+            </label>
+            <input
+              type="text"
+              value={newActionForm.group_label}
+              onChange={(e) => setNewActionForm({ ...newActionForm, group_label: e.target.value })}
+              placeholder="Ex: Vigile & Pointage Borne, Comptabilité, etc."
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+            />
+            {permMatrix?.groups && permMatrix.groups.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                <span className="text-[10px] text-ink-faint">Suggestions :</span>
+                {permMatrix.groups.slice(0, 4).map((g) => (
+                  <button
+                    key={g.label}
+                    type="button"
+                    onClick={() => setNewActionForm({ ...newActionForm, group_label: g.label })}
+                    className="text-[10px] text-amber hover:underline px-1 py-0.5 rounded bg-amber-wash/30"
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-ink">
+              Libellé de la permission <span className="text-red">*</span>
+            </label>
+            <input
+              type="text"
+              value={newActionForm.label}
+              onChange={(e) => {
+                const label = e.target.value;
+                // Auto-generate code slug if not touched
+                const slug = label
+                  .toLowerCase()
+                  .normalize('NFD')
+                  .replace(/[\u0300-\u036f]/g, '')
+                  .replace(/[^a-z0-9]/g, '_')
+                  .replace(/^_+|_+$/g, '');
+                const groupSlug = newActionForm.group_label
+                  .toLowerCase()
+                  .normalize('NFD')
+                  .replace(/[\u0300-\u036f]/g, '')
+                  .replace(/[^a-z0-9]/g, '_')
+                  .replace(/^_+|_+$/g, '');
+                const autoAction = groupSlug && slug ? `${groupSlug}.${slug}` : slug;
+                setNewActionForm({ ...newActionForm, label, action: autoAction });
+              }}
+              placeholder="Ex: Valider pointage vigile, Clôturer caisse, etc."
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-ink">
+              Code technique de l'action <span className="text-red">*</span>
+            </label>
+            <input
+              type="text"
+              value={newActionForm.action}
+              onChange={(e) => setNewActionForm({ ...newActionForm, action: e.target.value.toLowerCase().trim() })}
+              placeholder="Ex: vigile.pointer_borne"
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-xs text-ink focus:border-amber focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-ink-faint">
+              Identifiant unique sous la forme <code>module.action</code>. Sera automatiquement accordé à la Direction.
+            </p>
+          </div>
         </div>
       </Modal>
 

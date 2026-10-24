@@ -272,6 +272,13 @@ INSERT INTO roles (id, name, description, is_system) VALUES
 ON CONFLICT (id) DO NOTHING;
 ALTER TABLE loans ADD COLUMN IF NOT EXISTS out_condition text DEFAULT 'bon';
 ALTER TABLE loans ADD COLUMN IF NOT EXISTS return_notes text;
+CREATE TABLE IF NOT EXISTS app_permissions (
+  action text PRIMARY KEY,
+  label text NOT NULL,
+  group_label text NOT NULL,
+  is_custom boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 `;
 
-export const MIGRATION_NAME = '005_tools_accounting_and_photos';
+export const MIGRATION_NAME = '006_dynamic_permissions_and_import';

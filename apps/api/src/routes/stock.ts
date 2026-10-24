@@ -327,3 +327,124 @@ stockRoutes.post(
     return c.json({ movement, qty: next }, 201);
   },
 );
+
+const importStockSchema = z.object({
+  magasin_id: z.string().nullable().optional(),
+  items: z.array(
+    z.object({
+      name: z.string().min(1),
+      category: z.string().optional(),
+      unit: z.string().optional(),
+      location: z.string().optional(),
+      magasin_id: z.string().nullable().optional(),
+      min_qty: z.number().optional(),
+      supplier: z.string().nullable().optional(),
+      brand: z.string().nullable().optional(),
+      unit_cost: z.number().nullable().optional(),
+      qty: z.number().optional(),
+    }),
+  ),
+});
+
+stockRoutes.post('/import', requirePerm('stock.create_ref'), async (c) => {
+  const body = importStockSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) {
+    return c.json({ error: 'Fichier tableur ou format des articles invalide.' }, 400);
+  }
+
+  const { items, magasin_id: defaultMagasinId } = body.data;
+  if (!items.length) {
+    return c.json({ error: 'Aucun article trouvé dans le fichier importé.' }, 400);
+  }
+
+  const db = getDb();
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  await db.transaction(async (tx) => {
+    for (const item of items) {
+      const targetMagasin = item.magasin_id || defaultMagasinId || null;
+      const cleanName = item.name.trim();
+
+      // Recherche anti-doublon intelligente (même nom insensible à la casse et même magasin)
+      const existing = await tx.one<StockRefRow>(
+        `SELECT * FROM stock_refs 
+          WHERE lower(trim(name)) = lower(trim($1)) 
+            AND (magasin_id = $2 OR (magasin_id IS NULL AND $2 IS NULL))`,
+        [cleanName, targetMagasin],
+      );
+
+      if (existing) {
+        // Mise à jour fidèle sans doublon
+        await tx.query(
+          `UPDATE stock_refs SET
+             category = coalesce($2, category),
+             unit = coalesce($3, unit),
+             brand = coalesce($4, brand),
+             unit_cost = coalesce($5, unit_cost),
+             supplier = coalesce($6, supplier),
+             location = coalesce($7, location)
+           WHERE id = $1`,
+          [
+            existing.id,
+            item.category?.trim() || null,
+            item.unit?.trim() || null,
+            item.brand?.trim() || null,
+            item.unit_cost !== undefined ? item.unit_cost : null,
+            item.supplier?.trim() || null,
+            item.location?.trim() || null,
+          ],
+        );
+
+        if (typeof item.qty === 'number' && item.qty >= 0) {
+          const current = await refQty(Number(existing.id));
+          const diff = item.qty - current;
+          if (diff !== 0) {
+            await tx.query(
+              `INSERT INTO stock_movements (ref_id, move_type, qty, beneficiary, note, actor)
+               VALUES ($1, 'correction', $2, 'Import Tableur', 'Ajustement inventaire tableur Excel', $3)`,
+              [existing.id, Math.abs(diff), actorName(c)],
+            );
+          }
+        }
+        updatedCount += 1;
+      } else {
+        const initialQty = typeof item.qty === 'number' && item.qty >= 0 ? item.qty : 0;
+        await tx.query(
+          `INSERT INTO stock_refs (name, category, unit, location, magasin_id, min_qty, supplier, brand, unit_cost, initial_qty)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            cleanName,
+            item.category?.trim() || 'Quincaillerie',
+            item.unit?.trim() || 'u',
+            item.location?.trim() || 'Dépôt Magasin',
+            targetMagasin,
+            item.min_qty ?? 5,
+            item.supplier?.trim() || null,
+            item.brand?.trim() || null,
+            item.unit_cost ?? null,
+            initialQty,
+          ],
+        );
+        createdCount += 1;
+      }
+    }
+
+    await writeAudit(tx, {
+      entity: 'stock',
+      entityId: 'spreadsheet_import',
+      action: 'import',
+      after: { createdCount, updatedCount, total: items.length },
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  });
+
+  return c.json({
+    ok: true,
+    createdCount,
+    updatedCount,
+    totalProcessed: items.length,
+    message: `${createdCount} article(s) créé(s), ${updatedCount} article(s) mis à jour sans doublon.`,
+  });
+});

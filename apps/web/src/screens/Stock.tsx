@@ -27,10 +27,11 @@ import {
   IconRefresh,
   IconSearch,
 } from '../components/Icons';
-import { Camera, Coins, Download, Printer } from 'lucide-react';
+import { Camera, Coins, Download, FileSpreadsheet, Printer } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { usePrintSheet } from '../lib/print';
 import { ImagePickerModal } from '../components/ImagePickerModal';
+import { ExcelImportModal } from '../components/ExcelImportModal';
 import { formatCurrency } from '../lib/accounting';
 
 type RefForm = {
@@ -199,6 +200,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
   const [refForm, setRefForm] = useState<RefForm>(EMPTY_REF);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [photoTarget, setPhotoTarget] = useState<{ id?: number; current?: string | null; name?: string } | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -523,6 +525,15 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                 onClick={() => openMove('in')}
               >
                 Entrée
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<FileSpreadsheet size={15} />}
+                onClick={() => setImportOpen(true)}
+                title="Importer un fichier Excel (.xlsx, .xls) ou Google Sheets (.csv) sans doublon"
+              >
+                Importer Tableur
               </Button>
               <Button
                 variant="primary"
@@ -1457,6 +1468,17 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
         onClose={() => setPhotoModalOpen(false)}
         onSelect={(url) => void handleStockPhotoSelect(url)}
       />
+
+      {/* Modal Import Tableur Excel / CSV */}
+      {importOpen && (
+        <ExcelImportModal
+          type="stock"
+          onClose={() => setImportOpen(false)}
+          onSuccess={() => {
+            refresh();
+          }}
+        />
+      )}
 
       {portal}
     </div>

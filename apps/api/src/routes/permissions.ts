@@ -19,6 +19,7 @@ export const permissionsRoutes = new Hono();
 
 permissionsRoutes.use('*', requireAuth);
 
+// Liste unifiée des permissions & modules
 permissionsRoutes.get('/', requireRole('direction'), async (c) => {
   const db = getDb();
   const dbRoles = await db.query<{ id: string; name: string; description: string | null; is_system: boolean }>(
@@ -28,13 +29,108 @@ permissionsRoutes.get('/', requireRole('direction'), async (c) => {
   const rows = await db.query<{ role: string; action: string; allowed: boolean }>(
     'SELECT role, action, allowed FROM role_permissions',
   );
+
+  // Charger les actions additionnelles créées dynamiquement par le Super-Admin
+  const customActions = await db.query<{ action: string; label: string; group_label: string; is_custom: boolean }>(
+    'SELECT action, label, group_label, is_custom FROM app_permissions ORDER BY created_at ASC',
+  ).catch(() => []);
+
+  // Construire la liste complète des actions et groupes
+  const allActions = [
+    ...PERMISSION_ACTIONS.map((a) => ({ action: a, label: PERMISSION_LABELS[a] })),
+    ...customActions
+      .filter((ca) => !(PERMISSION_ACTIONS as readonly string[]).includes(ca.action))
+      .map((ca) => ({ action: ca.action, label: ca.label })),
+  ];
+
+  // Regrouper par groupe thématique
+  const groupMap = new Map<string, string[]>();
+  for (const g of PERMISSION_GROUPS) {
+    groupMap.set(g.label, [...g.actions]);
+  }
+  for (const ca of customActions) {
+    const existing = groupMap.get(ca.group_label) ?? [];
+    if (!existing.includes(ca.action)) {
+      existing.push(ca.action);
+      groupMap.set(ca.group_label, existing);
+    }
+  }
+  const groups = Array.from(groupMap.entries()).map(([label, actions]) => ({ label, actions }));
+
+  // Construire la matrice complète
+  const allActionKeys = allActions.map((a) => a.action);
+  const matrix = buildMatrix(rows, roleIds);
+  // Ajouter les lignes personnalisées dans la matrice
+  for (const ca of customActions) {
+    if (!matrix[ca.action as PermissionAction]) {
+      const row: Record<string, boolean> = {};
+      for (const roleId of roleIds) {
+        const found = rows.find((r) => r.role === roleId && r.action === ca.action);
+        row[roleId] = found ? found.allowed : roleId === 'direction';
+      }
+      (matrix as any)[ca.action] = row;
+    }
+  }
+
   return c.json({
-    actions: PERMISSION_ACTIONS.map((a) => ({ action: a, label: PERMISSION_LABELS[a] })),
-    groups: PERMISSION_GROUPS,
+    actions: allActions,
+    groups,
     roles: roleIds,
     rolesDetail: dbRoles,
-    matrix: buildMatrix(rows, roleIds),
+    matrix,
   });
+});
+
+const createActionSchema = z.object({
+  action: z.string().min(3).max(60).regex(/^[a-z0-9_.-]+$/, 'Identifiant technique composé de lettres, chiffres, points et tirets'),
+  label: z.string().min(2).max(100),
+  group_label: z.string().min(2).max(60),
+});
+
+// Création d'une nouvelle permission / module par le Super-Admin
+permissionsRoutes.post('/actions', requireRole('direction'), async (c) => {
+  const body = createActionSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) {
+    return c.json({ error: body.error.issues[0]?.message ?? 'Paramètres d’action invalides.' }, 400);
+  }
+  const db = getDb();
+  const trimmedAction = body.data.action.trim().toLowerCase();
+  const trimmedLabel = body.data.label.trim();
+  const trimmedGroup = body.data.group_label.trim();
+
+  // Vérifier si elle existe déjà dans les natives ou en base
+  if ((PERMISSION_ACTIONS as readonly string[]).includes(trimmedAction)) {
+    return c.json({ error: 'Cette permission système existe déjà.' }, 409);
+  }
+  const exists = await db.one<{ action: string }>('SELECT action FROM app_permissions WHERE action = $1', [trimmedAction]);
+  if (exists) {
+    return c.json({ error: 'Cette permission personnalisée existe déjà.' }, 409);
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.query(
+      'INSERT INTO app_permissions (action, label, group_label, is_custom) VALUES ($1, $2, $3, true)',
+      [trimmedAction, trimmedLabel, trimmedGroup],
+    );
+    // Accorder d'office au rôle direction
+    await tx.query(
+      'INSERT INTO role_permissions (role, action, allowed) VALUES ($1, $2, true) ON CONFLICT (role, action) DO UPDATE SET allowed = true',
+      ['direction', trimmedAction],
+    );
+  });
+
+  invalidatePermissionCache();
+
+  await writeAudit(db, {
+    entity: 'permissions',
+    entityId: trimmedAction,
+    action: 'create_action',
+    after: { action: trimmedAction, label: trimmedLabel, group: trimmedGroup },
+    actorId: actorId(c),
+    actorName: actorName(c),
+  });
+
+  return c.json({ ok: true, action: { action: trimmedAction, label: trimmedLabel, group_label: trimmedGroup } }, 201);
 });
 
 permissionsRoutes.get('/roles', requireRole('direction'), async (c) => {
@@ -210,12 +306,16 @@ permissionsRoutes.delete('/roles/:id', requireRole('direction'), async (c) => {
 permissionsRoutes.get('/me', async (c) => {
   const state = c.get('auth')!;
   const role = state.user.role;
+  const db = getDb();
+  const customActionRows = await db.query<{ action: string }>('SELECT action FROM app_permissions').catch(() => []);
+  const allActionKeys = [...PERMISSION_ACTIONS, ...customActionRows.map((r) => r.action)];
+
   if (isSuperAdmin(role)) {
-    const all = {} as Record<PermissionAction, boolean>;
-    for (const a of PERMISSION_ACTIONS) all[a] = true;
+    const all = {} as Record<string, boolean>;
+    for (const a of allActionKeys) all[a] = true;
     return c.json({ role, superAdmin: true, permissions: all });
   }
-  const rows = await getDb().query<{ action: string; allowed: boolean }>(
+  const rows = await db.query<{ action: string; allowed: boolean }>(
     'SELECT action, allowed FROM role_permissions WHERE role = $1',
     [role],
   );
@@ -223,12 +323,12 @@ permissionsRoutes.get('/me', async (c) => {
   for (const r of rows) {
     rowsMap.set(r.action, r.allowed);
   }
-  const permissions = {} as Record<PermissionAction, boolean>;
-  for (const a of PERMISSION_ACTIONS) {
+  const permissions = {} as Record<string, boolean>;
+  for (const a of allActionKeys) {
     if (rowsMap.has(a)) {
       permissions[a] = rowsMap.get(a)!;
     } else {
-      permissions[a] = (DEFAULT_PERMISSIONS[a] as readonly string[] | undefined)?.includes(role) ?? false;
+      permissions[a] = (DEFAULT_PERMISSIONS[a as PermissionAction] as readonly string[] | undefined)?.includes(role) ?? false;
     }
   }
   // Par défaut, tout utilisateur connecté peut modifier sa propre photo de profil
@@ -252,13 +352,16 @@ permissionsRoutes.put('/', requireRole('direction'), async (c) => {
   const dbRoles = await db.query<{ id: string }>('SELECT id FROM roles');
   const validRoleIds = dbRoles.map((r) => r.id);
 
+  const customActionRows = await db.query<{ action: string }>('SELECT action FROM app_permissions').catch(() => []);
+  const validActions = new Set([...PERMISSION_ACTIONS, ...customActionRows.map((r) => r.action)]);
+
   const before = await db.query<{ role: string; action: string; allowed: boolean }>(
     'SELECT role, action, allowed FROM role_permissions',
   );
 
   const entries: { role: string; action: string; allowed: boolean }[] = [];
   for (const [action, roles] of Object.entries(body.data.matrix)) {
-    if (!(PERMISSION_ACTIONS as readonly string[]).includes(action)) continue;
+    if (!validActions.has(action)) continue;
     for (const [role, allowed] of Object.entries(roles)) {
       if (!validRoleIds.includes(role)) continue;
       entries.push({ role, action, allowed: Boolean(allowed) });
