@@ -162,6 +162,7 @@ export type Employee = {
   photo_path: string | null;
   badge_token: string | null;
   active: boolean;
+  has_pin?: boolean;
 };
 
 export type StockRef = {
@@ -243,7 +244,7 @@ export type KioskSettings = {
 };
 
 export type KioskIdentify = {
-  employee: { id: string; full_name: string; job_title: string; photo_path: string | null };
+  employee: { id: string; full_name: string; job_title: string; photo_path: string | null; has_pin?: boolean };
   situation: {
     isWorkday: boolean;
     hasIn: boolean;

@@ -91,8 +91,9 @@ kioskRoutes.post('/identify', async (c) => {
     photo_path: string | null;
     active: boolean;
     badge_token: string | null;
+    pin_hash: string | null;
   }>(
-    `SELECT id, full_name, job_title, photo_path, active, badge_token
+    `SELECT id, full_name, job_title, photo_path, active, badge_token, pin_hash
        FROM employees
       WHERE active = true AND (id = ANY($1) OR badge_token = ANY($1))
       LIMIT 1`,
@@ -166,6 +167,7 @@ kioskRoutes.post('/identify', async (c) => {
       full_name: employee.full_name,
       job_title: employee.job_title,
       photo_path: employee.photo_path,
+      has_pin: !!employee.pin_hash,
     },
     situation: {
       isWorkday,
@@ -223,21 +225,23 @@ kioskRoutes.post('/punch', async (c) => {
     return c.json({ error: 'La Direction n’est pas soumise au pointage.' }, 403);
   }
 
-  // 2. Validation optionnelle du code secret / mot de passe si fourni
-  if (body.data.pin && body.data.pin.trim().length > 0) {
-    const inputPin = body.data.pin.trim();
-    let pinValid = false;
-    if (employee.pin_hash && verifyPassword(inputPin, employee.pin_hash)) {
-      pinValid = true;
-    } else if (linkedUser?.password_hash && verifyPassword(inputPin, linkedUser.password_hash)) {
-      pinValid = true;
-    } else if (employee.badge_token && inputPin.toUpperCase() === employee.badge_token.toUpperCase()) {
-      pinValid = true;
-    }
+  // 2. Validation OBLIGATOIRE du code secret personnel (Pilier 2 Anti-Fraude)
+  const inputPin = body.data.pin?.trim();
+  if (!inputPin) {
+    return c.json({ error: 'La validation par votre code secret personnel est obligatoire pour pointer.' }, 401);
+  }
 
-    if (!pinValid) {
-      return c.json({ error: 'Code secret ou mot de passe de validation incorrect.' }, 401);
-    }
+  let pinValid = false;
+  if (employee.pin_hash && verifyPassword(inputPin, employee.pin_hash)) {
+    pinValid = true;
+  } else if (linkedUser?.password_hash && verifyPassword(inputPin, linkedUser.password_hash)) {
+    pinValid = true;
+  } else if (employee.badge_token && inputPin.toUpperCase() === employee.badge_token.toUpperCase()) {
+    pinValid = true;
+  }
+
+  if (!pinValid) {
+    return c.json({ error: 'Code secret personnel incorrect. Veuillez vérifier et réessayer.' }, 401);
   }
 
   const photo = checkSelfie(body.data.selfie);
@@ -329,4 +333,21 @@ kioskRoutes.post('/punch', async (c) => {
     status,
     photoUrl: `/files/selfies/${fileName}`,
   });
+});
+
+kioskRoutes.post('/unlock', async (c) => {
+  const body = z.object({ password: z.string().min(1) }).safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Mot de passe requis pour déverrouiller la borne.' }, 400);
+
+  const db = getDb();
+  const adminUsers = await db.query<{ id: number; login: string; password_hash: string }>(
+    `SELECT id, login, password_hash FROM users WHERE role = 'direction' AND active = true`,
+  );
+
+  const isMatched = adminUsers.some((u) => verifyPassword(body.data.password, u.password_hash));
+  if (!isMatched) {
+    return c.json({ error: 'Code superviseur ou mot de passe Direction invalide. Déverrouillage refusé.' }, 403);
+  }
+
+  return c.json({ ok: true });
 });

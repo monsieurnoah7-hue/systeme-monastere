@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { writeAudit } from '../lib/audit.js';
+import { hashPassword } from '../lib/crypto.js';
 import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth.js';
 import { requirePerm } from '../middleware/permissions.js';
 import type { EmployeeRow } from '../types.js';
@@ -14,12 +15,14 @@ employeesRoutes.use('*', requireAuth);
 const createBody = z.object({
   full_name: z.string().min(3),
   job_title: z.string().min(2),
+  pin: z.string().min(4).max(10).optional(),
 });
 
 const patchBody = z.object({
   full_name: z.string().min(3).optional(),
   job_title: z.string().min(2).optional(),
   active: z.boolean().optional(),
+  pin: z.string().min(4).max(10).optional(),
 });
 
 async function nextEmployeeId(): Promise<string> {
@@ -40,8 +43,8 @@ function newBadgeToken(): string {
 }
 
 employeesRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
-  const employees = await getDb().query<EmployeeRow>(
-    'SELECT id, full_name, job_title, photo_path, badge_token, active FROM employees ORDER BY full_name',
+  const employees = await getDb().query<EmployeeRow & { has_pin: boolean }>(
+    'SELECT id, full_name, job_title, photo_path, badge_token, active, (pin_hash IS NOT NULL) AS has_pin FROM employees ORDER BY full_name',
   );
   return c.json({ employees });
 });
@@ -92,8 +95,8 @@ employeesRoutes.get('/today-status', requireRole('direction', 'magasinier', 'che
 
 employeesRoutes.get('/:id', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
   const id = c.req.param('id') ?? '';
-  const employee = await getDb().one<EmployeeRow>(
-    'SELECT id, full_name, job_title, photo_path, badge_token, active FROM employees WHERE id = $1',
+  const employee = await getDb().one<EmployeeRow & { has_pin: boolean }>(
+    'SELECT id, full_name, job_title, photo_path, badge_token, active, (pin_hash IS NOT NULL) AS has_pin FROM employees WHERE id = $1',
     [id],
   );
   if (!employee) return c.json({ error: 'Travailleur introuvable.' }, 404);
@@ -103,8 +106,8 @@ employeesRoutes.get('/:id', requireRole('direction', 'magasinier', 'chef_atelier
 employeesRoutes.get('/:id/detail', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
   const id = c.req.param('id') ?? '';
   const db = getDb();
-  const employee = await db.one<EmployeeRow>(
-    'SELECT id, full_name, job_title, photo_path, badge_token, active FROM employees WHERE id = $1',
+  const employee = await db.one<EmployeeRow & { has_pin: boolean }>(
+    'SELECT id, full_name, job_title, photo_path, badge_token, active, (pin_hash IS NOT NULL) AS has_pin FROM employees WHERE id = $1',
     [id],
   );
   if (!employee) return c.json({ error: 'Travailleur introuvable.' }, 404);
@@ -185,11 +188,12 @@ employeesRoutes.post('/', requirePerm('employees.create'), async (c) => {
   const db = getDb();
   const id = await nextEmployeeId();
   const badge = newBadgeToken();
+  const pinHash = body.data.pin ? hashPassword(body.data.pin.trim()) : null;
   const employee = await db.one<EmployeeRow>(
-    `INSERT INTO employees (id, full_name, job_title, badge_token)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO employees (id, full_name, job_title, badge_token, pin_hash)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING id, full_name, job_title, photo_path, badge_token, active`,
-    [id, body.data.full_name.trim(), body.data.job_title.trim(), badge],
+    [id, body.data.full_name.trim(), body.data.job_title.trim(), badge, pinHash],
   );
   await writeAudit(db, {
     entity: 'employee',
@@ -223,15 +227,22 @@ employeesRoutes.patch('/:id', requirePerm('employees.edit'), async (c) => {
     }
   }
 
+  const pinHash = patch.pin ? hashPassword(patch.pin.trim()) : undefined;
+
   const updated = await db.one<EmployeeRow>(
-    `UPDATE employees SET full_name = $2, job_title = $3, active = $4
+    `UPDATE employees SET
+       full_name = coalesce($2, full_name),
+       job_title = coalesce($3, job_title),
+       active = coalesce($4, active),
+       pin_hash = CASE WHEN $5::text IS NOT NULL THEN $5::text ELSE pin_hash END
       WHERE id = $1
       RETURNING id, full_name, job_title, photo_path, badge_token, active`,
     [
       id,
-      patch.full_name?.trim() ?? before.full_name,
-      patch.job_title?.trim() ?? before.job_title,
-      patch.active ?? before.active,
+      patch.full_name?.trim() ?? null,
+      patch.job_title?.trim() ?? null,
+      patch.active ?? null,
+      pinHash ?? null,
     ],
   );
   await writeAudit(db, {
@@ -244,6 +255,30 @@ employeesRoutes.patch('/:id', requirePerm('employees.edit'), async (c) => {
     actorName: actorName(c),
   });
   return c.json({ employee: updated });
+});
+
+employeesRoutes.post('/:id/pin', requirePerm('employees.edit'), async (c) => {
+  const id = c.req.param('id') ?? '';
+  const body = z.object({ pin: z.string().min(4).max(10) }).safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Le code PIN doit comporter entre 4 et 10 caractères.' }, 400);
+
+  const db = getDb();
+  const before = await db.one<{ id: string }>('SELECT id FROM employees WHERE id = $1', [id]);
+  if (!before) return c.json({ error: 'Travailleur introuvable.' }, 404);
+
+  const pinHash = hashPassword(body.data.pin.trim());
+  await db.query('UPDATE employees SET pin_hash = $1 WHERE id = $2', [pinHash, id]);
+
+  await writeAudit(db, {
+    entity: 'employee',
+    entityId: id,
+    action: 'pin_update',
+    actorId: actorId(c),
+    actorName: actorName(c),
+    reason: 'Code PIN secret de pointage mis à jour par la direction',
+  });
+
+  return c.json({ ok: true });
 });
 
 employeesRoutes.post('/:id/badge', requirePerm('employees.print_badge'), async (c) => {

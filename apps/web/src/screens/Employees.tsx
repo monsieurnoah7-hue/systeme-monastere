@@ -283,9 +283,18 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [form, setForm] = useState({ full_name: '', job_title: '' });
+  const [form, setForm] = useState({ full_name: '', job_title: '', pin: '' });
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Rôles dynamiques configurés par la Direction (Pilier 1)
+  const [availableRoles, setAvailableRoles] = useState<{ id: string; name: string }[]>([]);
+
+  // Modale PIN de pointage (Pilier 2)
+  const [pinModalFor, setPinModalFor] = useState<Employee | null>(null);
+  const [pinValue, setPinValue] = useState('');
+  const [pinModalError, setPinModalError] = useState<string | null>(null);
+  const [pinModalBusy, setPinModalBusy] = useState(false);
 
   const [badgeFor, setBadgeFor] = useState<Employee | null>(null);
   const [detailFor, setDetailFor] = useState<Employee | null>(null);
@@ -328,12 +337,14 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       api<{ employees: Employee[] }>('/api/employees'),
       api<{ employees: TodayEmployee[] }>('/api/employees/today-status').catch(() => ({ employees: [] })),
       api<{ leaves: Leave[] }>('/api/leaves?status=all').catch(() => ({ leaves: [] })),
+      api<{ roles: { id: string; name: string }[] }>('/api/permissions/roles').catch(() => ({ roles: [] })),
     ])
-      .then(([empRes, statusRes, leaveRes]) => {
+      .then(([empRes, statusRes, leaveRes, rolesRes]) => {
         if (!cancelled) {
           setEmployees(empRes.employees);
           setTodayStatus(statusRes.employees);
           setLeaves(leaveRes.leaves);
+          if (rolesRes?.roles) setAvailableRoles(rolesRes.roles);
           setError(null);
         }
       })
@@ -505,14 +516,14 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   function openCreate() {
     setEditing(null);
-    setForm({ full_name: '', job_title: '' });
+    setForm({ full_name: '', job_title: '', pin: '' });
     setFormError(null);
     setFormOpen(true);
   }
 
   function openEdit(employee: Employee) {
     setEditing(employee);
-    setForm({ full_name: employee.full_name, job_title: employee.job_title });
+    setForm({ full_name: employee.full_name, job_title: employee.job_title, pin: '' });
     setFormError(null);
     setFormOpen(true);
   }
@@ -524,12 +535,23 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       if (editing) {
         await api(`/api/employees/${editing.id}`, {
           method: 'PATCH',
-          body: JSON.stringify(form),
+          body: JSON.stringify({
+            full_name: form.full_name,
+            job_title: form.job_title,
+            pin: form.pin.trim() ? form.pin.trim() : undefined,
+          }),
         });
         toast('Fiche mise à jour.', 'success');
       } else {
-        await api('/api/employees', { method: 'POST', body: JSON.stringify(form) });
-        toast('Nouveau travailleur créé avec badge automatique.', 'success');
+        await api('/api/employees', {
+          method: 'POST',
+          body: JSON.stringify({
+            full_name: form.full_name,
+            job_title: form.job_title,
+            pin: form.pin.trim() ? form.pin.trim() : undefined,
+          }),
+        });
+        toast('Nouveau travailleur créé avec badge automatique et code secret.', 'success');
       }
       setFormOpen(false);
       setReload((value) => value + 1);
@@ -537,6 +559,30 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       setFormError(err instanceof Error ? err.message : 'Enregistrement impossible.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function savePin() {
+    if (!pinModalFor) return;
+    if (!pinValue || pinValue.trim().length < 4) {
+      setPinModalError('Le code secret PIN doit comporter au moins 4 chiffres.');
+      return;
+    }
+    setPinModalBusy(true);
+    setPinModalError(null);
+    try {
+      await api(`/api/employees/${pinModalFor.id}/pin`, {
+        method: 'POST',
+        body: JSON.stringify({ pin: pinValue.trim() }),
+      });
+      toast(`Code secret PIN défini pour ${pinModalFor.full_name}.`, 'success');
+      setPinModalFor(null);
+      setPinValue('');
+      setReload((v) => v + 1);
+    } catch (err) {
+      setPinModalError(err instanceof Error ? err.message : 'Impossible de définir le code PIN.');
+    } finally {
+      setPinModalBusy(false);
     }
   }
 
@@ -948,6 +994,32 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                 <p className="mt-1 text-xs text-ink-soft">
                   Code badge de pointage : <span className="font-mono font-bold text-ink">{detail.employee.badge_token ?? '—'}</span>
                 </p>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span
+                    className={cx(
+                      'rounded-full px-2 py-0.5 text-[10px] font-bold border',
+                      detail.employee.has_pin
+                        ? 'border-green/20 bg-green-wash text-green'
+                        : 'border-amber/20 bg-amber-wash text-amber',
+                    )}
+                  >
+                    {detail.employee.has_pin ? 'Code PIN configuré' : 'Sans code PIN'}
+                  </span>
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPinModalFor(detail.employee);
+                        setPinValue('');
+                        setPinModalError(null);
+                      }}
+                      className="text-xs text-amber hover:underline font-semibold"
+                    >
+                      {detail.employee.has_pin ? 'Modifier le code PIN' : 'Définir un code PIN'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1056,14 +1128,40 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink-soft">Fonction / Spécialité</label>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">
+              Fonction / Poste / Rôle (Défini par la Direction)
+            </label>
             <input
               type="text"
+              list="direction-roles-list"
               value={form.job_title}
-              placeholder="Ex : Menuisier débitage, Apprenti…"
+              placeholder="Sélectionnez ou saisissez un rôle…"
               onChange={(e) => setForm({ ...form, job_title: e.target.value })}
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
             />
+            <datalist id="direction-roles-list">
+              {availableRoles.map((r) => (
+                <option key={r.id} value={r.name} />
+              ))}
+            </datalist>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">
+              Code secret PIN de pointage {editing ? '(Optionnel - laisser vide pour conserver)' : '(4 à 6 chiffres)'}
+            </label>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={form.pin}
+              placeholder={editing ? '••••' : 'Ex : 1234'}
+              onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })}
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm tracking-widest text-ink focus:border-amber focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-ink-faint">
+              Obligatoire pour valider le pointage sur la borne après scan du badge.
+            </p>
           </div>
           {!editing && (
             <Banner tone="info">
@@ -1189,6 +1287,47 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
               placeholder="Ex : Événement familial, rendez-vous médical…"
               rows={2}
               className="w-full rounded-lg border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Définir / Modifier code PIN secret */}
+      <Modal
+        open={!!pinModalFor}
+        title={pinModalFor ? `Code PIN de pointage · ${pinModalFor.full_name}` : 'Code PIN secret'}
+        onClose={() => setPinModalFor(null)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPinModalFor(null)}>
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              disabled={pinModalBusy || pinValue.trim().length < 4}
+              onClick={() => void savePin()}
+            >
+              {pinModalBusy ? <Spinner /> : 'Enregistrer le code PIN'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-ink-soft">
+            Définissez un code secret PIN (4 à 6 chiffres) pour <strong>{pinModalFor?.full_name}</strong>.
+            Ce code est obligatoire pour valider chaque pointage sur la borne de l'atelier après scan du badge.
+          </p>
+          {pinModalError ? <Banner tone="error">{pinModalError}</Banner> : null}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Nouveau code secret PIN</label>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={pinValue}
+              placeholder="Ex: 1234"
+              onChange={(e) => setPinValue(e.target.value.replace(/\D/g, ''))}
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm tracking-widest text-ink focus:border-amber focus:outline-none"
             />
           </div>
         </div>

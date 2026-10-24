@@ -4,18 +4,20 @@ import { api, type Dashboard as DashboardType, type Employee, type KioskIdentify
 import { QR_PREFIX, qrDataUrl } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { initials } from '../lib/labels';
-import { Banner, Button, Card, Spinner, cx } from '../components/ui';
+import { Banner, Button, Card, Modal, Spinner, cx } from '../components/ui';
 import {
   Camera,
-  Check,
+  CheckCircle2,
   Clock,
   Download,
   FileSpreadsheet,
+  Lock,
   Printer,
   QrCode,
   RefreshCw,
   Search,
   Smartphone,
+  Unlock,
   Users,
   X,
 } from 'lucide-react';
@@ -23,7 +25,7 @@ import { exportToExcel, exportToPdf } from '../lib/export';
 import { ModularKeyboard } from '../components/ModularKeyboard';
 
 type Terminal = { id: string; name: string };
-type Stage = 'terminal' | 'identify' | 'card' | 'capture' | 'confirm';
+type Stage = 'terminal' | 'identify' | 'validate_pin' | 'actions' | 'capture' | 'confirm';
 
 const TERMINAL_KEY = 'mf.terminal';
 const AUTO_RETURN_SECONDS = 15;
@@ -267,6 +269,8 @@ export function Pointage() {
   const [terminals, setTerminals] = useState<Terminal[]>([]);
   const [stage, setStage] = useState<Stage>(() => (terminalId ? 'identify' : 'terminal'));
   const [code, setCode] = useState('');
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
   const [identified, setIdentified] = useState<KioskIdentify | null>(null);
   const [punchType, setPunchType] = useState<PunchType>('in');
   const [selfie, setSelfie] = useState<string | null>(null);
@@ -278,8 +282,22 @@ export function Pointage() {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<PunchResult | null>(null);
   const [idle, setIdle] = useState(0);
+  const [countdown, setCountdown] = useState(4);
   const [now, setNow] = useState(() => new Date());
   const { print, portal } = usePrintSheet();
+
+  // Borne Kiosque Verrouillée (Zéro évasion - Pilier 2)
+  const [isKioskLocked, setIsKioskLocked] = useState(() => {
+    try {
+      return sessionStorage.getItem('mf_kiosk_locked') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [unlockModalOpen, setUnlockModalOpen] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState('');
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlockBusy, setUnlockBusy] = useState(false);
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 1000);
@@ -316,7 +334,7 @@ export function Pointage() {
   }, [terminals, terminalId, stage]);
 
   useEffect(() => {
-    if (stage !== 'card') return;
+    if (stage !== 'actions' && stage !== 'validate_pin') return;
     setIdle(AUTO_RETURN_SECONDS);
     const timer = window.setInterval(() => {
       setIdle((value) => {
@@ -333,10 +351,18 @@ export function Pointage() {
 
   useEffect(() => {
     if (stage !== 'confirm') return;
-    const timer = window.setTimeout(() => {
-      resetToIdentify();
-    }, 6000);
-    return () => window.clearTimeout(timer);
+    setCountdown(4);
+    const timer = window.setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(timer);
+          resetToIdentify();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
   }, [stage]);
 
   function resetToIdentify() {
@@ -345,6 +371,8 @@ export function Pointage() {
     setMotif('');
     setMotifNote('');
     setCode('');
+    setPin('');
+    setPinError(null);
     setError(null);
     setStage(terminalId ? 'identify' : 'terminal');
     loadTimesheets();
@@ -366,7 +394,10 @@ export function Pointage() {
         body: JSON.stringify({ terminalId, code: value }),
       });
       setIdentified(res);
-      setStage('card');
+      setPin('');
+      setPinError(null);
+      // Étape 2 obligatoire : Validation par code secret personnel
+      setStage('validate_pin');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Identification impossible.';
       setError(message);
@@ -377,9 +408,24 @@ export function Pointage() {
     }
   }
 
+  function validatePin() {
+    if (!pin || pin.trim().length < 4) {
+      setPinError('Veuillez saisir votre code secret PIN personnel (au moins 4 chiffres).');
+      return;
+    }
+    setPinError(null);
+    // Étape 3 obligatoire : Choix de l'action & Selfie horodaté
+    setStage('actions');
+  }
+
   async function submitPunch() {
     if (!identified || !selfie) return;
     if (!terminalId) return;
+    if (!pin || pin.trim().length < 4) {
+      setError('Code secret personnel requis pour certifier le pointage.');
+      setStage('validate_pin');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -391,6 +437,7 @@ export function Pointage() {
           punchType,
           idMode: 'manual',
           selfie,
+          pin: pin.trim(),
           reason: motif && motif !== 'Autre' ? motif : motif === 'Autre' ? motifNote : undefined,
         }),
       });
@@ -403,10 +450,38 @@ export function Pointage() {
     }
   }
 
+  function lockKiosk() {
+    setIsKioskLocked(true);
+    sessionStorage.setItem('mf_kiosk_locked', 'true');
+    setActiveMainTab('kiosk');
+  }
+
+  async function handleUnlockKiosk() {
+    if (!unlockPassword.trim()) {
+      setUnlockError('Saisissez le mot de passe Direction.');
+      return;
+    }
+    setUnlockBusy(true);
+    setUnlockError(null);
+    try {
+      await api('/api/kiosk/unlock', {
+        method: 'POST',
+        body: JSON.stringify({ password: unlockPassword.trim() }),
+      });
+      setIsKioskLocked(false);
+      sessionStorage.removeItem('mf_kiosk_locked');
+      setUnlockModalOpen(false);
+      setUnlockPassword('');
+    } catch (err) {
+      setUnlockError(err instanceof Error ? err.message : 'Code ou mot de passe invalide.');
+    } finally {
+      setUnlockBusy(false);
+    }
+  }
+
   const situation = identified?.situation;
   const lateNeeded =
     punchType === 'in' && !!situation && situation.lateMinutes > situation.toleranceMinutes;
-  const progress = stage === 'card' ? (idle / AUTO_RETURN_SECONDS) * 100 : 100;
 
   // Filtered rows for Timesheets
   const filteredAttendance = attendanceDetail.filter((row) => {
@@ -832,8 +907,59 @@ export function Pointage() {
       {/* =========================================================================
           MODE 2 : BORNE KIOSQUE (INTERACTION DIRECTE OUVRIER / TABLETTE)
       ========================================================================= */}
-      {activeMainTab === 'kiosk' ? (
-        <div className="py-2">
+      {activeMainTab === 'kiosk' || isKioskLocked ? (
+        <div
+          className={cx(
+            'py-2 transition-all',
+            isKioskLocked &&
+              'fixed inset-0 z-50 overflow-y-auto bg-paper p-4 sm:p-6 backdrop-blur-xl',
+          )}
+        >
+          {/* Header Mode Borne Verrouillée ou Standard */}
+          <div className="mx-auto mb-4 flex max-w-xl items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-charcoal text-white">
+                <img src="/emblem-white.png" alt="Croix" className="h-5 w-5 object-contain" />
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-ink">
+                  Borne d'Atelier C.F.T.
+                </p>
+                <p className="text-[11px] text-ink-soft">
+                  {terminals.find((t) => t.id === terminalId)?.name ?? terminalId ?? 'Borne active'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {!isKioskLocked ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Lock size={14} className="text-amber" />}
+                  onClick={lockKiosk}
+                  title="Verrouille l'écran pour empêcher toute sortie de la borne par un travailleur"
+                >
+                  Verrouiller la borne
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={<Unlock size={14} className="text-green" />}
+                  onClick={() => {
+                    setUnlockError(null);
+                    setUnlockPassword('');
+                    setUnlockModalOpen(true);
+                  }}
+                  title="Déverrouiller le kiosque avec le mot de passe Direction"
+                >
+                  Quitter borne
+                </Button>
+              )}
+            </div>
+          </div>
+
           {stage === 'terminal' || !terminalId ? (
             <div className="mx-auto max-w-lg">
               <h2 className="text-xl font-bold text-ink">Sélection de la borne</h2>
@@ -983,10 +1109,138 @@ export function Pointage() {
             </div>
           ) : null}
 
-          {stage === 'card' && identified ? (
+          {/* ÉTAPE 2 : VALIDATION D'IDENTITÉ PAR CODE SECRET PERSONNEL (OBLIGATOIRE - ANTI-USURPATION) */}
+          {stage === 'validate_pin' && identified ? (
+            <div className="mx-auto max-w-md space-y-4" onClick={() => setIdle(AUTO_RETURN_SECONDS)}>
+              <div className="text-center">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-wash px-3 py-1 text-xs font-bold text-blue border border-blue/20">
+                    Étape 2 sur 3 · Authentification Secrète
+                  </span>
+                  <span className="text-[11px] font-mono text-ink-faint">
+                    Auto {idle}s
+                  </span>
+                </div>
+                <h2 className="mt-2 text-xl font-bold text-ink">Code secret personnel requis</h2>
+                <p className="text-xs text-ink-soft">
+                  La présence du badge seul ne suffit pas. Confirmez votre identité avec votre code PIN.
+                </p>
+              </div>
+
+              {/* Fiche Ouvrier Reconnue */}
+              <Card className="p-4 shadow-card">
+                <div className="flex items-center gap-3.5">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-wash text-amber font-bold text-sm border border-amber/20">
+                    {initials(identified.employee.full_name)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-ink">{identified.employee.full_name}</p>
+                    <p className="text-xs text-ink-soft">{identified.employee.job_title}</p>
+                    <p className="font-mono text-[11px] text-ink-faint">{identified.employee.id}</p>
+                  </div>
+                  <span className="rounded-full bg-green-wash px-2 py-0.5 text-[10px] font-bold text-green border border-green/20">
+                    Reconnu
+                  </span>
+                </div>
+              </Card>
+
+              {/* Champ d'affichage du PIN masqué */}
+              <Card className="p-5 shadow-card space-y-4">
+                <div className="text-center">
+                  <label className="block text-xs font-semibold text-ink-soft mb-2">
+                    Saisissez votre code PIN secret (4 à 6 chiffres)
+                  </label>
+                  <div className="flex justify-center gap-3">
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <span
+                        key={i}
+                        className={cx(
+                          'grid h-11 w-11 place-items-center rounded-xl border-2 text-lg font-bold font-mono transition-all',
+                          pin.length > i
+                            ? 'border-amber bg-amber text-white shadow-xs'
+                            : i === pin.length
+                            ? 'border-amber/60 bg-amber-wash/30'
+                            : 'border-line bg-paper-2 text-ink-faint',
+                        )}
+                      >
+                        {pin.length > i ? '•' : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {pinError ? <Banner tone="error">{pinError}</Banner> : null}
+
+                {/* Clavier numérique dédié PIN */}
+                <div className="grid grid-cols-3 gap-2 max-w-[280px] mx-auto pt-2">
+                  {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                    <button
+                      key={digit}
+                      type="button"
+                      onClick={() => {
+                        if (pin.length < 6) setPin((p) => p + digit);
+                      }}
+                      className="h-12 rounded-xl border border-line-strong bg-surface text-lg font-bold text-ink hover:bg-paper-2 active:scale-95 transition-all shadow-xs"
+                    >
+                      {digit}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPin('')}
+                    className="h-12 rounded-xl border border-line bg-surface text-xs font-semibold text-red hover:bg-red-wash active:scale-95 transition-all"
+                  >
+                    Effacer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (pin.length < 6) setPin((p) => p + '0');
+                    }}
+                    className="h-12 rounded-xl border border-line-strong bg-surface text-lg font-bold text-ink hover:bg-paper-2 active:scale-95 transition-all shadow-xs"
+                  >
+                    0
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPin((p) => p.slice(0, -1))}
+                    className="h-12 rounded-xl border border-line bg-surface text-xs font-semibold text-ink-soft hover:bg-paper-2 active:scale-95 transition-all"
+                  >
+                    ⌫
+                  </button>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button variant="ghost" className="flex-1" onClick={resetToIdentify}>
+                    Annuler
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="flex-1"
+                    disabled={pin.length < 4}
+                    onClick={validatePin}
+                  >
+                    Valider mon identité
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          ) : null}
+
+          {/* ÉTAPE 3 : CHOIX DE L'ACTION DE POINTAGE */}
+          {stage === 'actions' && identified ? (
             <div className="mx-auto max-w-xl space-y-4" onClick={() => setIdle(AUTO_RETURN_SECONDS)}>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-                <div className="h-full bg-amber transition-[width] duration-1000 ease-linear" style={{ width: `${progress}%` }} />
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-green-wash px-2.5 py-0.5 text-[11px] font-bold text-green border border-green/20">
+                    Étape 3 sur 3 · Action &amp; Preuve Photo
+                  </span>
+                  <h2 className="mt-1 text-lg font-bold text-ink leading-tight">Choisissez votre pointage</h2>
+                  <p className="text-xs text-ink-soft">Identité certifiée pour {identified.employee.full_name}</p>
+                </div>
+                <span className="text-[11px] font-mono text-ink-faint">
+                  Auto {idle}s
+                </span>
               </div>
 
               <Card className="p-5 shadow-card">
@@ -1000,16 +1254,16 @@ export function Pointage() {
                     <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{identified.employee.id}</p>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] uppercase font-semibold text-ink-faint">Aujourd'hui</span>
+                    <span className="text-[10px] uppercase font-semibold text-ink-faint">Situation</span>
                     <p className="mt-0.5 text-xs font-bold text-ink">
                       {!situation?.isWorkday
                         ? 'Jour non ouvré'
-                        : situation.onBreak
+                        : situation?.onBreak
                         ? 'En pause'
-                        : situation.hasIn && situation.hasOut
+                        : situation?.hasIn && situation?.hasOut
                         ? 'Journée terminée'
-                        : situation.hasIn
-                        ? 'Déjà en poste'
+                        : situation?.hasIn
+                        ? 'En poste'
                         : 'Non pointé'}
                     </p>
                   </div>
@@ -1017,7 +1271,7 @@ export function Pointage() {
 
                 <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-3 sm:grid-cols-4 text-xs">
                   <div>
-                    <span className="text-ink-faint text-[10px]">Ouverture</span>
+                    <span className="text-ink-faint text-[10px]">Heure atelier</span>
                     <p className="font-mono font-bold text-ink">{situation?.openingTime}</p>
                   </div>
                   <div>
@@ -1072,7 +1326,7 @@ export function Pointage() {
                       setStage('capture');
                     }}
                   >
-                    Prendre Pause
+                    Début de Pause
                   </Button>
                 ) : null}
                 {situation?.canBreakOut ? (
@@ -1085,7 +1339,7 @@ export function Pointage() {
                       setStage('capture');
                     }}
                   >
-                    Reprendre Travail
+                    Fin de Pause / Reprise
                   </Button>
                 ) : null}
               </div>
@@ -1098,14 +1352,22 @@ export function Pointage() {
             </div>
           ) : null}
 
+          {/* ÉTAPE 3 (SUITE) : PREUVE PHOTO SELFIE HORODATÉE OBLIGATOIRE */}
           {stage === 'capture' && identified ? (
             <div className="mx-auto max-w-md space-y-4">
               <div>
-                <h2 className="text-lg font-bold text-ink">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-wash px-2.5 py-0.5 text-[11px] font-bold text-amber">
+                  Preuve Photo Obligatoire
+                </span>
+                <h2 className="mt-1 text-lg font-bold text-ink">
                   {PUNCH_LABEL[punchType]} — {identified.employee.full_name}
                 </h2>
-                <p className="text-xs text-ink-soft">Photo d'atelier requise pour authentification.</p>
+                <p className="text-xs text-ink-soft">
+                  Positionnez votre visage face à la caméra pour enregistrer votre preuve de présence.
+                </p>
               </div>
+
+              {error ? <Banner tone="error">{error}</Banner> : null}
 
               {!selfie ? (
                 <Card className="overflow-hidden shadow-card">
@@ -1116,6 +1378,9 @@ export function Pointage() {
                         <Spinner />
                       </div>
                     ) : null}
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <div className="h-44 w-44 rounded-full border-2 border-dashed border-white/40" />
+                    </div>
                   </div>
                   <div className="p-4">
                     <Button
@@ -1169,7 +1434,7 @@ export function Pointage() {
                       disabled={busy || (lateNeeded && !motif)}
                       onClick={() => void submitPunch()}
                     >
-                      {busy ? <Spinner /> : 'Valider le pointage'}
+                      {busy ? <Spinner /> : 'Valider et Enregistrer'}
                     </Button>
                   </div>
                 </Card>
@@ -1177,18 +1442,30 @@ export function Pointage() {
             </div>
           ) : null}
 
+          {/* ÉTAPE 4 : CONFIRMATION VISUELLE & COMPTE À REBOURS RETOUR AUTOMATIQUE */}
           {stage === 'confirm' && result ? (
             <div className="mx-auto max-w-md">
-              <Card className="p-6 text-center shadow-card space-y-3">
-                <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-green-wash text-green">
-                  <Check size={28} />
+              <Card className="p-6 text-center shadow-card space-y-4">
+                <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-green-wash text-green border border-green/30 shadow-xs">
+                  <CheckCircle2 size={36} />
                 </span>
-                <h2 className="text-xl font-bold text-ink">{PUNCH_LABEL[result.punchType]} confirmée</h2>
-                <p className="text-xs text-ink-soft">{result.employee.full_name}</p>
-                <p className="font-mono text-3xl font-extrabold text-ink tabular-nums">{result.serverTime}</p>
-                <div className="flex justify-center gap-2 pt-3">
+                <div>
+                  <h2 className="text-xl font-bold text-ink">{PUNCH_LABEL[result.punchType]} confirmée</h2>
+                  <p className="text-xs text-ink-soft">{result.employee.full_name}</p>
+                </div>
+                <p className="font-mono text-4xl font-extrabold text-ink tabular-nums">{result.serverTime}</p>
+
+                <div className="rounded-xl border border-green/20 bg-green-wash/40 p-3 text-xs text-green font-medium">
+                  Pointage certifié avec selfie et code secret personnel.
+                </div>
+
+                <div className="pt-2 text-xs text-ink-faint">
+                  Retour automatique à l'accueil dans <span className="font-bold text-amber font-mono text-sm">{countdown}s</span>…
+                </div>
+
+                <div className="flex justify-center gap-2 pt-1">
                   <Button icon={<Printer size={16} />} onClick={() => print(<PunchReceipt result={result} />)}>
-                    Imprimer fiche
+                    Imprimer reçu
                   </Button>
                   <Button variant="primary" onClick={resetToIdentify}>
                     Fiche suivante
@@ -1198,6 +1475,47 @@ export function Pointage() {
               {portal}
             </div>
           ) : null}
+
+          {/* Modal Déverrouillage Borne Kiosque (Direction / Superviseur) */}
+          <Modal
+            open={unlockModalOpen}
+            title="Déverrouillage de la Borne d'Atelier"
+            onClose={() => setUnlockModalOpen(false)}
+            footer={
+              <>
+                <Button variant="ghost" onClick={() => setUnlockModalOpen(false)}>
+                  Annuler
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={unlockBusy || !unlockPassword.trim()}
+                  onClick={() => void handleUnlockKiosk()}
+                >
+                  {unlockBusy ? <Spinner /> : 'Déverrouiller'}
+                </Button>
+              </>
+            }
+          >
+            <div className="space-y-4">
+              <p className="text-xs text-ink-soft">
+                La borne est en mode exclusif imperméable. Saisissez le mot de passe de la Direction pour déverrouiller et revenir au menu principal.
+              </p>
+              {unlockError ? <Banner tone="error">{unlockError}</Banner> : null}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-ink-soft">Mot de passe Direction</label>
+                <input
+                  type="password"
+                  value={unlockPassword}
+                  placeholder="Mot de passe superviseur…"
+                  onChange={(e) => setUnlockPassword(e.target.value)}
+                  className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handleUnlockKiosk();
+                  }}
+                />
+              </div>
+            </div>
+          </Modal>
         </div>
       ) : null}
     </div>
