@@ -46,17 +46,19 @@ export function Magasins({ user, scan }: { user: { role: string }; scan?: ScanRe
   const [actionBusy, setActionBusy] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (magasins.length === 0) setLoading(true);
     setError(null);
     try {
       const res = await api<{ magasins: Magasin[] }>('/api/magasins');
       setMagasins(res.magasins);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Erreur de chargement');
+      if (magasins.length === 0) {
+        setError(e instanceof ApiError ? e.message : 'Erreur de chargement');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [magasins.length]);
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true);

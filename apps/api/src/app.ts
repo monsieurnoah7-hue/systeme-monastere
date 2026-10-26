@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { etag } from 'hono/etag';
+import { compress } from 'hono/compress';
 import { env } from './env.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
@@ -32,6 +34,9 @@ app.use(
     credentials: true,
   }),
 );
+
+app.use('/api/*', compress());
+app.use('/api/*', etag());
 
 app.get('/api/health', (c) => c.json({ ok: true, time: new Date().toISOString() }));
 

@@ -214,11 +214,23 @@ export function Shell({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
   const effectiveAllowed = allowedList ?? allowedViews(user.role);
   const items = NAV.filter((item) => effectiveAllowed.includes(item.id));
 
   // Quick navigation items for mobile bottom bar
   const mobileNav = items.slice(0, 4);
+
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -320,6 +332,12 @@ export function Shell({
             </div>
 
             <div className="flex items-center gap-1.5">
+              {!isOnline && (
+                <span className="flex items-center gap-1 rounded-full bg-amber-wash border border-amber/30 px-2 py-0.5 text-[10px] font-medium text-amber">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber" />
+                  Mode local
+                </span>
+              )}
               {onScan && (
                 <button
                   onClick={onScan}
@@ -416,8 +434,8 @@ export function Shell({
 
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface border border-line text-[11px] text-ink-soft font-mono">
-                  <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
-                  <span>Système opérationnel</span>
+                  <span className={cx('h-1.5 w-1.5 rounded-full', isOnline ? 'bg-green animate-pulse' : 'bg-amber')} />
+                  <span>{isOnline ? 'Système opérationnel' : 'Mode 2G / Hors-ligne (Cache local actif)'}</span>
                 </div>
                 {onScan && (
                   <button

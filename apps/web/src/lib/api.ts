@@ -6,21 +6,216 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(path, {
-    credentials: 'include',
-    ...options,
-    headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers ?? {}),
-    },
-  });
-  const text = await res.text();
-  const data = text ? (JSON.parse(text) as Record<string, unknown>) : null;
-  if (!res.ok) {
-    throw new ApiError(res.status, (data?.error as string) ?? `Erreur ${res.status}`);
+export type ApiOptions = RequestInit & {
+  bypassCache?: boolean;
+  cacheTtlMs?: number;
+};
+
+type CacheEntry<T = unknown> = {
+  data: T;
+  etag?: string;
+  timestamp: number;
+};
+
+const RAM_CACHE = new Map<string, CacheEntry>();
+const IN_FLIGHT = new Map<string, Promise<unknown>>();
+const PERSIST_PREFIX = 'mf_cache_v2_';
+
+function isPersistable(path: string): boolean {
+  return (
+    path.startsWith('/api/magasins') ||
+    path.startsWith('/api/tools') ||
+    path.startsWith('/api/stock') ||
+    path.startsWith('/api/employees') ||
+    path.startsWith('/api/permissions') ||
+    path.startsWith('/api/settings') ||
+    path.startsWith('/api/dashboard') ||
+    path.startsWith('/api/me')
+  );
+}
+
+function getStoredCache<T>(path: string): CacheEntry<T> | null {
+  try {
+    const raw = localStorage.getItem(PERSIST_PREFIX + path);
+    if (!raw) return null;
+    return JSON.parse(raw) as CacheEntry<T>;
+  } catch {
+    return null;
   }
-  return data as T;
+}
+
+function setStoredCache(path: string, entry: CacheEntry): void {
+  try {
+    localStorage.setItem(PERSIST_PREFIX + path, JSON.stringify(entry));
+  } catch {
+    // quota safe
+  }
+}
+
+export function clearApiCache(prefix?: string): void {
+  if (!prefix) {
+    RAM_CACHE.clear();
+    try {
+      const keys = Object.keys(localStorage);
+      for (const k of keys) {
+        if (k.startsWith(PERSIST_PREFIX)) localStorage.removeItem(k);
+      }
+    } catch {}
+    return;
+  }
+
+  for (const k of Array.from(RAM_CACHE.keys())) {
+    if (k.startsWith(prefix)) RAM_CACHE.delete(k);
+  }
+  try {
+    const keys = Object.keys(localStorage);
+    for (const k of keys) {
+      if (k.startsWith(PERSIST_PREFIX + prefix)) localStorage.removeItem(k);
+    }
+  } catch {}
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('mf-refresh-data', () => {
+    RAM_CACHE.clear();
+  });
+}
+
+export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  const method = (options.method ?? 'GET').toUpperCase();
+  const isGet = method === 'GET';
+  const bypassCache = options.bypassCache ?? false;
+  const ttl = options.cacheTtlMs ?? 20_000; // 20s en mémoire
+
+  // Mutations (POST, PATCH, PUT, DELETE)
+  if (!isGet) {
+    const res = await fetch(path, {
+      credentials: 'include',
+      ...options,
+      headers: {
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers ?? {}),
+      },
+    });
+    const text = await res.text();
+    const data = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+    if (!res.ok) {
+      throw new ApiError(res.status, (data?.error as string) ?? `Erreur ${res.status}`);
+    }
+
+    // Invalidation intelligente des caches cibles
+    if (path.includes('/tools')) {
+      clearApiCache('/api/tools');
+      clearApiCache('/api/magasins');
+      clearApiCache('/api/dashboard');
+    } else if (path.includes('/stock')) {
+      clearApiCache('/api/stock');
+      clearApiCache('/api/magasins');
+      clearApiCache('/api/dashboard');
+    } else if (path.includes('/magasins')) {
+      clearApiCache('/api/magasins');
+      clearApiCache('/api/tools');
+      clearApiCache('/api/stock');
+      clearApiCache('/api/dashboard');
+    } else if (path.includes('/employees') || path.includes('/leaves') || path.includes('/attendance')) {
+      clearApiCache('/api/employees');
+      clearApiCache('/api/leaves');
+      clearApiCache('/api/dashboard');
+    } else if (path.includes('/users') || path.includes('/permissions')) {
+      clearApiCache('/api/users');
+      clearApiCache('/api/permissions');
+    }
+
+    return data as T;
+  }
+
+  // Requêtes GET avec Cache SWR & Résilience 2G / Hors-ligne
+  const now = Date.now();
+  let cached = RAM_CACHE.get(path) as CacheEntry<T> | undefined;
+  if (!cached && isPersistable(path)) {
+    const disk = getStoredCache<T>(path);
+    if (disk) {
+      RAM_CACHE.set(path, disk);
+      cached = disk;
+    }
+  }
+
+  // 1. Hit de cache mémoire frais (< 20s) -> Réponse instantanée à 0 ms !
+  if (!bypassCache && cached && now - cached.timestamp < ttl) {
+    return cached.data;
+  }
+
+  // 2. Déduplication des requêtes identiques en cours de vol
+  if (IN_FLIGHT.has(path)) {
+    return IN_FLIGHT.get(path) as Promise<T>;
+  }
+
+  const fetchPromise = (async (): Promise<T> => {
+    const headers: Record<string, string> = {
+      ...((options.headers as Record<string, string>) ?? {}),
+    };
+    if (cached?.etag && !bypassCache) {
+      headers['If-None-Match'] = cached.etag;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const res = await fetch(path, {
+        credentials: 'include',
+        ...options,
+        signal: controller.signal,
+        headers,
+      });
+      clearTimeout(timeoutId);
+
+      // 304 Not Modified -> Réutilisation immédiate sans re-téléchargement
+      if (res.status === 304 && cached) {
+        cached.timestamp = Date.now();
+        RAM_CACHE.set(path, cached);
+        if (isPersistable(path)) setStoredCache(path, cached);
+        return cached.data;
+      }
+
+      const text = await res.text();
+      const data = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+
+      if (!res.ok) {
+        if (res.status >= 500 && cached) {
+          console.warn(`[Resilience] Serveur indisponible (${res.status}), utilisation du cache local pour ${path}`);
+          return cached.data;
+        }
+        throw new ApiError(res.status, (data?.error as string) ?? `Erreur ${res.status}`);
+      }
+
+      const etag = res.headers.get('etag') ?? undefined;
+      const newEntry: CacheEntry<T> = {
+        data: data as T,
+        etag,
+        timestamp: Date.now(),
+      };
+      RAM_CACHE.set(path, newEntry as CacheEntry);
+      if (isPersistable(path)) {
+        setStoredCache(path, newEntry as CacheEntry);
+      }
+
+      return data as T;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      // Mode dégradé 2G / Réseau coupé : fallback transparent sur le cache local
+      if (cached) {
+        console.warn(`[Resilience 2G/Hors-ligne] Réseau instable ou lent, données servies depuis le cache pour ${path}`);
+        return cached.data;
+      }
+      throw err;
+    } finally {
+      IN_FLIGHT.delete(path);
+    }
+  })();
+
+  IN_FLIGHT.set(path, fetchPromise);
+  return fetchPromise;
 }
 
 export type Role = string;

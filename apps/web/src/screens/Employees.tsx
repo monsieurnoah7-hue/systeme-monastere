@@ -343,7 +343,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    if (employees.length === 0) setLoading(true);
     Promise.all([
       api<{ employees: Employee[] }>('/api/employees'),
       api<{ employees: TodayEmployee[] }>('/api/employees/today-status').catch(() => ({ employees: [] })),
@@ -360,7 +360,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Chargement impossible.');
+        if (!cancelled && employees.length === 0) setError(err instanceof Error ? err.message : 'Chargement impossible.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -368,7 +368,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     return () => {
       cancelled = true;
     };
-  }, [reload]);
+  }, [reload, employees.length]);
 
   const statusMap = useMemo(() => {
     const m = new Map<string, TodayEmployee>();

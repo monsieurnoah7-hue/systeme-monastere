@@ -232,7 +232,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
       if (value) params.set(key, value);
     });
     let cancelled = false;
-    setLoading(true);
+    if (tools.length === 0) setLoading(true);
     api<{ tools: Tool[]; facets: Facets }>(`/api/tools?${params.toString()}`)
       .then((res) => {
         if (cancelled) return;
@@ -241,7 +241,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         setError(null);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Chargement impossible.');
+        if (!cancelled && tools.length === 0) setError(err instanceof Error ? err.message : 'Chargement impossible.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -249,7 +249,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
     return () => {
       cancelled = true;
     };
-  }, [filters, reload]);
+  }, [filters, reload, tools.length]);
 
   useEffect(() => {
     if (!selectedId) {

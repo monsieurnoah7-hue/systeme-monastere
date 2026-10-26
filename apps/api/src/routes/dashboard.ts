@@ -32,15 +32,16 @@ dashboardRoutes.get('/', async (c) => {
             count(*) FILTER (WHERE qty <= 0)::int AS empty
        FROM (
          SELECT r.id, r.min_qty,
-                (r.initial_qty + COALESCE(m.qty, 0)) AS qty
+                (
+                  r.initial_qty + COALESCE(
+                    (SELECT sum(CASE WHEN sm.move_type = 'in' THEN sm.qty
+                                     WHEN sm.move_type = 'out' THEN -sm.qty
+                                     WHEN sm.move_type = 'correction' THEN sm.qty END)
+                       FROM stock_movements sm
+                      WHERE sm.ref_id = r.id), 0
+                  )
+                ) AS qty
            FROM stock_refs r
-           LEFT JOIN (
-             SELECT ref_id,
-                    sum(CASE WHEN move_type = 'in' THEN qty
-                             WHEN move_type = 'out' THEN -qty
-                             WHEN move_type = 'correction' THEN qty END) AS qty
-               FROM stock_movements GROUP BY ref_id
-           ) m ON m.ref_id = r.id
        ) t`,
   );
 

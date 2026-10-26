@@ -438,7 +438,7 @@ export function Dashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    if (!data) setLoading(true);
     api<DashboardType>('/api/dashboard')
       .then((res) => {
         if (!cancelled) {
@@ -447,7 +447,7 @@ export function Dashboard() {
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Chargement impossible.');
+        if (!cancelled && !data) setError(err instanceof Error ? err.message : 'Chargement impossible.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -455,7 +455,7 @@ export function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [reload]);
+  }, [reload, data]);
 
   useEffect(() => {
     const handleSync = () => setReload((v) => v + 1);

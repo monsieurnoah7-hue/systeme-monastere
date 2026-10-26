@@ -220,6 +220,32 @@ CREATE TABLE IF NOT EXISTS image_blobs (
   content_type text NOT NULL DEFAULT 'image/jpeg',
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Performance indices for infinite scale (warehouses, tools, stocks, movements, attendances)
+CREATE INDEX IF NOT EXISTS tools_magasin_idx ON tools(magasin_id);
+CREATE INDEX IF NOT EXISTS tools_status_idx ON tools(status);
+CREATE INDEX IF NOT EXISTS tools_category_idx ON tools(category);
+CREATE INDEX IF NOT EXISTS tools_location_idx ON tools(location);
+CREATE INDEX IF NOT EXISTS tools_created_idx ON tools(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS stock_refs_magasin_idx ON stock_refs(magasin_id);
+CREATE INDEX IF NOT EXISTS stock_refs_category_idx ON stock_refs(category);
+
+CREATE INDEX IF NOT EXISTS stock_movements_ref_move_qty_idx ON stock_movements(ref_id, move_type, qty);
+CREATE INDEX IF NOT EXISTS stock_movements_created_idx ON stock_movements(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS magasins_code_idx ON magasins(code);
+CREATE INDEX IF NOT EXISTS magasins_active_idx ON magasins(active);
+
+CREATE INDEX IF NOT EXISTS loans_employee_status_idx ON loans(employee_id, status);
+CREATE INDEX IF NOT EXISTS loans_tool_status_idx ON loans(tool_id, status);
+
+CREATE INDEX IF NOT EXISTS employees_active_idx ON employees(active);
+
+CREATE INDEX IF NOT EXISTS attendance_emp_date_idx ON attendance(employee_id, punch_date DESC);
+CREATE INDEX IF NOT EXISTS attendance_terminal_idx ON attendance(terminal_id);
+
+CREATE INDEX IF NOT EXISTS audit_entity_idx ON audit_log(entity, entity_id);
 `;
 
 // Idempotent adjustments for databases created before breaks/permissions/magasins/leaves/tools accounting.
@@ -279,6 +305,32 @@ CREATE TABLE IF NOT EXISTS app_permissions (
   is_custom boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Performance indices for infinite scale (warehouses, tools, stocks, movements, attendances)
+CREATE INDEX IF NOT EXISTS tools_magasin_idx ON tools(magasin_id);
+CREATE INDEX IF NOT EXISTS tools_status_idx ON tools(status);
+CREATE INDEX IF NOT EXISTS tools_category_idx ON tools(category);
+CREATE INDEX IF NOT EXISTS tools_location_idx ON tools(location);
+CREATE INDEX IF NOT EXISTS tools_created_idx ON tools(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS stock_refs_magasin_idx ON stock_refs(magasin_id);
+CREATE INDEX IF NOT EXISTS stock_refs_category_idx ON stock_refs(category);
+
+CREATE INDEX IF NOT EXISTS stock_movements_ref_move_qty_idx ON stock_movements(ref_id, move_type, qty);
+CREATE INDEX IF NOT EXISTS stock_movements_created_idx ON stock_movements(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS magasins_code_idx ON magasins(code);
+CREATE INDEX IF NOT EXISTS magasins_active_idx ON magasins(active);
+
+CREATE INDEX IF NOT EXISTS loans_employee_status_idx ON loans(employee_id, status);
+CREATE INDEX IF NOT EXISTS loans_tool_status_idx ON loans(tool_id, status);
+
+CREATE INDEX IF NOT EXISTS employees_active_idx ON employees(active);
+
+CREATE INDEX IF NOT EXISTS attendance_emp_date_idx ON attendance(employee_id, punch_date DESC);
+CREATE INDEX IF NOT EXISTS attendance_terminal_idx ON attendance(terminal_id);
+
+CREATE INDEX IF NOT EXISTS audit_entity_idx ON audit_log(entity, entity_id);
 `;
 
-export const MIGRATION_NAME = '006_dynamic_permissions_and_import';
+export const MIGRATION_NAME = '007_performance_indices_and_scale';

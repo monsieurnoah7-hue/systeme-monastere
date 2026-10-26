@@ -240,7 +240,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    if (refs.length === 0) setLoading(true);
     const moveParams = new URLSearchParams();
     if (journalType) moveParams.set('move_type', journalType);
     if (journalFrom) moveParams.set('from', journalFrom);
@@ -259,7 +259,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
         setError(null);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Chargement impossible.');
+        if (!cancelled && refs.length === 0) setError(err instanceof Error ? err.message : 'Chargement impossible.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -267,7 +267,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
     return () => {
       cancelled = true;
     };
-  }, [reload, journalType, journalFrom, journalTo, journalQ]);
+  }, [reload, journalType, journalFrom, journalTo, journalQ, refs.length]);
 
   const refresh = useCallback(() => setReload((value) => value + 1), []);
 
