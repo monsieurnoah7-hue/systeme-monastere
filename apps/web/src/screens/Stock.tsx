@@ -27,7 +27,19 @@ import {
   IconRefresh,
   IconSearch,
 } from '../components/Icons';
-import { Camera, Coins, Download, FileSpreadsheet, Printer } from 'lucide-react';
+import {
+  Camera,
+  Coins,
+  Download,
+  FileSpreadsheet,
+  Printer,
+  Trash2,
+  ArrowRightLeft,
+  AlertTriangle,
+  Layers,
+  FolderArchive,
+  ArrowRight,
+} from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { usePrintSheet } from '../lib/print';
 import { ImagePickerModal } from '../components/ImagePickerModal';
@@ -214,6 +226,16 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
     note: '',
   });
 
+  /* Scope and Batch State (Google Enterprise) */
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'active' | 'drafts'>('all');
+  const [selectedRefIds, setSelectedRefIds] = useState<Set<number>>(new Set());
+  const [batchAssignOpen, setBatchAssignOpen] = useState(false);
+  const [batchAssignMagasinId, setBatchAssignMagasinId] = useState('');
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [deleteSingleRef, setDeleteSingleRef] = useState<StockRef | null>(null);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
+
   const { print, portal } = usePrintSheet();
 
   useEffect(() => {
@@ -259,22 +281,27 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
     }
   }, [scan]);
 
+  const activeRefs = useMemo(() => refs.filter((r) => !!r.magasin_id), [refs]);
+  const draftRefs = useMemo(() => refs.filter((r) => !r.magasin_id), [refs]);
+
   const stats = useMemo(() => {
-    let total = refs.length;
+    const list = scopeFilter === 'drafts' ? draftRefs : scopeFilter === 'active' ? activeRefs : refs;
+    let total = list.length;
     let normal = 0;
     let warning = 0;
     let empty = 0;
-    for (const r of refs) {
+    for (const r of list) {
       if (r.qty <= 0) empty++;
       else if (r.qty <= r.min_qty) warning++;
       else normal++;
     }
     return { total, normal, warning, empty };
-  }, [refs]);
+  }, [refs, activeRefs, draftRefs, scopeFilter]);
 
   const filtered = useMemo(() => {
+    const baseList = scopeFilter === 'active' ? activeRefs : scopeFilter === 'drafts' ? draftRefs : refs;
     const needle = q.trim().toLowerCase();
-    return refs.filter((ref) => {
+    return baseList.filter((ref) => {
       if (lowOnly && ref.qty > ref.min_qty) return false;
       if (magasinFilter && ref.magasin_id !== magasinFilter) return false;
       if (!needle) return true;
@@ -285,7 +312,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
         (ref.supplier ?? '').toLowerCase().includes(needle)
       );
     });
-  }, [refs, q, lowOnly, magasinFilter]);
+  }, [refs, activeRefs, draftRefs, scopeFilter, q, lowOnly, magasinFilter]);
 
   const selected = refs.find((ref) => ref.id === selectedId) ?? null;
   const selectedMoves = movements.filter((move) => move.ref_id === selectedId);
@@ -423,6 +450,108 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
     }
   }
 
+  function toggleSelect(id: number) {
+    setSelectedRefIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(currentList: StockRef[]) {
+    if (selectedRefIds.size === currentList.length && currentList.length > 0) {
+      setSelectedRefIds(new Set());
+    } else {
+      setSelectedRefIds(new Set(currentList.map((r) => r.id)));
+    }
+  }
+
+  async function handleBatchAssign() {
+    if (selectedRefIds.size === 0) return;
+    setBusy(true);
+    try {
+      const ids = Array.from(selectedRefIds);
+      const res = await api<{ ok: boolean; message: string }>('/api/stock/refs/batch-transfer', {
+        method: 'POST',
+        body: JSON.stringify({ ids, magasin_id: batchAssignMagasinId || null }),
+      });
+      toast(res.message, 'success');
+      setBatchAssignOpen(false);
+      setSelectedRefIds(new Set());
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Échec du transfert groupé.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleBatchDelete() {
+    if (selectedRefIds.size === 0) return;
+    setBusy(true);
+    try {
+      const ids = Array.from(selectedRefIds);
+      const res = await api<{ ok: boolean; message: string }>('/api/stock/refs/batch-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      });
+      toast(res.message, 'success');
+      setBatchDeleteOpen(false);
+      setSelectedRefIds(new Set());
+      refresh();
+      if (selectedId && ids.includes(selectedId)) {
+        setSelectedId(null);
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Échec de la suppression groupée.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteSingle(refItem: StockRef) {
+    setBusy(true);
+    try {
+      const res = await api<{ ok: boolean; message: string }>(`/api/stock/refs/${refItem.id}`, {
+        method: 'DELETE',
+      });
+      toast(res.message, 'success');
+      setDeleteSingleRef(null);
+      if (selectedId === refItem.id) setSelectedId(null);
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Suppression impossible.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteAll() {
+    if (deleteAllConfirmText !== 'SUPPRIMER') return;
+    setBusy(true);
+    try {
+      const res = await api<{ ok: boolean; message: string }>('/api/stock/refs/delete-all', {
+        method: 'POST',
+        body: JSON.stringify({
+          confirmation: 'SUPPRIMER',
+          drafts_only: scopeFilter === 'drafts',
+          magasin_id: magasinFilter || undefined,
+        }),
+      });
+      toast(res.message, 'success');
+      setDeleteAllOpen(false);
+      setDeleteAllConfirmText('');
+      setSelectedRefIds(new Set());
+      setSelectedId(null);
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Échec de la suppression globale.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const totalStockValuation = useMemo(
     () => refs.reduce((acc, r) => acc + Number(r.qty || 0) * Number(r.unit_cost || 0), 0),
     [refs],
@@ -543,9 +672,120 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
               >
                 Nouvelle Réf
               </Button>
+              {refs.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline-danger"
+                  icon={<Trash2 size={13} />}
+                  onClick={() => {
+                    setDeleteAllConfirmText('');
+                    setDeleteAllOpen(true);
+                  }}
+                  title="Purger ou supprimer l'ensemble des articles de stock"
+                >
+                  Tout supprimer
+                </Button>
+              )}
             </>
           ) : null}
         </div>
+      </div>
+
+      {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2.5">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
+          <button
+            type="button"
+            onClick={() => {
+              setScopeFilter('all');
+              setSelectedRefIds(new Set());
+            }}
+            className={cx(
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              scopeFilter === 'all'
+                ? 'bg-amber text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink hover:bg-paper',
+            )}
+          >
+            <Layers size={14} />
+            <span>Tout le Stock</span>
+            <span
+              className={cx(
+                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+                scopeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
+              )}
+            >
+              {refs.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setScopeFilter('active');
+              setSelectedRefIds(new Set());
+            }}
+            className={cx(
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              scopeFilter === 'active'
+                ? 'bg-amber text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink hover:bg-paper',
+            )}
+          >
+            <IconBox size={14} />
+            <span>Articles en Magasins</span>
+            <span
+              className={cx(
+                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+                scopeFilter === 'active' ? 'bg-white/20 text-white' : 'bg-surface text-green',
+              )}
+            >
+              {activeRefs.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setScopeFilter('drafts');
+              setSelectedRefIds(new Set());
+            }}
+            className={cx(
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              scopeFilter === 'drafts'
+                ? 'bg-amber text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink hover:bg-paper',
+            )}
+          >
+            <FolderArchive size={14} />
+            <span>Brouillons &amp; Non affectés</span>
+            <span
+              className={cx(
+                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+                scopeFilter === 'drafts'
+                  ? 'bg-white/20 text-white'
+                  : draftRefs.length > 0
+                    ? 'bg-amber-wash text-amber border border-amber/30'
+                    : 'bg-surface text-ink-faint',
+              )}
+            >
+              {draftRefs.length}
+            </span>
+          </button>
+        </div>
+
+        {draftRefs.length > 0 && scopeFilter !== 'drafts' && (
+          <button
+            onClick={() => {
+              setScopeFilter('drafts');
+              setSelectedRefIds(new Set());
+            }}
+            className="text-xs font-semibold text-amber hover:underline flex items-center gap-1.5"
+          >
+            <span>⚠️ {draftRefs.length} article{draftRefs.length > 1 ? 's' : ''} en brouillon sans magasin</span>
+            <ArrowRight size={13} />
+          </button>
+        )}
       </div>
 
       {/* KPI Dashboard Cards */}
@@ -692,14 +932,85 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
             )}
           </div>
 
+          {/* Drafts Informative Banner */}
+          {scopeFilter === 'drafts' && (
+            <div className="flex items-start gap-3 p-3.5 rounded-xl border border-amber/30 bg-amber-wash/50 text-xs text-ink leading-relaxed">
+              <FolderArchive size={18} className="text-amber shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-ink">Brouillons d’articles &amp; Matières en attente d’affectation</p>
+                <p className="text-ink-soft mt-0.5">
+                  Ces articles de stock ne sont rattachés à aucun magasin ou atelier. Ils ne sont pas comptabilisés dans le stock actif en magasin. Cochez-les pour les affecter en 1 clic au magasin de votre choix.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Batch Actions Bar (Flottant / Sticky quand sélection active) */}
+          {selectedRefIds.size > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border border-amber/40 bg-surface-2 shadow-card animate-slide-up">
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-7 w-7 place-items-center rounded-lg bg-amber text-white text-xs font-bold shadow-xs">
+                  {selectedRefIds.size}
+                </span>
+                <span className="text-xs font-semibold text-ink">
+                  {selectedRefIds.size} article{selectedRefIds.size > 1 ? 's' : ''} sélectionné{selectedRefIds.size > 1 ? 's' : ''}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {canManageRefs && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="border-amber/30 bg-amber-wash text-amber hover:bg-amber hover:text-white"
+                      icon={<ArrowRightLeft size={14} />}
+                      onClick={() => {
+                        setBatchAssignMagasinId('');
+                        setBatchAssignOpen(true);
+                      }}
+                    >
+                      Affecter / Transférer de magasin
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      icon={<Trash2 size={14} />}
+                      onClick={() => setBatchDeleteOpen(true)}
+                    >
+                      Supprimer la sélection ({selectedRefIds.size})
+                    </Button>
+                  </>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedRefIds(new Set())}
+                >
+                  Désélectionner tout
+                </Button>
+              </div>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-16 text-sm text-ink-soft">
               <Spinner /> Chargement du stock…
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState
-              title="Aucune référence trouvée"
-              hint="Aucun article ne correspond aux filtres appliqués."
+              title={
+                scopeFilter === 'drafts'
+                  ? 'Aucun article en brouillon'
+                  : scopeFilter === 'active'
+                    ? 'Aucun article en magasin'
+                    : 'Aucune référence trouvée'
+              }
+              hint={
+                scopeFilter === 'drafts'
+                  ? 'Toutes vos références sont actuellement rattachées à des magasins.'
+                  : 'Aucun article ne correspond aux filtres appliqués.'
+              }
               action={
                 canManageRefs ? (
                   <Button variant="primary" onClick={openCreate}>
@@ -716,29 +1027,56 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                        {canManageRefs && (
+                          <th className="px-2.5 py-2.5 w-10 text-center border-r border-line">
+                            <input
+                              type="checkbox"
+                              checked={filtered.length > 0 && selectedRefIds.size === filtered.length}
+                              onChange={() => toggleSelectAll(filtered)}
+                              className="h-4 w-4 rounded accent-amber cursor-pointer"
+                              title="Tout sélectionner / désélectionner"
+                            />
+                          </th>
+                        )}
                         <th className="px-2.5 py-2.5 w-12 border-r border-line text-center">Photo</th>
                         <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-44 border-r border-line">
                           Désignation &amp; Marque
                         </th>
                         <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
-                        <th className="px-3 py-2.5 min-w-32 border-r border-line">Emplacement</th>
+                        <th className="px-3 py-2.5 min-w-32 border-r border-line">Emplacement / Magasin</th>
                         <th className="px-3 py-2.5 min-w-36 border-r border-line">Stock Disponible</th>
                         <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Coût Unit.</th>
                         <th className="px-3 py-2.5 min-w-28 border-r border-line text-right">Valeur Stock</th>
                         <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
-                        <th className="px-3 py-2.5 min-w-32 text-right">Mouvements Rapides</th>
+                        <th className="px-3 py-2.5 min-w-36 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
                       {filtered.map((ref) => {
                         const state = stockState(ref);
                         const lineValuation = Number(ref.qty || 0) * Number(ref.unit_cost || 0);
+                        const isSelected = selectedRefIds.has(ref.id);
                         return (
                           <tr
                             key={ref.id}
                             onClick={() => setSelectedId(ref.id)}
-                            className="hover:bg-amber-wash/30 cursor-pointer transition-colors group"
+                            className={cx(
+                              'cursor-pointer transition-colors group',
+                              isSelected ? 'bg-amber-wash/40 hover:bg-amber-wash/50' : 'hover:bg-paper-2/40',
+                            )}
                           >
+                            {/* Checkbox */}
+                            {canManageRefs && (
+                              <td className="px-2.5 py-2 text-center border-r border-line" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSelect(ref.id)}
+                                  className="h-4 w-4 rounded accent-amber cursor-pointer"
+                                />
+                              </td>
+                            )}
+
                             {/* Photo Thumbnail */}
                             <td
                               className="px-2 py-1.5 text-center border-r border-line"
@@ -768,7 +1106,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                             </td>
 
                             {/* Sticky Designation & Marque */}
-                            <td className="sticky left-0 z-10 bg-surface group-hover:bg-[#FFF9F3] px-3 py-2 font-semibold text-ink border-r border-line">
+                            <td className="sticky left-0 z-10 bg-surface group-hover:bg-surface-2 px-3 py-2 font-semibold text-ink border-r border-line">
                               <div className="flex items-center gap-1.5">
                                 <span>{ref.name}</span>
                                 {ref.brand ? (
@@ -791,8 +1129,16 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
 
                             {/* Emplacement / Magasin */}
                             <td className="px-3 py-2 text-ink-soft border-r border-line">
-                              <div className="font-medium text-ink">{ref.magasin_name ?? 'Magasin Central'}</div>
-                              <div className="text-[10px] text-ink-faint">{ref.location}</div>
+                              {ref.magasin_name ? (
+                                <div>
+                                  <div className="font-semibold text-ink">{ref.magasin_name}</div>
+                                  <div className="text-[10px] text-ink-faint">{ref.location}</div>
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded bg-amber-wash px-2 py-0.5 text-[10px] font-semibold text-amber border border-amber/30">
+                                  <FolderArchive size={11} /> Brouillon (sans magasin)
+                                </span>
+                              )}
                             </td>
 
                             {/* Stock Bar Gauge */}
@@ -823,28 +1169,50 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                               </span>
                             </td>
 
-                            {/* Quick In / Out Buttons */}
+                            {/* Quick In / Out / Manage Buttons */}
                             <td className="px-3 py-2 text-right">
                               <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                 {canMove ? (
-                                  <button
-                                    onClick={() => openMove('out', ref.id)}
-                                    title="Enregistrer une sortie"
-                                    className="rounded border border-line bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-line-strong active:scale-95 transition-all"
-                                  >
-                                    - Sortie
-                                  </button>
+                                  <>
+                                    <button
+                                      onClick={() => openMove('out', ref.id)}
+                                      title="Enregistrer une sortie"
+                                      className="rounded border border-line bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-line-strong active:scale-95 transition-all"
+                                    >
+                                      - Sortie
+                                    </button>
+                                    <button
+                                      onClick={() => openMove('in', ref.id)}
+                                      title="Enregistrer une entrée"
+                                      className="rounded border border-line bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-line-strong active:scale-95 transition-all"
+                                    >
+                                      + Entrée
+                                    </button>
+                                  </>
                                 ) : null}
 
-                                {canManageRefs ? (
-                                  <button
-                                    onClick={() => openMove('in', ref.id)}
-                                    title="Enregistrer une entrée"
-                                    className="rounded border border-line bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-line-strong active:scale-95 transition-all"
-                                  >
-                                    + Entrée
-                                  </button>
-                                ) : null}
+                                {canManageRefs && (
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setSelectedRefIds(new Set([ref.id]));
+                                        setBatchAssignMagasinId(ref.magasin_id ?? '');
+                                        setBatchAssignOpen(true);
+                                      }}
+                                      className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all"
+                                      title="Affecter ou transférer de magasin"
+                                    >
+                                      <ArrowRightLeft size={13} />
+                                    </button>
+                                    <button
+                                      onClick={() => setDeleteSingleRef(ref)}
+                                      className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-red-500/10 hover:text-red hover:border-red-500/30 active:scale-95 transition-all"
+                                      title="Supprimer cet article"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </>
+                                )}
 
                                 <button
                                   onClick={() => setSelectedId(ref.id)}
@@ -862,10 +1230,10 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                 </div>
 
                 {/* Spreadsheet Summary Footer */}
-                <div className="bg-paper border-t border-line px-4 py-2 text-xs flex items-center justify-between font-semibold text-ink-soft">
-                  <span>Total : {filtered.length} référence(s) · Valeur Stock : {formatCurrency(totalStockValuation)}</span>
+                <div className="bg-paper border-t border-line px-4 py-2.5 text-xs flex items-center justify-between font-semibold text-ink-soft">
+                  <span>Affichés : {filtered.length} référence(s) · Valeur Stock : {formatCurrency(totalStockValuation)}</span>
                   <span className="text-[11px] text-ink-faint">
-                    Basculez sur l’onglet Journal pour consulter l’historique des consommations
+                    Cochez des articles pour les affecter ou les transférer par lot vers un magasin
                   </span>
                 </div>
               </div>
@@ -875,13 +1243,28 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                 {filtered.map((ref) => {
                   const state = stockState(ref);
                   const lineValuation = Number(ref.qty || 0) * Number(ref.unit_cost || 0);
+                  const isSelected = selectedRefIds.has(ref.id);
                   return (
                     <div
                       key={ref.id}
                       onClick={() => setSelectedId(ref.id)}
-                      className="rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper cursor-pointer transition-all space-y-2.5"
+                      className={cx(
+                        'rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper cursor-pointer transition-all space-y-2.5',
+                        isSelected && 'border-amber/50 bg-amber-wash/30',
+                      )}
                     >
                       <div className="flex items-start gap-3">
+                        {canManageRefs && (
+                          <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelect(ref.id)}
+                              className="h-4 w-4 rounded accent-amber cursor-pointer"
+                            />
+                          </div>
+                        )}
+
                         {ref.photo_path ? (
                           <img
                             src={ref.photo_path}
@@ -906,7 +1289,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                                 ) : null}
                               </div>
                               <p className="text-xs text-ink-faint mt-0.5">
-                                {ref.category} · {ref.magasin_name ?? ref.location}
+                                {ref.category} · {ref.magasin_name ?? <strong className="text-amber">📁 Brouillon</strong>}
                               </p>
                             </div>
                             <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft shrink-0">
@@ -935,6 +1318,28 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                       <div className="flex items-center justify-between pt-2 border-t border-line/60" onClick={(e) => e.stopPropagation()}>
                         <span className="text-xs text-ink-faint">Seuil : {ref.min_qty} {ref.unit}</span>
                         <div className="flex items-center gap-1.5">
+                          {canManageRefs && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setSelectedRefIds(new Set([ref.id]));
+                                  setBatchAssignMagasinId(ref.magasin_id ?? '');
+                                  setBatchAssignOpen(true);
+                                }}
+                                className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-amber"
+                                title="Affecter / Transférer"
+                              >
+                                <ArrowRightLeft size={13} />
+                              </button>
+                              <button
+                                onClick={() => setDeleteSingleRef(ref)}
+                                className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-red hover:border-red-500/30"
+                                title="Supprimer cet article"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </>
+                          )}
                           {canMove ? (
                             <button
                               onClick={() => openMove('out', ref.id)}
@@ -1195,6 +1600,14 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                       }}
                     >
                       Modifier la fiche
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-danger"
+                      icon={<Trash2 size={14} />}
+                      onClick={() => setDeleteSingleRef(selected)}
+                    >
+                      Supprimer l’article
                     </Button>
                   </>
                 ) : null}
@@ -1468,6 +1881,173 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
         onClose={() => setPhotoModalOpen(false)}
         onSelect={(url) => void handleStockPhotoSelect(url)}
       />
+
+      {/* Modal Affectation / Transfert Groupé */}
+      <Modal
+        open={batchAssignOpen}
+        title={`Affecter ou transférer ${selectedRefIds.size} article(s)`}
+        onClose={() => setBatchAssignOpen(false)}
+        footer={
+          <>
+            <Button onClick={() => setBatchAssignOpen(false)}>Annuler</Button>
+            <Button variant="primary" disabled={busy} onClick={() => void handleBatchAssign()}>
+              {busy ? <Spinner /> : 'Appliquer l’affectation'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-ink-soft">
+            Choisissez le magasin de destination pour les <strong>{selectedRefIds.size}</strong> article(s) sélectionnés.
+            Vous pouvez affecter des brouillons ou transférer des stocks d’un magasin à un autre en 1 clic.
+          </p>
+
+          <SelectField
+            label="Magasin de destination"
+            value={batchAssignMagasinId}
+            onChange={(e) => setBatchAssignMagasinId(e.target.value)}
+          >
+            <option value="">📁 Retirer de l’inventaire actif (remettre en brouillon)</option>
+            {magasins.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} ({m.code})
+              </option>
+            ))}
+          </SelectField>
+
+          <div>
+            <span className="mb-1 block text-xs font-semibold text-ink-soft uppercase tracking-wider">
+              Articles concernés par ce transfert :
+            </span>
+            <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-line bg-paper p-2">
+              {Array.from(selectedRefIds).map((id) => {
+                const r = refs.find((item) => item.id === id);
+                return (
+                  <div key={id} className="flex items-center justify-between text-xs py-1 px-1.5 border-b border-line/40 last:border-0">
+                    <span className="font-mono font-bold text-amber">REF-{id}</span>
+                    <span className="truncate flex-1 px-2 text-ink font-medium">{r?.name ?? 'Article'}</span>
+                    <span className="text-[11px] text-ink-faint">
+                      {r?.magasin_name ?? '📁 Brouillon'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Suppression Groupée */}
+      <Modal
+        open={batchDeleteOpen}
+        title={`Supprimer ${selectedRefIds.size} article(s) sélectionné(s)`}
+        onClose={() => setBatchDeleteOpen(false)}
+        footer={
+          <>
+            <Button onClick={() => setBatchDeleteOpen(false)}>Annuler</Button>
+            <Button variant="danger" disabled={busy} onClick={() => void handleBatchDelete()}>
+              {busy ? <Spinner /> : `Supprimer définitivement (${selectedRefIds.size})`}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Suppression irréversible du stock</p>
+              <p className="mt-0.5 text-ink-soft">
+                Vous êtes sur le point de supprimer définitivement <strong>{selectedRefIds.size}</strong> article(s) de stock.
+                Leur historique de mouvements sera également purgé.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Suppression Singleton */}
+      <Modal
+        open={!!deleteSingleRef}
+        title={deleteSingleRef ? `Supprimer l'article REF-${deleteSingleRef.id}` : 'Supprimer'}
+        onClose={() => setDeleteSingleRef(null)}
+        footer={
+          <>
+            <Button onClick={() => setDeleteSingleRef(null)}>Annuler</Button>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => {
+                if (deleteSingleRef) void handleDeleteSingle(deleteSingleRef);
+              }}
+            >
+              {busy ? <Spinner /> : 'Supprimer définitivement'}
+            </Button>
+          </>
+        }
+      >
+        {deleteSingleRef && (
+          <div className="space-y-3">
+            <p className="text-xs text-ink">
+              Confirmez-vous la suppression définitive de l'article suivant ?
+            </p>
+            <div className="rounded-lg border border-line bg-paper p-3 text-xs space-y-1">
+              <div className="font-mono font-bold text-amber">REF-{deleteSingleRef.id}</div>
+              <div className="font-semibold text-ink text-sm">{deleteSingleRef.name}</div>
+              <div className="text-ink-soft">{deleteSingleRef.category} · {deleteSingleRef.magasin_name ?? '📁 Brouillon'}</div>
+              <div className="text-[11px] text-ink-faint">Quantité actuelle en stock : {deleteSingleRef.qty} {deleteSingleRef.unit}</div>
+            </div>
+            <p className="text-[11px] text-ink-faint">
+              ⚠️ Cette action effacera également tous les mouvements d’entrée/sortie associés à cette référence.
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Suppression Globale / Purge Stock */}
+      <Modal
+        open={deleteAllOpen}
+        title="Zone Critique : Suppression globale du stock"
+        onClose={() => setDeleteAllOpen(false)}
+        footer={
+          <>
+            <Button onClick={() => setDeleteAllOpen(false)}>Annuler</Button>
+            <Button
+              variant="danger"
+              disabled={busy || deleteAllConfirmText !== 'SUPPRIMER'}
+              onClick={() => void handleDeleteAll()}
+            >
+              {busy ? <Spinner /> : 'Confirmer la suppression globale'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Attention : Action destructrice</p>
+              <p className="mt-0.5 text-ink-soft">
+                {scopeFilter === 'drafts'
+                  ? `Vous allez supprimer l'intégralité des ${draftRefs.length} articles en brouillon (non rattachés à un magasin).`
+                  : `Vous allez supprimer l'intégralité des ${refs.length} articles de stock enregistrés dans le système.`}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">
+              Tapez <strong className="font-mono text-red">SUPPRIMER</strong> pour débloquer :
+            </label>
+            <input
+              type="text"
+              value={deleteAllConfirmText}
+              onChange={(e) => setDeleteAllConfirmText(e.target.value)}
+              placeholder="SUPPRIMER"
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm uppercase text-ink focus:border-red focus:outline-none"
+            />
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal Import Tableur Excel / CSV */}
       {importOpen && (

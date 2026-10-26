@@ -15,6 +15,7 @@ export const PERMISSION_ACTIONS = [
   'stock.view',
   'stock.create_ref',
   'stock.edit_ref',
+  'stock.delete_ref',
   'stock.photo_edit',
   'stock.move',
   'stock.correct',
@@ -54,6 +55,7 @@ export const PERMISSION_LABELS: Record<PermissionAction, string> = {
   'stock.view': 'Consulter le stock',
   'stock.create_ref': 'Créer une référence',
   'stock.edit_ref': 'Modifier une référence',
+  'stock.delete_ref': 'Supprimer des références de stock & quincaillerie',
   'stock.photo_edit': 'Modifier la photo de quincaillerie / stock',
   'stock.move': 'Enregistrer un mouvement',
   'stock.correct': 'Corriger le stock',
@@ -87,7 +89,7 @@ export const PERMISSION_GROUPS: { label: string; actions: PermissionAction[] }[]
   },
   {
     label: 'Stock & quincaillerie',
-    actions: ['stock.view', 'stock.create_ref', 'stock.edit_ref', 'stock.photo_edit', 'stock.move', 'stock.correct'],
+    actions: ['stock.view', 'stock.create_ref', 'stock.edit_ref', 'stock.delete_ref', 'stock.photo_edit', 'stock.move', 'stock.correct'],
   },
   {
     label: 'Présences & congés',
@@ -122,6 +124,7 @@ export const DEFAULT_PERMISSIONS: Record<PermissionAction, Role[]> = {
   'stock.view': ['direction', 'magasinier', 'chef_atelier'],
   'stock.create_ref': ['magasinier'],
   'stock.edit_ref': ['magasinier'],
+  'stock.delete_ref': ['direction', 'magasinier'],
   'stock.photo_edit': ['direction', 'magasinier'],
   'stock.move': ['direction', 'magasinier', 'chef_atelier'],
   'stock.correct': ['magasinier'],

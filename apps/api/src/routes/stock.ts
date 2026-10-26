@@ -448,3 +448,150 @@ stockRoutes.post('/import', requirePerm('stock.create_ref'), async (c) => {
     message: `${createdCount} article(s) créé(s), ${updatedCount} article(s) mis à jour sans doublon.`,
   });
 });
+
+/* =========================================================================
+   DELETION & BATCH OPERATIONS (Google Enterprise Grade)
+========================================================================= */
+
+stockRoutes.delete('/refs/:id', requirePerm('stock.delete_ref'), async (c) => {
+  const id = Number(c.req.param('id'));
+  if (isNaN(id)) return c.json({ error: 'ID invalide.' }, 400);
+  const db = getDb();
+  const ref = await db.one<StockRefRow>('SELECT * FROM stock_refs WHERE id = $1', [id]);
+  if (!ref) return c.json({ error: 'Article introuvable.' }, 404);
+
+  await db.transaction(async (tx) => {
+    await tx.query('DELETE FROM stock_movements WHERE ref_id = $1', [id]);
+    await tx.query('DELETE FROM stock_refs WHERE id = $1', [id]);
+    await writeAudit(tx, {
+      entity: 'stock_ref',
+      entityId: String(id),
+      action: 'delete',
+      before: ref,
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  });
+
+  return c.json({ ok: true, message: `Article #${id} (${ref.name}) supprimé définitivement.` });
+});
+
+const batchDeleteRefsSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(500),
+});
+
+stockRoutes.post('/refs/batch-delete', requirePerm('stock.delete_ref'), async (c) => {
+  const body = batchDeleteRefsSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Liste d’articles invalide.' }, 400);
+  const { ids } = body.data;
+  const db = getDb();
+
+  let deletedCount = 0;
+  await db.transaction(async (tx) => {
+    await tx.query('DELETE FROM stock_movements WHERE ref_id = ANY($1)', [ids]);
+    const res = await tx.query('DELETE FROM stock_refs WHERE id = ANY($1) RETURNING id', [ids]);
+    deletedCount = res.length;
+    await writeAudit(tx, {
+      entity: 'stock_refs',
+      entityId: 'batch_delete',
+      action: 'delete',
+      before: { ids, count: deletedCount },
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  });
+
+  return c.json({ ok: true, deletedCount, message: `${deletedCount} article(s) supprimé(s) définitivement.` });
+});
+
+const deleteAllRefsSchema = z.object({
+  confirmation: z.literal('SUPPRIMER'),
+  drafts_only: z.boolean().optional(),
+  magasin_id: z.string().optional(),
+});
+
+stockRoutes.post('/refs/delete-all', requirePerm('stock.delete_ref'), async (c) => {
+  const body = deleteAllRefsSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Confirmation "SUPPRIMER" requise.' }, 400);
+
+  const { drafts_only, magasin_id } = body.data;
+  const db = getDb();
+
+  let targetSql = 'SELECT id FROM stock_refs WHERE 1=1';
+  const targetParams: unknown[] = [];
+  if (drafts_only) {
+    targetSql += ' AND (magasin_id IS NULL OR magasin_id = \'\')';
+  } else if (magasin_id) {
+    targetParams.push(magasin_id);
+    targetSql += ' AND magasin_id = $1';
+  }
+
+  let deletedCount = 0;
+  await db.transaction(async (tx) => {
+    const rows = await tx.query<{ id: number }>(targetSql, targetParams);
+    const ids = rows.map((r) => r.id);
+    if (ids.length > 0) {
+      await tx.query('DELETE FROM stock_movements WHERE ref_id = ANY($1)', [ids]);
+      await tx.query('DELETE FROM stock_refs WHERE id = ANY($1)', [ids]);
+      deletedCount = ids.length;
+    }
+    await writeAudit(tx, {
+      entity: 'stock_refs',
+      entityId: 'delete_all',
+      action: 'delete',
+      before: { drafts_only, magasin_id, count: deletedCount },
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  });
+
+  return c.json({ ok: true, deletedCount, message: `${deletedCount} article(s) de stock supprimé(s).` });
+});
+
+const batchTransferRefsSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1).max(500),
+  magasin_id: z.string().nullable().optional(),
+});
+
+stockRoutes.post('/refs/batch-transfer', requirePerm('stock.edit_ref'), async (c) => {
+  const body = batchTransferRefsSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Données de transfert invalides.' }, 400);
+
+  const { ids, magasin_id } = body.data;
+  const db = getDb();
+  const targetMagasin = magasin_id?.trim() || null;
+
+  let magName = '📁 Brouillon / Non affecté';
+  let magLocation = 'Quincaillerie';
+  if (targetMagasin) {
+    const mag = await db.one<{ name: string }>('SELECT name FROM magasins WHERE id = $1', [targetMagasin]);
+    if (!mag) return c.json({ error: 'Magasin de destination introuvable.' }, 404);
+    magName = mag.name;
+    magLocation = mag.name;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.query(
+      `UPDATE stock_refs 
+       SET magasin_id = $2,
+           location = $3
+       WHERE id = ANY($1)`,
+      [ids, targetMagasin, magLocation],
+    );
+
+    await writeAudit(tx, {
+      entity: 'stock_refs',
+      entityId: 'batch_transfer',
+      action: 'update',
+      after: { ids, targetMagasin, magName },
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  });
+
+  return c.json({
+    ok: true,
+    count: ids.length,
+    message: `${ids.length} article(s) affecté(s) / transféré(s) avec succès vers ${magName}.`,
+  });
+});
