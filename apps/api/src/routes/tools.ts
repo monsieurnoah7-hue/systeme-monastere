@@ -450,6 +450,189 @@ toolsRoutes.post('/import', requirePerm('tools.create'), async (c) => {
   });
 });
 
+/* =========================================================================
+   DELETION & BATCH OPERATIONS (Google Enterprise Grade)
+========================================================================= */
+
+toolsRoutes.delete('/:id', requirePerm('tools.delete'), async (c) => {
+  const id = c.req.param('id') ?? '';
+  const db = getDb();
+  const tool = await db.one<ToolRow>('SELECT * FROM tools WHERE id = $1', [id]);
+  if (!tool) return c.json({ error: 'Outil introuvable.' }, 404);
+  if (tool.status === 'en_pret') {
+    return c.json({ error: 'Impossible de supprimer un outil actuellement en prêt. Enregistrez d’abord son retour.' }, 409);
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.query('DELETE FROM tool_events WHERE tool_id = $1', [id]);
+    await tx.query('DELETE FROM loans WHERE tool_id = $1', [id]);
+    await tx.query('DELETE FROM tools WHERE id = $1', [id]);
+    await writeAudit(tx, {
+      entity: 'tool',
+      entityId: id,
+      action: 'delete',
+      before: tool,
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  });
+
+  return c.json({ ok: true, message: `Outil ${id} (${tool.name}) supprimé définitivement.` });
+});
+
+const batchDeleteSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(500),
+});
+
+toolsRoutes.post('/batch-delete', requirePerm('tools.delete'), async (c) => {
+  const body = batchDeleteSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Liste d’identifiants invalide.' }, 400);
+  const { ids } = body.data;
+  const db = getDb();
+
+  const inLoan = await db.query<{ id: string; name: string }>(
+    `SELECT id, name FROM tools WHERE id = ANY($1) AND status = 'en_pret'`,
+    [ids],
+  );
+  if (inLoan.length > 0) {
+    return c.json({
+      error: `Suppression bloquée : ${inLoan.length} outil(s) en prêt (${inLoan.map((t) => t.id).join(', ')}). Enregistrez d’abord leurs retours.`,
+    }, 409);
+  }
+
+  let deletedCount = 0;
+  await db.transaction(async (tx) => {
+    await tx.query('DELETE FROM tool_events WHERE tool_id = ANY($1)', [ids]);
+    await tx.query('DELETE FROM loans WHERE tool_id = ANY($1)', [ids]);
+    const res = await tx.query('DELETE FROM tools WHERE id = ANY($1) RETURNING id', [ids]);
+    deletedCount = res.length;
+    await writeAudit(tx, {
+      entity: 'tools',
+      entityId: 'batch_delete',
+      action: 'delete',
+      before: { ids, count: deletedCount },
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  });
+
+  return c.json({ ok: true, deletedCount, message: `${deletedCount} outil(s) supprimé(s) définitivement.` });
+});
+
+const deleteAllSchema = z.object({
+  confirmation: z.literal('SUPPRIMER'),
+  drafts_only: z.boolean().optional(),
+  magasin_id: z.string().optional(),
+});
+
+toolsRoutes.post('/delete-all', requirePerm('tools.delete'), async (c) => {
+  const body = deleteAllSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Confirmation "SUPPRIMER" requise.' }, 400);
+
+  const { drafts_only, magasin_id } = body.data;
+  const db = getDb();
+
+  let checkSql = `SELECT count(*) AS count FROM tools WHERE status = 'en_pret'`;
+  const checkParams: unknown[] = [];
+  if (drafts_only) {
+    checkSql += ` AND (magasin_id IS NULL OR magasin_id = '')`;
+  } else if (magasin_id) {
+    checkParams.push(magasin_id);
+    checkSql += ` AND magasin_id = $1`;
+  }
+  const inLoan = await db.one<{ count: string }>(checkSql, checkParams);
+  if (Number(inLoan?.count ?? 0) > 0) {
+    return c.json({ error: 'Certains outils de ce périmètre sont en prêt. Enregistrez leurs retours avant suppression globale.' }, 409);
+  }
+
+  let targetSql = `SELECT id FROM tools WHERE 1=1`;
+  const targetParams: unknown[] = [];
+  if (drafts_only) {
+    targetSql += ` AND (magasin_id IS NULL OR magasin_id = '')`;
+  } else if (magasin_id) {
+    targetParams.push(magasin_id);
+    targetSql += ` AND magasin_id = $1`;
+  }
+
+  let deletedCount = 0;
+  await db.transaction(async (tx) => {
+    const rows = await tx.query<{ id: string }>(targetSql, targetParams);
+    const ids = rows.map((r) => r.id);
+    if (ids.length > 0) {
+      await tx.query('DELETE FROM tool_events WHERE tool_id = ANY($1)', [ids]);
+      await tx.query('DELETE FROM loans WHERE tool_id = ANY($1)', [ids]);
+      await tx.query('DELETE FROM tools WHERE id = ANY($1)', [ids]);
+      deletedCount = ids.length;
+    }
+    await writeAudit(tx, {
+      entity: 'tools',
+      entityId: 'delete_all',
+      action: 'delete',
+      before: { drafts_only, magasin_id, count: deletedCount },
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  });
+
+  return c.json({ ok: true, deletedCount, message: `${deletedCount} outil(s) supprimé(s).` });
+});
+
+const batchTransferSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(500),
+  magasin_id: z.string().nullable().optional(),
+});
+
+toolsRoutes.post('/batch-transfer', requirePerm('tools.edit'), async (c) => {
+  const body = batchTransferSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Données de transfert invalides.' }, 400);
+
+  const { ids, magasin_id } = body.data;
+  const db = getDb();
+  const targetMagasin = magasin_id?.trim() || null;
+
+  let magName = '📁 Brouillon / Non affecté';
+  let magLocation = 'En attente';
+  if (targetMagasin) {
+    const mag = await db.one<{ name: string }>('SELECT name FROM magasins WHERE id = $1', [targetMagasin]);
+    if (!mag) return c.json({ error: 'Magasin de destination introuvable.' }, 404);
+    magName = mag.name;
+    magLocation = mag.name;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.query(
+      `UPDATE tools 
+       SET magasin_id = $2,
+           location = $3
+       WHERE id = ANY($1)`,
+      [ids, targetMagasin, magLocation],
+    );
+
+    for (const toolId of ids) {
+      await tx.query(
+        `INSERT INTO tool_events (tool_id, event_type, from_status, to_status, actor, note)
+         VALUES ($1, 'transfert', 'disponible', 'disponible', $2, $3)`,
+        [toolId, actorName(c), `Affectation/Transfert vers : ${magName}`],
+      );
+    }
+
+    await writeAudit(tx, {
+      entity: 'tools',
+      entityId: 'batch_transfer',
+      action: 'update',
+      after: { ids, targetMagasin, magName },
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+  });
+
+  return c.json({
+    ok: true,
+    count: ids.length,
+    message: `${ids.length} outil(s) affecté(s) / transféré(s) avec succès vers ${magName}.`,
+  });
+});
+
 export async function logToolEvent(c: Context, toolId: string, type: string, from: ToolStatus | null, to: ToolStatus, note: string) {
   await getDb().query(
     `INSERT INTO tool_events (tool_id, event_type, from_status, to_status, actor, note)

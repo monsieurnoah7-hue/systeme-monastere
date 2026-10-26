@@ -4,6 +4,7 @@ export const PERMISSION_ACTIONS = [
   'tools.view',
   'tools.create',
   'tools.edit',
+  'tools.delete',
   'tools.edit_status',
   'tools.photo_edit',
   'loans.view',
@@ -42,6 +43,7 @@ export const PERMISSION_LABELS: Record<PermissionAction, string> = {
   'tools.view': 'Consulter les outils',
   'tools.create': 'Créer des outils',
   'tools.edit': 'Modifier un outil (fiche, magasin)',
+  'tools.delete': 'Supprimer des outils & matériels',
   'tools.edit_status': 'Modifier le statut d’un outil',
   'tools.photo_edit': 'Modifier la photo des outils & matériels',
   'loans.view': 'Voir les prêts',
@@ -77,7 +79,7 @@ export const PERMISSION_LABELS: Record<PermissionAction, string> = {
 export const PERMISSION_GROUPS: { label: string; actions: PermissionAction[] }[] = [
   {
     label: 'Outils & prêts',
-    actions: ['tools.view', 'tools.create', 'tools.edit', 'tools.edit_status', 'tools.photo_edit', 'loans.view', 'loans.create', 'loans.return'],
+    actions: ['tools.view', 'tools.create', 'tools.edit', 'tools.delete', 'tools.edit_status', 'tools.photo_edit', 'loans.view', 'loans.create', 'loans.return'],
   },
   {
     label: 'Magasins',
@@ -109,6 +111,7 @@ export const DEFAULT_PERMISSIONS: Record<PermissionAction, Role[]> = {
   'tools.view': ['direction', 'magasinier', 'chef_atelier'],
   'tools.create': ['magasinier'],
   'tools.edit': ['magasinier'],
+  'tools.delete': ['direction', 'magasinier'],
   'tools.edit_status': ['magasinier'],
   'tools.photo_edit': ['direction', 'magasinier'],
   'loans.view': ['direction', 'magasinier', 'chef_atelier'],

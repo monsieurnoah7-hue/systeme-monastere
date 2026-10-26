@@ -44,7 +44,7 @@ const BTN_BASE =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue';
 const BTN_VARIANT: Record<string, string> = {
   primary:
-    'bg-amber text-slate-950 font-semibold shadow-xs hover:bg-amber-3 hover:shadow-card ' +
+    'bg-amber text-white font-semibold shadow-xs hover:bg-amber-3 hover:shadow-card ' +
     'focus-visible:outline-blue',
   secondary: 'bg-surface-2 text-ink border border-line-strong hover:bg-surface-3 hover:border-line-strong/80 shadow-xs',
   ghost: 'bg-surface text-ink border border-line-strong hover:bg-surface-2 hover:border-line-strong/80 shadow-xs',

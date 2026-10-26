@@ -44,7 +44,19 @@ import {
   IconWrench,
   IconBox,
 } from '../components/Icons';
-import { Download, Printer, Camera, TrendingDown, FileSpreadsheet } from 'lucide-react';
+import {
+  Download,
+  Printer,
+  Camera,
+  TrendingDown,
+  FileSpreadsheet,
+  Trash2,
+  ArrowRightLeft,
+  AlertTriangle,
+  Layers,
+  FolderArchive,
+  ArrowRight,
+} from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { ExcelImportModal } from '../components/ExcelImportModal';
@@ -204,6 +216,16 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
   const { print, portal } = usePrintSheet();
   const [busy, setBusy] = useState(false);
 
+  /* Scope filter: active stock vs drafts */
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'active' | 'drafts'>('all');
+  const [selectedToolIds, setSelectedToolIds] = useState<Set<string>>(new Set());
+  const [batchAssignOpen, setBatchAssignOpen] = useState(false);
+  const [batchAssignMagasinId, setBatchAssignMagasinId] = useState('');
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [deleteSingleTool, setDeleteSingleTool] = useState<Tool | null>(null);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
+
   useEffect(() => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
@@ -274,24 +296,37 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
     }
   }, [scan]);
 
+  const activeTools = useMemo(() => tools.filter((t) => !!t.magasin_id), [tools]);
+  const draftTools = useMemo(() => tools.filter((t) => !t.magasin_id), [tools]);
+
+  const displayedTools = useMemo(() => {
+    if (scopeFilter === 'active') return activeTools;
+    if (scopeFilter === 'drafts') return draftTools;
+    return tools;
+  }, [scopeFilter, activeTools, draftTools, tools]);
+
   const stats = useMemo(() => {
+    const list = scopeFilter === 'drafts' ? draftTools : scopeFilter === 'active' ? activeTools : tools;
     const counts = {
-      total: tools.length,
+      total: list.length,
       disponible: 0,
       en_pret: 0,
       maintenance: 0,
       manquant: 0,
       reforme: 0,
     };
-    for (const tool of tools) {
+    for (const tool of list) {
       if (tool.status in counts) {
         counts[tool.status as keyof typeof counts]++;
       }
     }
     return counts;
-  }, [tools]);
+  }, [scopeFilter, activeTools, draftTools, tools]);
 
-  const auditSummary = useMemo(() => computePortfolioAudit(tools), [tools]);
+  const auditSummary = useMemo(() => {
+    const list = scopeFilter === 'drafts' ? draftTools : activeTools.length > 0 ? activeTools : tools;
+    return computePortfolioAudit(list);
+  }, [scopeFilter, activeTools, draftTools, tools]);
 
   async function createTool() {
     setBusy(true);
@@ -375,6 +410,108 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
       refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Affectation impossible.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedToolIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(currentList: Tool[]) {
+    if (selectedToolIds.size === currentList.length && currentList.length > 0) {
+      setSelectedToolIds(new Set());
+    } else {
+      setSelectedToolIds(new Set(currentList.map((t) => t.id)));
+    }
+  }
+
+  async function handleBatchAssign() {
+    if (selectedToolIds.size === 0) return;
+    setBusy(true);
+    try {
+      const ids = Array.from(selectedToolIds);
+      const res = await api<{ ok: boolean; message: string }>('/api/tools/batch-transfer', {
+        method: 'POST',
+        body: JSON.stringify({ ids, magasin_id: batchAssignMagasinId || null }),
+      });
+      toast(res.message, 'success');
+      setBatchAssignOpen(false);
+      setSelectedToolIds(new Set());
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Échec de l’affectation groupée.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleBatchDelete() {
+    if (selectedToolIds.size === 0) return;
+    setBusy(true);
+    try {
+      const ids = Array.from(selectedToolIds);
+      const res = await api<{ ok: boolean; message: string }>('/api/tools/batch-delete', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      });
+      toast(res.message, 'success');
+      setBatchDeleteOpen(false);
+      setSelectedToolIds(new Set());
+      refresh();
+      if (selectedId && ids.includes(selectedId)) {
+        setSelectedId(null);
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Échec de la suppression groupée.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteSingle(tool: Tool) {
+    setBusy(true);
+    try {
+      const res = await api<{ ok: boolean; message: string }>(`/api/tools/${tool.id}`, {
+        method: 'DELETE',
+      });
+      toast(res.message, 'success');
+      setDeleteSingleTool(null);
+      if (selectedId === tool.id) setSelectedId(null);
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Suppression impossible.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteAll() {
+    if (deleteAllConfirmText !== 'SUPPRIMER') return;
+    setBusy(true);
+    try {
+      const res = await api<{ ok: boolean; message: string }>('/api/tools/delete-all', {
+        method: 'POST',
+        body: JSON.stringify({
+          confirmation: 'SUPPRIMER',
+          drafts_only: scopeFilter === 'drafts',
+          magasin_id: filters.magasin_id || undefined,
+        }),
+      });
+      toast(res.message, 'success');
+      setDeleteAllOpen(false);
+      setDeleteAllConfirmText('');
+      setSelectedToolIds(new Set());
+      setSelectedId(null);
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Échec de la suppression globale.', 'error');
     } finally {
       setBusy(false);
     }
@@ -593,9 +730,120 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               >
                 Nouvel Outil
               </Button>
+              {tools.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline-danger"
+                  icon={<Trash2 size={13} />}
+                  onClick={() => {
+                    setDeleteAllConfirmText('');
+                    setDeleteAllOpen(true);
+                  }}
+                  title="Purger ou supprimer l'ensemble du parc d'outils"
+                >
+                  Tout supprimer
+                </Button>
+              )}
             </>
           ) : null}
         </div>
+      </div>
+
+      {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2.5">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
+          <button
+            type="button"
+            onClick={() => {
+              setScopeFilter('all');
+              setSelectedToolIds(new Set());
+            }}
+            className={cx(
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              scopeFilter === 'all'
+                ? 'bg-amber text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink hover:bg-paper',
+            )}
+          >
+            <Layers size={14} />
+            <span>Tout le Parc</span>
+            <span
+              className={cx(
+                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+                scopeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
+              )}
+            >
+              {tools.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setScopeFilter('active');
+              setSelectedToolIds(new Set());
+            }}
+            className={cx(
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              scopeFilter === 'active'
+                ? 'bg-amber text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink hover:bg-paper',
+            )}
+          >
+            <IconBox size={14} />
+            <span>Parc Actif en Magasins</span>
+            <span
+              className={cx(
+                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+                scopeFilter === 'active' ? 'bg-white/20 text-white' : 'bg-surface text-green',
+              )}
+            >
+              {activeTools.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setScopeFilter('drafts');
+              setSelectedToolIds(new Set());
+            }}
+            className={cx(
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              scopeFilter === 'drafts'
+                ? 'bg-amber text-white shadow-xs'
+                : 'text-ink-soft hover:text-ink hover:bg-paper',
+            )}
+          >
+            <FolderArchive size={14} />
+            <span>Brouillons &amp; Non affectés</span>
+            <span
+              className={cx(
+                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+                scopeFilter === 'drafts'
+                  ? 'bg-white/20 text-white'
+                  : draftTools.length > 0
+                    ? 'bg-amber-wash text-amber border border-amber/30'
+                    : 'bg-surface text-ink-faint',
+              )}
+            >
+              {draftTools.length}
+            </span>
+          </button>
+        </div>
+
+        {draftTools.length > 0 && scopeFilter !== 'drafts' && (
+          <button
+            onClick={() => {
+              setScopeFilter('drafts');
+              setSelectedToolIds(new Set());
+            }}
+            className="text-xs font-semibold text-amber hover:underline flex items-center gap-1.5"
+          >
+            <span>⚠️ {draftTools.length} outil{draftTools.length > 1 ? 's' : ''} en brouillon sans affectation</span>
+            <ArrowRight size={13} />
+          </button>
+        )}
       </div>
 
       {/* KPI Dashboard Cards */}
@@ -818,15 +1066,86 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
         </div>
       ) : null}
 
+      {/* Drafts Informative Banner */}
+      {scopeFilter === 'drafts' && (
+        <div className="flex items-start gap-3 p-3.5 rounded-xl border border-amber/30 bg-amber-wash/50 text-xs text-ink leading-relaxed">
+          <FolderArchive size={18} className="text-amber shrink-0 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-ink">Brouillons d’outils &amp; Matériels en attente d’affectation</p>
+            <p className="text-ink-soft mt-0.5">
+              Ces équipements ne sont rattachés à aucun magasin, atelier ou salle. Ils <strong>ne sont pas comptabilisés</strong> dans le stock opérationnel actif et ne peuvent être prêtés. Cochez-les pour les affecter en 1 clic au magasin de votre choix.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Actions Bar (Flottant / Sticky quand sélection active) */}
+      {selectedToolIds.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border border-amber/40 bg-surface-2 shadow-card animate-slide-up">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-amber text-white text-xs font-bold shadow-xs">
+              {selectedToolIds.size}
+            </span>
+            <span className="text-xs font-semibold text-ink">
+              {selectedToolIds.size} outil{selectedToolIds.size > 1 ? 's' : ''} sélectionné{selectedToolIds.size > 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {canManage && (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="border-amber/30 bg-amber-wash text-amber hover:bg-amber hover:text-white"
+                  icon={<ArrowRightLeft size={14} />}
+                  onClick={() => {
+                    setBatchAssignMagasinId('');
+                    setBatchAssignOpen(true);
+                  }}
+                >
+                  Affecter / Transférer de magasin
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  icon={<Trash2 size={14} />}
+                  onClick={() => setBatchDeleteOpen(true)}
+                >
+                  Supprimer la sélection ({selectedToolIds.size})
+                </Button>
+              </>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedToolIds(new Set())}
+            >
+              Désélectionner tout
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content: Tableur or Cards */}
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-16 text-sm text-ink-soft">
           <Spinner /> Chargement du parc d’outils…
         </div>
-      ) : tools.length === 0 ? (
+      ) : displayedTools.length === 0 ? (
         <EmptyState
-          title="Aucun outil ne correspond à vos filtres"
-          hint="Essayez de modifier vos filtres ou créez la fiche d’un nouvel équipement."
+          title={
+            scopeFilter === 'drafts'
+              ? 'Aucun outil en brouillon'
+              : scopeFilter === 'active'
+                ? 'Aucun outil actif en magasin'
+                : 'Aucun outil ne correspond à vos filtres'
+          }
+          hint={
+            scopeFilter === 'drafts'
+              ? 'Tous vos outils sont actuellement affectés à des magasins opérationnels.'
+              : 'Essayez de modifier vos filtres ou créez la fiche d’un nouvel équipement.'
+          }
           action={
             canManage ? (
               <Button variant="primary" onClick={() => setNewOpen(true)}>
@@ -843,6 +1162,17 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                    {canManage && (
+                      <th className="px-2.5 py-2.5 w-10 text-center border-r border-line">
+                        <input
+                          type="checkbox"
+                          checked={displayedTools.length > 0 && selectedToolIds.size === displayedTools.length}
+                          onChange={() => toggleSelectAll(displayedTools)}
+                          className="h-4 w-4 rounded accent-amber cursor-pointer"
+                          title="Tout sélectionner / désélectionner"
+                        />
+                      </th>
+                    )}
                     <th className="px-2.5 py-2.5 w-12 border-r border-line text-center">Photo</th>
                     <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-24 border-r border-line">
                       Réf / Code QR
@@ -853,18 +1183,34 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                     <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">VNC Nette</th>
                     <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Statut</th>
-                    <th className="px-3 py-2.5 min-w-32 text-right">Actions Rapides</th>
+                    <th className="px-3 py-2.5 min-w-36 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {tools.map((tool) => {
+                  {displayedTools.map((tool) => {
                     const acc = computeToolAccounting(tool);
+                    const isSelected = selectedToolIds.has(tool.id);
                     return (
                       <tr
                         key={tool.id}
                         onClick={() => setSelectedId(tool.id)}
-                        className="hover:bg-amber-wash/30 cursor-pointer transition-colors group"
+                        className={cx(
+                          'cursor-pointer transition-colors group',
+                          isSelected ? 'bg-amber-wash/40 hover:bg-amber-wash/50' : 'hover:bg-paper-2/40',
+                        )}
                       >
+                        {/* Checkbox */}
+                        {canManage && (
+                          <td className="px-2.5 py-2 text-center border-r border-line" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelect(tool.id)}
+                              className="h-4 w-4 rounded accent-amber cursor-pointer"
+                            />
+                          </td>
+                        )}
+
                         {/* Photo Thumbnail */}
                         <td className="px-2 py-1.5 text-center border-r border-line" onClick={(e) => {
                           if (canManage) {
@@ -922,15 +1268,23 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
 
                         {/* Magasin & Location */}
                         <td className="px-3 py-2 text-ink-soft border-r border-line">
-                          <div className="font-medium text-ink">{tool.magasin_name ?? 'Magasin Central'}</div>
-                          <div className="text-[10px] text-ink-faint">{tool.location}</div>
+                          {tool.magasin_name ? (
+                            <div>
+                              <div className="font-semibold text-ink">{tool.magasin_name}</div>
+                              <div className="text-[10px] text-ink-faint">{tool.location}</div>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-wash px-2 py-0.5 text-[10px] font-semibold text-amber border border-amber/30">
+                              <FolderArchive size={11} /> Brouillon (sans magasin)
+                            </span>
+                          )}
                         </td>
 
                         {/* VNC Nette */}
                         <td className="px-3 py-2 text-right font-mono font-semibold text-ink border-r border-line">
                           {acc ? (
                             <div>
-                              <span className={acc.isFullyAmortized ? 'text-purple-700' : 'text-green'}>
+                              <span className={acc.isFullyAmortized ? 'text-purple-400' : 'text-green'}>
                                 {formatCurrency(acc.vnc)}
                               </span>
                               <span className="block text-[10px] text-ink-faint font-normal">{acc.progressPercent}% amorti</span>
@@ -981,11 +1335,33 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                                   setLoanFor(tool);
                                   setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
                                 }}
-                                className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs hover:bg-[#E05A02] active:scale-95 transition-all"
+                                className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs hover:bg-amber-2 active:scale-95 transition-all"
                               >
                                 Prêter
                               </button>
                             ) : null}
+
+                            {canManage && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setAssignFor(tool);
+                                    setAssignMagasinId(tool.magasin_id ?? '');
+                                  }}
+                                  className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all"
+                                  title="Affecter ou changer de magasin"
+                                >
+                                  <ArrowRightLeft size={13} />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteSingleTool(tool)}
+                                  className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-red-500/10 hover:text-red hover:border-red-500/30 active:scale-95 transition-all"
+                                  title="Supprimer définitivement cet outil"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
+                            )}
 
                             <button
                               onClick={() => setSelectedId(tool.id)}
@@ -1003,25 +1379,40 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
             </div>
 
             {/* Tableur Footer Total */}
-            <div className="bg-paper border-t border-line px-4 py-2 text-xs flex items-center justify-between font-semibold text-ink-soft">
-              <span>Total : {tools.length} référence(s) · VNC Globale : {formatCurrency(auditSummary.totalVnc)}</span>
+            <div className="bg-paper border-t border-line px-4 py-2.5 text-xs flex items-center justify-between font-semibold text-ink-soft">
+              <span>Affichés : {displayedTools.length} référence(s) {scopeFilter === 'drafts' ? '(brouillons)' : `· VNC : ${formatCurrency(auditSummary.totalVnc)}`}</span>
               <span className="text-[11px] text-ink-faint">
-                Cliquez sur n’importe quelle ligne pour voir l’amortissement ou imprimer le QR code
+                Cochez des outils pour les affecter ou les transférer par lot vers un magasin
               </span>
             </div>
           </div>
 
           {/* Cards View (pour Mobile) */}
           <div className={cx('space-y-2.5', viewMode === 'cards' ? 'block' : 'sm:hidden')}>
-            {tools.map((tool) => {
+            {displayedTools.map((tool) => {
               const acc = computeToolAccounting(tool);
+              const isSelected = selectedToolIds.has(tool.id);
               return (
                 <div
                   key={tool.id}
                   onClick={() => setSelectedId(tool.id)}
-                  className="rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper-2 cursor-pointer transition-all space-y-2.5"
+                  className={cx(
+                    'rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper-2 cursor-pointer transition-all space-y-2.5',
+                    isSelected && 'border-amber/50 bg-amber-wash/30',
+                  )}
                 >
                   <div className="flex items-start gap-3">
+                    {canManage && (
+                      <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(tool.id)}
+                          className="h-4 w-4 rounded accent-amber cursor-pointer"
+                        />
+                      </div>
+                    )}
+
                     {tool.photo_path ? (
                       <img
                         src={tool.photo_path}
@@ -1081,8 +1472,35 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-ink-faint pt-2 border-t border-line/60">
-                    <span>{tool.magasin_name ?? tool.location}</span>
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <span className="truncate max-w-[150px]">
+                      {tool.magasin_name ? (
+                        tool.magasin_name
+                      ) : (
+                        <strong className="text-amber">📁 Brouillon</strong>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {canManage && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setAssignFor(tool);
+                              setAssignMagasinId(tool.magasin_id ?? '');
+                            }}
+                            className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-amber"
+                            title="Affecter de magasin"
+                          >
+                            <ArrowRightLeft size={13} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteSingleTool(tool)}
+                            className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-red hover:border-red-500/30"
+                            title="Supprimer cet outil"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
                       {canManage && tool.status === 'disponible' ? (
                         <button
                           onClick={() => {
@@ -1317,6 +1735,13 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                 >
                   Affecter à un magasin
                 </Button>
+                <Button
+                  variant="outline-danger"
+                  icon={<Trash2 size={14} />}
+                  onClick={() => setDeleteSingleTool(detail.tool)}
+                >
+                  Supprimer la fiche
+                </Button>
               </div>
             ) : null}
 
@@ -1477,20 +1902,34 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <SelectField
-              label="Magasin / atelier"
-              value={newForm.magasin_id}
-              onChange={(event) => setNewForm((f) => ({ ...f, magasin_id: event.target.value }))}
-            >
-              <option value="">— Aucun —</option>
-              {magasins.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </SelectField>
+            <div>
+              <SelectField
+                label="Magasin / Atelier d'affectation"
+                value={newForm.magasin_id}
+                onChange={(event) => {
+                  const magId = event.target.value;
+                  const mag = magasins.find((m) => m.id === magId);
+                  setNewForm((f) => ({
+                    ...f,
+                    magasin_id: magId,
+                    location: mag ? mag.name : f.location || 'Magasin',
+                  }));
+                }}
+              >
+                <option value="">📁 Laisser sans affectation (Brouillon)</option>
+                {magasins.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name} ({m.code})</option>
+                ))}
+              </SelectField>
+              <p className="mt-1 text-[11px] text-ink-faint">
+                Classé en <strong>Brouillon</strong> tant qu'il n'est pas rattaché à un magasin.
+              </p>
+            </div>
             <Field
-              label="Emplacement normal"
+              label="Emplacement spécifique / Rayon"
               value={newForm.location}
               onChange={(event) => setNewForm((f) => ({ ...f, location: event.target.value }))}
+              placeholder="ex. Étagère B3, Établi 2..."
             />
           </div>
 
@@ -1758,6 +2197,172 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
           }}
         />
       )}
+
+      {/* Modal Affectation / Transfert Groupé (Interchanger magasins & Affecter brouillons) */}
+      <Modal
+        open={batchAssignOpen}
+        title={`Affecter ou transférer ${selectedToolIds.size} outil(s)`}
+        onClose={() => setBatchAssignOpen(false)}
+        footer={
+          <>
+            <Button onClick={() => setBatchAssignOpen(false)}>Annuler</Button>
+            <Button variant="primary" disabled={busy} onClick={() => void handleBatchAssign()}>
+              {busy ? <Spinner /> : 'Appliquer l’affectation'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-ink-soft">
+            Choisissez le magasin de destination pour les <strong>{selectedToolIds.size}</strong> outil(s) sélectionnés.
+            Vous pouvez affecter des brouillons, ou interchanger des outils d'un magasin à un autre en une seule opération.
+          </p>
+
+          <SelectField
+            label="Magasin de destination"
+            value={batchAssignMagasinId}
+            onChange={(e) => setBatchAssignMagasinId(e.target.value)}
+          >
+            <option value="">📁 Retirer de l’inventaire actif (remettre en brouillon)</option>
+            {magasins.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} ({m.code})
+              </option>
+            ))}
+          </SelectField>
+
+          <div>
+            <span className="mb-1 block text-xs font-semibold text-ink-soft uppercase tracking-wider">
+              Outils concernés par ce transfert :
+            </span>
+            <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-line bg-paper p-2">
+              {Array.from(selectedToolIds).map((id) => {
+                const t = tools.find((item) => item.id === id);
+                return (
+                  <div key={id} className="flex items-center justify-between text-xs py-1 px-1.5 border-b border-line/40 last:border-0">
+                    <span className="font-mono font-bold text-amber">{id}</span>
+                    <span className="truncate flex-1 px-2 text-ink font-medium">{t?.name ?? 'Outil'}</span>
+                    <span className="text-[11px] text-ink-faint">
+                      {t?.magasin_name ?? '📁 Brouillon'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Suppression Groupée */}
+      <Modal
+        open={batchDeleteOpen}
+        title={`Supprimer ${selectedToolIds.size} outil(s) sélectionné(s)`}
+        onClose={() => setBatchDeleteOpen(false)}
+        footer={
+          <>
+            <Button onClick={() => setBatchDeleteOpen(false)}>Annuler</Button>
+            <Button variant="danger" disabled={busy} onClick={() => void handleBatchDelete()}>
+              {busy ? <Spinner /> : `Supprimer définitivement (${selectedToolIds.size})`}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Suppression irréversible</p>
+              <p className="mt-0.5 text-ink-soft">
+                Vous êtes sur le point de supprimer définitivement ces <strong>{selectedToolIds.size}</strong> outil(s).
+                Leur historique d'événements et de prêts archivés sera également supprimé. Les outils actuellement en prêt ne pourront pas être supprimés tant qu’ils n’auront pas été retournés.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Suppression Singleton */}
+      <Modal
+        open={!!deleteSingleTool}
+        title={deleteSingleTool ? `Supprimer l'outil ${deleteSingleTool.id}` : 'Supprimer'}
+        onClose={() => setDeleteSingleTool(null)}
+        footer={
+          <>
+            <Button onClick={() => setDeleteSingleTool(null)}>Annuler</Button>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() => {
+                if (deleteSingleTool) void handleDeleteSingle(deleteSingleTool);
+              }}
+            >
+              {busy ? <Spinner /> : 'Supprimer définitivement'}
+            </Button>
+          </>
+        }
+      >
+        {deleteSingleTool && (
+          <div className="space-y-3">
+            <p className="text-xs text-ink">
+              Confirmez-vous la suppression définitive de la fiche suivante ?
+            </p>
+            <div className="rounded-lg border border-line bg-paper p-3 text-xs space-y-1">
+              <div className="font-mono font-bold text-amber">{deleteSingleTool.id}</div>
+              <div className="font-semibold text-ink text-sm">{deleteSingleTool.name}</div>
+              <div className="text-ink-soft">{deleteSingleTool.category} · {deleteSingleTool.magasin_name ?? '📁 Brouillon'}</div>
+            </div>
+            <p className="text-[11px] text-ink-faint">
+              ⚠️ Cette action effacera également tous les événements de pointage et de suivi rattachés à cet outil.
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Suppression Globale / Purge */}
+      <Modal
+        open={deleteAllOpen}
+        title="Zone Critique : Suppression globale"
+        onClose={() => setDeleteAllOpen(false)}
+        footer={
+          <>
+            <Button onClick={() => setDeleteAllOpen(false)}>Annuler</Button>
+            <Button
+              variant="danger"
+              disabled={busy || deleteAllConfirmText !== 'SUPPRIMER'}
+              onClick={() => void handleDeleteAll()}
+            >
+              {busy ? <Spinner /> : 'Confirmer la suppression globale'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red">
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Attention : Action destructrice</p>
+              <p className="mt-0.5 text-ink-soft">
+                {scopeFilter === 'drafts'
+                  ? `Vous allez supprimer l'intégralité des ${draftTools.length} outils en brouillon (non affectés à un magasin).`
+                  : `Vous allez supprimer l'intégralité du parc d'outils (${tools.length} référence(s)). Les outils actuellement en prêt seront protégés.`}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">
+              Tapez <strong className="font-mono text-red">SUPPRIMER</strong> pour débloquer la suppression :
+            </label>
+            <input
+              type="text"
+              value={deleteAllConfirmText}
+              onChange={(e) => setDeleteAllConfirmText(e.target.value)}
+              placeholder="SUPPRIMER"
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm uppercase text-ink focus:border-red focus:outline-none"
+            />
+          </div>
+        </div>
+      </Modal>
 
       {portal}
     </div>
