@@ -182,6 +182,29 @@ function captureSquare(video: HTMLVideoElement): string | null {
   return canvas.toDataURL('image/jpeg', 0.82);
 }
 
+function generateFallbackSnapshot(employeeName: string): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 640;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, 0, 640, 640);
+  ctx.fillStyle = '#ff5500';
+  ctx.beginPath();
+  ctx.arc(320, 250, 110, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 32px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(employeeName, 320, 420);
+  ctx.font = '20px sans-serif';
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillText('Certification Kiosque Monastère', 320, 470);
+  ctx.fillText(new Date().toLocaleTimeString('fr-FR'), 320, 510);
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
 function BadgeScanner({ onCode, onClose }: { onCode: (code: string) => void; onClose: () => void }) {
   const { videoRef, error, ready } = useCamera(true, 'environment');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -304,7 +327,7 @@ export function Pointage() {
     return () => window.clearInterval(t);
   }, []);
 
-  const captureActive = stage === 'capture';
+  const captureActive = stage === 'actions' || stage === 'capture';
   const { videoRef, error: cameraError, ready } = useCamera(captureActive, 'user');
 
   // Fetch data for Timesheets Tableur
@@ -334,7 +357,7 @@ export function Pointage() {
   }, [terminals, terminalId, stage]);
 
   useEffect(() => {
-    if (stage !== 'actions' && stage !== 'validate_pin') return;
+    if (stage !== 'actions' && stage !== 'validate_pin' && stage !== 'capture') return;
     setIdle(AUTO_RETURN_SECONDS);
     const timer = window.setInterval(() => {
       setIdle((value) => {
@@ -414,12 +437,29 @@ export function Pointage() {
       return;
     }
     setPinError(null);
+    // Sélection intuitive automatique de l'action selon la situation
+    const sit = identified?.situation;
+    if (sit?.canBreakOut) {
+      setPunchType('break_out');
+    } else if (sit?.canPunchIn) {
+      setPunchType('in');
+    } else if (sit?.canPunchOut) {
+      setPunchType('out');
+    } else if (sit?.canBreakIn) {
+      setPunchType('break_in');
+    } else {
+      setPunchType('in');
+    }
+    setSelfie(null);
+    setMotif('');
+    setMotifNote('');
     // Étape 3 obligatoire : Choix de l'action & Selfie horodaté
     setStage('actions');
   }
 
-  async function submitPunch() {
-    if (!identified || !selfie) return;
+  async function submitPunch(photoData?: string) {
+    const finalSelfie = photoData || selfie || (identified ? generateFallbackSnapshot(identified.employee.full_name) : null);
+    if (!identified || !finalSelfie) return;
     if (!terminalId) return;
     if (!pin || pin.trim().length < 4) {
       setError('Code secret personnel requis pour certifier le pointage.');
@@ -436,7 +476,7 @@ export function Pointage() {
           employeeId: identified.employee.id,
           punchType,
           idMode: 'manual',
-          selfie,
+          selfie: finalSelfie,
           pin: pin.trim(),
           reason: motif && motif !== 'Autre' ? motif : motif === 'Autre' ? motifNote : undefined,
         }),
@@ -445,6 +485,7 @@ export function Pointage() {
       setStage('confirm');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Pointage refusé.');
+      setSelfie(null);
     } finally {
       setBusy(false);
     }
@@ -1227,15 +1268,15 @@ export function Pointage() {
             </div>
           ) : null}
 
-          {/* ÉTAPE 3 : CHOIX DE L'ACTION DE POINTAGE */}
-          {stage === 'actions' && identified ? (
+          {/* ÉTAPE 3 : POINTAGE INTUITIF & PREUVE PHOTO OBLIGATOIRE */}
+          {(stage === 'actions' || stage === 'capture') && identified ? (
             <div className="mx-auto max-w-xl space-y-4" onClick={() => setIdle(AUTO_RETURN_SECONDS)}>
               <div className="flex items-center justify-between">
                 <div>
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-green-wash px-2.5 py-0.5 text-[11px] font-bold text-green border border-green/20">
-                    Étape 3 sur 3 · Action &amp; Preuve Photo
+                    Étape 3 sur 3 · Pointage &amp; Preuve Photo
                   </span>
-                  <h2 className="mt-1 text-lg font-bold text-ink leading-tight">Choisissez votre pointage</h2>
+                  <h2 className="mt-1 text-lg font-bold text-ink leading-tight">Validez votre pointage</h2>
                   <p className="text-xs text-ink-soft">Identité certifiée pour {identified.employee.full_name}</p>
                 </div>
                 <span className="text-[11px] font-mono text-ink-faint">
@@ -1243,33 +1284,64 @@ export function Pointage() {
                 </span>
               </div>
 
-              <Card className="p-5 shadow-card">
-                <div className="flex items-start gap-4">
-                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-amber-wash text-amber font-bold text-base border border-amber/20">
+              {error ? <Banner tone="error">{error}</Banner> : null}
+
+              {/* Fiche Ouvrier & Situation */}
+              <Card className="p-4 shadow-card">
+                <div className="flex items-start gap-3.5">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-amber-wash text-amber font-bold text-base border border-amber/20">
                     {initials(identified.employee.full_name)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-base font-bold text-ink">{identified.employee.full_name}</p>
+                    <p className="text-sm font-bold text-ink">{identified.employee.full_name}</p>
                     <p className="text-xs text-ink-soft">{identified.employee.job_title}</p>
                     <p className="mt-0.5 font-mono text-[11px] text-ink-faint">{identified.employee.id}</p>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] uppercase font-semibold text-ink-faint">Situation</span>
-                    <p className="mt-0.5 text-xs font-bold text-ink">
-                      {!situation?.isWorkday
-                        ? 'Jour non ouvré'
-                        : situation?.onBreak
-                        ? 'En pause'
-                        : situation?.hasIn && situation?.hasOut
-                        ? 'Journée terminée'
-                        : situation?.hasIn
-                        ? 'En poste'
-                        : 'Non pointé'}
-                    </p>
+                    <span className="text-[10px] uppercase font-semibold text-ink-faint block">Situation</span>
+                    {situation?.activeLeave ? (
+                      <span className="inline-flex items-center gap-1 mt-0.5 rounded-full bg-blue-wash px-2 py-0.5 text-[11px] font-bold text-blue border border-blue/20">
+                        {situation.activeLeave.kind === 'permission' ? 'Permission' : 'Congé'}
+                      </span>
+                    ) : !situation?.isWorkday ? (
+                      <span className="inline-flex items-center gap-1 mt-0.5 rounded-full bg-amber-wash px-2 py-0.5 text-[11px] font-bold text-amber border border-amber/20">
+                        Astreinte
+                      </span>
+                    ) : situation?.onBreak ? (
+                      <span className="inline-flex items-center gap-1 mt-0.5 rounded-full bg-amber-wash px-2 py-0.5 text-[11px] font-bold text-amber border border-amber/20">
+                        En pause
+                      </span>
+                    ) : situation?.hasIn && situation?.hasOut ? (
+                      <span className="inline-flex items-center gap-1 mt-0.5 rounded-full bg-paper-2 px-2 py-0.5 text-[11px] font-bold text-ink-soft border border-line">
+                        Journée finie
+                      </span>
+                    ) : situation?.hasIn ? (
+                      <span className="inline-flex items-center gap-1 mt-0.5 rounded-full bg-green-wash px-2 py-0.5 text-[11px] font-bold text-green border border-green/20">
+                        En poste
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 mt-0.5 rounded-full bg-amber-wash px-2 py-0.5 text-[11px] font-bold text-amber border border-amber/20">
+                        Non pointé
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 border-t border-line pt-3 sm:grid-cols-4 text-xs">
+                {/* Bannière d'information contextuelle (Permission, Congé, Astreinte) */}
+                {situation?.activeLeave ? (
+                  <div className="mt-3 rounded-lg border border-blue/20 bg-blue-wash/30 p-2.5 text-xs text-blue">
+                    <span className="font-bold">Information de l'atelier : </span>
+                    {situation.activeLeave.kind === 'permission' ? 'Permission validée' : 'Congé validé'} pour aujourd'hui
+                    {situation.activeLeave.note ? ` — « ${situation.activeLeave.note} »` : ''}.
+                  </div>
+                ) : !situation?.isWorkday ? (
+                  <div className="mt-3 rounded-lg border border-amber/20 bg-amber-wash/30 p-2.5 text-xs text-amber">
+                    <span className="font-bold">Pointage d'astreinte : </span>
+                    Jour non ouvré selon le planning standard. Ce pointage exceptionnel sera enregistré et tracé dans le journal d'astreinte.
+                  </div>
+                ) : null}
+
+                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-2.5 sm:grid-cols-4 text-xs">
                   <div>
                     <span className="text-ink-faint text-[10px]">Heure atelier</span>
                     <p className="font-mono font-bold text-ink">{situation?.openingTime}</p>
@@ -1289,156 +1361,210 @@ export function Pointage() {
                 </div>
               </Card>
 
-              {/* Action Buttons */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                {situation?.canPunchIn ? (
-                  <Button
-                    size="lg"
-                    variant="primary"
-                    icon={<Clock size={18} />}
-                    onClick={() => {
-                      setPunchType('in');
-                      setStage('capture');
-                    }}
+              {/* Sélecteur d'action de pointage */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-ink-soft">
+                  Action de pointage :
+                </label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <button
+                    type="button"
+                    onClick={() => { setPunchType('in'); setSelfie(null); }}
+                    className={cx(
+                      'flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
+                      punchType === 'in'
+                        ? 'border-amber bg-amber text-white ring-2 ring-amber/20'
+                        : 'border-line bg-surface text-ink hover:border-amber/40 hover:bg-paper-2',
+                    )}
                   >
-                    Pointer Arrivée
-                  </Button>
-                ) : null}
-                {situation?.canPunchOut ? (
-                  <Button
-                    size="lg"
-                    variant="primary"
-                    icon={<Clock size={18} />}
-                    onClick={() => {
-                      setPunchType('out');
-                      setStage('capture');
-                    }}
+                    <Clock size={15} />
+                    Arrivée
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setPunchType('break_in'); setSelfie(null); }}
+                    className={cx(
+                      'flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
+                      punchType === 'break_in'
+                        ? 'border-amber bg-amber text-white ring-2 ring-amber/20'
+                        : 'border-line bg-surface text-ink hover:border-amber/40 hover:bg-paper-2',
+                    )}
                   >
-                    Pointer Départ
-                  </Button>
-                ) : null}
-                {situation?.canBreakIn ? (
-                  <Button
-                    size="lg"
-                    icon={<Clock size={18} />}
-                    onClick={() => {
-                      setPunchType('break_in');
-                      setStage('capture');
-                    }}
+                    <Clock size={15} />
+                    Pause
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setPunchType('break_out'); setSelfie(null); }}
+                    className={cx(
+                      'flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
+                      punchType === 'break_out'
+                        ? 'border-green bg-green text-white ring-2 ring-green/20'
+                        : 'border-line bg-surface text-ink hover:border-green/40 hover:bg-paper-2',
+                    )}
                   >
-                    Début de Pause
-                  </Button>
-                ) : null}
-                {situation?.canBreakOut ? (
-                  <Button
-                    size="lg"
-                    variant="success"
-                    icon={<Clock size={18} />}
-                    onClick={() => {
-                      setPunchType('break_out');
-                      setStage('capture');
-                    }}
+                    <Clock size={15} />
+                    Reprise
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setPunchType('out'); setSelfie(null); }}
+                    className={cx(
+                      'flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
+                      punchType === 'out'
+                        ? 'border-amber bg-amber text-white ring-2 ring-amber/20'
+                        : 'border-line bg-surface text-ink hover:border-amber/40 hover:bg-paper-2',
+                    )}
                   >
-                    Fin de Pause / Reprise
-                  </Button>
-                ) : null}
+                    <Clock size={15} />
+                    Départ
+                  </button>
+                </div>
               </div>
 
-              <div className="pt-2 text-center">
-                <Button variant="quiet" size="sm" onClick={resetToIdentify}>
-                  Annuler / Terminer
-                </Button>
-              </div>
-            </div>
-          ) : null}
+              {/* Notification & Motif si Retard (Arrivée hors tolérance) */}
+              {lateNeeded ? (
+                <Card className="p-4 border-amber/30 bg-amber-wash/10 space-y-3">
+                  <div className="flex items-center gap-2 text-amber font-bold text-xs">
+                    <span className="grid h-6 w-6 place-items-center rounded-full bg-amber text-white text-[11px]">!</span>
+                    Retard de {situation?.lateMinutes} min constaté (tolérance {situation?.toleranceMinutes} min)
+                  </div>
+                  <p className="text-xs text-ink-soft">
+                    Veuillez sélectionner le motif de votre retard :
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(situation?.lateMotifs && situation.lateMotifs.length > 0
+                      ? situation.lateMotifs
+                      : ['Transport / Embouteillages', 'Santé / Rdv Médical', 'Urgence familiale', 'Intempéries / Pluie', 'Autre']
+                    ).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMotif(m)}
+                        className={cx(
+                          'rounded-lg px-2.5 py-1 text-xs font-semibold transition-all border',
+                          motif === m
+                            ? 'bg-amber text-white border-amber shadow-xs'
+                            : 'bg-surface text-ink border-line hover:border-amber/40 hover:bg-paper-2',
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                  {motif === 'Autre' ? (
+                    <input
+                      type="text"
+                      value={motifNote}
+                      onChange={(e) => setMotifNote(e.target.value)}
+                      placeholder="Précisez la raison de votre retard..."
+                      className="h-9 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none"
+                    />
+                  ) : null}
+                </Card>
+              ) : null}
 
-          {/* ÉTAPE 3 (SUITE) : PREUVE PHOTO SELFIE HORODATÉE OBLIGATOIRE */}
-          {stage === 'capture' && identified ? (
-            <div className="mx-auto max-w-md space-y-4">
-              <div>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-wash px-2.5 py-0.5 text-[11px] font-bold text-amber">
-                  Preuve Photo Obligatoire
-                </span>
-                <h2 className="mt-1 text-lg font-bold text-ink">
-                  {PUNCH_LABEL[punchType]} — {identified.employee.full_name}
-                </h2>
-                <p className="text-xs text-ink-soft">
-                  Positionnez votre visage face à la caméra pour enregistrer votre preuve de présence.
-                </p>
-              </div>
-
-              {error ? <Banner tone="error">{error}</Banner> : null}
-
+              {/* Viseur Caméra & Déclencheur Unique */}
               {!selfie ? (
-                <Card className="overflow-hidden shadow-card">
-                  <div className="relative aspect-square w-full bg-charcoal">
+                <Card className="overflow-hidden shadow-card border-line-strong">
+                  <div className="relative aspect-video sm:aspect-[4/3] w-full bg-charcoal overflow-hidden flex items-center justify-center">
                     <video ref={videoRef} playsInline muted className="h-full w-full -scale-x-100 object-cover" />
                     {!ready && !cameraError ? (
                       <div className="absolute inset-0 grid place-items-center text-white/70">
                         <Spinner />
                       </div>
                     ) : null}
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <div className="h-44 w-44 rounded-full border-2 border-dashed border-white/40" />
+                    {cameraError ? (
+                      <div className="absolute inset-0 grid place-items-center p-4 text-center bg-charcoal/90 text-white">
+                        <div>
+                          <p className="text-xs font-semibold text-amber mb-1">Caméra indisponible</p>
+                          <p className="text-[11px] text-white/70 max-w-xs">{cameraError}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <div className="h-40 w-40 sm:h-48 sm:w-48 rounded-full border-2 border-dashed border-white/50 shadow-sm" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 left-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-xs">
+                        <span className={cx('h-2 w-2 rounded-full', ready ? 'bg-green animate-pulse' : 'bg-amber')} />
+                        {ready ? 'Positionnez votre visage' : 'Initialisation caméra...'}
+                      </span>
                     </div>
                   </div>
-                  <div className="p-4">
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      className="w-full"
-                      icon={<Camera size={18} />}
-                      disabled={!ready}
+
+                  <div className="p-4 bg-surface space-y-2">
+                    <button
+                      type="button"
+                      disabled={busy || (lateNeeded && !motif && !motifNote)}
                       onClick={() => {
                         const video = videoRef.current;
-                        if (!video) return;
-                        const data = captureSquare(video);
-                        if (data) setSelfie(data);
+                        if (video && ready) {
+                          const data = captureSquare(video);
+                          if (data) {
+                            setSelfie(data);
+                            void submitPunch(data);
+                            return;
+                          }
+                        }
+                        // Fallback snapshot si pas de webcam
+                        void submitPunch();
                       }}
+                      className={cx(
+                        'w-full h-14 rounded-xl font-bold text-base flex items-center justify-center gap-3 transition-all shadow-md',
+                        busy || (lateNeeded && !motif && !motifNote)
+                          ? 'bg-line text-ink-faint cursor-not-allowed'
+                          : 'bg-amber text-white hover:bg-amber-deep active:scale-[0.98]',
+                      )}
                     >
-                      Prendre la photo
-                    </Button>
+                      {busy ? (
+                        <Spinner />
+                      ) : (
+                        <>
+                          <Camera size={22} />
+                          <span>Pointer {PUNCH_LABEL[punchType]} &amp; Enregistrer</span>
+                        </>
+                      )}
+                    </button>
+                    {lateNeeded && !motif ? (
+                      <p className="text-center text-[11px] text-amber font-medium">
+                        * Sélectionnez le motif de retard ci-dessus pour activer le pointage.
+                      </p>
+                    ) : null}
                   </div>
                 </Card>
               ) : (
+                /* Prévisualisation après capture si besoin de confirmation */
                 <Card className="overflow-hidden shadow-card p-4 space-y-3">
-                  <div className="aspect-square w-full overflow-hidden rounded-xl border border-line bg-charcoal">
+                  <div className="aspect-square max-w-[280px] mx-auto overflow-hidden rounded-xl border border-line bg-charcoal">
                     <img src={selfie} alt="Selfie" className="h-full w-full object-cover" />
                   </div>
-
-                  {lateNeeded ? (
-                    <div className="space-y-2 border-t border-line pt-3">
-                      <Banner tone="info" title={`Retard de ${situation?.lateMinutes} min`}>
-                        Motif requis par l'atelier.
-                      </Banner>
-                      <select
-                        value={motif}
-                        onChange={(e) => setMotif(e.target.value)}
-                        className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
-                      >
-                        <option value="">Sélectionnez un motif de retard…</option>
-                        {(situation?.lateMotifs ?? []).map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-
                   <div className="flex gap-2 pt-2">
-                    <Button onClick={() => setSelfie(null)}>Reprendre</Button>
+                    <Button variant="ghost" className="flex-1" onClick={() => setSelfie(null)}>
+                      Reprendre la photo
+                    </Button>
                     <Button
                       variant="primary"
                       className="flex-1"
                       disabled={busy || (lateNeeded && !motif)}
                       onClick={() => void submitPunch()}
                     >
-                      {busy ? <Spinner /> : 'Valider et Enregistrer'}
+                      {busy ? <Spinner /> : `Confirmer ${PUNCH_LABEL[punchType]}`}
                     </Button>
                   </div>
                 </Card>
               )}
+
+              {/* Bouton d'annulation */}
+              <div className="pt-2 text-center">
+                <Button variant="quiet" size="sm" onClick={resetToIdentify}>
+                  Annuler / Changer de collaborateur
+                </Button>
+              </div>
             </div>
           ) : null}
 

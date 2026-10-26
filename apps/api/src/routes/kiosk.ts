@@ -159,7 +159,25 @@ kioskRoutes.post('/identify', async (c) => {
   const onBreak = hasBreakIn && !hasBreakOut;
   const lateMinutes = hasIn
     ? Number(todayRows.find((r) => r.punch_type === 'in')?.late_minutes ?? 0)
-    : Math.max(0, todayMin - openedMin);
+    : isWorkday
+    ? Math.max(0, todayMin - openedMin)
+    : 0;
+
+  // Recherche d'un congé ou d'une permission validée pour aujourd'hui
+  const activeLeave = await db.one<{ kind: string; note: string | null; from_date: string; to_date: string }>(
+    `SELECT kind, note, from_date::text AS from_date, to_date::text AS to_date 
+       FROM absences 
+      WHERE employee_id = $1 
+        AND status = 'approved' 
+        AND $2 >= from_date AND $2 <= to_date
+      LIMIT 1`,
+    [employee.id, today],
+  ).catch(() => null);
+
+  const canPunchIn = !hasIn;
+  const canPunchOut = hasIn && !hasOut && !onBreak;
+  const canBreakIn = hasIn && !hasBreakIn && !hasBreakOut && !onBreak;
+  const canBreakOut = onBreak;
 
   return c.json({
     employee: {
@@ -176,17 +194,20 @@ kioskRoutes.post('/identify', async (c) => {
       hasBreakIn,
       hasBreakOut,
       onBreak,
-      canPunchIn: isWorkday && !hasIn && !hasOut,
-      canPunchOut: isWorkday && hasIn && !hasOut && !onBreak,
-      canBreakIn: isWorkday && hasIn && !hasBreakIn && !hasBreakOut && !onBreak,
-      canBreakOut: isWorkday && onBreak,
+      canPunchIn,
+      canPunchOut,
+      canBreakIn,
+      canBreakOut,
       lateMinutes,
+      isLate: isWorkday && !hasIn && lateMinutes > settings.tolerance_minutes,
       afterClosing: todayMin > closedMin,
       openingTime: settings.opening_time,
       closingTime: settings.closing_time,
       toleranceMinutes: settings.tolerance_minutes,
       lateMotifs: settings.late_motifs,
       cardDisplaySeconds: settings.card_display_seconds,
+      isExceptionalWorkday: !isWorkday,
+      activeLeave: activeLeave ? { kind: activeLeave.kind, note: activeLeave.note } : null,
     },
     history: history.map((row) => ({
       date: row.punch_date,
@@ -254,7 +275,6 @@ kioskRoutes.post('/punch', async (c) => {
   const openedMin = parseHm(settings.opening_time);
   const closedMin = parseHm(settings.closing_time);
   const isWorkday = settings.workdays.includes(now.getDay());
-  if (!isWorkday) return c.json({ error: 'Jour non ouvré selon les paramètres de la direction.' }, 409);
 
   const existing = await db.query<{ punch_type: string }>(
     'SELECT punch_type FROM attendance WHERE employee_id = $1 AND punch_date = $2',
@@ -269,7 +289,7 @@ kioskRoutes.post('/punch', async (c) => {
   const pt = body.data.punchType;
   if (pt === 'in' && hasIn) return c.json({ error: 'Arrivée déjà pointée aujourd’hui.' }, 409);
   if ((pt === 'out' || pt === 'break_out' || pt === 'break_in') && !hasIn) {
-    return c.json({ error: 'Pointage impossible sans arrivée (CDC 4.6.4).' }, 409);
+    return c.json({ error: 'Pointage impossible sans arrivée préalable.' }, 409);
   }
   if (pt === 'out' && hasOut) return c.json({ error: 'Déjà pointé en fin de journée.' }, 409);
   if (pt === 'out' && onBreak) return c.json({ error: 'Vous êtes en pause : reprenez d’abord (reprise de pause).' }, 409);
@@ -278,9 +298,12 @@ kioskRoutes.post('/punch', async (c) => {
   }
   if (pt === 'break_out' && !onBreak) return c.json({ error: 'Aucune pause en cours.' }, 409);
 
-  const lateMinutes = pt === 'in' ? Math.max(0, todayMin - openedMin) : 0;
-  const reasonRequired = pt === 'in' && todayMin > openedMin + settings.tolerance_minutes;
-  const reason = body.data.reason?.trim() || null;
+  const lateMinutes = pt === 'in' ? (isWorkday ? Math.max(0, todayMin - openedMin) : 0) : 0;
+  const reasonRequired = pt === 'in' && isWorkday && todayMin > openedMin + settings.tolerance_minutes;
+  let reason = body.data.reason?.trim() || null;
+  if (!isWorkday) {
+    reason = reason ? `${reason} (Astreinte / Jour non ouvré)` : 'Pointage exceptionnel (Jour non ouvré / Astreinte)';
+  }
   if (reasonRequired && !reason) {
     return c.json(
       { error: `Retard de ${lateMinutes} min : le motif est obligatoire (tolérance ${settings.tolerance_minutes} min).`, lateMinutes, reasonRequired: true },

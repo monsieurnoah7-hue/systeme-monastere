@@ -274,6 +274,9 @@ export type KioskIdentify = {
     toleranceMinutes: number;
     lateMotifs: string[];
     cardDisplaySeconds: number;
+    isExceptionalWorkday?: boolean;
+    isLate?: boolean;
+    activeLeave?: { kind: string; note: string | null } | null;
   };
   history: {
     date: string;
