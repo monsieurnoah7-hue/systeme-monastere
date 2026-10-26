@@ -185,7 +185,13 @@ function formatBytes(size: number): string {
   return `${(size / 1_048_576).toFixed(1)} Mo`;
 }
 
-function formatHumanBackupLabel(pathname: string, uploadedAt?: string): { title: string; subtitle: string; isAuto: boolean } {
+function formatHumanBackupLabel(pathname: string, uploadedAt?: string): {
+  title: string;
+  dateStr: string;
+  timeStr: string;
+  isAuto: boolean;
+  rawName: string;
+} {
   const clean = pathname.replace(/^backups\//, '');
   const match = clean.match(/monastere-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})/);
   if (match && match[1] && match[2] && match[3] && match[4] && match[5]) {
@@ -205,8 +211,10 @@ function formatHumanBackupLabel(pathname: string, uploadedAt?: string): { title:
     const isAuto = Number(hh) >= 2 && Number(hh) <= 4;
     return {
       title: `Instantané du ${capitalized}`,
-      subtitle: `Généré à ${timeStr} (archive ${clean})`,
+      dateStr: capitalized,
+      timeStr,
       isAuto,
+      rawName: clean,
     };
   }
 
@@ -216,13 +224,18 @@ function formatHumanBackupLabel(pathname: string, uploadedAt?: string): { title:
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+  }).format(date);
+  const timeStr = new Intl.DateTimeFormat('fr-FR', {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date);
+  const capitalized = dayStr.charAt(0).toUpperCase() + dayStr.slice(1);
   return {
-    title: `Instantané du ${dayStr.charAt(0).toUpperCase() + dayStr.slice(1)}`,
-    subtitle: clean,
+    title: `Instantané du ${capitalized}`,
+    dateStr: capitalized,
+    timeStr,
     isAuto: false,
+    rawName: clean,
   };
 }
 
@@ -1252,46 +1265,65 @@ function AdminSettings({ user }: { user: User }) {
               </div>
             )}
 
-            {/* Accounts List */}
+            {/* Accounts List & Table */}
             <CardContent className="p-0">
-              <ul className="divide-y divide-line">
-                {filteredUsers.map((account) => {
-                  const employee = account.employee_id ? employeesById.get(account.employee_id) : undefined;
-                  const theme = ROLE_THEME[account.role] ?? DEFAULT_ROLE_THEME;
-                  return (
-                    <li
-                      key={account.id}
-                      className={cx(
-                        'flex flex-col gap-3 px-5 py-3.5 transition-colors sm:flex-row sm:items-center sm:justify-between',
-                        !account.active ? 'bg-paper/40 opacity-75' : 'hover:bg-paper-2/30',
-                      )}
-                    >
-                      {/* Left: Avatar & Identity */}
-                      <div className="flex min-w-0 flex-1 items-center gap-3.5">
-                        <div
-                          onClick={() => {
-                            setProfilePhotoTarget({ type: 'user', userId: account.id, current: account.photo_path, name: account.display_name });
-                            setProfilePhotoOpen(true);
-                          }}
+              {/* Desktop Table (Antigravity Grid with vertical borders) */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-line bg-paper-2 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+                      <th className="py-2.5 px-3 text-center w-12 border-r border-line">Photo</th>
+                      <th className="py-2.5 px-4 border-r border-line">Utilisateur &amp; Identifiant</th>
+                      <th className="py-2.5 px-4 border-r border-line">Rôle attribué</th>
+                      <th className="py-2.5 px-4 border-r border-line">Fiche travailleur liée</th>
+                      <th className="py-2.5 px-3 text-center border-r border-line">Statut</th>
+                      <th className="py-2.5 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {filteredUsers.map((account) => {
+                      const employee = account.employee_id ? employeesById.get(account.employee_id) : undefined;
+                      const theme = ROLE_THEME[account.role] ?? DEFAULT_ROLE_THEME;
+                      return (
+                        <tr
+                          key={account.id}
                           className={cx(
-                            'group relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden cursor-pointer hover:border-amber transition-colors',
-                            theme.bg,
+                            'transition-colors hover:bg-paper-2/40',
+                            !account.active && 'bg-paper/30 opacity-75',
                           )}
-                          title="Cliquer pour modifier la photo de profil de ce compte"
                         >
-                          {account.photo_path ? (
-                            <img src={account.photo_path} alt={account.display_name} className="h-full w-full object-cover" />
-                          ) : (
-                            roleInitials(account.display_name)
-                          )}
-                          <span className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Camera size={13} />
-                          </span>
-                        </div>
+                          {/* Photo Avatar */}
+                          <td className="py-2 px-3 text-center border-r border-line">
+                            <div
+                              onClick={() => {
+                                setProfilePhotoTarget({ type: 'user', userId: account.id, current: account.photo_path, name: account.display_name });
+                                setProfilePhotoOpen(true);
+                              }}
+                              className={cx(
+                                'group relative mx-auto grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden cursor-pointer hover:border-amber transition-colors',
+                                theme.bg,
+                              )}
+                              title="Modifier la photo"
+                            >
+                              {account.photo_path ? (
+                                <img src={account.photo_path} alt={account.display_name} className="h-full w-full object-cover" />
+                              ) : (
+                                roleInitials(account.display_name)
+                              )}
+                              <span className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Camera size={12} />
+                              </span>
+                            </div>
+                          </td>
 
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="truncate text-sm font-semibold text-ink">{account.display_name}</span>
+                          {/* Identity & Login */}
+                          <td className="py-2.5 px-4 border-r border-line">
+                            <div className="font-semibold text-ink text-xs">{account.display_name}</div>
+                            <div className="font-mono text-[11px] text-ink-faint">@{account.login}</div>
+                          </td>
+
+                          {/* Role */}
+                          <td className="py-2.5 px-4 border-r border-line">
                             <span
                               className={cx(
                                 'inline-flex items-center rounded-chip border px-2 py-0.5 text-[11px] font-medium',
@@ -1300,9 +1332,25 @@ function AdminSettings({ user }: { user: User }) {
                             >
                               {availableRoles.find((r) => r.id === account.role)?.name ?? ROLE_LABEL[account.role] ?? account.role}
                             </span>
+                          </td>
+
+                          {/* Linked Employee */}
+                          <td className="py-2.5 px-4 border-r border-line">
+                            {employee ? (
+                              <div className="text-xs">
+                                <span className="font-medium text-ink">{employee.full_name}</span>{' '}
+                                <span className="font-mono text-[11px] text-ink-faint">({employee.id})</span>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-ink-faint italic">— Aucun</span>
+                            )}
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-2.5 px-3 text-center border-r border-line">
                             <span
                               className={cx(
-                                'inline-flex items-center gap-1 rounded-chip border px-2 py-0.5 text-[11px] font-medium',
+                                'inline-flex items-center gap-1 rounded-chip border px-2 py-0.5 text-[10px] font-medium',
                                 account.active
                                   ? 'border-green/20 bg-green-wash text-green'
                                   : 'border-line-strong bg-grey-wash text-ink-faint',
@@ -1313,25 +1361,112 @@ function AdminSettings({ user }: { user: User }) {
                               />
                               {account.active ? 'Actif' : 'Inactif'}
                             </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-2.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button size="sm" variant="ghost" onClick={() => openEditAccount(account)} className="h-7 text-xs px-2.5">
+                                Modifier
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setResetFor(account);
+                                  setResetPassword('');
+                                }}
+                                className="h-7 text-xs px-2.5"
+                              >
+                                Clé
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={account.active ? 'outline-danger' : 'secondary'}
+                                onClick={() => void toggleUser(account)}
+                                className="h-7 text-xs px-2.5"
+                              >
+                                {account.active ? 'Désactiver' : 'Activer'}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards (sm:hidden) */}
+              <div className="sm:hidden divide-y divide-line">
+                {filteredUsers.map((account) => {
+                  const employee = account.employee_id ? employeesById.get(account.employee_id) : undefined;
+                  const theme = ROLE_THEME[account.role] ?? DEFAULT_ROLE_THEME;
+                  return (
+                    <div
+                      key={account.id}
+                      className={cx(
+                        'p-4 space-y-3',
+                        !account.active && 'bg-paper/30 opacity-80',
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          onClick={() => {
+                            setProfilePhotoTarget({ type: 'user', userId: account.id, current: account.photo_path, name: account.display_name });
+                            setProfilePhotoOpen(true);
+                          }}
+                          className={cx(
+                            'relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden',
+                            theme.bg,
+                          )}
+                        >
+                          {account.photo_path ? (
+                            <img src={account.photo_path} alt={account.display_name} className="h-full w-full object-cover" />
+                          ) : (
+                            roleInitials(account.display_name)
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-semibold text-sm text-ink truncate">{account.display_name}</span>
+                            <span
+                              className={cx(
+                                'inline-flex items-center gap-1 rounded-chip border px-1.5 py-0.5 text-[10px] font-medium shrink-0',
+                                account.active
+                                  ? 'border-green/20 bg-green-wash text-green'
+                                  : 'border-line-strong bg-grey-wash text-ink-faint',
+                              )}
+                            >
+                              <span className={cx('h-1.5 w-1.5 rounded-full', account.active ? 'bg-green' : 'bg-ink-faint')} />
+                              {account.active ? 'Actif' : 'Inactif'}
+                            </span>
                           </div>
 
-                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
-                            <span className="font-mono text-ink font-medium">@{account.login}</span>
-                            <span>•</span>
-                            {employee ? (
-                              <span className="text-ink-soft">
-                                Fiche travailleur : <strong className="font-medium text-ink">{employee.full_name}</strong> ({employee.id})
-                              </span>
-                            ) : (
-                              <span className="text-ink-faint italic">Aucun profil travailleur lié</span>
-                            )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-xs text-ink-faint">@{account.login}</span>
+                            <span className="text-ink-faint text-[10px]">·</span>
+                            <span
+                              className={cx(
+                                'inline-flex items-center rounded-chip border px-1.5 py-0.5 text-[10px] font-medium',
+                                theme.bg,
+                              )}
+                            >
+                              {availableRoles.find((r) => r.id === account.role)?.name ?? ROLE_LABEL[account.role] ?? account.role}
+                            </span>
                           </div>
+
+                          {employee ? (
+                            <div className="text-[11px] text-ink-soft mt-1">
+                              Fiche : <strong className="text-ink font-medium">{employee.full_name}</strong>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 
-                      {/* Right: Actions */}
-                      <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
-                        <Button size="sm" variant="ghost" onClick={() => openEditAccount(account)}>
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-line/50">
+                        <Button size="sm" variant="ghost" onClick={() => openEditAccount(account)} className="h-8 text-xs flex-1">
                           Modifier
                         </Button>
                         <Button
@@ -1341,6 +1476,7 @@ function AdminSettings({ user }: { user: User }) {
                             setResetFor(account);
                             setResetPassword('');
                           }}
+                          className="h-8 text-xs flex-1"
                         >
                           Mot de passe
                         </Button>
@@ -1348,26 +1484,27 @@ function AdminSettings({ user }: { user: User }) {
                           size="sm"
                           variant={account.active ? 'outline-danger' : 'secondary'}
                           onClick={() => void toggleUser(account)}
+                          className="h-8 text-xs"
                         >
                           {account.active ? 'Désactiver' : 'Activer'}
                         </Button>
                       </div>
-                    </li>
+                    </div>
                   );
                 })}
+              </div>
 
-                {filteredUsers.length === 0 ? (
-                  <li className="px-6 py-12 text-center text-sm text-ink-soft">
-                    <UserX size={32} className="mx-auto text-ink-faint mb-2" />
-                    <p className="font-semibold text-ink">Aucun compte utilisateur trouvé</p>
-                    <p className="mt-1 text-xs text-ink-faint">
-                      {userSearch || roleFilter !== 'all' || statusFilter !== 'all'
-                        ? 'Modifiez ou effacez vos filtres de recherche.'
-                        : 'Cliquez sur « Nouveau compte » pour ajouter un collaborateur.'}
-                    </p>
-                  </li>
-                ) : null}
-              </ul>
+              {filteredUsers.length === 0 ? (
+                <div className="px-6 py-12 text-center text-sm text-ink-soft">
+                  <UserX size={32} className="mx-auto text-ink-faint mb-2" />
+                  <p className="font-semibold text-ink">Aucun compte utilisateur trouvé</p>
+                  <p className="mt-1 text-xs text-ink-faint">
+                    {userSearch || roleFilter !== 'all' || statusFilter !== 'all'
+                      ? 'Modifiez ou effacez vos filtres de recherche.'
+                      : 'Cliquez sur « Nouveau compte » pour ajouter un collaborateur.'}
+                  </p>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1422,20 +1559,9 @@ function AdminSettings({ user }: { user: User }) {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-semibold text-ink">{r.name}</span>
-                            <code className="rounded bg-paper-2 px-1.5 py-0.5 font-mono text-[11px] text-ink-faint">
-                              {r.id}
-                            </code>
-                            {isRootDirection ? (
+                            {isRootDirection && (
                               <span className="inline-flex items-center rounded-chip border border-amber/30 bg-amber-wash px-2 py-0.5 text-[10px] font-semibold text-amber">
                                 Super-Admin racine
-                              </span>
-                            ) : r.is_system ? (
-                              <span className="inline-flex items-center rounded-chip border border-line-strong bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft">
-                                Rôle standard
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center rounded-chip border border-green/30 bg-green-wash px-2 py-0.5 text-[10px] font-semibold text-green">
-                                Rôle personnalisé
                               </span>
                             )}
                           </div>
@@ -1445,7 +1571,7 @@ function AdminSettings({ user }: { user: User }) {
                           <div className="mt-1 flex items-center gap-3 text-[11px] text-ink-faint">
                             <span>
                               {userCount === 0
-                                ? 'Aucun utilisateur affecté'
+                                ? 'Aucun collaborateur affecté'
                                 : `${userCount} collaborateur${userCount > 1 ? 's' : ''} affecté${userCount > 1 ? 's' : ''}`}
                             </span>
                           </div>
@@ -2133,51 +2259,118 @@ function AdminSettings({ user }: { user: User }) {
                   <p>Cliquez sur « Sauvegarder maintenant » pour créer le premier instantané du monastère.</p>
                 </div>
               ) : (
-                <ul className="divide-y divide-line">
-                  {backups.map((backup) => {
-                    const info = formatHumanBackupLabel(backup.pathname, backup.uploadedAt);
-                    return (
-                      <li
-                        key={backup.pathname}
-                        className="flex flex-col gap-2 px-5 py-3.5 text-xs sm:flex-row sm:items-center sm:justify-between hover:bg-paper-2/30 transition-colors"
-                      >
-                        <div className="min-w-0 space-y-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-ink text-sm">
-                              {info.title}
-                            </span>
-                            {info.isAuto ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-blue/10 px-2 py-0.5 text-[10px] font-semibold text-blue border border-blue/20">
-                                ⏰ Automatique Quotidienne
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-green/10 px-2 py-0.5 text-[10px] font-semibold text-green border border-green/20">
-                                👤 Instantané Manuel
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-ink-faint text-[11px] font-mono">
-                            {info.subtitle}
-                          </p>
-                        </div>
+                <>
+                  {/* Desktop Table (Antigravity Grid with vertical borders) */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-line bg-paper-2 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+                          <th className="py-2.5 px-4 border-r border-line">Date &amp; Heure de capture</th>
+                          <th className="py-2.5 px-4 border-r border-line">Type d'instantané</th>
+                          <th className="py-2.5 px-4 text-center border-r border-line">Volume archive</th>
+                          <th className="py-2.5 px-4 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line">
+                        {backups.map((backup) => {
+                          const info = formatHumanBackupLabel(backup.pathname, backup.uploadedAt);
+                          return (
+                            <tr
+                              key={backup.pathname}
+                              className="transition-colors hover:bg-paper-2/40"
+                            >
+                              {/* Date & Heure */}
+                              <td className="py-2.5 px-4 border-r border-line">
+                                <div className="font-semibold text-ink text-xs">{info.dateStr}</div>
+                                <div className="text-[11px] text-ink-faint">à {info.timeStr}</div>
+                              </td>
 
-                        <div className="flex items-center gap-3">
-                          <span className="rounded-md bg-paper-2 border border-line px-2 py-1 font-mono text-xs text-ink font-semibold">
-                            {formatBytes(backup.size)}
-                          </span>
+                              {/* Type */}
+                              <td className="py-2.5 px-4 border-r border-line">
+                                {info.isAuto ? (
+                                  <span className="inline-flex items-center gap-1 rounded-chip border border-blue/20 bg-blue-wash px-2 py-0.5 text-[11px] font-medium text-blue">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-blue" />
+                                    Automatique
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded-chip border border-green/20 bg-green-wash px-2 py-0.5 text-[11px] font-medium text-green">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-green" />
+                                    Manuel
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Volume */}
+                              <td className="py-2.5 px-4 text-center border-r border-line">
+                                <span className="font-mono text-xs font-semibold text-ink">
+                                  {formatBytes(backup.size)}
+                                </span>
+                              </td>
+
+                              {/* Action */}
+                              <td className="py-2.5 px-4 text-right">
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  icon={<Download size={13} />}
+                                  onClick={() => void downloadBackup(backup.pathname)}
+                                  className="h-7 text-xs px-2.5"
+                                >
+                                  Télécharger
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Cards (sm:hidden) */}
+                  <div className="sm:hidden divide-y divide-line">
+                    {backups.map((backup) => {
+                      const info = formatHumanBackupLabel(backup.pathname, backup.uploadedAt);
+                      return (
+                        <div
+                          key={backup.pathname}
+                          className="p-3.5 flex items-center justify-between gap-3 hover:bg-paper-2/30 transition-colors"
+                        >
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-ink text-xs truncate">
+                                {info.dateStr}
+                              </span>
+                              {info.isAuto ? (
+                                <span className="inline-flex items-center rounded-chip border border-blue/20 bg-blue-wash px-1.5 py-0.2 text-[10px] font-medium text-blue">
+                                  Auto
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center rounded-chip border border-green/20 bg-green-wash px-1.5 py-0.2 text-[10px] font-medium text-green">
+                                  Manuel
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-ink-faint">
+                              <span>{info.timeStr}</span>
+                              <span>·</span>
+                              <span className="font-mono font-medium text-ink-soft">{formatBytes(backup.size)}</span>
+                            </div>
+                          </div>
+
                           <Button
                             size="sm"
                             variant="secondary"
                             icon={<Download size={13} />}
                             onClick={() => void downloadBackup(backup.pathname)}
+                            className="h-8 text-xs shrink-0"
                           >
                             Télécharger
                           </Button>
                         </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

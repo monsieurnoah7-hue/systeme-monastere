@@ -9,7 +9,6 @@ import {
   Card,
   Chip,
   Drawer,
-  EmptyState,
   Modal,
   PageHeader,
   Spinner,
@@ -18,7 +17,6 @@ import {
 } from '../components/ui';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { QrCode } from '../components/QrCode';
-import { DataTable, type DataTableColumn } from '../components/DataTable';
 import {
   Calendar as CalendarIcon,
   Camera,
@@ -424,126 +422,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     );
   }
 
-  const employeeColumns = useMemo<DataTableColumn<Employee>[]>(
-    () => [
-      {
-        accessorKey: 'full_name',
-        header: 'Nom du travailleur',
-        sortFn: 'alphanumeric',
-        meta: { cellClassName: 'whitespace-normal min-w-56' },
-        cell: ({ row }) => {
-          const employee = row.original;
-          return (
-            <div className="flex items-center gap-3">
-              <span
-                onClick={(e) => {
-                  if (canManage) {
-                    e.stopPropagation();
-                    setPhotoTarget({ id: employee.id, current: employee.photo_path, name: employee.full_name });
-                    setPhotoModalOpen(true);
-                  }
-                }}
-                className={cx(
-                  'group relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden transition-colors',
-                  canManage ? 'cursor-pointer hover:border-amber' : '',
-                  employee.active ? 'bg-amber-wash text-amber border-amber/20' : 'bg-grey-wash text-ink-faint border-line',
-                )}
-                title={canManage ? 'Cliquer pour modifier la photo (WhatsApp)' : undefined}
-              >
-                {employee.photo_path ? (
-                  <img src={employee.photo_path} alt={employee.full_name} className="h-full w-full object-cover" />
-                ) : (
-                  initials(employee.full_name)
-                )}
-                {canManage && (
-                  <span className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Camera size={13} />
-                  </span>
-                )}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-xs font-bold text-ink">{employee.full_name}</p>
-                <p className="truncate text-[11px] text-ink-soft">
-                  {employee.job_title} · <span className="font-mono">{employee.id}</span>
-                </p>
-              </div>
-            </div>
-          );
-        },
-      },
-      {
-        id: 'day',
-        accessorKey: 'id',
-        enableSorting: false,
-        header: 'État d’aujourd’hui',
-        cell: ({ row }) => dayChip(row.original),
-      },
-      {
-        id: 'badge',
-        accessorKey: 'badge_token',
-        header: 'Badge QR',
-        enableSorting: false,
-        meta: { headerClassName: 'hidden sm:table-cell', cellClassName: 'hidden sm:table-cell' },
-        cell: ({ row }) => (
-          <span className="font-mono text-xs tabular-nums text-ink font-semibold">
-            {row.original.badge_token ?? '—'}
-          </span>
-        ),
-      },
-      {
-        id: 'active',
-        accessorKey: 'active',
-        header: 'Statut',
-        cell: ({ row }) => (
-          <span
-            className={cx(
-              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
-              row.original.active
-                ? 'border-green/20 bg-green-wash text-green'
-                : 'border-line bg-grey-wash text-ink-faint',
-            )}
-          >
-            <span className={cx('h-1.5 w-1.5 rounded-full', row.original.active ? 'bg-green' : 'bg-ink-faint')} />
-            {row.original.active ? 'Actif' : 'Inactif'}
-          </span>
-        ),
-      },
-      {
-        id: 'actions',
-        enableSorting: false,
-        header: '',
-        meta: { cellClassName: 'whitespace-nowrap text-right' },
-        cell: ({ row }) => {
-          const employee = row.original;
-          return (
-            <div className="flex items-center justify-end gap-1">
-              <Button size="sm" variant="ghost" onClick={() => setDetailFor(employee)}>
-                Détail
-              </Button>
-              {canManage && (
-                <>
-                  <Button size="sm" variant="ghost" onClick={() => openEdit(employee)}>
-                    Modifier
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setBadgeFor(employee)}>
-                    Badge
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={employee.active ? 'outline-danger' : 'secondary'}
-                    onClick={() => void toggleActive(employee)}
-                  >
-                    {employee.active ? 'Désactiver' : 'Activer'}
-                  </Button>
-                </>
-              )}
-            </div>
-          );
-        },
-      },
-    ],
-    [canManage, statusMap],
-  );
+
 
   function openCreate() {
     setEditing(null);
@@ -942,94 +821,183 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             </div>
           </div>
 
-          {/* DataTable with Mobile Card View */}
-          <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-            <DataTable
-              data={filtered}
-              columns={employeeColumns}
-              caption="Effectif de l’atelier de menuiserie"
-              renderCard={(employee) => (
-                <div
-                  key={employee.id}
-                  className="rounded-xl border border-line bg-surface p-3.5 shadow-xs space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span
-                        onClick={(e) => {
-                          if (canManage) {
-                            e.stopPropagation();
-                            setPhotoTarget({ id: employee.id, current: employee.photo_path, name: employee.full_name });
-                            setPhotoModalOpen(true);
-                          }
-                        }}
-                        className={cx(
-                          'grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden transition-colors',
-                          canManage ? 'cursor-pointer hover:border-amber' : '',
-                          employee.active ? 'bg-amber-wash text-amber border-amber/20' : 'bg-grey-wash text-ink-faint border-line',
-                        )}
+          {/* Antigravity Structured Tableur (Style Image 3) */}
+          <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
+            {/* Desktop & Tablet Tableur */}
+            <div className="hidden sm:block overflow-x-auto scroll-thin">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="px-2.5 py-2.5 w-12 border-r border-line text-center">Photo</th>
+                    <th className="px-3 py-2.5 min-w-44 border-r border-line">Identité &amp; Métier</th>
+                    <th className="px-3 py-2.5 min-w-32 border-r border-line text-center">État d’aujourd’hui</th>
+                    <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">Badge QR</th>
+                    <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">Statut</th>
+                    <th className="px-3 py-2.5 min-w-48 text-right">Actions rapides</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-xs text-ink-faint">
+                        Aucun travailleur ne correspond à vos filtres.
+                      </td>
+                    </tr>
+                  ) : (
+                    filtered.map((employee) => (
+                      <tr
+                        key={employee.id}
+                        onClick={() => setDetailFor(employee)}
+                        className="hover:bg-surface-2/60 cursor-pointer transition-colors group"
                       >
-                        {employee.photo_path ? (
-                          <img src={employee.photo_path} alt={employee.full_name} className="h-full w-full object-cover" />
-                        ) : (
-                          initials(employee.full_name)
-                        )}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-ink">{employee.full_name}</p>
-                        <p className="truncate text-xs text-ink-soft">
-                          {employee.job_title} · <span className="font-mono text-ink-faint">{employee.id}</span>
-                        </p>
+                        {/* Photo Thumbnail */}
+                        <td
+                          className="px-2 py-1.5 text-center border-r border-line"
+                          onClick={(e) => {
+                            if (canManage) {
+                              e.stopPropagation();
+                              setPhotoTarget({ id: employee.id, current: employee.photo_path, name: employee.full_name });
+                              setPhotoModalOpen(true);
+                            }
+                          }}
+                        >
+                          <span
+                            className={cx(
+                              'group relative mx-auto grid h-8 w-8 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden transition-colors',
+                              canManage ? 'cursor-pointer hover:border-amber' : '',
+                              employee.active ? 'bg-amber-wash text-amber border-amber/20' : 'bg-grey-wash text-ink-faint border-line',
+                            )}
+                            title={canManage ? 'Cliquer pour modifier la photo' : undefined}
+                          >
+                            {employee.photo_path ? (
+                              <img src={employee.photo_path} alt={employee.full_name} className="h-full w-full object-cover" />
+                            ) : (
+                              initials(employee.full_name)
+                            )}
+                          </span>
+                        </td>
+
+                        {/* Name & Title */}
+                        <td className="px-3 py-2 border-r border-line">
+                          <div className="font-semibold text-ink text-xs">{employee.full_name}</div>
+                          <div className="text-[11px] text-ink-soft">
+                            {employee.job_title} · <span className="font-mono text-ink-faint">{employee.id}</span>
+                          </div>
+                        </td>
+
+                        {/* Today Attendance */}
+                        <td className="px-3 py-2 border-r border-line text-center">
+                          {dayChip(employee)}
+                        </td>
+
+                        {/* QR Badge */}
+                        <td className="px-3 py-2 border-r border-line text-center font-mono text-xs font-semibold text-ink tabular-nums">
+                          {employee.badge_token ?? '—'}
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-3 py-2 border-r border-line text-center">
+                          <span
+                            className={cx(
+                              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
+                              employee.active
+                                ? 'border-green/20 bg-green-wash text-green'
+                                : 'border-line bg-grey-wash text-ink-faint',
+                            )}
+                          >
+                            <span className={cx('h-1.5 w-1.5 rounded-full', employee.active ? 'bg-green' : 'bg-ink-faint')} />
+                            {employee.active ? 'Actif' : 'Inactif'}
+                          </span>
+                        </td>
+
+                        {/* Quick Actions */}
+                        <td className="px-3 py-1.5 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="sm" variant="ghost" onClick={() => setDetailFor(employee)}>
+                              Détail
+                            </Button>
+                            {canManage && (
+                              <>
+                                <Button size="sm" variant="ghost" onClick={() => openEdit(employee)}>
+                                  Modifier
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => setBadgeFor(employee)}>
+                                  Badge
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={employee.active ? 'outline-danger' : 'secondary'}
+                                  onClick={() => void toggleActive(employee)}
+                                >
+                                  {employee.active ? 'Désactiver' : 'Activer'}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards (Touch-friendly & Clean) */}
+            <div className="sm:hidden divide-y divide-line">
+              {filtered.length === 0 ? (
+                <div className="p-6 text-center text-xs text-ink-faint">
+                  Aucun travailleur ne correspond à vos filtres.
+                </div>
+              ) : (
+                filtered.map((employee) => (
+                  <div
+                    key={employee.id}
+                    onClick={() => setDetailFor(employee)}
+                    className="p-3.5 space-y-2.5 active:bg-surface-2/40 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span
+                          className={cx(
+                            'grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden',
+                            employee.active ? 'bg-amber-wash text-amber border-amber/20' : 'bg-grey-wash text-ink-faint border-line',
+                          )}
+                        >
+                          {employee.photo_path ? (
+                            <img src={employee.photo_path} alt={employee.full_name} className="h-full w-full object-cover" />
+                          ) : (
+                            initials(employee.full_name)
+                          )}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-bold text-ink">{employee.full_name}</p>
+                          <p className="truncate text-[11px] text-ink-soft">
+                            {employee.job_title} · <span className="font-mono text-ink-faint">{employee.id}</span>
+                          </p>
+                        </div>
                       </div>
+                      <div className="shrink-0">{dayChip(employee)}</div>
                     </div>
-                    <div className="shrink-0">{dayChip(employee)}</div>
-                  </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/60 pt-2.5 text-xs">
-                    <span
-                      className={cx(
-                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
-                        employee.active
-                          ? 'border-green/20 bg-green-wash text-green'
-                          : 'border-line bg-grey-wash text-ink-faint',
-                      )}
-                    >
-                      <span className={cx('h-1.5 w-1.5 rounded-full', employee.active ? 'bg-green' : 'bg-ink-faint')} />
-                      {employee.active ? 'Actif' : 'Inactif'}
-                    </span>
-
-                    <div className="flex items-center gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => setDetailFor(employee)}>
-                        Détail
-                      </Button>
-                      {canManage && (
-                        <>
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+                      <span className="font-mono text-[11px] text-ink-faint">
+                        Badge : <strong className="text-ink">{employee.badge_token ?? '—'}</strong>
+                      </span>
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <Button size="sm" variant="ghost" onClick={() => setDetailFor(employee)}>
+                          Détail
+                        </Button>
+                        {canManage && (
                           <Button size="sm" variant="ghost" onClick={() => openEdit(employee)}>
                             Modifier
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setBadgeFor(employee)}>
-                            Badge
-                          </Button>
-                        </>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ))
               )}
-              empty={
-                <EmptyState
-                  title="Aucun travailleur trouvé"
-                  hint="Ajustez vos filtres de recherche ou enregistrez un collaborateur."
-                  action={
-                    canManage ? (
-                      <Button variant="primary" onClick={openCreate}>
-                        Nouveau travailleur
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              }
-            />
+            </div>
           </div>
         </TabsContent>
 
