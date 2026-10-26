@@ -41,23 +41,23 @@ const BTN_BASE =
   'relative inline-flex items-center justify-center gap-2 rounded-btn font-medium select-none ' +
   'transition-all duration-[120ms] ease-[cubic-bezier(0.16,1,0.3,1)] ' +
   'active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100 ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber';
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue';
 const BTN_VARIANT: Record<string, string> = {
   primary:
-    'bg-amber text-white shadow-xs hover:bg-amber-2 hover:shadow-card ' +
-    'focus-visible:outline-amber',
-  secondary: 'bg-charcoal text-white shadow-xs hover:bg-charcoal-3 hover:shadow-card',
+    'bg-amber text-slate-950 font-semibold shadow-xs hover:bg-amber-3 hover:shadow-card ' +
+    'focus-visible:outline-blue',
+  secondary: 'bg-surface-2 text-ink border border-line-strong hover:bg-surface-3 hover:border-line-strong/80 shadow-xs',
   ghost: 'bg-surface text-ink border border-line-strong hover:bg-surface-2 hover:border-line-strong/80 shadow-xs',
-  quiet: 'bg-transparent text-ink-soft hover:bg-grey-wash hover:text-ink',
+  quiet: 'bg-transparent text-ink-soft hover:bg-surface-2 hover:text-ink',
   danger: 'bg-red text-white shadow-xs hover:opacity-90 hover:shadow-card',
-  'outline-danger': 'bg-surface text-red border border-red/30 hover:bg-red-wash',
+  'outline-danger': 'bg-red-500/10 text-red border border-red-500/30 hover:bg-red-500/20',
   success: 'bg-green text-white shadow-xs hover:bg-green-2 hover:shadow-card',
 };
 const BTN_SIZE: Record<string, string> = {
-  sm: 'h-9 px-3 text-[13px] rounded-[8px]',
-  md: 'h-11 px-4 text-sm',
-  lg: 'h-12 px-5 text-[15px]',
-  xl: 'h-14 px-7 text-base',
+  sm: 'h-8 px-3 text-[12px] rounded-[6px]',
+  md: 'h-9 px-3.5 text-xs rounded-[8px]',
+  lg: 'h-11 px-5 text-sm rounded-[8px]',
+  xl: 'h-12 px-6 text-base rounded-[10px]',
 };
 
 export function Button({
@@ -78,7 +78,7 @@ export function Button({
       {...rest}
     >
       {loading ? (
-        <span className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current/30 border-t-current" />
+        <span className="inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current/30 border-t-current" />
       ) : (
         icon
       )}
@@ -90,13 +90,13 @@ export function Button({
 type Tone = 'green' | 'blue' | 'amber' | 'red' | 'grey' | 'neutral' | 'purple';
 
 const TONE_CLASS: Record<Tone, { chip: string; dot: string }> = {
-  green: { chip: 'bg-[#18181f] text-[#d4d4d8] border-[#272732]', dot: 'bg-[#10b981]' },
-  blue: { chip: 'bg-[#18181f] text-[#d4d4d8] border-[#272732]', dot: 'bg-[#3b82f6]' },
-  amber: { chip: 'bg-[#18181f] text-[#d4d4d8] border-[#272732]', dot: 'bg-[#ff5500]' },
-  red: { chip: 'bg-[#18181f] text-[#d4d4d8] border-[#272732]', dot: 'bg-[#ef4444]' },
-  grey: { chip: 'bg-[#18181f] text-[#a1a1aa] border-[#272732]', dot: 'bg-[#71717a]' },
-  neutral: { chip: 'bg-[#18181f] text-[#a1a1aa] border-[#272732]', dot: 'bg-[#71717a]' },
-  purple: { chip: 'bg-[#18181f] text-[#d4d4d8] border-[#272732]', dot: 'bg-[#8b5cf6]' },
+  green: { chip: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', dot: 'bg-emerald-400' },
+  blue: { chip: 'bg-sky-500/10 text-sky-400 border-sky-500/20', dot: 'bg-sky-400' },
+  amber: { chip: 'bg-amber-500/10 text-amber-300 border-amber-500/20', dot: 'bg-amber-400' },
+  red: { chip: 'bg-rose-500/10 text-rose-400 border-rose-500/20', dot: 'bg-rose-400' },
+  grey: { chip: 'bg-slate-500/10 text-slate-300 border-slate-500/20', dot: 'bg-slate-400' },
+  neutral: { chip: 'bg-slate-500/10 text-slate-300 border-slate-500/20', dot: 'bg-slate-400' },
+  purple: { chip: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20', dot: 'bg-indigo-400' },
 };
 
 export function Chip({
@@ -172,10 +172,10 @@ export function PageHeader({
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3 slide-up">
       <div>
         {eyebrow ? (
-          <p className="mb-1 text-[11px] font-semibold tracking-[0.14em] text-amber uppercase">{eyebrow}</p>
+          <p className="mb-1 text-[11px] font-semibold tracking-[0.14em] text-blue uppercase">{eyebrow}</p>
         ) : null}
-        <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-ink">{title}</h1>
-        {hint ? <p className="mt-1 text-sm text-ink-soft">{hint}</p> : null}
+        <h1 className="text-[24px] font-bold tracking-tight text-ink">{title}</h1>
+        {hint ? <p className="mt-1 text-xs text-ink-soft">{hint}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
@@ -192,20 +192,20 @@ export function Field({
   const id = useId();
   return (
     <label htmlFor={id} className={cx('block', className)}>
-      <span className="mb-1.5 block text-[13px] font-medium text-ink-soft">{label}</span>
+      <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">{label}</span>
       <input
         id={id}
         aria-invalid={ariaInvalid}
         className={cx(
-          'h-11 w-full rounded-btn border bg-surface px-3 text-sm text-ink placeholder:text-ink-faint',
+          'h-9 w-full rounded-btn border bg-surface px-3 text-xs text-ink placeholder:text-ink-faint',
           'transition-colors duration-[120ms] focus:outline-none focus:ring-2',
           ariaInvalid
             ? 'border-red focus:border-red focus:ring-red/15'
-            : 'border-line-strong focus:border-amber focus:ring-amber/15',
+            : 'border-line-strong focus:border-blue focus:ring-blue/15',
         )}
         {...rest}
       />
-      {hint ? <span className="mt-1 block text-[12px] text-ink-faint">{hint}</span> : null}
+      {hint ? <span className="mt-1 block text-[11px] text-ink-faint">{hint}</span> : null}
     </label>
   );
 }
@@ -219,12 +219,12 @@ export function SelectField({
   const id = useId();
   return (
     <label htmlFor={id} className={cx('block', className)}>
-      {label ? <span className="mb-1.5 block text-[13px] font-medium text-ink-soft">{label}</span> : null}
+      {label ? <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">{label}</span> : null}
       <select
         id={id}
         className={cx(
-          'h-11 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink',
-          'transition-colors duration-[120ms] focus:border-amber focus:outline-none focus:ring-2 focus:ring-amber/15',
+          'h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink',
+          'transition-colors duration-[120ms] focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/15',
         )}
         {...rest}
       >
@@ -242,12 +242,12 @@ export function TextArea({
   const id = useId();
   return (
     <label htmlFor={id} className={cx('block', className)}>
-      {label ? <span className="mb-1.5 block text-[13px] font-medium text-ink-soft">{label}</span> : null}
+      {label ? <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">{label}</span> : null}
       <textarea
         id={id}
         className={cx(
-          'w-full rounded-btn border border-line-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint',
-          'transition-colors duration-[120ms] focus:border-amber focus:outline-none focus:ring-2 focus:ring-amber/15',
+          'w-full rounded-btn border border-line-strong bg-surface px-3 py-2 text-xs text-ink placeholder:text-ink-faint',
+          'transition-colors duration-[120ms] focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/15',
         )}
         rows={3}
         {...rest}

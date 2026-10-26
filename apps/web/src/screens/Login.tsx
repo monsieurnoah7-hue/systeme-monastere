@@ -36,23 +36,31 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-charcoal px-4 py-10">
-      <div className="w-full max-w-[26rem]">
-        <div className="mb-6 flex flex-col items-center text-center text-white">
-          <div className="mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-surface border border-white/10 p-2.5 shadow-pop">
-            <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-11 w-11 object-contain" />
+    <div className="relative flex min-h-full items-center justify-center bg-paper px-4 py-10 overflow-hidden">
+      {/* Antigravity Atmospheric Glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-blue-500/5 blur-[120px] pointer-events-none rounded-full" />
+      <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 translate-y-1/2 w-[400px] h-[250px] bg-amber-500/5 blur-[100px] pointer-events-none rounded-full" />
+
+      <div className="relative z-10 w-full max-w-[26rem]">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div className="mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-surface-2 border border-line p-2.5 shadow-pop">
+            <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-9 w-9 object-contain" />
           </div>
-          <h2 className="text-sm font-bold tracking-tight text-white uppercase">
-            C.F.T. des Bénédictins du Mont Fébé
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-semibold text-emerald-400 mb-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            C.F.T. BÉNÉDICTINS DU MONT FÉBÉ
+          </div>
+          <h2 className="text-sm font-bold tracking-tight text-ink uppercase">
+            Système Central de Gestion
           </h2>
-          <p className="mt-0.5 text-xs text-amber font-semibold tracking-wide">
-            Centre de Formation Technique · Menuiserie
+          <p className="mt-0.5 text-xs text-amber font-medium">
+            Menuiserie · Logistique &amp; Présences
           </p>
         </div>
 
-        <div className="rise rounded-card border border-white/10 bg-surface p-6 shadow-pop">
-          <h1 className="text-lg font-semibold text-ink">Connexion</h1>
-          <p className="mt-1 text-sm text-ink-soft">Accès réservé aux profils autorisés.</p>
+        <div className="rise rounded-xl border border-line bg-surface p-6 shadow-pop backdrop-blur">
+          <h1 className="text-base font-semibold text-ink">Connexion sécurisée</h1>
+          <p className="mt-1 text-xs text-ink-soft">Accès réservé aux collaborateurs et administrateurs.</p>
 
           <form onSubmit={submit} className="mt-5 space-y-4">
             <Field
@@ -80,17 +88,17 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
                 {error}
               </Banner>
             ) : null}
-            <Button type="submit" variant="primary" size="lg" className="w-full" loading={busy}>
-              {busy ? 'Connexion…' : 'Se connecter'}
+            <Button type="submit" variant="primary" size="md" className="w-full" loading={busy}>
+              {busy ? 'Connexion en cours…' : 'Accéder à l’espace de travail'}
             </Button>
           </form>
 
           {import.meta.env.DEV ? (
             <div className="mt-6 border-t border-line pt-4">
-              <p className="text-[12px] font-medium uppercase tracking-wide text-ink-faint">
-                Comptes de démonstration
+              <p className="text-[11px] font-medium uppercase tracking-wide text-ink-faint">
+                Comptes de test rapide
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {DEMO.map((account) => (
                   <button
                     key={account.login}
@@ -99,7 +107,7 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
                       setLogin(account.login);
                       setPassword(account.password);
                     }}
-                    className="rounded-chip border border-line-strong bg-surface-2 px-2.5 py-1 text-[12px] font-medium text-ink-soft transition-colors duration-150 hover:border-amber hover:text-amber focus-visible:border-amber focus-visible:text-amber"
+                    className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-ink-soft transition-colors duration-150 hover:border-amber hover:text-amber"
                   >
                     {account.label}
                   </button>
@@ -109,8 +117,8 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
           ) : null}
         </div>
 
-        <p className="mt-4 text-center text-[12px] text-white/40">
-          Pointage sur terminal enregistré — aucun compte requis pour pointer.
+        <p className="mt-4 text-center text-[11px] text-ink-faint">
+          Pointage atelier sur borne QR · Aucun compte requis pour le badge artisan.
         </p>
       </div>
     </div>

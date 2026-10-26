@@ -152,6 +152,13 @@ export function allowedViews(role: Role, permissions?: Record<string, boolean> |
   return computeAllowedViews(role, permissions);
 }
 
+const NAV_CATEGORIES: { title: string; views: ViewId[] }[] = [
+  { title: 'Pilotage & Vision', views: ['dashboard'] },
+  { title: 'Atelier & Magasins', views: ['outils', 'stock', 'magasins'] },
+  { title: 'Équipe & Présences', views: ['pointage', 'employes', 'espace'] },
+  { title: 'Administration', views: ['parametres'] },
+];
+
 function NavButton({
   item,
   active,
@@ -166,29 +173,32 @@ function NavButton({
     <button
       onClick={onClick}
       className={cx(
-        'group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all duration-150',
+        'group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-all duration-150',
         active
-          ? 'bg-amber-wash text-amber font-semibold shadow-xs'
-          : 'text-ink-soft hover:bg-paper-2 hover:text-ink',
+          ? 'bg-blue-500/10 text-sky-400 font-semibold border border-blue-500/20 shadow-xs'
+          : 'text-ink-soft hover:bg-surface-2 hover:text-ink border border-transparent',
       )}
     >
+      {active && (
+        <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-blue" />
+      )}
       <Icon
-        size={18}
+        size={16}
         className={cx(
           'shrink-0 transition-colors',
-          active ? 'text-amber' : 'text-ink-faint group-hover:text-ink-soft',
+          active ? 'text-blue' : 'text-ink-faint group-hover:text-ink-soft',
         )}
       />
-      <span className="flex-1 truncate">{item.label}</span>
-      {active ? <span className="h-1.5 w-1.5 rounded-full bg-amber" /> : null}
+      <span className="flex-1 truncate tracking-tight">{item.label}</span>
+      {active && <span className="h-1.5 w-1.5 rounded-full bg-blue shadow-xs" />}
     </button>
   );
 }
 
 /**
- * Widget Live Clock Tracker
+ * Widget Live Clock Tracker & Quick Actions (Google Antigravity style)
  */
-function LiveClockWidget({ onTrack, isDirection }: { onTrack: () => void; isDirection: boolean }) {
+function LiveClockWidget({ onTrack, isDirection, onOpenPalette }: { onTrack: () => void; isDirection: boolean; onOpenPalette: () => void }) {
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -200,30 +210,45 @@ function LiveClockWidget({ onTrack, isDirection }: { onTrack: () => void; isDire
   const dateStr = time.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
-    <div className="mx-3 my-2 rounded-xl border border-line bg-surface-2/70 p-3 shadow-xs">
-      <div className="flex items-center justify-between text-xs text-ink-faint">
+    <div className="mx-3 my-2 rounded-xl border border-line bg-surface-2/60 p-2.5 shadow-xs">
+      {/* Quick Search Shortcut Bar */}
+      <button
+        onClick={onOpenPalette}
+        className="mb-2 flex w-full items-center justify-between rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] text-ink-faint hover:text-ink hover:border-line-strong transition-all shadow-xs"
+        title="Ouvrir la palette de commandes (Ctrl+K)"
+      >
+        <span className="flex items-center gap-1.5">
+          <span className="text-xs">🔍</span>
+          <span>Recherche rapide…</span>
+        </span>
+        <kbd className="rounded border border-line-strong bg-paper px-1.5 py-0.5 font-mono text-[9px] font-semibold text-ink-faint">
+          ⌘K
+        </kbd>
+      </button>
+
+      <div className="flex items-center justify-between text-[11px] text-ink-faint">
         <span className="flex items-center gap-1.5 font-medium text-ink-soft capitalize">
-          <span className="h-2 w-2 rounded-full bg-green animate-pulse" />
+          <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
           {dateStr}
         </span>
-        <span className="text-[10px] uppercase tracking-wider font-semibold text-amber">Direct</span>
+        <span className="text-[9px] uppercase tracking-wider font-semibold text-sky-400">Direct</span>
       </div>
 
-      <div className="mt-1 text-center font-mono text-xl font-bold tracking-tight text-ink tabular-nums">
+      <div className="mt-0.5 text-center font-mono text-lg font-bold tracking-tight text-ink tabular-nums">
         {timeStr}
       </div>
 
       {!isDirection ? (
         <button
           onClick={onTrack}
-          className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-lg bg-amber px-3 py-2 text-xs font-semibold text-white shadow-xs transition-all hover:bg-amber-2 active:scale-[0.98]"
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber px-2.5 py-1.5 text-xs font-semibold text-slate-950 shadow-xs transition-all hover:bg-amber-3 active:scale-[0.98]"
         >
-          <Fingerprint size={15} />
+          <Fingerprint size={14} />
           Pointer maintenant
         </button>
       ) : (
-        <div className="mt-2 text-center text-[11px] font-medium text-ink-faint">
-          Super-Admin · Gouvernance C.F.T.
+        <div className="mt-1 text-center text-[10px] font-medium text-ink-faint">
+          Gouvernance &amp; Super-Admin
         </div>
       )}
     </div>
@@ -270,30 +295,48 @@ export function Shell({
     <TooltipProvider delayDuration={200}>
       <div className="flex h-full min-h-0 bg-paper">
         {/* =========================================================================
-            DESKTOP SIDEBAR
+            DESKTOP SIDEBAR (Google Antigravity Architecture)
         ========================================================================= */}
-        <aside className="no-print hidden w-64 shrink-0 flex-col border-r border-line bg-surface lg:flex">
+        <aside className="no-print hidden w-60 shrink-0 flex-col border-r border-line bg-surface lg:flex">
           {/* Logo Brand Header */}
-          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-line">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-charcoal border border-line p-1.5 shadow-xs">
-              <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-7 w-7 object-contain" />
+          <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-line bg-surface-2/40">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-charcoal border border-line p-1 shadow-xs">
+              <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-6 w-6 object-contain" />
             </div>
-            <div className="leading-tight min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-bold tracking-tight text-ink truncate">C.F.T. Menuiserie</span>
+            <div className="leading-tight min-w-0 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold tracking-tight text-ink truncate">C.F.T. Menuiserie</span>
+                <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.2 text-[9px] font-bold text-emerald-400 border border-emerald-500/20">
+                  ACTIF
+                </span>
               </div>
-              <p className="text-[10px] text-ink-faint truncate font-medium">Bénédictins du Mont Fébé</p>
+              <p className="text-[10px] text-ink-faint truncate font-medium">Bénédictins Mont Fébé</p>
             </div>
           </div>
 
-          {/* Quick Punch Tracker Widget */}
-          <LiveClockWidget onTrack={() => onView('pointage')} isDirection={user.role === 'direction'} />
+          {/* Quick Punch Tracker & Search Widget */}
+          <LiveClockWidget
+            onTrack={() => onView('pointage')}
+            isDirection={user.role === 'direction'}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
 
-          {/* Main Navigation */}
-          <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2 scroll-thin">
-            {items.map((item) => (
-              <NavButton key={item.id} item={item} active={item.id === view} onClick={() => onView(item.id)} />
-            ))}
+          {/* Categorized Antigravity Navigation */}
+          <nav className="flex-1 space-y-3 overflow-y-auto px-2.5 py-2 scroll-thin">
+            {NAV_CATEGORIES.map((cat) => {
+              const catItems = items.filter((it) => cat.views.includes(it.id));
+              if (catItems.length === 0) return null;
+              return (
+                <div key={cat.title} className="space-y-0.5">
+                  <div className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-ink-faint/80">
+                    {cat.title}
+                  </div>
+                  {catItems.map((item) => (
+                    <NavButton key={item.id} item={item} active={item.id === view} onClick={() => onView(item.id)} />
+                  ))}
+                </div>
+              );
+            })}
           </nav>
 
           {/* Scanner Button (Desktop) */}
@@ -301,18 +344,18 @@ export function Shell({
             <div className="px-3 pb-2">
               <button
                 onClick={onScan}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink transition-all hover:bg-paper-2 hover:border-line-strong active:scale-[0.98]"
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-line bg-surface-2/60 px-3 py-1.5 text-xs font-semibold text-ink transition-all hover:bg-surface-3 hover:border-line-strong active:scale-[0.98]"
               >
-                <QrCode size={15} className="text-amber" />
+                <QrCode size={14} className="text-amber" />
                 Scanner un QR code
               </button>
             </div>
           )}
 
           {/* User Profile Footer */}
-          <div className="border-t border-line p-3">
-            <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 bg-paper/60">
-              <span className="relative grid h-8 w-8 place-items-center rounded-full bg-amber-wash text-xs font-bold text-amber border border-amber/20 overflow-hidden shrink-0">
+          <div className="border-t border-line p-2.5 bg-surface-2/30">
+            <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 bg-surface border border-line/50">
+              <span className="relative grid h-7 w-7 place-items-center rounded-full bg-amber-wash text-xs font-bold text-amber border border-amber/20 overflow-hidden shrink-0">
                 {user.photo_path ? (
                   <img src={user.photo_path} alt={user.display_name} className="h-full w-full object-cover" />
                 ) : (
@@ -322,7 +365,7 @@ export function Shell({
               </span>
               <div className="min-w-0 flex-1 leading-tight">
                 <p className="truncate text-xs font-semibold text-ink">{user.display_name}</p>
-                <p className="truncate text-[11px] text-ink-faint">{ROLE_LABEL[user.role] ?? user.role}</p>
+                <p className="truncate text-[10px] text-ink-faint font-mono">@{user.login}</p>
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -331,7 +374,7 @@ export function Shell({
                     className="rounded-lg p-1.5 text-ink-faint transition-colors hover:bg-red-wash hover:text-red"
                     aria-label="Se déconnecter"
                   >
-                    <LogOut size={16} />
+                    <LogOut size={15} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top">Se déconnecter</TooltipContent>
@@ -437,9 +480,49 @@ export function Shell({
             </DrawerContent>
           </Drawer>
 
-          {/* Main Scrollable Content */}
-          <main className="min-h-0 flex-1 overflow-y-auto scroll-thin">
-            <div className="mx-auto w-full max-w-7xl px-3 py-4 pb-28 sm:px-6 lg:px-8 lg:py-6 lg:pb-12">
+          {/* Main Scrollable Content with Antigravity Top Bar */}
+          <main className="min-h-0 flex-1 overflow-y-auto scroll-thin flex flex-col">
+            {/* Desktop Topbar Header */}
+            <div className="no-print hidden lg:flex items-center justify-between px-6 py-2.5 border-b border-line bg-surface-2/40 backdrop-blur sticky top-0 z-10 text-xs">
+              <div className="flex items-center gap-2 text-ink-soft">
+                <span className="font-semibold text-ink">C.F.T.</span>
+                <span className="text-ink-faint">/</span>
+                <span className="text-ink-faint">Système Monastère</span>
+                <span className="text-ink-faint">/</span>
+                <span className="font-semibold text-sky-400 capitalize">
+                  {NAV.find((n) => n.id === view)?.label ?? view}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface border border-line text-[11px] text-ink-soft font-mono">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
+                  <span>Système opérationnel</span>
+                </div>
+                {onScan && (
+                  <button
+                    onClick={onScan}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-line text-xs font-medium text-ink hover:text-amber hover:border-amber/40 transition-colors shadow-xs"
+                    title="Scanner un code QR"
+                  >
+                    <QrCode size={13} className="text-amber" />
+                    <span>Scan QR</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setPaletteOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-line text-xs text-ink-faint hover:text-ink hover:border-line-strong transition-colors shadow-xs"
+                  title="Ouvrir la palette de commandes (Ctrl+K)"
+                >
+                  <span>Rechercher</span>
+                  <kbd className="rounded border border-line-strong bg-paper px-1 py-0.2 font-mono text-[9px] font-semibold text-ink-faint">
+                    ⌘K
+                  </kbd>
+                </button>
+              </div>
+            </div>
+
+            <div className="mx-auto w-full max-w-7xl px-3 py-4 pb-28 sm:px-6 lg:px-8 lg:py-6 lg:pb-12 flex-1">
               {children}
             </div>
           </main>
