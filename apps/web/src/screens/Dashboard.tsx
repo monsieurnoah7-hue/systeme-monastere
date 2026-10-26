@@ -245,6 +245,7 @@ function KpiCard({
   icon,
   onClick,
   tone = 'default',
+  className,
 }: {
   label: string;
   value: string | number;
@@ -252,6 +253,7 @@ function KpiCard({
   icon: React.ReactNode;
   onClick?: () => void;
   tone?: 'default' | 'warn' | 'alert' | 'success';
+  className?: string;
 }) {
   return (
     <button
@@ -259,6 +261,7 @@ function KpiCard({
       className={cx(
         'group rounded-xl border border-line bg-surface p-4 text-left shadow-card transition-all duration-150',
         onClick ? 'hover:-translate-y-0.5 hover:border-line-strong hover:shadow-card-hover' : 'cursor-default',
+        className,
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -531,45 +534,51 @@ export function Dashboard() {
         onOpenPointage={() => setDrawer({ kind: 'attendance' })}
       />
 
-      {/* KPIs Cards Grid */}
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label="Présences du jour"
-          value={das04 ? das04.present : '—'}
-          hint={
-            das04
-              ? `${das04.absent} absents · ${das04.late} retards · ${das04.conge} congés`
-              : 'Accès restreint à la direction'
-          }
-          icon={<Users size={18} />}
-          tone={das04 && das04.late > 0 ? 'warn' : 'success'}
-          onClick={() => setDrawer({ kind: 'attendance' })}
-        />
+      {/* KPIs Cards Grid - Horizontal scroll on mobile & tablet, grid on xl */}
+      <section className="relative">
+        <div className="flex xl:grid xl:grid-cols-4 gap-3 overflow-x-auto pb-2 -mx-3 px-3 sm:-mx-6 sm:px-6 xl:mx-0 xl:px-0 xl:pb-0 scroll-smooth snap-x snap-mandatory scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] touch-pan-x">
+          <KpiCard
+            className="min-w-[260px] sm:min-w-[280px] w-[75vw] sm:w-[320px] shrink-0 xl:w-auto xl:min-w-0 xl:shrink snap-start"
+            label="Présences du jour"
+            value={das04 ? das04.present : '—'}
+            hint={
+              das04
+                ? `${das04.absent} absents · ${das04.late} retards · ${das04.conge} congés`
+                : 'Accès restreint à la direction'
+            }
+            icon={<Users size={18} />}
+            tone={das04 && das04.late > 0 ? 'warn' : 'success'}
+            onClick={() => setDrawer({ kind: 'attendance' })}
+          />
 
-        <KpiCard
-          label="Outils & Machines"
-          value={das01.total}
-          hint={`${das01.disponible} disponibles · ${das01.en_pret} en prêt`}
-          icon={<Wrench size={18} />}
-          onClick={() => openTools('disponible', 'Outils disponibles')}
-        />
+          <KpiCard
+            className="min-w-[260px] sm:min-w-[280px] w-[75vw] sm:w-[320px] shrink-0 xl:w-auto xl:min-w-0 xl:shrink snap-start"
+            label="Outils & Machines"
+            value={das01.total}
+            hint={`${das01.disponible} disponibles · ${das01.en_pret} en prêt`}
+            icon={<Wrench size={18} />}
+            onClick={() => openTools('disponible', 'Outils disponibles')}
+          />
 
-        <KpiCard
-          label="Stocks d’Atelier"
-          value={das02.refs}
-          hint={`${das02.low} sous le seuil min · ${das02.empty} épuisées`}
-          icon={<Package size={18} />}
-          tone={das02.low + das02.empty > 0 ? 'warn' : 'default'}
-          onClick={() => setDrawer({ kind: 'stock' })}
-        />
+          <KpiCard
+            className="min-w-[260px] sm:min-w-[280px] w-[75vw] sm:w-[320px] shrink-0 xl:w-auto xl:min-w-0 xl:shrink snap-start"
+            label="Stocks d’Atelier"
+            value={das02.refs}
+            hint={`${das02.low} sous le seuil min · ${das02.empty} épuisées`}
+            icon={<Package size={18} />}
+            tone={das02.low + das02.empty > 0 ? 'warn' : 'default'}
+            onClick={() => setDrawer({ kind: 'stock' })}
+          />
 
-        <KpiCard
-          label="Mouvements d'Aujourd’hui"
-          value={das03.exits + das03.entries + das03.returns}
-          hint={`${das03.exits} sorties · ${das03.entries} entrées · ${das03.returns} retours`}
-          icon={<ArrowUpRight size={18} />}
-          onClick={() => setDrawer({ kind: 'movements' })}
-        />
+          <KpiCard
+            className="min-w-[260px] sm:min-w-[280px] w-[75vw] sm:w-[320px] shrink-0 xl:w-auto xl:min-w-0 xl:shrink snap-start"
+            label="Mouvements d'Aujourd’hui"
+            value={das03.exits + das03.entries + das03.returns}
+            hint={`${das03.exits} sorties · ${das03.entries} entrées · ${das03.returns} retours`}
+            icon={<ArrowUpRight size={18} />}
+            onClick={() => setDrawer({ kind: 'movements' })}
+          />
+        </div>
       </section>
 
       {/* Main Grid: Présences & Analytics */}
@@ -584,7 +593,8 @@ export function Dashboard() {
           <Card className="shadow-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-bold text-ink flex items-center gap-2">
-                <AlertTriangle size={16} className="text-amber" /> Alertes opérationnelles
+                <span>Alertes opérationnelles</span>
+                <AlertTriangle size={16} className="text-amber shrink-0" />
               </h2>
               <span className="text-xs text-ink-faint">Action requise</span>
             </div>

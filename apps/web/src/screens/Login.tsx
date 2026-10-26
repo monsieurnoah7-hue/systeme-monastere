@@ -116,10 +116,6 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
             </div>
           ) : null}
         </div>
-
-        <p className="mt-4 text-center text-[11px] text-ink-faint">
-          Pointage atelier sur borne QR · Aucun compte requis pour le badge artisan.
-        </p>
       </div>
     </div>
   );

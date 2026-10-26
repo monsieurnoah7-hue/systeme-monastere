@@ -223,6 +223,51 @@ kioskRoutes.post('/identify', async (c) => {
   });
 });
 
+const verifyPinBody = z.object({
+  terminalId: z.string().min(1),
+  employeeId: z.string().min(1),
+  pin: z.string().min(1),
+});
+
+kioskRoutes.post('/verify-pin', async (c) => {
+  const body = verifyPinBody.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Code secret requis.' }, 400);
+
+  const db = getDb();
+  const terminal = await db.one<{ id: string }>('SELECT id FROM terminals WHERE id = $1 AND active = true', [body.data.terminalId]);
+  if (!terminal) return c.json({ error: 'Terminal non enregistré par la direction.' }, 403);
+
+  const employee = await db.one<{ id: string; full_name: string; active: boolean; pin_hash: string | null; badge_token: string | null }>(
+    'SELECT id, full_name, active, pin_hash, badge_token FROM employees WHERE id = $1 AND active = true',
+    [body.data.employeeId],
+  );
+  if (!employee) return c.json({ error: 'Travailleur introuvable.' }, 404);
+
+  const linkedUser = await db.one<{ id: number; role: string; password_hash: string }>(
+    'SELECT id, role, password_hash FROM users WHERE employee_id = $1',
+    [employee.id],
+  );
+  if (linkedUser?.role === 'direction') {
+    return c.json({ error: 'La Direction n’est pas soumise au pointage.' }, 403);
+  }
+
+  const inputPin = body.data.pin.trim();
+  let pinValid = false;
+  if (employee.pin_hash && verifyPassword(inputPin, employee.pin_hash)) {
+    pinValid = true;
+  } else if (linkedUser?.password_hash && verifyPassword(inputPin, linkedUser.password_hash)) {
+    pinValid = true;
+  } else if (employee.badge_token && inputPin.toUpperCase() === employee.badge_token.toUpperCase()) {
+    pinValid = true;
+  }
+
+  if (!pinValid) {
+    return c.json({ error: 'Code secret personnel incorrect. Veuillez vérifier et réessayer.' }, 401);
+  }
+
+  return c.json({ ok: true });
+});
+
 kioskRoutes.post('/punch', async (c) => {
   const body = punchBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) return c.json({ error: 'Données de pointage incomplètes.' }, 400);

@@ -22,7 +22,6 @@ import {
   X,
 } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
-import { ModularKeyboard } from '../components/ModularKeyboard';
 
 type Terminal = { id: string; name: string };
 type Stage = 'terminal' | 'identify' | 'validate_pin' | 'actions' | 'capture' | 'confirm';
@@ -327,6 +326,15 @@ export function Pointage() {
     return () => window.clearInterval(t);
   }, []);
 
+  const codeInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (stage === 'identify') {
+      const timer = setTimeout(() => codeInputRef.current?.focus(), 80);
+      return () => clearTimeout(timer);
+    }
+  }, [stage]);
+
   const captureActive = stage === 'actions' || stage === 'capture';
   const { videoRef, error: cameraError, ready } = useCamera(captureActive, 'user');
 
@@ -401,6 +409,22 @@ export function Pointage() {
     loadTimesheets();
   }
 
+  useEffect(() => {
+    if (stage !== 'validate_pin') return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key >= '0' && e.key <= '9') {
+        if (pin.length < 6) setPin((p) => p + e.key);
+      } else if (e.key === 'Backspace') {
+        setPin((p) => p.slice(0, -1));
+      } else if (e.key === 'Enter') {
+        if (pin.length >= 4) void validatePin();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [stage, pin, terminalId, identified]);
+
   async function identify(raw: string) {
     if (!terminalId) {
       setError('Sélectionnez d’abord un terminal enregistré.');
@@ -431,30 +455,49 @@ export function Pointage() {
     }
   }
 
-  function validatePin() {
+  async function validatePin() {
     if (!pin || pin.trim().length < 4) {
       setPinError('Veuillez saisir votre code secret PIN personnel (au moins 4 chiffres).');
       return;
     }
+    if (!terminalId || !identified) return;
+    setBusy(true);
     setPinError(null);
-    // Sélection intuitive automatique de l'action selon la situation
-    const sit = identified?.situation;
-    if (sit?.canBreakOut) {
-      setPunchType('break_out');
-    } else if (sit?.canPunchIn) {
-      setPunchType('in');
-    } else if (sit?.canPunchOut) {
-      setPunchType('out');
-    } else if (sit?.canBreakIn) {
-      setPunchType('break_in');
-    } else {
-      setPunchType('in');
+    try {
+      await api('/api/kiosk/verify-pin', {
+        method: 'POST',
+        body: JSON.stringify({
+          terminalId,
+          employeeId: identified.employee.id,
+          pin: pin.trim(),
+        }),
+      });
+
+      // Sélection intuitive automatique de l'action selon la situation
+      const sit = identified?.situation;
+      if (sit?.canBreakOut) {
+        setPunchType('break_out');
+      } else if (sit?.canPunchIn) {
+        setPunchType('in');
+      } else if (sit?.canPunchOut) {
+        setPunchType('out');
+      } else if (sit?.canBreakIn) {
+        setPunchType('break_in');
+      } else {
+        setPunchType('in');
+      }
+      setSelfie(null);
+      setMotif('');
+      setMotifNote('');
+      // Étape 3 obligatoire : Choix de l'action & Selfie horodaté
+      setStage('actions');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Code secret personnel incorrect.';
+      setPinError(message);
+      setPin('');
+    } finally {
+      setBusy(false);
     }
-    setSelfie(null);
-    setMotif('');
-    setMotifNote('');
-    // Étape 3 obligatoire : Choix de l'action & Selfie horodaté
-    setStage('actions');
   }
 
   async function submitPunch(photoData?: string) {
@@ -701,17 +744,17 @@ export function Pointage() {
                 icon={<Download size={13} />}
                 onClick={() => {
                   const dateStr = new Date().toISOString().split('T')[0];
-                  const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Pause', 'Heures', 'Écart', 'Statut'];
+                  const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Statut', 'Heures', 'Pause', 'Écart'];
                   const rows = filteredAttendance.map((row) => [
                     row.id,
                     row.fullName,
                     row.jobTitle,
                     row.inAt || '-',
                     row.outAt || (row.inAt ? 'En poste' : '-'),
-                    row.inAt ? '0h45' : '-',
-                    row.inAt ? '7h45' : '0h00',
-                    row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
                     row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
+                    row.inAt ? '7h45' : '0h00',
+                    row.inAt ? '0h45' : '-',
+                    row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
                   ]);
                   exportToExcel(`Feuille_Presence_${dateStr}`, 'Présences', headers, rows);
                 }}
@@ -724,17 +767,17 @@ export function Pointage() {
                 variant="secondary"
                 icon={<Printer size={13} />}
                 onClick={() => {
-                  const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Pause', 'Heures', 'Écart', 'Statut'];
+                  const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Statut', 'Heures', 'Pause', 'Écart'];
                   const rows = filteredAttendance.map((row) => [
                     row.id,
                     row.fullName,
                     row.jobTitle,
                     row.inAt || '-',
                     row.outAt || (row.inAt ? 'En poste' : '-'),
-                    row.inAt ? '0h45' : '-',
-                    row.inAt ? '7h45' : '0h00',
-                    row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
                     row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
+                    row.inAt ? '7h45' : '0h00',
+                    row.inAt ? '0h45' : '-',
+                    row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
                   ]);
                   exportToPdf(
                     'Feuille de Présence & Pointage Quotidien',
@@ -769,17 +812,17 @@ export function Pointage() {
 
           {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
           <div className={cx('overflow-hidden rounded-xl border border-line bg-surface shadow-card', viewMode === 'cards' && 'hidden sm:block')}>
-            <div className="overflow-x-auto scroll-thin">
+            <div className="overflow-x-auto scroll-thin touch-pan-x overscroll-x-contain">
               <table className="w-full text-left sheet-grid min-w-[760px]">
                 <thead>
                   <tr>
-                    <th className="sheet-th sticky-col min-w-[200px]">Travailleur / ID</th>
+                    <th className="sheet-th sticky-col min-w-[190px]">Travailleur / ID</th>
                     <th className="sheet-th w-28 text-center">Arrivée (In)</th>
                     <th className="sheet-th w-28 text-center">Départ (Out)</th>
-                    <th className="sheet-th w-28 text-center">Pause</th>
+                    <th className="sheet-th w-32 text-center bg-amber-wash/20 font-bold text-ink">Statut</th>
                     <th className="sheet-th w-32 text-center">Durée travaillée</th>
+                    <th className="sheet-th w-28 text-center">Pause</th>
                     <th className="sheet-th w-28 text-center">Tolérance / Écart</th>
-                    <th className="sheet-th w-32 text-center">Statut</th>
                   </tr>
                 </thead>
                 <tbody className="text-xs divide-y divide-line">
@@ -815,14 +858,29 @@ export function Pointage() {
                           {row.outAt ?? (row.inAt ? <span className="text-green text-[11px] font-medium">En poste</span> : '—')}
                         </td>
 
-                        {/* Break */}
-                        <td className="sheet-cell text-center font-mono tabular-nums text-ink-faint">
-                          {row.inAt ? '0h45' : '—'}
+                        {/* Status Chip - Placed directly right of Départ */}
+                        <td className="sheet-cell text-center bg-amber-wash/10">
+                          <span
+                            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[10px] font-semibold text-ink-soft"
+                          >
+                            <span
+                              className={cx(
+                                'h-1.5 w-1.5 rounded-full shrink-0',
+                                isPresent ? 'bg-green' : isLate ? 'bg-amber' : 'bg-ink-faint',
+                              )}
+                            />
+                            {isPresent ? 'Validé' : isLate ? 'Retard' : 'Non pointé'}
+                          </span>
                         </td>
 
                         {/* Total Hours */}
                         <td className="sheet-cell text-center font-mono font-bold text-ink tabular-nums">
                           {row.inAt ? '7h45' : '0h00'}
+                        </td>
+
+                        {/* Break */}
+                        <td className="sheet-cell text-center font-mono tabular-nums text-ink-faint">
+                          {row.inAt ? '0h45' : '—'}
                         </td>
 
                         {/* Ecart / Retard */}
@@ -836,21 +894,6 @@ export function Pointage() {
                           ) : (
                             <span className="text-ink-faint">—</span>
                           )}
-                        </td>
-
-                        {/* Status Chip */}
-                        <td className="sheet-cell text-center">
-                          <span
-                            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[10px] font-medium text-ink-soft"
-                          >
-                            <span
-                              className={cx(
-                                'h-1.5 w-1.5 rounded-full shrink-0',
-                                isPresent ? 'bg-green' : isLate ? 'bg-amber' : 'bg-ink-faint',
-                              )}
-                            />
-                            {isPresent ? 'Validé' : isLate ? 'Retard' : 'Non pointé'}
-                          </span>
                         </td>
                       </tr>
                     );
@@ -875,17 +918,16 @@ export function Pointage() {
                       {totalPresent + totalLate} arrivées
                     </td>
                     <td className="sheet-cell text-center font-mono tabular-nums text-ink-soft">—</td>
-                    <td className="sheet-cell text-center font-mono tabular-nums text-ink-faint">—</td>
+                    <td className="sheet-cell text-center text-[11px] text-ink-soft bg-amber-wash/10 font-bold">
+                      {totalPresent} validés
+                    </td>
                     <td className="sheet-cell text-center font-mono tabular-nums text-ink font-bold">
                       {((totalPresent + totalLate) * 7.75).toFixed(1)}h
                     </td>
+                    <td className="sheet-cell text-center font-mono tabular-nums text-ink-faint">—</td>
                     <td className="sheet-cell text-center font-mono tabular-nums text-amber">
                       {totalLate} retards
                     </td>
-                    <td className="sheet-cell text-center text-[11px] text-ink-soft">
-                      {totalPresent} validés
-                    </td>
-                    <td className="sheet-cell text-center">—</td>
                   </tr>
                 </tfoot>
               </table>
@@ -923,7 +965,7 @@ export function Pointage() {
                   </span>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2.5 text-xs">
+                <div className="mt-3 grid grid-cols-4 gap-2 border-t border-line/60 pt-2.5 text-xs text-center">
                   <div>
                     <span className="text-[10px] text-ink-faint block">Arrivée</span>
                     <span className="font-mono font-bold text-ink">{row.inAt ?? '—'}</span>
@@ -931,6 +973,15 @@ export function Pointage() {
                   <div>
                     <span className="text-[10px] text-ink-faint block">Départ</span>
                     <span className="font-mono font-bold text-ink">{row.outAt ?? 'En poste'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-ink-faint block font-semibold text-ink">Statut</span>
+                    <span className={cx(
+                      'font-semibold text-[11px] block truncate',
+                      row.status === 'present' ? 'text-green' : row.status === 'late' ? 'text-amber' : 'text-ink-faint'
+                    )}>
+                      {row.status === 'present' ? 'Validé' : row.status === 'late' ? 'Retard' : 'Non pointé'}
+                    </span>
                   </div>
                   <div className="text-right">
                     <span className="text-[10px] text-ink-faint block">Tolérance</span>
@@ -956,21 +1007,13 @@ export function Pointage() {
               'fixed inset-0 z-50 overflow-y-auto bg-paper p-4 sm:p-6 backdrop-blur-xl',
           )}
         >
-          {/* Header Mode Borne Verrouillée ou Standard */}
-          <div className="mx-auto mb-4 flex max-w-xl items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-charcoal text-white">
-                <img src="/emblem-white.png" alt="Croix" className="h-5 w-5 object-contain" />
-              </span>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-ink">
-                  Borne d'Atelier C.F.T.
-                </p>
-                <p className="text-[11px] text-ink-soft">
-                  {terminals.find((t) => t.id === terminalId)?.name ?? terminalId ?? 'Borne active'}
-                </p>
-              </div>
-            </div>
+          {/* Actions Borne Kiosque Minimaliste */}
+          <div className="mx-auto mb-3 flex max-w-xl items-center justify-between">
+            {stage === 'identify' && !isKioskLocked ? (
+              <Button variant="quiet" size="sm" onClick={clear}>
+                Changer borne
+              </Button>
+            ) : <div />}
 
             <div className="flex items-center gap-2">
               {!isKioskLocked ? (
@@ -1046,24 +1089,9 @@ export function Pointage() {
 
           {stage === 'identify' ? (
             <div className="mx-auto max-w-xl space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-charcoal border border-line p-1.5 shadow-xs">
-                    <img src="/emblem-white.png" alt="Croix" className="h-7 w-7 object-contain" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-ink leading-tight">Identification Ouvrier</h2>
-                    <p className="text-xs text-ink-soft">C.F.T. des Bénédictins du Mont Fébé</p>
-                  </div>
-                </div>
-                <Button variant="quiet" size="sm" onClick={clear}>
-                  Changer borne
-                </Button>
-              </div>
-
               {/* Horloge Kiosque */}
               <div className="rounded-2xl bg-charcoal px-5 py-5 text-center text-white shadow-card border border-line">
-                <p className="font-mono text-4xl font-extrabold tracking-tight text-amber tabular-nums">
+                <p className="font-mono text-4xl sm:text-5xl font-extrabold tracking-tight text-amber tabular-nums">
                   {now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </p>
                 <p className="mt-1 text-xs capitalize text-white/60">
@@ -1071,63 +1099,72 @@ export function Pointage() {
                 </p>
               </div>
 
-              <Card className="p-4 sm:p-5 shadow-card space-y-4">
-                {/* Zone de visualisation tactile du code saisi avec curseur */}
-                <div>
-                  <div className="mb-2 flex items-baseline justify-between text-xs">
-                    <span className="font-semibold text-ink">Code ou badge saisi</span>
-                    <span className="text-[11px] text-ink-faint">
-                      {code.length > 0 ? `${code.length} caractère${code.length > 1 ? 's' : ''}` : 'Clavier modulable AZERTY / 123'}
-                    </span>
+              <Card className="p-4 sm:p-6 shadow-card space-y-4">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!busy && code.trim().length > 0) void identify(code);
+                  }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="block text-xs font-semibold text-ink mb-1.5">
+                      Code ou badge artisan
+                    </label>
+
+                    <div className="relative flex items-center">
+                      <input
+                        ref={codeInputRef}
+                        type="text"
+                        inputMode="text"
+                        autoFocus
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, MAX_CODE_LENGTH))}
+                        placeholder="Tapez votre code (ex: P3N8D ou 003)..."
+                        className="w-full rounded-xl border-2 border-line-strong bg-paper-2 px-4 py-3.5 pr-12 font-mono text-xl sm:text-2xl font-extrabold tracking-wider text-center text-ink placeholder:text-ink-faint/60 placeholder:text-sm placeholder:font-sans placeholder:tracking-normal shadow-inner transition-colors focus:border-amber focus:outline-none"
+                        disabled={busy}
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        spellCheck="false"
+                      />
+
+                      {code.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCode('');
+                            codeInputRef.current?.focus();
+                          }}
+                          className="absolute right-3 grid h-8 w-8 place-items-center rounded-lg bg-surface-2 text-ink-soft hover:text-ink active:scale-90"
+                          title="Effacer tout"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="relative flex items-center justify-center rounded-xl border-2 border-line-strong bg-paper-2 px-4 py-3 min-h-[58px] shadow-inner transition-colors focus-within:border-amber">
-                    {code ? (
-                      <p className="font-mono text-2xl sm:text-3xl font-extrabold tracking-widest text-ink tabular-nums flex items-center gap-1">
-                        {code}
-                        <span className="inline-block h-6 w-0.5 animate-pulse bg-amber" />
-                      </p>
-                    ) : (
-                      <p className="text-xs sm:text-sm text-ink-faint flex items-center gap-1.5 select-none">
-                        <span>Tapez votre code (ex: P3N8D ou 003)...</span>
-                        <span className="inline-block h-4 w-0.5 animate-pulse bg-amber" />
-                      </p>
-                    )}
-
-                    {code.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setCode('')}
-                        className="absolute right-3 grid h-7 w-7 place-items-center rounded-lg bg-surface-2 text-ink-soft hover:text-ink active:scale-90"
-                        title="Effacer tout"
-                      >
-                        <X size={15} />
-                      </button>
-                    )}
+                  <div className="flex gap-2.5 pt-1">
+                    <Button
+                      type="button"
+                      size="lg"
+                      className="flex-1 text-sm font-semibold"
+                      icon={<QrCode size={18} />}
+                      onClick={() => setScanning(true)}
+                    >
+                      Scanner badge QR
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="lg"
+                      className="flex-1 text-sm font-semibold"
+                      disabled={busy || code.trim().length === 0}
+                    >
+                      {busy ? <Spinner /> : 'Valider'}
+                    </Button>
                   </div>
-                </div>
-
-                {/* Clavier Modulable Style SwiftKey / Android WhatsApp */}
-                <ModularKeyboard
-                  value={code}
-                  onChange={setCode}
-                  onSubmit={() => void identify(code)}
-                  maxLength={MAX_CODE_LENGTH}
-                />
-
-                <div className="flex gap-2 pt-1">
-                  <Button className="flex-1" icon={<QrCode size={16} />} onClick={() => setScanning(true)}>
-                    Scanner badge QR
-                  </Button>
-                  <Button
-                    variant="primary"
-                    className="flex-1"
-                    disabled={busy || code.length === 0}
-                    onClick={() => void identify(code)}
-                  >
-                    {busy ? <Spinner /> : 'Valider'}
-                  </Button>
-                </div>
+                </form>
 
                 {error ? (
                   <div className="mt-2">

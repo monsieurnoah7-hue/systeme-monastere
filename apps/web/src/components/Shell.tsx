@@ -198,7 +198,7 @@ function NavButton({
 /**
  * Widget Live Clock Tracker & Quick Actions (Google Antigravity style)
  */
-function LiveClockWidget({ onTrack, isDirection, onOpenPalette }: { onTrack: () => void; isDirection: boolean; onOpenPalette: () => void }) {
+function LiveClockWidget({ onTrack, isDirection }: { onTrack: () => void; isDirection: boolean }) {
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -211,21 +211,6 @@ function LiveClockWidget({ onTrack, isDirection, onOpenPalette }: { onTrack: () 
 
   return (
     <div className="mx-3 my-2 rounded-xl border border-line bg-surface-2/60 p-2.5 shadow-xs">
-      {/* Quick Search Shortcut Bar */}
-      <button
-        onClick={onOpenPalette}
-        className="mb-2 flex w-full items-center justify-between rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[11px] text-ink-faint hover:text-ink hover:border-line-strong transition-all shadow-xs"
-        title="Ouvrir la palette de commandes (Ctrl+K)"
-      >
-        <span className="flex items-center gap-1.5">
-          <span className="text-xs">🔍</span>
-          <span>Recherche rapide…</span>
-        </span>
-        <kbd className="rounded border border-line-strong bg-paper px-1.5 py-0.5 font-mono text-[9px] font-semibold text-ink-faint">
-          ⌘K
-        </kbd>
-      </button>
-
       <div className="flex items-center justify-between text-[11px] text-ink-faint">
         <span className="flex items-center gap-1.5 font-medium text-ink-soft capitalize">
           <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
@@ -314,11 +299,10 @@ export function Shell({
             </div>
           </div>
 
-          {/* Quick Punch Tracker & Search Widget */}
+          {/* Quick Punch Tracker Widget */}
           <LiveClockWidget
             onTrack={() => onView('pointage')}
             isDirection={user.role === 'direction'}
-            onOpenPalette={() => setPaletteOpen(true)}
           />
 
           {/* Categorized Antigravity Navigation */}
@@ -509,16 +493,6 @@ export function Shell({
                     <span>Scan QR</span>
                   </button>
                 )}
-                <button
-                  onClick={() => setPaletteOpen(true)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-line text-xs text-ink-faint hover:text-ink hover:border-line-strong transition-colors shadow-xs"
-                  title="Ouvrir la palette de commandes (Ctrl+K)"
-                >
-                  <span>Rechercher</span>
-                  <kbd className="rounded border border-line-strong bg-paper px-1 py-0.2 font-mono text-[9px] font-semibold text-ink-faint">
-                    ⌘K
-                  </kbd>
-                </button>
               </div>
             </div>
 
