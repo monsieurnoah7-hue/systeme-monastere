@@ -166,3 +166,39 @@ usersRoutes.post('/me/password', requireAuth, async (c) => {
   });
   return c.json({ ok: true });
 });
+
+usersRoutes.delete('/:id', requirePerm('users.manage'), async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id)) return c.json({ error: 'Compte invalide.' }, 400);
+
+  const db = getDb();
+  const user = await db.one<UserListRow>('SELECT * FROM users WHERE id = $1', [id]);
+  if (!user) return c.json({ error: 'Compte introuvable.' }, 404);
+
+  if (id === actorId(c)) {
+    return c.json({ error: 'Vous ne pouvez pas supprimer votre propre compte administrateur.' }, 409);
+  }
+
+  if (user.role === 'direction') {
+    const adminCount = await db.one<{ count: string }>(
+      "SELECT count(*) as count FROM users WHERE role = 'direction' AND active = true AND id != $1",
+      [id],
+    );
+    if (Number(adminCount?.count ?? 0) === 0) {
+      return c.json({ error: 'Impossible de supprimer le dernier compte administrateur Direction actif.' }, 409);
+    }
+  }
+
+  await db.query('DELETE FROM users WHERE id = $1', [id]);
+
+  await writeAudit(db, {
+    entity: 'user',
+    entityId: String(id),
+    action: 'delete',
+    before: { login: user.login, role: user.role, display_name: user.display_name },
+    actorId: actorId(c),
+    actorName: actorName(c),
+  });
+
+  return c.json({ ok: true, message: `Compte @${user.login} supprimé avec succès.` });
+});

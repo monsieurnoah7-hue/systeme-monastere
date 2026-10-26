@@ -341,6 +341,9 @@ function AdminSettings({ user }: { user: User }) {
   const [resetPassword, setResetPassword] = useState('');
   const [editFor, setEditFor] = useState<AppUserRow | null>(null);
   const [editForm, setEditForm] = useState({ display_name: '', role: 'travailleur' as Role, employee_id: '' });
+  const [deleteUserFor, setDeleteUserFor] = useState<AppUserRow | null>(null);
+  const [deleteUserBusy, setDeleteUserBusy] = useState(false);
+  const [deleteUserError, setDeleteUserError] = useState<string | null>(null);
 
   // Photo modal states for profile (self / direction admin)
   const [profilePhotoOpen, setProfilePhotoOpen] = useState(false);
@@ -626,6 +629,7 @@ function AdminSettings({ user }: { user: User }) {
       toast('Nouveau compte créé.', 'success');
       setUserOpen(false);
       setReload((value) => value + 1);
+      window.dispatchEvent(new CustomEvent('mf-refresh-data'));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Création impossible.');
     } finally {
@@ -641,6 +645,7 @@ function AdminSettings({ user }: { user: User }) {
       });
       toast(account.active ? `Compte ${account.login} désactivé.` : `Compte ${account.login} activé.`, 'success');
       setReload((value) => value + 1);
+      window.dispatchEvent(new CustomEvent('mf-refresh-data'));
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Opération refusée.', 'error');
     }
@@ -657,6 +662,7 @@ function AdminSettings({ user }: { user: User }) {
       toast(`Mot de passe réinitialisé pour ${resetFor.login}.`, 'success');
       setResetFor(null);
       setResetPassword('');
+      window.dispatchEvent(new CustomEvent('mf-refresh-data'));
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Opération refusée.', 'error');
     } finally {
@@ -690,10 +696,30 @@ function AdminSettings({ user }: { user: User }) {
       toast('Compte mis à jour.', 'success');
       setEditFor(null);
       setReload((value) => value + 1);
+      window.dispatchEvent(new CustomEvent('mf-refresh-data'));
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Mise à jour impossible.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleDeleteUser() {
+    if (!deleteUserFor) return;
+    setDeleteUserBusy(true);
+    setDeleteUserError(null);
+    try {
+      await api(`/api/users/${deleteUserFor.id}`, {
+        method: 'DELETE',
+      });
+      toast(`Compte @${deleteUserFor.login} supprimé définitivement.`, 'success');
+      setDeleteUserFor(null);
+      setReload((value) => value + 1);
+      window.dispatchEvent(new CustomEvent('mf-refresh-data'));
+    } catch (err) {
+      setDeleteUserError(err instanceof Error ? err.message : 'Impossible de supprimer ce compte.');
+    } finally {
+      setDeleteUserBusy(false);
     }
   }
 
@@ -1388,6 +1414,20 @@ function AdminSettings({ user }: { user: User }) {
                               >
                                 {account.active ? 'Désactiver' : 'Activer'}
                               </Button>
+                              {account.id !== user.id && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setDeleteUserFor(account);
+                                    setDeleteUserError(null);
+                                  }}
+                                  className="h-7 w-7 p-0 text-ink-faint hover:text-red hover:bg-red/10"
+                                  title={`Supprimer définitivement @${account.login}`}
+                                >
+                                  <Trash2 size={13} />
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1465,7 +1505,7 @@ function AdminSettings({ user }: { user: User }) {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-line/50">
+                      <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-line/50">
                         <Button size="sm" variant="ghost" onClick={() => openEditAccount(account)} className="h-8 text-xs flex-1">
                           Modifier
                         </Button>
@@ -1488,6 +1528,20 @@ function AdminSettings({ user }: { user: User }) {
                         >
                           {account.active ? 'Désactiver' : 'Activer'}
                         </Button>
+                        {account.id !== user.id && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setDeleteUserFor(account);
+                              setDeleteUserError(null);
+                            }}
+                            className="h-8 w-8 p-0 text-red hover:bg-red/10"
+                            title="Supprimer ce compte"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -2754,6 +2808,55 @@ function AdminSettings({ user }: { user: User }) {
               onChange={(e) => setResetPassword(e.target.value)}
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
             />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Supprimer définitivement un utilisateur */}
+      <Modal
+        open={!!deleteUserFor}
+        title={`Supprimer le compte @${deleteUserFor?.login ?? ''}`}
+        onClose={() => {
+          if (!deleteUserBusy) {
+            setDeleteUserFor(null);
+            setDeleteUserError(null);
+          }
+        }}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              disabled={deleteUserBusy}
+              onClick={() => {
+                setDeleteUserFor(null);
+                setDeleteUserError(null);
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deleteUserBusy}
+              onClick={() => void handleDeleteUser()}
+            >
+              {deleteUserBusy ? <Spinner /> : 'Supprimer définitivement'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          {deleteUserError ? <Banner tone="error">{deleteUserError}</Banner> : null}
+          <p className="text-sm text-ink">
+            Êtes-vous sûr de vouloir supprimer définitivement le compte{' '}
+            <strong>{deleteUserFor?.display_name}</strong> (<span className="font-mono text-xs">@{deleteUserFor?.login}</span>) ?
+          </p>
+          <div className="rounded-xl border border-line bg-paper-2 p-3 text-xs text-ink-soft space-y-1">
+            <p className="font-semibold text-ink flex items-center gap-1.5">
+              <AlertTriangle size={13} className="text-amber" /> Information importante
+            </p>
+            <p>
+              Cette opération retire les identifiants et les accès de l'utilisateur. L'historique d'audit des actions antérieures et les pointages du travailleur restent intacts.
+            </p>
           </div>
         </div>
       </Modal>

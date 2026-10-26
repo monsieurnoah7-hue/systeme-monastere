@@ -288,6 +288,17 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
   const refresh = useCallback(() => setReload((value) => value + 1), []);
 
   useEffect(() => {
+    const handleSync = () => {
+      refresh();
+      api<{ magasins: Magasin[] }>('/api/magasins')
+        .then((res) => setMagasins(res.magasins.filter((m) => m.active)))
+        .catch(() => {});
+    };
+    window.addEventListener('mf-refresh-data', handleSync);
+    return () => window.removeEventListener('mf-refresh-data', handleSync);
+  }, [refresh]);
+
+  useEffect(() => {
     if (!scan) return;
     if (scan.kind === 'tool') {
       setFilters({ q: '', status: '', category: '', location: '', magasin_id: '' });

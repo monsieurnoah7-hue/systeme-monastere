@@ -457,6 +457,12 @@ export function Dashboard() {
     };
   }, [reload]);
 
+  useEffect(() => {
+    const handleSync = () => setReload((v) => v + 1);
+    window.addEventListener('mf-refresh-data', handleSync);
+    return () => window.removeEventListener('mf-refresh-data', handleSync);
+  }, []);
+
   const openTools = useCallback((status: string, title: string) => {
     setTools(null);
     setDrawer({ kind: 'tools', status, title });

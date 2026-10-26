@@ -112,6 +112,9 @@ magasinsRoutes.patch('/:id', requirePerm('magasins.manage'), async (c) => {
 
 magasinsRoutes.delete('/:id', requirePerm('magasins.manage'), async (c) => {
   const id = c.req.param('id') ?? '';
+  const body = await c.req.json().catch(() => ({}));
+  const targetId = (body?.targetMagasinId || c.req.query('targetMagasinId'))?.trim() || null;
+
   const db = getDb();
   const before = await db.one<MagasinRow>('SELECT * FROM magasins WHERE id = $1', [id]);
   if (!before) return c.json({ error: 'Magasin introuvable.' }, 404);
@@ -123,13 +126,57 @@ magasinsRoutes.delete('/:id', requirePerm('magasins.manage'), async (c) => {
   );
   const toolsCount = Number(usage?.tools ?? 0);
   const refsCount = Number(usage?.refs ?? 0);
-  if (toolsCount > 0 || refsCount > 0) {
+
+  if ((toolsCount > 0 || refsCount > 0) && !targetId) {
     return c.json(
       {
-        error: `Ce magasin contient encore ${toolsCount} outil(s) et ${refsCount} référence(s) de stock. Affectez-les ailleurs avant de le supprimer.`,
+        error: `Ce magasin contient encore ${toolsCount} outil(s) et ${refsCount} référence(s) de stock.`,
+        canTransfer: true,
+        toolsCount,
+        refsCount,
       },
       409,
     );
+  }
+
+  if (targetId) {
+    if (targetId === id) {
+      return c.json({ error: 'Le magasin de destination doit être distinct du magasin à supprimer.' }, 400);
+    }
+    const target = await db.one<MagasinRow>('SELECT * FROM magasins WHERE id = $1', [targetId]);
+    if (!target) return c.json({ error: 'Magasin de destination introuvable.' }, 404);
+
+    await db.transaction(async (tx) => {
+      if (toolsCount > 0) {
+        await tx.query('UPDATE tools SET magasin_id = $1, location = $2 WHERE magasin_id = $3', [
+          targetId,
+          target.name,
+          id,
+        ]);
+      }
+      if (refsCount > 0) {
+        await tx.query('UPDATE stock_refs SET magasin_id = $1, location = $2 WHERE magasin_id = $3', [
+          targetId,
+          target.name,
+          id,
+        ]);
+      }
+      await tx.query('DELETE FROM magasins WHERE id = $1', [id]);
+      await writeAudit(tx, {
+        entity: 'magasin',
+        entityId: id,
+        action: 'delete_with_transfer',
+        before,
+        after: { transferredTo: targetId, targetName: target.name, toolsCount, refsCount },
+        actorId: actorId(c),
+        actorName: actorName(c),
+      });
+    });
+
+    return c.json({
+      ok: true,
+      message: `Magasin supprimé avec succès. ${toolsCount} outil(s) et ${refsCount} stock(s) ont été transférés vers « ${target.name} ».`,
+    });
   }
 
   await db.query('DELETE FROM magasins WHERE id = $1', [id]);
@@ -141,7 +188,7 @@ magasinsRoutes.delete('/:id', requirePerm('magasins.manage'), async (c) => {
     actorId: actorId(c),
     actorName: actorName(c),
   });
-  return c.json({ ok: true });
+  return c.json({ ok: true, message: `Magasin « ${before.name} » supprimé.` });
 });
 
 magasinsRoutes.get('/:id', requirePerm('magasins.view'), async (c) => {

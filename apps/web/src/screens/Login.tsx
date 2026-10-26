@@ -43,14 +43,13 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
       <div className="relative z-10 w-full max-w-[26rem]">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-surface-2 border border-line p-2.5 shadow-pop">
+          <div className="mb-2.5 grid h-14 w-14 place-items-center rounded-2xl bg-surface-2 border border-line p-2.5 shadow-pop">
             <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-9 w-9 object-contain" />
           </div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-semibold text-emerald-400 mb-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            C.F.T. BÉNÉDICTINS DU MONT FÉBÉ
-          </div>
-          <h2 className="text-sm font-bold tracking-tight text-ink uppercase">
+          <p className="text-xs font-semibold tracking-wider text-ink-soft uppercase">
+            C.F.T. Bénédictins du Mont Fébé
+          </p>
+          <h2 className="mt-1 text-base font-bold tracking-tight text-ink uppercase">
             Système Central de Gestion
           </h2>
           <p className="mt-0.5 text-xs text-amber font-medium">

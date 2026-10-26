@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import {
   Clock,
+  Fingerprint,
   Gauge,
   LogOut,
   Menu,
@@ -12,7 +13,6 @@ import {
   Warehouse,
   Wrench,
   X,
-  Fingerprint,
 } from 'lucide-react';
 import type { MyPermissions, Role, User } from '../lib/api';
 import { ROLE_LABEL, initials } from '../lib/labels';
@@ -195,51 +195,6 @@ function NavButton({
   );
 }
 
-/**
- * Widget Live Clock Tracker & Quick Actions (Google Antigravity style)
- */
-function LiveClockWidget({ onTrack, isDirection }: { onTrack: () => void; isDirection: boolean }) {
-  const [time, setTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const timeStr = time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const dateStr = time.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-
-  return (
-    <div className="mx-3 my-2 rounded-xl border border-line bg-surface-2/60 p-2.5 shadow-xs">
-      <div className="flex items-center justify-between text-[11px] text-ink-faint">
-        <span className="flex items-center gap-1.5 font-medium text-ink-soft capitalize">
-          <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
-          {dateStr}
-        </span>
-        <span className="text-[9px] uppercase tracking-wider font-semibold text-sky-400">Direct</span>
-      </div>
-
-      <div className="mt-0.5 text-center font-mono text-lg font-bold tracking-tight text-ink tabular-nums">
-        {timeStr}
-      </div>
-
-      {!isDirection ? (
-        <button
-          onClick={onTrack}
-          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber px-2.5 py-1.5 text-xs font-semibold text-slate-950 shadow-xs transition-all hover:bg-amber-3 active:scale-[0.98]"
-        >
-          <Fingerprint size={14} />
-          Pointer maintenant
-        </button>
-      ) : (
-        <div className="mt-1 text-center text-[10px] font-medium text-ink-faint">
-          Gouvernance &amp; Super-Admin
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function Shell({
   user,
   view,
@@ -299,14 +254,8 @@ export function Shell({
             </div>
           </div>
 
-          {/* Quick Punch Tracker Widget */}
-          <LiveClockWidget
-            onTrack={() => onView('pointage')}
-            isDirection={user.role === 'direction'}
-          />
-
           {/* Categorized Antigravity Navigation */}
-          <nav className="flex-1 space-y-3 overflow-y-auto px-2.5 py-2 scroll-thin">
+          <nav className="flex-1 space-y-3 overflow-y-auto px-2.5 py-3 scroll-thin">
             {NAV_CATEGORIES.map((cat) => {
               const catItems = items.filter((it) => cat.views.includes(it.id));
               if (catItems.length === 0) return null;
@@ -322,19 +271,6 @@ export function Shell({
               );
             })}
           </nav>
-
-          {/* Scanner Button (Desktop) */}
-          {onScan && (
-            <div className="px-3 pb-2">
-              <button
-                onClick={onScan}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-line bg-surface-2/60 px-3 py-1.5 text-xs font-semibold text-ink transition-all hover:bg-surface-3 hover:border-line-strong active:scale-[0.98]"
-              >
-                <QrCode size={14} className="text-amber" />
-                Scanner un QR code
-              </button>
-            </div>
-          )}
 
           {/* User Profile Footer */}
           <div className="border-t border-line p-2.5 bg-surface-2/30">

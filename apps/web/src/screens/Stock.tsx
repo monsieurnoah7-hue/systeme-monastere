@@ -272,6 +272,12 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
   const refresh = useCallback(() => setReload((value) => value + 1), []);
 
   useEffect(() => {
+    const handleSync = () => refresh();
+    window.addEventListener('mf-refresh-data', handleSync);
+    return () => window.removeEventListener('mf-refresh-data', handleSync);
+  }, [refresh]);
+
+  useEffect(() => {
     if (!scan) return;
     if (scan.kind === 'stock') {
       setQ('');
