@@ -218,7 +218,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
             )}
             {visitedViews.has('outils') && (
               <div className={activeView === 'outils' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'outils'}>
-                <Outils user={user} scan={scan} />
+                <Outils user={user} scan={scan} permissions={permissions} />
               </div>
             )}
             {visitedViews.has('pointage') && (
@@ -228,17 +228,17 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
             )}
             {visitedViews.has('stock') && (
               <div className={activeView === 'stock' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'stock'}>
-                <Stock user={user} scan={scan} />
+                <Stock user={user} scan={scan} permissions={permissions} />
               </div>
             )}
             {visitedViews.has('employes') && (
               <div className={activeView === 'employes' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'employes'}>
-                <Employees user={user} scan={scan} />
+                <Employees user={user} scan={scan} permissions={permissions} />
               </div>
             )}
             {visitedViews.has('magasins') && (
               <div className={activeView === 'magasins' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'magasins'}>
-                <Magasins user={user} scan={scan} />
+                <Magasins user={user} scan={scan} permissions={permissions} />
               </div>
             )}
             {visitedViews.has('espace') && (

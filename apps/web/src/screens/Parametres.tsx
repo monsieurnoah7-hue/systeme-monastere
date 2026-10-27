@@ -37,6 +37,7 @@ import {
   Copy,
   Database,
   Download,
+  Eye,
   Filter,
   HardDrive,
   KeyRound,
@@ -54,6 +55,7 @@ import {
   Users,
   UserX,
   X,
+  Zap,
 } from 'lucide-react';
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { computeAllowedViews } from '../components/Shell';
@@ -68,53 +70,60 @@ export type RoleArchetypeUI = {
 
 export const ROLE_ARCHETYPES_UI: RoleArchetypeUI[] = [
   {
-    id: 'ouvrier',
-    name: 'Opérateur Atelier & Chantier',
+    id: 'menuisier',
+    name: 'Menuisier Atelier',
     badge: 'Atelier',
-    description: 'Accès personnel : badge QR, pointages, congés et consultation des outils.',
-    modules: ['Mon Espace', 'Outils (Lecture)'],
+    description: 'Consultation du catalogue d’outillage, badge QR et espace personnel (Lecture seule).',
+    modules: ['Mon Espace', 'Outils (Lecture seule)', 'Prêts (Consultation)'],
   },
   {
     id: 'magasinier',
-    name: 'Logistique, Magasins & Quincaillerie',
-    badge: 'Magasin',
-    description: 'Gestion complète des stocks, entrées/sorties, magasins et fiches outils.',
-    modules: ['Mon Espace', 'Outils', 'Stock', 'Magasins', 'Tableau de bord'],
+    name: 'Magasinier & Quincaillerie',
+    badge: 'Magasin & Dépôt',
+    description: 'Gestion intégrale de l’outillage, dépôts, consommables, quincaillerie et mouvements.',
+    modules: ['Mon Espace', 'Outils & Matériels', 'Stock & Quincaillerie', 'Magasins', 'Tableau de bord'],
   },
   {
-    id: 'superviseur',
-    name: 'Supervision Terrain & Équipe',
+    id: 'chef_equipe',
+    name: 'Chef d’équipe / Superviseur',
     badge: 'Supervision',
-    description: 'Pilotage des ouvriers, présences, retards, congés, équipe et prêts.',
-    modules: ['Mon Espace', 'Tableau de bord', 'Pointage', 'Travailleurs', 'Outils', 'Stock'],
+    description: 'Supervision des travailleurs, pointages de présence, congés, prêts et mouvements d’atelier.',
+    modules: ['Mon Espace', 'Tableau de bord', 'Pointage & Présences', 'Travailleurs', 'Prêts d’outils', 'Mouvements Stock'],
   },
   {
     id: 'auditeur',
-    name: 'Contrôle & Audit (Lecture Seule)',
-    badge: 'Audit',
-    description: 'Vue d’ensemble sur l’atelier, valorisation et rapports patrimoniaux.',
-    modules: ['Mon Espace', 'Tableau de bord', 'Outils (Lecture)', 'Stock (Lecture)', 'Travailleurs (Lecture)'],
+    name: 'Auditeur / Contrôleur (Lecture seule)',
+    badge: 'Audit & Contrôle',
+    description: 'Consultation complète de l’outillage, stocks, dépôts, présences et KPI, sans aucune modification.',
+    modules: ['Mon Espace', 'Tableau de bord', 'Outils (Lecture seule)', 'Stock (Lecture seule)', 'Travailleurs (Lecture seule)'],
   },
   {
     id: 'maintenance',
-    name: 'Maintenance & Réparations',
+    name: 'Maintenance & Affûtage',
     badge: 'Technique',
-    description: 'Contrôle technique, changements de statut et réparations d’outils.',
-    modules: ['Mon Espace', 'Outils & Maintenance', 'Stock'],
+    description: 'Entretien des machines, réparation, diagnostic et mise à jour de l’état du parc.',
+    modules: ['Mon Espace', 'Outils & Réparations', 'Statuts d’équipements', 'Stock consommables'],
+  },
+  {
+    id: 'responsable_stock',
+    name: 'Gestionnaire des Stocks & Quincaillerie',
+    badge: 'Stocks',
+    description: 'Suivi exclusif des matières premières, consommables, quincaillerie et réapprovisionnements.',
+    modules: ['Mon Espace', 'Stock & Quincaillerie', 'Entrées / Sorties / Transferts', 'Alertes seuils'],
   },
   {
     id: 'clone',
     name: 'Dupliquer un rôle existant',
-    badge: 'Copie',
-    description: 'Copie exactement les permissions accordées à un autre rôle.',
-    modules: ['Identique au rôle source'],
+    badge: 'Duplication',
+    description: 'Copie exactement les permissions accordées à un autre rôle déjà configuré.',
+    modules: ['Identique au rôle source sélectionné'],
   },
   {
     id: 'custom',
-    name: 'Personnalisé sur mesure',
-    badge: 'Libre',
-    description: 'Définissez librement les privilèges dans la matrice.',
-    modules: ['Mon Espace par défaut'],
+    name: 'Rôle vierge sur-mesure',
+    badge: 'Sur mesure',
+    description: 'Créez un rôle sans droits initiaux et cochez librement ses permissions dans la matrice.',
+    modules: ['Attribution manuelle dans la matrice'],
   },
 ];
 
@@ -794,6 +803,38 @@ function AdminSettings({ user }: { user: User }) {
     }
   }
 
+  function applyColumnPreset(role: string, preset: 'view_only' | 'all' | 'none') {
+    if (!permMatrix || !permDraft) return;
+    setPermDraft((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev };
+      for (const act of permMatrix.actions) {
+        const actionCode = act.action;
+        const isView = act.kind === 'view' || actionCode.endsWith('.view');
+        let allowed = false;
+        if (preset === 'all') allowed = true;
+        else if (preset === 'none') allowed = false;
+        else if (preset === 'view_only') allowed = isView;
+
+        updated[actionCode] = {
+          ...updated[actionCode],
+          [role]: allowed,
+        };
+      }
+      return updated;
+    });
+
+    const roleName = availableRoles.find((r) => r.id === role)?.name ?? ROLE_LABEL[role] ?? role;
+    toast(
+      preset === 'view_only'
+        ? `Droits de « ${roleName} » configurés en Consultation (Lecture seule).`
+        : preset === 'all'
+        ? `Toutes les permissions ont été accordées à « ${roleName} ».`
+        : `Toutes les permissions ont été révoquées pour « ${roleName} ».`,
+      'info',
+    );
+  }
+
   async function handleCreateAction() {
     if (!newActionForm.action.trim() || !newActionForm.label.trim() || !newActionForm.group_label.trim()) {
       setNewActionError('Tous les champs sont obligatoires.');
@@ -826,12 +867,11 @@ function AdminSettings({ user }: { user: User }) {
   }
 
   // Role management actions (Direction)
-  function openCreateRoleModal(defaultArchetype = 'ouvrier') {
+  function openCreateRoleModal(defaultArchetype = 'menuisier') {
     const fallbackArch = ROLE_ARCHETYPES_UI[0]!;
     const arch = ROLE_ARCHETYPES_UI.find((a) => a.id === defaultArchetype) ?? fallbackArch;
-    const initialId = arch.id === 'clone' || arch.id === 'custom' ? '' : `${arch.id}_${Math.floor(10 + Math.random() * 90)}`;
     setRoleForm({
-      id: initialId,
+      id: '',
       name: arch.id === 'clone' || arch.id === 'custom' ? '' : arch.name,
       description: arch.description,
       template: defaultArchetype,
@@ -848,8 +888,8 @@ function AdminSettings({ user }: { user: User }) {
     setRoleForm((f) => ({
       ...f,
       template: archId,
-      name: f.name.trim() ? f.name : (arch.id === 'clone' || arch.id === 'custom' ? '' : arch.name),
-      id: f.id.trim() ? f.id : (arch.id === 'clone' || arch.id === 'custom' ? '' : `${arch.id}_${Math.floor(10 + Math.random() * 90)}`),
+      name: arch.id === 'clone' || arch.id === 'custom' ? '' : arch.name,
+      id: '',
       description: arch.description,
     }));
   }
@@ -862,23 +902,25 @@ function AdminSettings({ user }: { user: User }) {
   }
 
   async function handleSaveRole() {
-    const trimmedId = roleForm.id.trim().toLowerCase();
     const trimmedName = roleForm.name.trim();
-    if (roleModalMode === 'create' && !trimmedId) {
-      setRoleError('L’identifiant technique du rôle est requis.');
-      return;
-    }
     if (!trimmedName) {
       setRoleError('Le libellé officiel du rôle est requis.');
       return;
     }
+
+    const autoId = (roleForm.id.trim() || trimmedName)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '_')
+      .replace(/^_+|_+$/g, '');
 
     setRoleBusy(true);
     setRoleError(null);
     try {
       if (roleModalMode === 'create') {
         const payload: Record<string, unknown> = {
-          id: trimmedId,
+          id: autoId || undefined,
           name: trimmedName,
           description: roleForm.description.trim() || undefined,
         };
@@ -892,7 +934,7 @@ function AdminSettings({ user }: { user: User }) {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        toast(`Rôle « ${trimmedName} » créé avec privilèges initialisés.`, 'success');
+        toast(`Rôle « ${trimmedName} » créé avec succès. Vous pouvez maintenant ajuster ses droits dans la matrice.`, 'success');
         window.dispatchEvent(new CustomEvent('permissions:updated'));
         window.dispatchEvent(new CustomEvent('roles-updated'));
       } else {
@@ -1755,65 +1797,167 @@ function AdminSettings({ user }: { user: User }) {
                     <table className="w-full min-w-[620px] text-left">
                       <thead className="border-b border-line bg-paper-2/60 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
                         <tr>
-                          <th className="sticky left-0 top-0 z-20 bg-surface-2 px-4 py-3 border-r border-line min-w-[190px] sm:min-w-[240px]">
-                            Module &amp; Action
+                          <th className="sticky left-0 top-0 z-20 bg-surface-2 px-4 py-3 border-r border-line min-w-[200px] sm:min-w-[260px]">
+                            <div className="flex items-center justify-between">
+                              <span>Module &amp; Action</span>
+                              <span className="text-[10px] lowercase font-normal text-ink-faint">({permMatrix.actions.length} permissions)</span>
+                            </div>
                           </th>
-                          {permMatrix.roles
-                            .filter((r) => r !== 'direction')
-                            .map((role) => (
-                              <th key={role} className="px-4 py-3 text-center min-w-[110px]">
-                                <span
-                                  className={cx(
-                                    'inline-flex items-center rounded-chip border px-2 py-0.5 text-[11px] font-semibold',
-                                    (ROLE_THEME[role] ?? DEFAULT_ROLE_THEME).bg,
+                          {permMatrix.roles.map((role) => {
+                            const isDir = role === 'direction';
+                            const roleDetail = availableRoles.find((ar) => ar.id === role);
+                            const isSystem = ['direction', 'magasinier', 'chef_atelier', 'travailleur'].includes(role);
+                            const roleName = roleDetail?.name ?? ROLE_LABEL[role] ?? role;
+
+                            return (
+                              <th key={role} className="px-3 py-3 text-center min-w-[130px] border-r border-line/60 align-top">
+                                <div className="flex flex-col items-center gap-1.5">
+                                  <div className="flex items-center gap-1">
+                                    <span
+                                      className={cx(
+                                        'inline-flex items-center rounded-chip border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap',
+                                        (ROLE_THEME[role] ?? DEFAULT_ROLE_THEME).bg,
+                                      )}
+                                      title={roleDetail?.description || roleName}
+                                    >
+                                      {roleName}
+                                    </span>
+                                    {!isSystem && roleDetail && (
+                                      <div className="flex items-center gap-0.5">
+                                        <button
+                                          type="button"
+                                          title="Modifier ce rôle"
+                                          onClick={() => openEditRoleModal(roleDetail)}
+                                          className="rounded p-0.5 text-ink-faint hover:text-ink hover:bg-paper-2 transition-colors"
+                                        >
+                                          <Pencil size={11} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Supprimer ce rôle"
+                                          onClick={() => setDeleteRoleConfirm(roleDetail)}
+                                          className="rounded p-0.5 text-ink-faint hover:text-red hover:bg-paper-2 transition-colors"
+                                        >
+                                          <Trash2 size={11} />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {isDir ? (
+                                    <span className="text-[10px] text-green font-medium">Accès total permanent</span>
+                                  ) : (
+                                    <div className="flex items-center gap-1 text-[10px]">
+                                      <button
+                                        type="button"
+                                        onClick={() => applyColumnPreset(role, 'view_only')}
+                                        title="Accorder uniquement les droits de consultation (Lecture seule)"
+                                        className="rounded px-1.5 py-0.5 bg-paper hover:bg-paper-2 border border-line text-ink-soft text-[10px] font-medium transition-colors"
+                                      >
+                                        👁️ Lecture
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => applyColumnPreset(role, 'all')}
+                                        title="Tout cocher pour ce rôle"
+                                        className="rounded px-1.5 py-0.5 bg-paper hover:bg-paper-2 border border-line text-ink-soft text-[10px] font-medium transition-colors"
+                                      >
+                                        ⚡ Tout
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => applyColumnPreset(role, 'none')}
+                                        title="Tout décocher pour ce rôle"
+                                        className="rounded px-1.5 py-0.5 bg-paper hover:bg-paper-2 border border-line text-ink-soft text-[10px] font-medium transition-colors"
+                                      >
+                                        ✕ Rien
+                                      </button>
+                                    </div>
                                   )}
-                                >
-                                  {availableRoles.find((ar) => ar.id === role)?.name ?? ROLE_LABEL[role] ?? role}
-                                </span>
+                                </div>
                               </th>
-                            ))}
+                            );
+                          })}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line text-sm">
                         {permMatrix.groups.map((group) => (
                           <Fragment key={group.label}>
                             <tr className="bg-paper-2/70 font-semibold text-ink text-xs uppercase tracking-wide">
-                              <td colSpan={4} className="sticky left-0 px-4 py-2 text-ink-soft bg-paper-2/90 font-bold">
+                              <td colSpan={permMatrix.roles.length + 1} className="sticky left-0 px-4 py-2 text-ink-soft bg-paper-2/90 font-bold border-b border-line/60">
                                 {group.label}
                               </td>
                             </tr>
                             {group.actions.map((action) => {
                               const meta = permMatrix.actions.find((a) => a.action === action);
+                              const isView = meta?.kind === 'view' || action.endsWith('.view');
                               return (
                                 <tr key={action} className="hover:bg-paper-2/30 transition-colors group">
-                                  <td className="sticky left-0 bg-surface group-hover:bg-paper-2/40 px-4 py-2.5 border-r border-line z-10 min-w-[190px] sm:min-w-[240px]">
-                                    <div className="font-medium text-ink text-xs">{meta?.label ?? action}</div>
-                                    <div className="font-mono text-[10px] text-ink-faint">{action}</div>
+                                  <td className="sticky left-0 bg-surface group-hover:bg-paper-2/40 px-4 py-2.5 border-r border-line z-10 min-w-[200px] sm:min-w-[260px]">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="min-w-0 pr-2">
+                                        <div className="font-medium text-ink text-xs truncate">{meta?.label ?? action}</div>
+                                        <div className="font-mono text-[10px] text-ink-faint">{action}</div>
+                                      </div>
+                                      <span
+                                        className={cx(
+                                          'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider shrink-0 border select-none',
+                                          isView
+                                            ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+                                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                                        )}
+                                        title={isView ? 'Droit de consultation sans modification' : 'Action opérationnelle (création, modification, déplacement ou suppression)'}
+                                      >
+                                        {isView ? (
+                                          <>
+                                            <Eye size={10} /> Consultation
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Zap size={10} /> Action
+                                          </>
+                                        )}
+                                      </span>
+                                    </div>
                                   </td>
-                                  {permMatrix.roles
-                                    .filter((r) => r !== 'direction')
-                                    .map((role) => {
-                                      const isChecked = !!permDraft[action]?.[role];
+                                  {permMatrix.roles.map((role) => {
+                                    if (role === 'direction') {
                                       return (
-                                        <td key={role} className="px-4 py-2.5 text-center min-w-[110px]">
-                                          <button
-                                            type="button"
-                                            role="checkbox"
-                                            aria-checked={isChecked}
-                                            onClick={() => togglePerm(action, role)}
-                                            className={cx(
-                                              'inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs font-bold transition-all shadow-xs active:scale-90',
-                                              isChecked
-                                                ? 'border-green bg-green text-white shadow-xs'
-                                                : 'border-line bg-surface text-ink-faint hover:bg-paper-2',
-                                            )}
-                                            title={`${isChecked ? 'Révoquer' : 'Accorder'} ${meta?.label} pour ${availableRoles.find((ar) => ar.id === role)?.name ?? ROLE_LABEL[role] ?? role}`}
+                                        <td key={role} className="px-3 py-2 text-center min-w-[110px] border-r border-line/40">
+                                          <span
+                                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-green/30 bg-green/10 text-green"
+                                            title="Privilège garanti pour la Direction"
                                           >
-                                            {isChecked ? <Check size={15} /> : ''}
-                                          </button>
+                                            <Check size={14} />
+                                          </span>
                                         </td>
                                       );
-                                    })}
+                                    }
+
+                                    const isChecked = !!permDraft[action]?.[role];
+                                    const roleName = availableRoles.find((ar) => ar.id === role)?.name ?? ROLE_LABEL[role] ?? role;
+                                    return (
+                                      <td key={role} className="px-3 py-2 text-center min-w-[110px] border-r border-line/40">
+                                        <button
+                                          type="button"
+                                          role="checkbox"
+                                          aria-checked={isChecked}
+                                          onClick={() => togglePerm(action, role)}
+                                          className={cx(
+                                            'inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs font-bold transition-all shadow-xs active:scale-90',
+                                            isChecked
+                                              ? isView
+                                                ? 'border-blue-500 bg-blue-600 text-white shadow-xs'
+                                                : 'border-green bg-green text-white shadow-xs'
+                                              : 'border-line bg-surface text-ink-faint hover:bg-paper-2',
+                                          )}
+                                          title={`${isChecked ? 'Révoquer' : 'Accorder'} ${meta?.label ?? action} pour ${roleName}`}
+                                        >
+                                          {isChecked ? <Check size={15} /> : ''}
+                                        </button>
+                                      </td>
+                                    );
+                                  })}
                                 </tr>
                               );
                             })}
@@ -2926,10 +3070,10 @@ function AdminSettings({ user }: { user: User }) {
             </Button>
             <Button
               variant="primary"
-              disabled={roleBusy || !roleForm.name.trim() || (roleModalMode === 'create' && !roleForm.id.trim())}
+              disabled={roleBusy || !roleForm.name.trim()}
               onClick={() => void handleSaveRole()}
             >
-              {roleBusy ? <Spinner /> : roleModalMode === 'create' ? 'Créer le rôle & Activer les privilèges' : 'Enregistrer les modifications'}
+              {roleBusy ? <Spinner /> : roleModalMode === 'create' ? 'Créer le rôle & Configurer dans la matrice' : 'Enregistrer les modifications'}
             </Button>
           </>
         }
@@ -2940,10 +3084,13 @@ function AdminSettings({ user }: { user: User }) {
           {/* Archetype Quick Selection (Create Mode) */}
           {roleModalMode === 'create' && (
             <div className="space-y-2">
-              <label className="block text-xs font-semibold text-ink">
-                1. Choisissez un modèle de rôle pré-configuré (Archétype en 1 clic) :
-              </label>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-ink">
+                  1. Modèle de rôle pré-configuré (Archétype en 1 clic) :
+                </label>
+                <span className="text-[11px] text-ink-faint">Sélectionnez un modèle pour pré-remplir les droits</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {ROLE_ARCHETYPES_UI.map((arch) => {
                   const isSelected = roleForm.template === arch.id;
                   return (
@@ -2956,9 +3103,9 @@ function AdminSettings({ user }: { user: User }) {
                       )}
                     >
                       <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-ink">{arch.name}</span>
-                          <span className="rounded-full bg-paper px-1.5 py-0.5 text-[9px] font-bold text-amber border border-amber/20">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-xs font-bold text-ink truncate">{arch.name}</span>
+                          <span className="shrink-0 rounded-full bg-paper px-1.5 py-0.5 text-[9px] font-bold text-amber border border-amber/20">
                             {arch.badge}
                           </span>
                         </div>
@@ -3001,7 +3148,7 @@ function AdminSettings({ user }: { user: User }) {
 
           <div className="border-t border-line pt-3 space-y-3">
             <span className="block text-xs font-semibold text-ink">
-              {roleModalMode === 'create' ? '2. Personnalisez l’intitulé et le code technique :' : 'Informations du rôle :'}
+              {roleModalMode === 'create' ? '2. Informations et intitulé du rôle :' : 'Informations du rôle :'}
             </span>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -3018,15 +3165,27 @@ function AdminSettings({ user }: { user: User }) {
 
               {roleModalMode === 'create' ? (
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-ink-soft">
-                    Identifiant technique unique (Minuscules/chiffres/tirets)
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-medium text-ink-soft">
+                      Identifiant système
+                    </label>
+                    <span className="text-[10px] text-ink-faint">Auto-généré (modifiable)</span>
+                  </div>
                   <input
                     type="text"
                     value={roleForm.id}
-                    placeholder="Ex: resp_scierie"
+                    placeholder={
+                      roleForm.name.trim()
+                        ? roleForm.name
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .toLowerCase()
+                            .replace(/[^a-z0-9_-]/g, '_')
+                            .replace(/^_+|_+$/g, '')
+                        : 'Généré automatiquement'
+                    }
                     onChange={(e) => setRoleForm({ ...roleForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
-                    className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none"
+                    className="h-10 w-full rounded-btn border border-line bg-surface/80 px-3 font-mono text-xs text-ink focus:border-amber focus:outline-none"
                   />
                 </div>
               ) : (
@@ -3043,7 +3202,7 @@ function AdminSettings({ user }: { user: User }) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Description des responsabilités</label>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Description des responsabilités (facultative)</label>
               <textarea
                 rows={2}
                 value={roleForm.description}

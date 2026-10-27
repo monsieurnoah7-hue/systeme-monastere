@@ -265,9 +265,25 @@ function TimeOffCalendarView({
   );
 }
 
-export function Employees({ user, scan }: { user: User; scan?: ScanResult | null }) {
+export function Employees({
+  user,
+  scan,
+  permissions,
+}: {
+  user: User;
+  scan?: ScanResult | null;
+  permissions?: Record<string, boolean> | null;
+}) {
   const toast = useToast();
-  const canManage = user.role === 'direction';
+  const isSuper = user.role === 'direction';
+  const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
+
+  const canCreate = hasPerm('employees.create') || (!permissions && user.role === 'direction');
+  const canEdit = hasPerm('employees.edit') || (!permissions && user.role === 'direction');
+  const canPhoto = hasPerm('employees.photo_edit') || (!permissions && user.role === 'direction');
+  const canPrintBadge = hasPerm('employees.print_badge') || (!permissions && user.role === 'direction');
+  const canManageLeaves = hasPerm('leaves.manage') || (!permissions && user.role === 'direction');
+  const canManage = canCreate || canEdit;
 
   const [activeTab, setActiveTab] = useState<'people' | 'timeoff'>('people');
 
@@ -760,7 +776,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             <Button size="sm" onClick={openLeave} icon={<CalendarIcon size={14} />}>
               Congé / Permission
             </Button>
-            {canManage && (
+            {canCreate && (
               <Button size="sm" variant="primary" icon={<UserPlus size={15} />} onClick={openCreate}>
                 Nouveau travailleur
               </Button>
@@ -919,7 +935,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                         <td
                           className="px-2 py-1.5 text-center border-r border-line"
                           onClick={(e) => {
-                            if (canManage) {
+                            if (canPhoto) {
                               e.stopPropagation();
                               setPhotoTarget({ id: employee.id, current: employee.photo_path, name: employee.full_name });
                               setPhotoModalOpen(true);
@@ -929,10 +945,10 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                           <span
                             className={cx(
                               'group relative mx-auto grid h-8 w-8 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden transition-colors',
-                              canManage ? 'cursor-pointer hover:border-amber' : '',
+                              canPhoto ? 'cursor-pointer hover:border-amber' : '',
                               employee.active ? 'bg-amber-wash text-amber border-amber/20' : 'bg-grey-wash text-ink-faint border-line',
                             )}
-                            title={canManage ? 'Cliquer pour modifier la photo' : undefined}
+                            title={canPhoto ? 'Cliquer pour modifier la photo' : undefined}
                           >
                             {employee.photo_path ? (
                               <img src={employee.photo_path} alt={employee.full_name} className="h-full w-full object-cover" />
@@ -981,33 +997,41 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                             <Button size="sm" variant="ghost" onClick={() => setDetailFor(employee)}>
                               Détail
                             </Button>
-                            {canManage && (
+                            {(canEdit || canPrintBadge) && (
                               <>
-                                <Button size="sm" variant="ghost" onClick={() => openEdit(employee)}>
-                                  Modifier
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={() => setBadgeFor(employee)}>
-                                  Badge
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant={employee.active ? 'outline-danger' : 'secondary'}
-                                  onClick={() => void toggleActive(employee)}
-                                >
-                                  {employee.active ? 'Désactiver' : 'Activer'}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setDeleteEmployeeFor(employee);
-                                    setDeleteError(null);
-                                  }}
-                                  className="h-7 w-7 p-0 text-ink-faint hover:text-red hover:bg-red/10"
-                                  title={`Supprimer définitivement ${employee.full_name}`}
-                                >
-                                  <Trash2 size={13} />
-                                </Button>
+                                {canEdit && (
+                                  <Button size="sm" variant="ghost" onClick={() => openEdit(employee)}>
+                                    Modifier
+                                  </Button>
+                                )}
+                                {canPrintBadge && (
+                                  <Button size="sm" variant="ghost" onClick={() => setBadgeFor(employee)}>
+                                    Badge
+                                  </Button>
+                                )}
+                                {canEdit && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant={employee.active ? 'outline-danger' : 'secondary'}
+                                      onClick={() => void toggleActive(employee)}
+                                    >
+                                      {employee.active ? 'Désactiver' : 'Activer'}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setDeleteEmployeeFor(employee);
+                                        setDeleteError(null);
+                                      }}
+                                      className="h-7 w-7 p-0 text-ink-faint hover:text-red hover:bg-red/10"
+                                      title={`Supprimer définitivement ${employee.full_name}`}
+                                    >
+                                      <Trash2 size={13} />
+                                    </Button>
+                                  </>
+                                )}
                               </>
                             )}
                           </div>
@@ -1101,7 +1125,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             employees={employees}
             onOpenLeave={openLeave}
             onReview={reviewLeave}
-            canManage={canManage}
+            canManage={canManageLeaves}
           />
         </TabsContent>
       </Tabs>
@@ -1125,24 +1149,24 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             <div className="flex items-start gap-4">
               <div
                 onClick={() => {
-                  if (canManage) {
+                  if (canPhoto) {
                     setPhotoTarget({ id: detail.employee.id, current: detail.employee.photo_path, name: detail.employee.full_name });
                     setPhotoModalOpen(true);
                   }
                 }}
                 className={cx(
                   'group relative grid h-20 w-20 shrink-0 place-items-center rounded-2xl text-xl font-bold border shadow-xs overflow-hidden',
-                  canManage ? 'cursor-pointer hover:border-amber transition-colors' : '',
+                  canPhoto ? 'cursor-pointer hover:border-amber transition-colors' : '',
                   detail.employee.photo_path ? 'border-line' : 'bg-amber-wash text-amber border-amber/20',
                 )}
-                title={canManage ? "Cliquer pour modifier la photo de profil (WhatsApp)" : undefined}
+                title={canPhoto ? "Cliquer pour modifier la photo de profil (WhatsApp)" : undefined}
               >
                 {detail.employee.photo_path ? (
                   <img src={detail.employee.photo_path} alt={detail.employee.full_name} className="h-full w-full object-cover" />
                 ) : (
                   initials(detail.employee.full_name)
                 )}
-                {canManage && (
+                {canPhoto && (
                   <span className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <Camera size={20} />
                   </span>
@@ -1169,7 +1193,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                 <p className="mt-1 text-xs text-ink-soft">
                   Code badge de pointage : <span className="font-mono font-bold text-ink">{detail.employee.badge_token ?? '—'}</span>
                 </p>
-                {canManage ? (
+                {canPhoto ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -1193,7 +1217,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                   >
                     {detail.employee.has_pin ? 'Code PIN configuré' : 'Sans code PIN'}
                   </span>
-                  {canManage && (
+                  {canEdit && (
                     <button
                       type="button"
                       onClick={() => {
@@ -1425,7 +1449,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
           </div>
 
           {/* Seamless Account Creation */}
-          {!editing && canManage && (
+          {!editing && canCreate && (
             <div className="rounded-xl border border-line bg-paper/60 p-3.5 space-y-3">
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <input

@@ -80,7 +80,7 @@ export const toolsRoutes = new Hono();
 
 toolsRoutes.use('*', requireAuth);
 
-toolsRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
+toolsRoutes.get('/', requirePerm('tools.view'), async (c) => {
   const parsed = listQuery.safeParse(c.req.query());
   if (!parsed.success) return c.json({ error: 'Filtres invalides.' }, 400);
   const { q, status, category, location, magasin_id } = parsed.data;
@@ -122,7 +122,7 @@ toolsRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier'), asy
   });
 });
 
-toolsRoutes.get('/:id', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
+toolsRoutes.get('/:id', requirePerm('tools.view'), async (c) => {
   const db = getDb();
   const id = c.req.param('id');
   const tool = await db.one(`SELECT t.*, m.name AS magasin_name, m.code AS magasin_code

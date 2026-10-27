@@ -14,9 +14,20 @@ type MagasinDetail = {
   stock: (Pick<StockRef, 'id' | 'name' | 'category' | 'unit' | 'qty' | 'min_qty'>)[];
 };
 
-export function Magasins({ user, scan }: { user: { role: string }; scan?: ScanResult | null }) {
+export function Magasins({
+  user,
+  scan,
+  permissions,
+}: {
+  user: { role: string };
+  scan?: ScanResult | null;
+  permissions?: Record<string, boolean> | null;
+}) {
   const toast = useToast();
-  const canManage = user.role === 'magasinier' || user.role === 'direction';
+  const isSuper = user.role === 'direction';
+  const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
+
+  const canManage = hasPerm('magasins.manage') || (!permissions && (user.role === 'magasinier' || user.role === 'direction'));
   const [magasins, setMagasins] = useState<Magasin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

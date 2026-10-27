@@ -6,6 +6,7 @@ import {
   DEFAULT_PERMISSIONS,
   PERMISSION_ACTIONS,
   PERMISSION_GROUPS,
+  PERMISSION_KINDS,
   PERMISSION_LABELS,
   ROLE_ARCHETYPES,
   buildMatrix,
@@ -23,7 +24,18 @@ permissionsRoutes.use('*', requireAuth);
 permissionsRoutes.get('/', requireRole('direction'), async (c) => {
   const db = getDb();
   const dbRoles = await db.query<{ id: string; name: string; description: string | null; is_system: boolean }>(
-    'SELECT id, name, description, is_system FROM roles ORDER BY is_system DESC, name ASC',
+    `SELECT id, name, description, is_system 
+     FROM roles 
+     ORDER BY 
+       CASE 
+         WHEN id = 'direction' THEN 1 
+         WHEN id = 'chef_atelier' THEN 2 
+         WHEN id = 'magasinier' THEN 3 
+         WHEN id = 'travailleur' THEN 4 
+         ELSE 5 
+       END, 
+       created_at ASC, 
+       name ASC`,
   );
   const roleIds = dbRoles.map((r) => r.id);
   const rows = await db.query<{ role: string; action: string; allowed: boolean }>(
@@ -35,12 +47,20 @@ permissionsRoutes.get('/', requireRole('direction'), async (c) => {
     'SELECT action, label, group_label, is_custom FROM app_permissions ORDER BY created_at ASC',
   ).catch(() => []);
 
-  // Construire la liste complète des actions et groupes
+  // Construire la liste complète des actions et groupes avec distinction LECTURE vs ACTION
   const allActions = [
-    ...PERMISSION_ACTIONS.map((a) => ({ action: a, label: PERMISSION_LABELS[a] })),
+    ...PERMISSION_ACTIONS.map((a) => ({
+      action: a,
+      label: PERMISSION_LABELS[a],
+      kind: PERMISSION_KINDS[a] || (a.endsWith('.view') ? 'view' : 'action'),
+    })),
     ...customActions
       .filter((ca) => !(PERMISSION_ACTIONS as readonly string[]).includes(ca.action))
-      .map((ca) => ({ action: ca.action, label: ca.label })),
+      .map((ca) => ({
+        action: ca.action,
+        label: ca.label,
+        kind: (ca.action.endsWith('.view') ? 'view' : 'action') as 'view' | 'action',
+      })),
   ];
 
   // Regrouper par groupe thématique
@@ -135,12 +155,21 @@ permissionsRoutes.post('/actions', requireRole('direction'), async (c) => {
 
 permissionsRoutes.get('/roles', async (c) => {
   const db = getDb();
-  const roles = await db.query<{ id: string; name: string; description: string | null; is_system: boolean; user_count: string }>(
-    `SELECT r.id, r.name, r.description, r.is_system, count(u.id)::text AS user_count
+  const roles = await db.query<{ id: string; name: string; description: string | null; is_system: boolean; created_at: string; user_count: string }>(
+    `SELECT r.id, r.name, r.description, r.is_system, r.created_at, count(u.id)::text AS user_count
      FROM roles r
      LEFT JOIN users u ON u.role = r.id
-     GROUP BY r.id, r.name, r.description, r.is_system
-     ORDER BY r.is_system DESC, r.name ASC`,
+     GROUP BY r.id, r.name, r.description, r.is_system, r.created_at
+     ORDER BY 
+       CASE 
+         WHEN r.id = 'direction' THEN 1 
+         WHEN r.id = 'chef_atelier' THEN 2 
+         WHEN r.id = 'magasinier' THEN 3 
+         WHEN r.id = 'travailleur' THEN 4 
+         ELSE 5 
+       END, 
+       r.created_at ASC,
+       r.name ASC`,
   );
   return c.json({ roles });
 });
@@ -158,7 +187,7 @@ permissionsRoutes.get('/archetypes', requireRole('direction'), async (c) => {
 });
 
 const createRoleSchema = z.object({
-  id: z.string().min(2).max(40).regex(/^[a-z0-9_-]+$/, 'Identifiant composé de minuscules, chiffres, tirets'),
+  id: z.string().max(40).regex(/^[a-z0-9_-]*$/).optional().nullable(),
   name: z.string().min(2).max(80),
   description: z.string().max(250).optional().nullable(),
   template: z.string().optional().nullable(),
@@ -172,9 +201,30 @@ permissionsRoutes.post('/roles', requireRole('direction'), async (c) => {
     return c.json({ error: body.error.issues[0]?.message ?? 'Données du rôle invalides.' }, 400);
   }
   const db = getDb();
-  const exists = await db.one<{ id: string }>('SELECT id FROM roles WHERE id = $1', [body.data.id]);
-  if (exists) {
-    return c.json({ error: 'Un rôle avec cet identifiant existe déjà.' }, 409);
+
+  // Auto-generate ID/slug if omitted
+  let roleId = (body.data.id ?? '').trim().toLowerCase();
+  if (!roleId) {
+    roleId = body.data.name
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 32);
+    if (!roleId) roleId = `role_${Date.now().toString(36)}`;
+    let candidate = roleId;
+    let idx = 1;
+    while (await db.one<{ id: string }>('SELECT id FROM roles WHERE id = $1', [candidate])) {
+      candidate = `${roleId.slice(0, 28)}_${idx++}`;
+    }
+    roleId = candidate;
+  } else {
+    const exists = await db.one<{ id: string }>('SELECT id FROM roles WHERE id = $1', [roleId]);
+    if (exists) {
+      return c.json({ error: 'Un rôle avec cet identifiant existe déjà.' }, 409);
+    }
   }
 
   // Déterminer les permissions initiales selon le template ou la copie
@@ -205,7 +255,7 @@ permissionsRoutes.post('/roles', requireRole('direction'), async (c) => {
   await db.transaction(async (tx) => {
     await tx.query(
       'INSERT INTO roles (id, name, description, is_system) VALUES ($1, $2, $3, false)',
-      [body.data.id, body.data.name.trim(), body.data.description?.trim() || null],
+      [roleId, body.data.name.trim(), body.data.description?.trim() || null],
     );
 
     // Initialiser les permissions en base pour ce nouveau rôle
@@ -213,7 +263,7 @@ permissionsRoutes.post('/roles', requireRole('direction'), async (c) => {
       const allowed = initialActions.includes(action);
       await tx.query(
         'INSERT INTO role_permissions (role, action, allowed) VALUES ($1, $2, $3)',
-        [body.data.id, action, allowed],
+        [roleId, action, allowed],
       );
     }
   });
@@ -222,14 +272,14 @@ permissionsRoutes.post('/roles', requireRole('direction'), async (c) => {
 
   await writeAudit(db, {
     entity: 'roles',
-    entityId: body.data.id,
+    entityId: roleId,
     action: 'create',
-    after: { ...body.data, initialActionsCount: initialActions.length },
+    after: { ...body.data, id: roleId, initialActionsCount: initialActions.length },
     actorId: actorId(c),
     actorName: actorName(c),
   });
 
-  return c.json({ ok: true, id: body.data.id, permissionsCount: initialActions.length });
+  return c.json({ ok: true, id: roleId, permissionsCount: initialActions.length });
 });
 
 const updateRoleSchema = z.object({

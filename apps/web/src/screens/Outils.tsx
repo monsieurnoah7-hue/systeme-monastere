@@ -161,9 +161,27 @@ function A4Sheet({ tools }: { tools: Tool[] }) {
   );
 }
 
-export function Outils({ user, scan }: { user: User; scan?: ScanResult | null }) {
+export function Outils({
+  user,
+  scan,
+  permissions,
+}: {
+  user: User;
+  scan?: ScanResult | null;
+  permissions?: Record<string, boolean> | null;
+}) {
   const toast = useToast();
-  const canManage = user.role === 'direction' || user.role === 'magasinier';
+  const isSuper = user.role === 'direction';
+  const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
+
+  const canCreate = hasPerm('tools.create') || (!permissions && user.role === 'magasinier');
+  const canEdit = hasPerm('tools.edit') || (!permissions && user.role === 'magasinier');
+  const canDelete = hasPerm('tools.delete') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
+  const canEditStatus = hasPerm('tools.edit_status') || (!permissions && user.role === 'magasinier');
+  const canPhoto = hasPerm('tools.photo_edit') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
+  const canLoan = hasPerm('loans.create') || (!permissions && user.role === 'magasinier');
+  const canReturn = hasPerm('loans.return') || (!permissions && user.role === 'magasinier');
+  const canManage = canCreate || canEdit;
 
   const [filters, setFilters] = useState({ q: '', status: '', category: '', location: '', magasin_id: '' });
   const [tools, setTools] = useState<Tool[]>([]);
@@ -1224,7 +1242,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
 
                         {/* Photo Thumbnail */}
                         <td className="px-2 py-1.5 text-center border-r border-line" onClick={(e) => {
-                          if (canManage) {
+                          if (canPhoto) {
                             e.stopPropagation();
                             setPhotoTarget({ id: tool.id, current: tool.photo_path, name: tool.name });
                             setPhotoModalOpen(true);
@@ -1340,7 +1358,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                         {/* Actions Rapides */}
                         <td className="px-3 py-2 text-right">
                           <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                            {canManage && tool.status === 'disponible' ? (
+                            {canLoan && tool.status === 'disponible' ? (
                               <button
                                 onClick={() => {
                                   setLoanFor(tool);
@@ -1352,25 +1370,29 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                               </button>
                             ) : null}
 
-                            {canManage && (
+                            {(canEdit || canDelete) && (
                               <>
-                                <button
-                                  onClick={() => {
-                                    setAssignFor(tool);
-                                    setAssignMagasinId(tool.magasin_id ?? '');
-                                  }}
-                                  className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all"
-                                  title="Affecter ou changer de magasin"
-                                >
-                                  <ArrowRightLeft size={13} />
-                                </button>
-                                <button
-                                  onClick={() => setDeleteSingleTool(tool)}
-                                  className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-red-500/10 hover:text-red hover:border-red-500/30 active:scale-95 transition-all"
-                                  title="Supprimer définitivement cet outil"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
+                                {canEdit && (
+                                  <button
+                                    onClick={() => {
+                                      setAssignFor(tool);
+                                      setAssignMagasinId(tool.magasin_id ?? '');
+                                    }}
+                                    className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all"
+                                    title="Affecter ou changer de magasin"
+                                  >
+                                    <ArrowRightLeft size={13} />
+                                  </button>
+                                )}
+                                {canDelete && (
+                                  <button
+                                    onClick={() => setDeleteSingleTool(tool)}
+                                    className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-red-500/10 hover:text-red hover:border-red-500/30 active:scale-95 transition-all"
+                                    title="Supprimer définitivement cet outil"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
                               </>
                             )}
 
@@ -1491,28 +1513,32 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                       )}
                     </span>
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                      {canManage && (
+                      {(canEdit || canDelete) && (
                         <>
-                          <button
-                            onClick={() => {
-                              setAssignFor(tool);
-                              setAssignMagasinId(tool.magasin_id ?? '');
-                            }}
-                            className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-amber"
-                            title="Affecter de magasin"
-                          >
-                            <ArrowRightLeft size={13} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteSingleTool(tool)}
-                            className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-red hover:border-red-500/30"
-                            title="Supprimer cet outil"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          {canEdit && (
+                            <button
+                              onClick={() => {
+                                setAssignFor(tool);
+                                setAssignMagasinId(tool.magasin_id ?? '');
+                              }}
+                              className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-amber"
+                              title="Affecter de magasin"
+                            >
+                              <ArrowRightLeft size={13} />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              onClick={() => setDeleteSingleTool(tool)}
+                              className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-red hover:border-red-500/30"
+                              title="Supprimer cet outil"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </>
                       )}
-                      {canManage && tool.status === 'disponible' ? (
+                      {canLoan && tool.status === 'disponible' ? (
                         <button
                           onClick={() => {
                             setLoanFor(tool);
@@ -1558,7 +1584,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                     alt={detail.tool.name}
                     className="h-full w-full object-contain"
                   />
-                  {canManage ? (
+                  {canPhoto ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -1577,7 +1603,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                     <IconWrench size={28} />
                   </div>
                   <p className="text-xs text-ink-soft">Aucune photo enregistrée pour cet équipement.</p>
-                  {canManage ? (
+                  {canPhoto ? (
                     <Button
                       size="sm"
                       variant="secondary"
@@ -1706,9 +1732,9 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
               </div>
             </Card>
 
-            {canManage ? (
+            {(canLoan || canReturn || canEditStatus || canEdit || canDelete) ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {detail.tool.status === 'disponible' ? (
+                {canLoan && detail.tool.status === 'disponible' ? (
                   <Button
                     variant="primary"
                     onClick={() => {
@@ -1719,7 +1745,7 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                     Prêter cet outil
                   </Button>
                 ) : null}
-                {detail.loan ? (
+                {canReturn && detail.loan ? (
                   <Button
                     variant="primary"
                     onClick={() => {
@@ -1730,29 +1756,35 @@ export function Outils({ user, scan }: { user: User; scan?: ScanResult | null })
                     Enregistrer le retour
                   </Button>
                 ) : null}
-                <Button
-                  onClick={() => {
-                    setStatusFor(detail.tool);
-                    setStatusForm({ status: detail.tool.status, reason: '' });
-                  }}
-                >
-                  Changer le statut
-                </Button>
-                <Button
-                  onClick={() => {
-                    setAssignFor(detail.tool);
-                    setAssignMagasinId(detail.tool.magasin_id ?? '');
-                  }}
-                >
-                  Affecter à un magasin
-                </Button>
-                <Button
-                  variant="outline-danger"
-                  icon={<Trash2 size={14} />}
-                  onClick={() => setDeleteSingleTool(detail.tool)}
-                >
-                  Supprimer la fiche
-                </Button>
+                {canEditStatus ? (
+                  <Button
+                    onClick={() => {
+                      setStatusFor(detail.tool);
+                      setStatusForm({ status: detail.tool.status, reason: '' });
+                    }}
+                  >
+                    Changer le statut
+                  </Button>
+                ) : null}
+                {canEdit ? (
+                  <Button
+                    onClick={() => {
+                      setAssignFor(detail.tool);
+                      setAssignMagasinId(detail.tool.magasin_id ?? '');
+                    }}
+                  >
+                    Affecter à un magasin
+                  </Button>
+                ) : null}
+                {canDelete ? (
+                  <Button
+                    variant="outline-danger"
+                    icon={<Trash2 size={14} />}
+                    onClick={() => setDeleteSingleTool(detail.tool)}
+                  >
+                    Supprimer la fiche
+                  </Button>
+                ) : null}
               </div>
             ) : null}
 

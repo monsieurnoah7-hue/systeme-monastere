@@ -78,6 +78,44 @@ export const PERMISSION_LABELS: Record<PermissionAction, string> = {
   'permissions.manage': 'Gérer les permissions',
 };
 
+export const PERMISSION_KINDS: Record<PermissionAction, 'view' | 'action'> = {
+  'tools.view': 'view',
+  'tools.create': 'action',
+  'tools.edit': 'action',
+  'tools.delete': 'action',
+  'tools.edit_status': 'action',
+  'tools.photo_edit': 'action',
+  'loans.view': 'view',
+  'loans.create': 'action',
+  'loans.return': 'action',
+  'magasins.view': 'view',
+  'magasins.manage': 'action',
+  'stock.view': 'view',
+  'stock.create_ref': 'action',
+  'stock.edit_ref': 'action',
+  'stock.delete_ref': 'action',
+  'stock.photo_edit': 'action',
+  'stock.move': 'action',
+  'stock.correct': 'action',
+  'attendance.view': 'view',
+  'attendance.correct': 'action',
+  'leaves.view': 'view',
+  'leaves.manage': 'action',
+  'employees.view': 'view',
+  'employees.create': 'action',
+  'employees.edit': 'action',
+  'employees.photo_edit': 'action',
+  'employees.print_badge': 'action',
+  'dashboard.view': 'view',
+  'settings.view': 'view',
+  'settings.edit': 'action',
+  'users.view': 'view',
+  'users.manage': 'action',
+  'profile.photo_edit_self': 'action',
+  'terminals.manage': 'action',
+  'permissions.manage': 'action',
+};
+
 export const PERMISSION_GROUPS: { label: string; actions: PermissionAction[] }[] = [
   {
     label: 'Outils & prêts',
@@ -184,14 +222,19 @@ export const ROLE_ARCHETYPES: Record<
   string,
   { label: string; description: string; actions: PermissionAction[] }
 > = {
+  menuisier: {
+    label: 'Menuisier Atelier',
+    description: 'Consultation du catalogue d’outillage, badge QR et espace personnel (Lecture seule).',
+    actions: ['profile.photo_edit_self', 'tools.view', 'loans.view'],
+  },
   ouvrier: {
-    label: 'Opérateur Atelier & Chantier',
-    description: 'Accès personnel (Mon Espace, badge, pointages) et consultation du catalogue des outils.',
+    label: 'Menuisier Atelier',
+    description: 'Consultation du catalogue d’outillage, badge QR et espace personnel (Lecture seule).',
     actions: ['profile.photo_edit_self', 'tools.view', 'loans.view'],
   },
   magasinier: {
-    label: 'Logistique, Magasins & Quincaillerie',
-    description: 'Gestion intégrale des stocks, mouvements, création de références, fiches outils et photos.',
+    label: 'Magasinier & Quincaillerie',
+    description: 'Gestion intégrale de l’outillage, dépôts, consommables, quincaillerie et mouvements.',
     actions: [
       'profile.photo_edit_self',
       'tools.view',
@@ -215,9 +258,32 @@ export const ROLE_ARCHETYPES: Record<
       'dashboard.view',
     ],
   },
+  chef_equipe: {
+    label: 'Chef d’équipe / Superviseur',
+    description: 'Supervision des travailleurs, pointages de présence, congés, prêts et mouvements d’atelier.',
+    actions: [
+      'profile.photo_edit_self',
+      'dashboard.view',
+      'attendance.view',
+      'attendance.correct',
+      'leaves.view',
+      'leaves.manage',
+      'employees.view',
+      'employees.create',
+      'employees.edit',
+      'employees.photo_edit',
+      'employees.print_badge',
+      'tools.view',
+      'loans.view',
+      'loans.create',
+      'loans.return',
+      'stock.view',
+      'stock.move',
+    ],
+  },
   superviseur: {
-    label: 'Supervision Terrain, Équipe & RH',
-    description: 'Pilotage des travailleurs, pointages, congés, départs de chantier et prêts d’outils.',
+    label: 'Chef d’équipe / Superviseur',
+    description: 'Supervision des travailleurs, pointages de présence, congés, prêts et mouvements d’atelier.',
     actions: [
       'profile.photo_edit_self',
       'dashboard.view',
@@ -239,8 +305,8 @@ export const ROLE_ARCHETYPES: Record<
     ],
   },
   auditeur: {
-    label: 'Contrôle de Gestion & Audit (Lecture Seule)',
-    description: 'Consultation complète du tableau de bord, valorisation patrimoniale et rapports d’inventaire.',
+    label: 'Auditeur / Contrôleur (Lecture seule)',
+    description: 'Consultation complète de l’outillage, stocks, dépôts, présences et KPI, sans aucune modification.',
     actions: [
       'profile.photo_edit_self',
       'dashboard.view',
@@ -255,7 +321,7 @@ export const ROLE_ARCHETYPES: Record<
     ],
   },
   maintenance: {
-    label: 'Maintenance Technique & Outillage',
+    label: 'Maintenance & Affûtage',
     description: 'Entretien des machines, réparation, diagnostic et mise à jour de l’état de l’outillage.',
     actions: [
       'profile.photo_edit_self',
@@ -267,6 +333,22 @@ export const ROLE_ARCHETYPES: Record<
       'loans.return',
       'stock.view',
       'stock.move',
+    ],
+  },
+  responsable_stock: {
+    label: 'Gestionnaire des Stocks & Quincaillerie',
+    description: 'Suivi exclusif des matières premières, consommables, quincaillerie et mouvements.',
+    actions: [
+      'profile.photo_edit_self',
+      'stock.view',
+      'stock.create_ref',
+      'stock.edit_ref',
+      'stock.delete_ref',
+      'stock.photo_edit',
+      'stock.move',
+      'stock.correct',
+      'magasins.view',
+      'dashboard.view',
     ],
   },
 };

@@ -525,7 +525,7 @@ export type EmployeeDetail = {
 export type PermissionAction = string;
 
 export type PermissionMatrix = {
-  actions: { action: PermissionAction; label: string }[];
+  actions: { action: PermissionAction; label: string; kind?: 'view' | 'action' }[];
   groups: { label: string; actions: PermissionAction[] }[];
   roles: Role[];
   rolesDetail?: RoleInfo[];

@@ -185,10 +185,26 @@ function StockBinLabel({ refItem }: { refItem: StockRef }) {
   );
 }
 
-export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) {
+export function Stock({
+  user,
+  scan,
+  permissions,
+}: {
+  user: User;
+  scan?: ScanResult | null;
+  permissions?: Record<string, boolean> | null;
+}) {
   const toast = useToast();
-  const canManageRefs = user.role === 'magasinier' || user.role === 'direction';
-  const canMove = ['direction', 'magasinier', 'chef_atelier'].includes(user.role);
+  const isSuper = user.role === 'direction';
+  const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
+
+  const canCreateRef = hasPerm('stock.create_ref') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
+  const canEditRef = hasPerm('stock.edit_ref') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
+  const canDeleteRef = hasPerm('stock.delete_ref') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
+  const canMove = hasPerm('stock.move') || (!permissions && ['direction', 'magasinier', 'chef_atelier'].includes(user.role));
+  const canCorrect = hasPerm('stock.correct') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
+  const canPhoto = hasPerm('stock.photo_edit') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
+  const canManageRefs = canCreateRef || canEditRef;
 
   const [activeTab, setActiveTab] = useState<'inventory' | 'journal'>('inventory');
   const [refs, setRefs] = useState<StockRef[]>([]);
@@ -1087,7 +1103,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                             <td
                               className="px-2 py-1.5 text-center border-r border-line"
                               onClick={(e) => {
-                                if (canManageRefs) {
+                                if (canPhoto) {
                                   e.stopPropagation();
                                   setPhotoTarget({ id: ref.id, current: ref.photo_path, name: ref.name });
                                   setPhotoModalOpen(true);
@@ -1197,26 +1213,30 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                                   </>
                                 ) : null}
 
-                                {canManageRefs && (
+                                {(canEditRef || canDeleteRef) && (
                                   <>
-                                    <button
-                                      onClick={() => {
-                                        setSelectedRefIds(new Set([ref.id]));
-                                        setBatchAssignMagasinId(ref.magasin_id ?? '');
-                                        setBatchAssignOpen(true);
-                                      }}
-                                      className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all"
-                                      title="Affecter ou transférer de magasin"
-                                    >
-                                      <ArrowRightLeft size={13} />
-                                    </button>
-                                    <button
-                                      onClick={() => setDeleteSingleRef(ref)}
-                                      className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-red-500/10 hover:text-red hover:border-red-500/30 active:scale-95 transition-all"
-                                      title="Supprimer cet article"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
+                                    {canEditRef && (
+                                      <button
+                                        onClick={() => {
+                                          setSelectedRefIds(new Set([ref.id]));
+                                          setBatchAssignMagasinId(ref.magasin_id ?? '');
+                                          setBatchAssignOpen(true);
+                                        }}
+                                        className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all"
+                                        title="Affecter ou transférer de magasin"
+                                      >
+                                        <ArrowRightLeft size={13} />
+                                      </button>
+                                    )}
+                                    {canDeleteRef && (
+                                      <button
+                                        onClick={() => setDeleteSingleRef(ref)}
+                                        className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-red-500/10 hover:text-red hover:border-red-500/30 active:scale-95 transition-all"
+                                        title="Supprimer cet article"
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    )}
                                   </>
                                 )}
 
@@ -1504,7 +1524,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                     alt={selected.name}
                     className="h-full w-full object-contain"
                   />
-                  {canManageRefs ? (
+                  {canPhoto ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -1523,7 +1543,7 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                     <IconBox size={24} />
                   </div>
                   <p className="text-xs text-ink-soft">Aucune photo enregistrée pour cet article.</p>
-                  {canManageRefs ? (
+                  {canPhoto ? (
                     <Button
                       size="sm"
                       variant="secondary"
@@ -1580,43 +1600,47 @@ export function Stock({ user, scan }: { user: User; scan?: ScanResult | null }) 
                     Sortie
                   </Button>
                 ) : null}
-                {canManageRefs ? (
-                  <>
-                    <Button
-                      size="sm"
-                      icon={<IconArrowIn size={16} />}
-                      onClick={() => {
-                        openMove('in', selected.id);
-                      }}
-                    >
-                      Entrée
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        openMove('correction', selected.id);
-                      }}
-                    >
-                      Ajuster inventaire
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        openEdit(selected);
-                      }}
-                    >
-                      Modifier la fiche
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline-danger"
-                      icon={<Trash2 size={14} />}
-                      onClick={() => setDeleteSingleRef(selected)}
-                    >
-                      Supprimer l’article
-                    </Button>
-                  </>
-                ) : null}
+                {canMove && (
+                  <Button
+                    size="sm"
+                    icon={<IconArrowIn size={16} />}
+                    onClick={() => {
+                      openMove('in', selected.id);
+                    }}
+                  >
+                    Entrée
+                  </Button>
+                )}
+                {canCorrect && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      openMove('correction', selected.id);
+                    }}
+                  >
+                    Ajuster inventaire
+                  </Button>
+                )}
+                {canEditRef && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      openEdit(selected);
+                    }}
+                  >
+                    Modifier la fiche
+                  </Button>
+                )}
+                {canDeleteRef && (
+                  <Button
+                    size="sm"
+                    variant="outline-danger"
+                    icon={<Trash2 size={14} />}
+                    onClick={() => setDeleteSingleRef(selected)}
+                  >
+                    Supprimer l’article
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   icon={<IconPrinter size={16} />}

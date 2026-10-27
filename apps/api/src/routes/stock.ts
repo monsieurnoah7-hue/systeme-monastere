@@ -72,7 +72,7 @@ async function refQty(refId: number): Promise<number> {
   return Number(row?.qty ?? 0);
 }
 
-stockRoutes.get('/refs', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
+stockRoutes.get('/refs', requirePerm('stock.view'), async (c) => {
   const magasinId = c.req.query('magasin_id');
   const params: unknown[] = [];
   let magasinWhere = '';
@@ -107,7 +107,7 @@ stockRoutes.get('/refs', requireRole('direction', 'magasinier', 'chef_atelier'),
   });
 });
 
-stockRoutes.get('/movements', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
+stockRoutes.get('/movements', requirePerm('stock.view'), async (c) => {
   const refId = c.req.query('refId');
   const moveType = c.req.query('move_type');
   const from = c.req.query('from');
