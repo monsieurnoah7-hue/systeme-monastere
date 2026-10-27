@@ -19,6 +19,7 @@ import {
   EmptyState,
   Modal,
   PageHeader,
+  PasswordInput,
   Spinner,
   cx,
   useToast,
@@ -334,11 +335,13 @@ function AdminSettings({ user }: { user: User }) {
     login: '',
     display_name: '',
     password: '',
+    confirmPassword: '',
     role: 'magasinier' as Role,
     employee_id: '',
   });
   const [resetFor, setResetFor] = useState<AppUserRow | null>(null);
   const [resetPassword, setResetPassword] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
   const [editFor, setEditFor] = useState<AppUserRow | null>(null);
   const [editForm, setEditForm] = useState({ display_name: '', role: 'travailleur' as Role, employee_id: '' });
   const [deleteUserFor, setDeleteUserFor] = useState<AppUserRow | null>(null);
@@ -622,9 +625,19 @@ function AdminSettings({ user }: { user: User }) {
     setBusy(true);
     setFormError(null);
     try {
+      if (userForm.password !== userForm.confirmPassword) {
+        setFormError('La confirmation du mot de passe ne correspond pas.');
+        return;
+      }
       await api('/api/users', {
         method: 'POST',
-        body: JSON.stringify({ ...userForm, employee_id: userForm.employee_id || undefined }),
+        body: JSON.stringify({
+          login: userForm.login,
+          display_name: userForm.display_name,
+          password: userForm.password,
+          role: userForm.role,
+          employee_id: userForm.employee_id || undefined,
+        }),
       });
       toast('Nouveau compte créé.', 'success');
       setUserOpen(false);
@@ -653,6 +666,10 @@ function AdminSettings({ user }: { user: User }) {
 
   async function resetUserPassword() {
     if (!resetFor) return;
+    if (resetPassword !== resetPasswordConfirm) {
+      toast('La confirmation du mot de passe ne correspond pas.', 'error');
+      return;
+    }
     setBusy(true);
     try {
       await api(`/api/users/${resetFor.id}`, {
@@ -662,6 +679,7 @@ function AdminSettings({ user }: { user: User }) {
       toast(`Mot de passe réinitialisé pour ${resetFor.login}.`, 'success');
       setResetFor(null);
       setResetPassword('');
+      setResetPasswordConfirm('');
       window.dispatchEvent(new CustomEvent('mf-refresh-data'));
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Opération refusée.', 'error');
@@ -876,6 +894,7 @@ function AdminSettings({ user }: { user: User }) {
         });
         toast(`Rôle « ${trimmedName} » créé avec privilèges initialisés.`, 'success');
         window.dispatchEvent(new CustomEvent('permissions:updated'));
+        window.dispatchEvent(new CustomEvent('roles-updated'));
       } else {
         await api(`/api/permissions/roles/${roleForm.id}`, {
           method: 'PUT',
@@ -886,6 +905,7 @@ function AdminSettings({ user }: { user: User }) {
         });
         toast(`Rôle « ${trimmedName} » mis à jour.`, 'success');
         window.dispatchEvent(new CustomEvent('permissions:updated'));
+        window.dispatchEvent(new CustomEvent('roles-updated'));
       }
       setRoleModalOpen(false);
       setReload((v) => v + 1);
@@ -936,6 +956,8 @@ function AdminSettings({ user }: { user: User }) {
       toast(`Rôle « ${role.name} » supprimé avec succès.`, 'success');
       setDeleteRoleConfirm(null);
       setReload((v) => v + 1);
+      window.dispatchEvent(new CustomEvent('permissions:updated'));
+      window.dispatchEvent(new CustomEvent('roles-updated'));
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Suppression impossible.', 'error');
     } finally {
@@ -1209,7 +1231,7 @@ function AdminSettings({ user }: { user: User }) {
                 variant="primary"
                 icon={<UserPlus size={16} />}
                 onClick={() => {
-                  setUserForm({ login: '', display_name: '', password: '', role: 'magasinier', employee_id: '' });
+                  setUserForm({ login: '', display_name: '', password: '', confirmPassword: '', role: 'magasinier', employee_id: '' });
                   setFormError(null);
                   setUserOpen(true);
                 }}
@@ -2167,8 +2189,7 @@ function AdminSettings({ user }: { user: User }) {
 
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink-soft">Mot de passe actuel</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={pw.current}
                     onChange={(e) => setPw({ ...pw, current: e.target.value })}
                     className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
@@ -2177,8 +2198,7 @@ function AdminSettings({ user }: { user: User }) {
 
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink-soft">Nouveau mot de passe</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={pw.next}
                     onChange={(e) => setPw({ ...pw, next: e.target.value })}
                     className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
@@ -2187,8 +2207,7 @@ function AdminSettings({ user }: { user: User }) {
 
                 <div>
                   <label className="mb-1 block text-xs font-medium text-ink-soft">Confirmer le nouveau mot de passe</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={pw.confirm}
                     onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
                     className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
@@ -2607,7 +2626,22 @@ function AdminSettings({ user }: { user: User }) {
                 type="text"
                 value={userForm.display_name}
                 placeholder="Ex : Landry ONANA"
-                onChange={(e) => setUserForm({ ...userForm, display_name: e.target.value })}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  const autoLogin = name
+                    .trim()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '.')
+                    .replace(/^\.+|\.+$/g, '')
+                    .slice(0, 32);
+                  setUserForm((prev) => ({
+                    ...prev,
+                    display_name: name,
+                    login: prev.login && prev.login !== prev.display_name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '.') ? prev.login : autoLogin,
+                  }));
+                }}
                 className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
               />
             </div>
@@ -2627,14 +2661,23 @@ function AdminSettings({ user }: { user: User }) {
 
             <div>
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Mot de passe temporaire</label>
-              <input
-                type="text"
+              <PasswordInput
                 value={userForm.password}
                 placeholder="Au moins 6 caractères"
                 onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
                 className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Confirmer le mot de passe</label>
+            <PasswordInput
+              value={userForm.confirmPassword}
+              placeholder="Répétez le mot de passe"
+              onChange={(e) => setUserForm({ ...userForm, confirmPassword: e.target.value })}
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+            />
           </div>
 
           <div>
@@ -2757,21 +2800,6 @@ function AdminSettings({ user }: { user: User }) {
             </div>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Rattacher à un travailleur</label>
-            <select
-              value={editForm.employee_id}
-              onChange={(e) => setEditForm({ ...editForm, employee_id: e.target.value })}
-              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
-            >
-              <option value="">Aucun profil travailleur</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.full_name} ({e.id})
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
       </Modal>
 
@@ -2779,15 +2807,31 @@ function AdminSettings({ user }: { user: User }) {
       <Modal
         open={!!resetFor}
         title={resetFor ? `Réinitialiser le mot de passe · @${resetFor.login}` : 'Réinitialiser le mot de passe'}
-        onClose={() => setResetFor(null)}
+        onClose={() => {
+          setResetFor(null);
+          setResetPassword('');
+          setResetPasswordConfirm('');
+        }}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setResetFor(null)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setResetFor(null);
+                setResetPassword('');
+                setResetPasswordConfirm('');
+              }}
+            >
               Annuler
             </Button>
             <Button
               variant="primary"
-              disabled={busy || resetPassword.length < 6}
+              disabled={
+                busy ||
+                resetPassword.length < 6 ||
+                resetPasswordConfirm.length < 6 ||
+                resetPassword !== resetPasswordConfirm
+              }
               onClick={() => void resetUserPassword()}
             >
               {busy ? <Spinner /> : 'Définir ce mot de passe'}
@@ -2797,15 +2841,23 @@ function AdminSettings({ user }: { user: User }) {
       >
         <div className="space-y-3">
           <p className="text-xs text-ink-soft">
-            Définissez un nouveau mot de passe temporaire pour <strong>{resetFor?.display_name}</strong> (@{resetFor?.login}).
+            Définissez un nouveau mot de passe pour <strong>{resetFor?.display_name}</strong> (@{resetFor?.login}).
           </p>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-ink-soft">Nouveau mot de passe</label>
-            <input
-              type="text"
+            <PasswordInput
               value={resetPassword}
               placeholder="Minimum 6 caractères"
               onChange={(e) => setResetPassword(e.target.value)}
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Confirmer le mot de passe</label>
+            <PasswordInput
+              value={resetPasswordConfirm}
+              placeholder="Répétez le mot de passe"
+              onChange={(e) => setResetPasswordConfirm(e.target.value)}
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
             />
           </div>

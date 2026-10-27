@@ -133,7 +133,7 @@ permissionsRoutes.post('/actions', requireRole('direction'), async (c) => {
   return c.json({ ok: true, action: { action: trimmedAction, label: trimmedLabel, group_label: trimmedGroup } }, 201);
 });
 
-permissionsRoutes.get('/roles', requireRole('direction'), async (c) => {
+permissionsRoutes.get('/roles', async (c) => {
   const db = getDb();
   const roles = await db.query<{ id: string; name: string; description: string | null; is_system: boolean; user_count: string }>(
     `SELECT r.id, r.name, r.description, r.is_system, count(u.id)::text AS user_count

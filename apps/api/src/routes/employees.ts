@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { writeAudit } from '../lib/audit.js';
-import { hashPassword } from '../lib/crypto.js';
+import { hashPassword, verifyPassword } from '../lib/crypto.js';
 import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth.js';
 import { requirePerm } from '../middleware/permissions.js';
 import type { EmployeeRow } from '../types.js';
@@ -330,12 +330,22 @@ employeesRoutes.post('/:id/photo', requirePerm('employees.photo_edit'), async (c
 
 employeesRoutes.post('/:id/pin', requirePerm('employees.edit'), async (c) => {
   const id = c.req.param('id') ?? '';
-  const body = z.object({ pin: z.string().min(4).max(10) }).safeParse(await c.req.json().catch(() => ({})));
+  const body = z.object({
+    old_pin: z.string().optional(),
+    pin: z.string().min(4).max(10),
+  }).safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) return c.json({ error: 'Le code PIN doit comporter entre 4 et 10 caractères.' }, 400);
 
   const db = getDb();
-  const before = await db.one<{ id: string }>('SELECT id FROM employees WHERE id = $1', [id]);
+  const before = await db.one<{ id: string; pin_hash: string | null }>('SELECT id, pin_hash FROM employees WHERE id = $1', [id]);
   if (!before) return c.json({ error: 'Travailleur introuvable.' }, 404);
+
+  if (before.pin_hash && body.data.old_pin) {
+    const valid = verifyPassword(body.data.old_pin.trim(), before.pin_hash);
+    if (!valid) {
+      return c.json({ error: "L'ancien code PIN est incorrect." }, 400);
+    }
+  }
 
   const pinHash = hashPassword(body.data.pin.trim());
   await db.query('UPDATE employees SET pin_hash = $1 WHERE id = $2', [pinHash, id]);

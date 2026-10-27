@@ -4,7 +4,7 @@ import { api, type Dashboard as DashboardType, type Employee, type KioskIdentify
 import { QR_PREFIX, qrDataUrl } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { initials } from '../lib/labels';
-import { Banner, Button, Card, Modal, Spinner, cx } from '../components/ui';
+import { Banner, Button, Card, Modal, PasswordInput, Spinner, cx } from '../components/ui';
 import {
   Camera,
   CheckCircle2,
@@ -1670,8 +1670,7 @@ export function Pointage() {
               {unlockError ? <Banner tone="error">{unlockError}</Banner> : null}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-ink-soft">Mot de passe Direction</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={unlockPassword}
                   placeholder="Mot de passe superviseur…"
                   onChange={(e) => setUnlockPassword(e.target.value)}

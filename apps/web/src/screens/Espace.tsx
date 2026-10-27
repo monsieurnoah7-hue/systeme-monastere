@@ -71,6 +71,7 @@ export function Espace({
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -113,6 +114,21 @@ export function Espace({
         payload.display_name = displayName.trim();
       }
       if (newPassword.trim()) {
+        if (!currentPassword) {
+          setProfileError('Veuillez renseigner votre mot de passe actuel.');
+          setProfileSaving(false);
+          return;
+        }
+        if (newPassword.trim().length < 6) {
+          setProfileError('Le nouveau mot de passe doit comporter au moins 6 caractères.');
+          setProfileSaving(false);
+          return;
+        }
+        if (newPassword.trim() !== confirmPassword.trim()) {
+          setProfileError('La confirmation du mot de passe ne correspond pas au nouveau mot de passe.');
+          setProfileSaving(false);
+          return;
+        }
         payload.current_password = currentPassword;
         payload.new_password = newPassword.trim();
       }
@@ -130,6 +146,7 @@ export function Espace({
       setProfileSuccess('Profil mis à jour avec succès.');
       setCurrentPassword('');
       setNewPassword('');
+      setConfirmPassword('');
       if (res.user?.display_name) {
         setDisplayName(res.user.display_name);
       }
@@ -219,6 +236,13 @@ export function Espace({
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Minimum 6 caractères"
+                  />
+                  <Field
+                    label="Confirmer le nouveau mot de passe"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Répétez le mot de passe"
                   />
                 </div>
               </div>

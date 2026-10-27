@@ -1,12 +1,14 @@
 import {
   useCallback,
   useId,
+  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { IconAlert, IconCheck, IconX } from './Icons';
 import {
@@ -182,29 +184,78 @@ export function PageHeader({
   );
 }
 
+export function PasswordInput({
+  className,
+  inputMode,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement>) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative w-full">
+      <input
+        type={show ? 'text' : 'password'}
+        inputMode={inputMode}
+        className={cx(className, 'pr-9')}
+        {...props}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => setShow((v) => !v)}
+        title={show ? 'Masquer' : 'Afficher'}
+        aria-label={show ? 'Masquer la saisie' : 'Afficher la saisie'}
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-amber focus:text-amber transition-colors p-1"
+      >
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  );
+}
+
 export function Field({
   label,
   hint,
   className,
+  type,
   'aria-invalid': ariaInvalid,
   ...rest
-}: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string }) {
+}: InputHTMLAttributes<HTMLInputElement> & { label?: string; hint?: string }) {
   const id = useId();
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === 'password';
+  const effectiveType = isPassword ? (showPassword ? 'text' : 'password') : type;
+
   return (
     <label htmlFor={id} className={cx('block', className)}>
-      <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">{label}</span>
-      <input
-        id={id}
-        aria-invalid={ariaInvalid}
-        className={cx(
-          'h-9 w-full rounded-btn border bg-surface px-3 text-xs text-ink placeholder:text-ink-faint',
-          'transition-colors duration-[120ms] focus:outline-none focus:ring-2',
-          ariaInvalid
-            ? 'border-red focus:border-red focus:ring-red/15'
-            : 'border-line-strong focus:border-blue focus:ring-blue/15',
+      {label ? <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">{label}</span> : null}
+      <div className="relative">
+        <input
+          id={id}
+          type={effectiveType}
+          aria-invalid={ariaInvalid}
+          className={cx(
+            'h-9 w-full rounded-btn border bg-surface px-3 text-xs text-ink placeholder:text-ink-faint',
+            isPassword ? 'pr-9' : '',
+            'transition-colors duration-[120ms] focus:outline-none focus:ring-2',
+            ariaInvalid
+              ? 'border-red focus:border-red focus:ring-red/15'
+              : 'border-line-strong focus:border-blue focus:ring-blue/15',
+          )}
+          {...rest}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setShowPassword((v) => !v)}
+            title={showPassword ? 'Masquer' : 'Afficher'}
+            aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-amber focus:text-amber transition-colors p-1"
+          >
+            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
         )}
-        {...rest}
-      />
+      </div>
       {hint ? <span className="mt-1 block text-[11px] text-ink-faint">{hint}</span> : null}
     </label>
   );

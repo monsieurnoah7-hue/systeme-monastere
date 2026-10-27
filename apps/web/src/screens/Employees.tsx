@@ -11,6 +11,7 @@ import {
   Drawer,
   Modal,
   PageHeader,
+  PasswordInput,
   Spinner,
   cx,
   useToast,
@@ -305,7 +306,9 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   // Modale PIN de pointage (Pilier 2)
   const [pinModalFor, setPinModalFor] = useState<Employee | null>(null);
+  const [pinOldValue, setPinOldValue] = useState('');
   const [pinValue, setPinValue] = useState('');
+  const [pinConfirmValue, setPinConfirmValue] = useState('');
   const [pinModalError, setPinModalError] = useState<string | null>(null);
   const [pinModalBusy, setPinModalBusy] = useState(false);
 
@@ -375,6 +378,22 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     };
   }, [reload, employees.length]);
 
+  useEffect(() => {
+    function loadRoles() {
+      api<{ roles: { id: string; name: string }[] }>('/api/permissions/roles')
+        .then((res) => {
+          if (res?.roles && res.roles.length > 0) setAvailableRoles(res.roles);
+        })
+        .catch(() => {});
+    }
+    window.addEventListener('roles-updated', loadRoles);
+    window.addEventListener('permissions:updated', loadRoles);
+    return () => {
+      window.removeEventListener('roles-updated', loadRoles);
+      window.removeEventListener('permissions:updated', loadRoles);
+    };
+  }, []);
+
   const statusMap = useMemo(() => {
     const m = new Map<string, TodayEmployee>();
     for (const s of todayStatus) m.set(s.id, s);
@@ -431,15 +450,16 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   function openCreate() {
     setEditing(null);
+    const defaultRole = availableRoles.find((r) => r.id === 'travailleur') || availableRoles[0];
     setForm({
       full_name: '',
-      job_title: '',
+      job_title: defaultRole?.name || 'Travailleur / Menuisier',
       pin: '',
       photo_path: null,
       create_account: false,
       account_login: '',
       account_password: '',
-      account_role: 'travailleur',
+      account_role: defaultRole?.id || 'travailleur',
     });
     setFormError(null);
     setFormOpen(true);
@@ -447,6 +467,9 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   function openEdit(employee: Employee) {
     setEditing(employee);
+    const matchingRole = availableRoles.find(
+      (r) => r.name.toLowerCase() === employee.job_title.toLowerCase() || r.id.toLowerCase() === employee.job_title.toLowerCase()
+    ) || availableRoles[0];
     setForm({
       full_name: employee.full_name,
       job_title: employee.job_title,
@@ -455,7 +478,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       create_account: false,
       account_login: '',
       account_password: '',
-      account_role: 'travailleur',
+      account_role: matchingRole?.id || 'travailleur',
     });
     setFormError(null);
     setFormOpen(true);
@@ -530,8 +553,16 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
 
   async function savePin() {
     if (!pinModalFor) return;
+    if (pinModalFor.has_pin && !pinOldValue.trim()) {
+      setPinModalError('Veuillez renseigner votre ancien code PIN.');
+      return;
+    }
     if (!pinValue || pinValue.trim().length < 4) {
       setPinModalError('Le code secret PIN doit comporter au moins 4 chiffres.');
+      return;
+    }
+    if (pinValue.trim() !== pinConfirmValue.trim()) {
+      setPinModalError('La confirmation du code PIN ne correspond pas au nouveau code saisi.');
       return;
     }
     setPinModalBusy(true);
@@ -539,11 +570,16 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     try {
       await api(`/api/employees/${pinModalFor.id}/pin`, {
         method: 'POST',
-        body: JSON.stringify({ pin: pinValue.trim() }),
+        body: JSON.stringify({
+          old_pin: pinModalFor.has_pin ? pinOldValue.trim() : undefined,
+          pin: pinValue.trim(),
+        }),
       });
-      toast(`Code secret PIN défini pour ${pinModalFor.full_name}.`, 'success');
+      toast(`Code secret PIN mis à jour pour ${pinModalFor.full_name}.`, 'success');
       setPinModalFor(null);
+      setPinOldValue('');
       setPinValue('');
+      setPinConfirmValue('');
       setReload((v) => v + 1);
     } catch (err) {
       setPinModalError(err instanceof Error ? err.message : 'Impossible de définir le code PIN.');
@@ -780,9 +816,13 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
           {/* Quick Metrics */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Card className="p-3.5 shadow-card">
-              <span className="text-[10px] uppercase font-bold text-ink-faint">Effectif actif</span>
+              <span className="text-[10px] uppercase font-bold text-ink-faint">Effectif de l'atelier</span>
               <p className="mt-1 font-mono text-2xl font-bold text-ink tabular-nums">{employees.filter((e) => e.active).length}</p>
-              <p className="text-[10px] text-ink-faint mt-0.5">{employees.length} enregistré{employees.length > 1 ? 's' : ''}</p>
+              <p className="text-[10px] text-ink-faint mt-0.5">
+                {employees.filter((e) => e.active).length === 0
+                  ? 'Aucun travailleur actif'
+                  : `${employees.filter((e) => e.active).length} travailleur${employees.filter((e) => e.active).length > 1 ? 's' : ''} en service`}
+              </p>
             </Card>
             <Card className="p-3.5 shadow-card">
               <span className="text-[10px] uppercase font-bold text-ink-faint flex items-center gap-1.5">
@@ -1334,7 +1374,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                 setForm((prev) => ({
                   ...prev,
                   full_name: name,
-                  account_login: prev.account_login ? prev.account_login : autoLogin,
+                  account_login: prev.account_login && prev.account_login !== prev.full_name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '.') ? prev.account_login : autoLogin,
                 }));
               }}
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
@@ -1342,29 +1382,34 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-soft">
-              Fonction / Poste / Rôle (Défini par la Direction)
+              Rôle / Poste (Défini par la Direction)
             </label>
-            <input
-              type="text"
-              list="direction-roles-list"
-              value={form.job_title}
-              placeholder="Sélectionnez ou saisissez un rôle…"
-              onChange={(e) => setForm({ ...form, job_title: e.target.value })}
+            <select
+              value={form.account_role}
+              onChange={(e) => {
+                const selectedId = e.target.value;
+                const r = availableRoles.find((item) => item.id === selectedId);
+                setForm((prev) => ({
+                  ...prev,
+                  account_role: selectedId,
+                  job_title: r ? r.name : selectedId,
+                }));
+              }}
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
-            />
-            <datalist id="direction-roles-list">
+            >
               {availableRoles.map((r) => (
-                <option key={r.id} value={r.name} />
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-soft">
               Code secret PIN de pointage {editing ? '(Optionnel - laisser vide pour conserver)' : '(4 à 6 chiffres)'}
             </label>
-            <input
-              type="password"
+            <PasswordInput
               inputMode="numeric"
               maxLength={6}
               value={form.pin}
@@ -1377,10 +1422,10 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
             </p>
           </div>
 
-          {/* Seamless Account Creation (Onboarding 1-Click) */}
+          {/* Seamless Account Creation */}
           {!editing && canManage && (
             <div className="rounded-xl border border-line bg-paper/60 p-3.5 space-y-3">
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={form.create_account}
@@ -1397,69 +1442,46 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                     setForm((f) => ({
                       ...f,
                       create_account: checked,
-                      account_login: f.account_login ? f.account_login : autoLogin,
-                      account_password: f.account_password ? f.account_password : (f.pin || 'Monastere2026!'),
+                      account_login: f.account_login || autoLogin,
+                      account_password: f.account_password || (f.pin || 'Monastere2026!'),
                     }));
                   }}
-                  className="h-4 w-4 rounded border-line-strong text-amber accent-amber focus:ring-amber"
+                  className="h-4 w-4 rounded border-line-strong text-amber accent-[#d9480f] focus:ring-amber"
                 />
-                <span className="text-xs font-bold text-ink">
-                  🔑 Activer immédiatement un compte d’accès applicatif pour ce travailleur
-                </span>
+                <div>
+                  <span className="text-xs font-semibold text-ink">
+                    Créer un compte d’accès applicatif pour ce travailleur
+                  </span>
+                  <span className="block text-[11px] text-ink-soft">
+                    Active l'accès direct avec les privilèges du rôle sélectionné ci-dessus.
+                  </span>
+                </div>
               </label>
 
               {form.create_account && (
-                <div className="pt-2 border-t border-line space-y-3 animate-in fade-in duration-200">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-ink-soft">Identifiant de connexion</label>
-                      <input
-                        type="text"
-                        value={form.account_login}
-                        placeholder="Ex : landry.onana"
-                        onChange={(e) => setForm({ ...form, account_login: e.target.value.toLowerCase() })}
-                        className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-ink-soft">Mot de passe temporaire</label>
-                      <input
-                        type="text"
-                        value={form.account_password}
-                        placeholder="Par défaut : identique au PIN"
-                        onChange={(e) => setForm({ ...form, account_password: e.target.value })}
-                        className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
+                <div className="pt-2.5 border-t border-line grid gap-3 sm:grid-cols-2 animate-in fade-in duration-200">
                   <div>
-                    <label className="mb-1 block text-[11px] font-medium text-ink-soft">Rôle applicatif attribué</label>
-                    <select
-                      value={form.account_role}
-                      onChange={(e) => setForm({ ...form, account_role: e.target.value })}
-                      className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
-                    >
-                      <option value="travailleur">Travailleur (Mon Espace personnel, badge & prêts)</option>
-                      {availableRoles.filter((r) => r.id !== 'travailleur' && r.id !== 'direction').map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} ({r.id})
-                        </option>
-                      ))}
-                    </select>
+                    <label className="mb-1 block text-[11px] font-medium text-ink-soft">Identifiant de connexion</label>
+                    <input
+                      type="text"
+                      value={form.account_login}
+                      placeholder="Ex : landry.onana"
+                      onChange={(e) => setForm({ ...form, account_login: e.target.value.toLowerCase() })}
+                      className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
+                    />
                   </div>
-                  <p className="text-[10px] text-ink-faint">
-                    💡 Ce compte sera immédiatement actif. Le travailleur aura accès à son interface dédiée selon les droits de ce rôle.
-                  </p>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-ink-soft">Mot de passe temporaire</label>
+                    <PasswordInput
+                      value={form.account_password}
+                      placeholder="Par défaut : identique au PIN"
+                      onChange={(e) => setForm({ ...form, account_password: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+                    />
+                  </div>
                 </div>
               )}
             </div>
-          )}
-
-          {!editing && (
-            <Banner tone="info">
-              L’identifiant (EMP-XXX) et le badge QR professionnel sont automatiquement générés.
-            </Banner>
           )}
         </div>
       </Modal>
@@ -1588,16 +1610,36 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       {/* Modal: Définir / Modifier code PIN secret */}
       <Modal
         open={!!pinModalFor}
-        title={pinModalFor ? `Code PIN de pointage · ${pinModalFor.full_name}` : 'Code PIN secret'}
-        onClose={() => setPinModalFor(null)}
+        title={pinModalFor?.has_pin ? `Modifier le code PIN · ${pinModalFor?.full_name}` : `Définir un code PIN · ${pinModalFor?.full_name}`}
+        onClose={() => {
+          setPinModalFor(null);
+          setPinOldValue('');
+          setPinValue('');
+          setPinConfirmValue('');
+          setPinModalError(null);
+        }}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setPinModalFor(null)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPinModalFor(null);
+                setPinOldValue('');
+                setPinValue('');
+                setPinConfirmValue('');
+                setPinModalError(null);
+              }}
+            >
               Annuler
             </Button>
             <Button
               variant="primary"
-              disabled={pinModalBusy || pinValue.trim().length < 4}
+              disabled={
+                pinModalBusy ||
+                pinValue.trim().length < 4 ||
+                pinConfirmValue.trim().length < 4 ||
+                (!!pinModalFor?.has_pin && !pinOldValue.trim())
+              }
               onClick={() => void savePin()}
             >
               {pinModalBusy ? <Spinner /> : 'Enregistrer le code PIN'}
@@ -1607,19 +1649,48 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       >
         <div className="space-y-4">
           <p className="text-xs text-ink-soft">
-            Définissez un code secret PIN (4 à 6 chiffres) pour <strong>{pinModalFor?.full_name}</strong>.
-            Ce code est obligatoire pour valider chaque pointage sur la borne de l'atelier après scan du badge.
+            {pinModalFor?.has_pin
+              ? `Modification sécurisée du code secret PIN pour ${pinModalFor?.full_name}.`
+              : `Définissez un code secret PIN (4 à 6 chiffres) pour ${pinModalFor?.full_name}.`}
           </p>
           {pinModalError ? <Banner tone="error">{pinModalError}</Banner> : null}
+
+          {pinModalFor?.has_pin && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Ancien code PIN</label>
+              <PasswordInput
+                inputMode="numeric"
+                maxLength={6}
+                value={pinOldValue}
+                placeholder="••••"
+                onChange={(e) => setPinOldValue(e.target.value.replace(/\D/g, ''))}
+                className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm tracking-widest text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
+          )}
+
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Nouveau code secret PIN</label>
-            <input
-              type="password"
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">
+              {pinModalFor?.has_pin ? 'Nouveau code secret PIN' : 'Code secret PIN (4 à 6 chiffres)'}
+            </label>
+            <PasswordInput
               inputMode="numeric"
               maxLength={6}
               value={pinValue}
               placeholder="Ex: 1234"
               onChange={(e) => setPinValue(e.target.value.replace(/\D/g, ''))}
+              className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm tracking-widest text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-soft">Confirmer le code secret PIN</label>
+            <PasswordInput
+              inputMode="numeric"
+              maxLength={6}
+              value={pinConfirmValue}
+              placeholder="Répétez le code"
+              onChange={(e) => setPinConfirmValue(e.target.value.replace(/\D/g, ''))}
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm tracking-widest text-ink focus:border-amber focus:outline-none"
             />
           </div>
