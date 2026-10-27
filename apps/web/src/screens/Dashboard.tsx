@@ -152,7 +152,9 @@ function LiveTrackerHero({
               <span className="text-green">{presentCount}</span>
               <span className="text-ink-faint">/</span>
               <span>{totalTeam}</span>
-              <span className="text-xs font-normal text-ink-faint">ouvriers</span>
+              <span className="text-xs font-normal text-ink-faint">
+                {totalTeam > 1 ? 'ouvriers' : 'ouvrier'}
+              </span>
             </div>
           </div>
 
@@ -503,6 +505,7 @@ export function Dashboard() {
   }
 
   const { das01, das02, das03, das04, das05 } = data;
+  const totalTeam = das04 ? das04.present + das04.absent + das04.late + das04.conge + das04.permission : 0;
   const dailyMoves = [
     { name: 'Entrées', value: das03.entries, color: '#10b981' },
     { name: 'Sorties', value: das03.exits, color: '#ff6603' },
@@ -536,7 +539,7 @@ export function Dashboard() {
       {/* Live Punch Clock Hero Banner */}
       <LiveTrackerHero
         presentCount={das04?.present ?? 0}
-        totalTeam={das04 ? (das04.present + das04.absent + das04.late + das04.conge + das04.permission) : 0}
+        totalTeam={totalTeam}
         onOpenPointage={() => setDrawer({ kind: 'attendance' })}
       />
 
@@ -549,7 +552,9 @@ export function Dashboard() {
             value={das04 ? das04.present : '—'}
             hint={
               das04
-                ? `${das04.absent} absents · ${das04.late} retards · ${das04.conge} congés`
+                ? totalTeam === 0
+                  ? 'Aucun travailleur actif enregistré'
+                  : `${das04.absent} absents · ${das04.late} retards · ${das04.conge} congés`
                 : 'Accès restreint à la direction'
             }
             icon={<Users size={18} />}

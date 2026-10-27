@@ -376,3 +376,42 @@ employeesRoutes.post('/:id/badge', requirePerm('employees.print_badge'), async (
   });
   return c.json({ employee: updated });
 });
+
+employeesRoutes.delete('/:id', requirePerm('employees.edit'), async (c) => {
+  const id = c.req.param('id') ?? '';
+  const db = getDb();
+  const employee = await db.one<EmployeeRow>('SELECT * FROM employees WHERE id = $1', [id]);
+  if (!employee) return c.json({ error: 'Travailleur introuvable.' }, 404);
+
+  // Vérifier s'il a des emprunts d'outils en cours non rendus
+  const activeLoans = await db.one<{ count: string }>(
+    `SELECT count(*)::text AS count FROM loans WHERE employee_id = $1 AND status = 'out'`,
+    [id],
+  );
+  if (Number(activeLoans?.count ?? 0) > 0) {
+    return c.json({ error: 'Impossible de supprimer ce travailleur : il a encore des outils en prêt non restitués.' }, 409);
+  }
+
+  await db.transaction(async (tx) => {
+    // 1. Délier les comptes utilisateurs rattachés
+    await tx.query('UPDATE users SET employee_id = NULL WHERE employee_id = $1', [id]);
+    // 2. Nettoyer les pointages, absences et historiques d'emprunts
+    await tx.query('DELETE FROM attendance WHERE employee_id = $1', [id]);
+    await tx.query('DELETE FROM absences WHERE employee_id = $1', [id]);
+    await tx.query('DELETE FROM loans WHERE employee_id = $1', [id]);
+    // 3. Supprimer la fiche employé
+    await tx.query('DELETE FROM employees WHERE id = $1', [id]);
+
+    await writeAudit(tx, {
+      entity: 'employee',
+      entityId: id,
+      action: 'delete',
+      before: employee,
+      actorId: actorId(c),
+      actorName: actorName(c),
+      reason: 'Suppression définitive de la fiche travailleur',
+    });
+  });
+
+  return c.json({ ok: true, message: `Travailleur ${employee.full_name} supprimé avec succès.` });
+});

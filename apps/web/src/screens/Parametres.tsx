@@ -1164,9 +1164,9 @@ function AdminSettings({ user }: { user: User }) {
                 )}
               </div>
               <p className="mt-1 text-2xl font-semibold text-ink">
-                {users.filter((u) => !!u.employee_id).length}
+                {users.filter((u) => !!u.employee_id && employeesById.has(u.employee_id)).length}
               </p>
-              <p className="mt-1 text-[10px] text-ink-faint">Liés à une fiche artisan</p>
+              <p className="mt-1 text-[10px] text-ink-faint">Liés à une fiche artisan active</p>
             </Card>
 
             <Card

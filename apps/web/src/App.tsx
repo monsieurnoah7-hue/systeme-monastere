@@ -81,6 +81,36 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const allowed = useMemo(() => computeAllowedViews(user.role, permissions), [user.role, permissions]);
   const defaultView: ViewId = user.role === 'travailleur' ? 'espace' : (allowed[0] ?? 'espace');
   const [view, setView] = useState<ViewId>(defaultView);
+  const [visitedViews, setVisitedViews] = useState<Set<ViewId>>(() => new Set([defaultView]));
+
+  // Preload remaining screen chunks in background during browser idle
+  useEffect(() => {
+    const idle = typeof window !== 'undefined' && 'requestIdleCallback' in window
+      ? (window as any).requestIdleCallback
+      : (cb: () => void) => setTimeout(cb, 200);
+    idle(() => {
+      import('./screens/Dashboard').catch(() => {});
+      import('./screens/Outils').catch(() => {});
+      import('./screens/Magasins').catch(() => {});
+      import('./screens/Stock').catch(() => {});
+      import('./screens/Employees').catch(() => {});
+      import('./screens/Pointage').catch(() => {});
+      import('./screens/Parametres').catch(() => {});
+      import('./screens/Espace').catch(() => {});
+    });
+  }, []);
+
+  // Track visited views to keep them alive in DOM for instant 0ms tab switching
+  useEffect(() => {
+    if (view) {
+      setVisitedViews((prev) => {
+        if (prev.has(view)) return prev;
+        const next = new Set(prev);
+        next.add(view);
+        return next;
+      });
+    }
+  }, [view]);
 
   // Si la vue courante n'est plus autorisée après mise à jour des droits
   useEffect(() => {
@@ -181,18 +211,46 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
               </div>
             }
           >
-            {
-              {
-                dashboard: <Dashboard />,
-                outils: <Outils user={user} scan={scan} />,
-                pointage: <Pointage />,
-                stock: <Stock user={user} scan={scan} />,
-                employes: <Employees user={user} scan={scan} />,
-                magasins: <Magasins user={user} scan={scan} />,
-                espace: <Espace scan={scan} user={user} onNavigate={setView} />,
-                parametres: <Parametres user={user} />,
-              }[activeView]
-            }
+            {visitedViews.has('dashboard') && (
+              <div className={activeView === 'dashboard' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'dashboard'}>
+                <Dashboard />
+              </div>
+            )}
+            {visitedViews.has('outils') && (
+              <div className={activeView === 'outils' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'outils'}>
+                <Outils user={user} scan={scan} />
+              </div>
+            )}
+            {visitedViews.has('pointage') && (
+              <div className={activeView === 'pointage' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'pointage'}>
+                <Pointage />
+              </div>
+            )}
+            {visitedViews.has('stock') && (
+              <div className={activeView === 'stock' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'stock'}>
+                <Stock user={user} scan={scan} />
+              </div>
+            )}
+            {visitedViews.has('employes') && (
+              <div className={activeView === 'employes' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'employes'}>
+                <Employees user={user} scan={scan} />
+              </div>
+            )}
+            {visitedViews.has('magasins') && (
+              <div className={activeView === 'magasins' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'magasins'}>
+                <Magasins user={user} scan={scan} />
+              </div>
+            )}
+            {visitedViews.has('espace') && (
+              <div className={activeView === 'espace' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'espace'}>
+                <Espace scan={scan} user={user} onNavigate={setView} />
+              </div>
+            )}
+            {visitedViews.has('parametres') && (
+              <div className={activeView === 'parametres' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'parametres'}>
+                <Parametres user={user} />
+              </div>
+            )}
           </Suspense>
         )}
       </Shell>

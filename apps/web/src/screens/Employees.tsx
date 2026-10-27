@@ -18,6 +18,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { QrCode } from '../components/QrCode';
 import {
+  AlertTriangle,
   Calendar as CalendarIcon,
   Camera,
   Clock,
@@ -26,6 +27,7 @@ import {
   Printer,
   RefreshCw,
   Search,
+  Trash2,
   UserPlus,
   Users,
   ChevronLeft,
@@ -308,6 +310,9 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
   const [pinModalBusy, setPinModalBusy] = useState(false);
 
   const [badgeFor, setBadgeFor] = useState<Employee | null>(null);
+  const [deleteEmployeeFor, setDeleteEmployeeFor] = useState<Employee | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [detailFor, setDetailFor] = useState<Employee | null>(null);
   const [detail, setDetail] = useState<EmployeeDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -575,6 +580,23 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
     }
   }
 
+  async function handleDeleteEmployee() {
+    if (!deleteEmployeeFor) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await api(`/api/employees/${deleteEmployeeFor.id}`, { method: 'DELETE' });
+      toast(`Fiche de ${deleteEmployeeFor.full_name} supprimée définitivement.`, 'success');
+      setDeleteEmployeeFor(null);
+      setReload((value) => value + 1);
+      window.dispatchEvent(new CustomEvent('mf-refresh-data'));
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Suppression impossible.');
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   function openLeave() {
     const todayStr = new Date().toISOString().slice(0, 10);
     setLeaveForm({ employee_id: employees[0]?.id ?? '', kind: 'conge', from_date: todayStr, to_date: todayStr, note: '' });
@@ -758,8 +780,9 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
           {/* Quick Metrics */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Card className="p-3.5 shadow-card">
-              <span className="text-[10px] uppercase font-bold text-ink-faint">Effectif total</span>
-              <p className="mt-1 font-mono text-2xl font-bold text-ink tabular-nums">{employees.length}</p>
+              <span className="text-[10px] uppercase font-bold text-ink-faint">Effectif actif</span>
+              <p className="mt-1 font-mono text-2xl font-bold text-ink tabular-nums">{employees.filter((e) => e.active).length}</p>
+              <p className="text-[10px] text-ink-faint mt-0.5">{employees.length} enregistré{employees.length > 1 ? 's' : ''}</p>
             </Card>
             <Card className="p-3.5 shadow-card">
               <span className="text-[10px] uppercase font-bold text-ink-faint flex items-center gap-1.5">
@@ -931,6 +954,18 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                                 >
                                   {employee.active ? 'Désactiver' : 'Activer'}
                                 </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setDeleteEmployeeFor(employee);
+                                    setDeleteError(null);
+                                  }}
+                                  className="h-7 w-7 p-0 text-ink-faint hover:text-red hover:bg-red/10"
+                                  title={`Supprimer définitivement ${employee.full_name}`}
+                                >
+                                  <Trash2 size={13} />
+                                </Button>
                               </>
                             )}
                           </div>
@@ -988,9 +1023,23 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
                           Détail
                         </Button>
                         {canManage && (
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(employee)}>
-                            Modifier
-                          </Button>
+                          <>
+                            <Button size="sm" variant="ghost" onClick={() => openEdit(employee)}>
+                              Modifier
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setDeleteEmployeeFor(employee);
+                                setDeleteError(null);
+                              }}
+                              className="h-8 w-8 p-0 text-red hover:bg-red/10"
+                              title="Supprimer ce travailleur"
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1573,6 +1622,56 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
               onChange={(e) => setPinValue(e.target.value.replace(/\D/g, ''))}
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm tracking-widest text-ink focus:border-amber focus:outline-none"
             />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Supprimer définitivement un travailleur */}
+      <Modal
+        open={!!deleteEmployeeFor}
+        title={`Supprimer ${deleteEmployeeFor?.full_name ?? ''}`}
+        onClose={() => {
+          if (!deleteBusy) {
+            setDeleteEmployeeFor(null);
+            setDeleteError(null);
+          }
+        }}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              disabled={deleteBusy}
+              onClick={() => {
+                setDeleteEmployeeFor(null);
+                setDeleteError(null);
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deleteBusy}
+              onClick={() => void handleDeleteEmployee()}
+            >
+              {deleteBusy ? <Spinner /> : 'Supprimer définitivement'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          {deleteError ? <Banner tone="error">{deleteError}</Banner> : null}
+          <p className="text-sm text-ink">
+            Êtes-vous sûr de vouloir supprimer définitivement la fiche de{' '}
+            <strong>{deleteEmployeeFor?.full_name}</strong> ({deleteEmployeeFor?.id}) ?
+          </p>
+          <div className="rounded-xl border border-line bg-paper-2 p-3 text-xs text-ink-soft space-y-1">
+            <p className="font-semibold text-ink flex items-center gap-1.5">
+              <AlertTriangle size={13} className="text-amber" /> Impact de la suppression
+            </p>
+            <p>
+              Cette opération retire définitivement le profil travailleur, son badge et délie tout compte applicatif rattaché.
+              Si ce travailleur a des outils actuellement en prêt non restitués, la suppression sera bloquée par sécurité.
+            </p>
           </div>
         </div>
       </Modal>

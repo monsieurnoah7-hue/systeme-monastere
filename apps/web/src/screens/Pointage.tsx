@@ -629,7 +629,11 @@ export function Pointage() {
                 Présents à l'heure
               </span>
               <p className="mt-1 font-mono text-2xl font-bold text-green tabular-nums">{totalPresent}</p>
-              <p className="text-[11px] text-ink-faint mt-0.5">Sur {employees.length || attendanceDetail.length} ouvriers</p>
+              <p className="text-[11px] text-ink-faint mt-0.5">
+                {(employees.length || attendanceDetail.length) > 0
+                  ? `Sur ${employees.length || attendanceDetail.length} ouvrier${(employees.length || attendanceDetail.length) > 1 ? 's' : ''}`
+                  : 'Aucun travailleur enregistré'}
+              </p>
             </Card>
 
             <Card className="p-4 shadow-card">
