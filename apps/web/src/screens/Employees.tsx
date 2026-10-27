@@ -167,7 +167,9 @@ function TimeOffCalendarView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
-          <span className="hidden md:inline text-ink-faint font-medium">({employees.length} salariés)</span>
+          <span className="hidden md:inline text-ink-faint font-medium">
+            ({employees.filter((e) => e.active).length} salarié{employees.filter((e) => e.active).length > 1 ? 's' : ''})
+          </span>
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-blue" />
             <span className="text-ink-soft">Congé payé</span>
@@ -709,7 +711,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
       headers,
       rows,
       [
-        { label: 'Effectif Total', value: employees.length },
+        { label: 'Effectif Actif', value: employees.filter((e) => e.active).length },
         { label: 'Ouvriers Actifs', value: employees.filter((e) => e.active).length },
         {
           label: 'En Poste Aujourd’hui',
@@ -790,7 +792,7 @@ export function Employees({ user, scan }: { user: User; scan?: ScanResult | null
               <Users size={16} />
               <span>Répertoire de l’Équipe</span>
               <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
-                {employees.length}
+                {employees.filter((e) => e.active).length}
               </span>
             </TabsTrigger>
 
