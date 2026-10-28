@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
-import { api, type Dashboard as DashboardType, type Employee, type KioskIdentify, type PunchResult, type PunchType } from '../lib/api';
+import { api, type Dashboard as DashboardType, type Employee, type KioskIdentify, type PunchResult, type PunchType, type User } from '../lib/api';
 import { QR_PREFIX, qrDataUrl } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { initials } from '../lib/labels';
@@ -275,7 +275,17 @@ const MAX_CODE_LENGTH = 10;
 /**
  * COMPOSANT PRINCIPAL POINTAGE
  */
-export function Pointage() {
+export function Pointage({
+  user,
+  permissions,
+}: {
+  user?: User;
+  permissions?: Record<string, boolean> | null;
+} = {}) {
+  const isSuper = user?.role === 'direction';
+  const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
+  const canExportReports = !user || hasPerm('reports.export') || (!permissions && (user.role === 'direction' || user.role === 'chef_atelier'));
+
   const [activeMainTab, setActiveMainTab] = useState<'timesheets' | 'kiosk'>('timesheets');
 
   // Timesheets Overview state
@@ -742,69 +752,73 @@ export function Pointage() {
                 Actualiser
               </Button>
 
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<Download size={13} />}
-                onClick={() => {
-                  const dateStr = new Date().toISOString().split('T')[0];
-                  const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Statut', 'Heures', 'Pause', 'Écart'];
-                  const rows = filteredAttendance.map((row) => [
-                    row.id,
-                    row.fullName,
-                    row.jobTitle,
-                    row.inAt || '-',
-                    row.outAt || (row.inAt ? 'En poste' : '-'),
-                    row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
-                    row.inAt ? '7h45' : '0h00',
-                    row.inAt ? '0h45' : '-',
-                    row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
-                  ]);
-                  exportToExcel(`Feuille_Presence_${dateStr}`, 'Présences', headers, rows);
-                }}
-              >
-                Excel
-              </Button>
+              {canExportReports && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Download size={13} />}
+                    onClick={() => {
+                      const dateStr = new Date().toISOString().split('T')[0];
+                      const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Statut', 'Heures', 'Pause', 'Écart'];
+                      const rows = filteredAttendance.map((row) => [
+                        row.id,
+                        row.fullName,
+                        row.jobTitle,
+                        row.inAt || '-',
+                        row.outAt || (row.inAt ? 'En poste' : '-'),
+                        row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
+                        row.inAt ? '7h45' : '0h00',
+                        row.inAt ? '0h45' : '-',
+                        row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
+                      ]);
+                      exportToExcel(`Feuille_Presence_${dateStr}`, 'Présences', headers, rows);
+                    }}
+                  >
+                    Excel
+                  </Button>
 
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<Printer size={13} />}
-                onClick={() => {
-                  const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Statut', 'Heures', 'Pause', 'Écart'];
-                  const rows = filteredAttendance.map((row) => [
-                    row.id,
-                    row.fullName,
-                    row.jobTitle,
-                    row.inAt || '-',
-                    row.outAt || (row.inAt ? 'En poste' : '-'),
-                    row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
-                    row.inAt ? '7h45' : '0h00',
-                    row.inAt ? '0h45' : '-',
-                    row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
-                  ]);
-                  exportToPdf(
-                    'Feuille de Présence & Pointage Quotidien',
-                    'Registre officiel des présences d’atelier du Centre de Formation Technique',
-                    headers,
-                    rows,
-                    [
-                      { label: 'Effectif Total', value: attendanceDetail.length },
-                      { label: 'Présents à l’heure', value: totalPresent },
-                      { label: 'Retards constatés', value: totalLate },
-                      {
-                        label: 'Ponctualité globale',
-                        value:
-                          attendanceDetail.length > 0
-                            ? `${Math.round(((totalPresent + totalLate) / attendanceDetail.length) * 100)}%`
-                            : '—',
-                      },
-                    ],
-                  );
-                }}
-              >
-                Imprimer
-              </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Printer size={13} />}
+                    onClick={() => {
+                      const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Statut', 'Heures', 'Pause', 'Écart'];
+                      const rows = filteredAttendance.map((row) => [
+                        row.id,
+                        row.fullName,
+                        row.jobTitle,
+                        row.inAt || '-',
+                        row.outAt || (row.inAt ? 'En poste' : '-'),
+                        row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
+                        row.inAt ? '7h45' : '0h00',
+                        row.inAt ? '0h45' : '-',
+                        row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
+                      ]);
+                      exportToPdf(
+                        'Feuille de Présence & Pointage Quotidien',
+                        'Registre officiel des présences d’atelier du Centre de Formation Technique',
+                        headers,
+                        rows,
+                        [
+                          { label: 'Effectif Total', value: attendanceDetail.length },
+                          { label: 'Présents à l’heure', value: totalPresent },
+                          { label: 'Retards constatés', value: totalLate },
+                          {
+                            label: 'Ponctualité globale',
+                            value:
+                              attendanceDetail.length > 0
+                                ? `${Math.round(((totalPresent + totalLate) / attendanceDetail.length) * 100)}%`
+                                : '—',
+                          },
+                        ],
+                      );
+                    }}
+                  >
+                    Imprimer
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 

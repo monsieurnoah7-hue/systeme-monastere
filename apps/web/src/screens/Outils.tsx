@@ -183,6 +183,10 @@ export function Outils({
   const canReturn = hasPerm('loans.return') || (!permissions && user.role === 'magasinier');
   const canManage = canCreate || canEdit;
 
+  const canViewFinancial = hasPerm('financial.view');
+  const canViewReports = hasPerm('reports.view') || canViewFinancial;
+  const canExportReports = hasPerm('reports.export');
+
   const [filters, setFilters] = useState({ q: '', status: '', category: '', location: '', magasin_id: '' });
   const [tools, setTools] = useState<Tool[]>([]);
   const [facets, setFacets] = useState<Facets>({ categories: [], locations: [] });
@@ -714,22 +718,26 @@ export function Outils({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            icon={<Download size={14} />}
-            onClick={handleExportExcel}
-          >
-            Excel
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            icon={<Printer size={14} />}
-            onClick={handleExportPdf}
-          >
-            Imprimer
-          </Button>
+          {canExportReports && (
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Download size={14} />}
+                onClick={handleExportExcel}
+              >
+                Excel
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Printer size={14} />}
+                onClick={handleExportPdf}
+              >
+                Imprimer
+              </Button>
+            </>
+          )}
           <Button
             size="sm"
             icon={<IconPrinter size={16} />}
@@ -934,62 +942,66 @@ export function Outils({
       </div>
 
       {/* Bandeau d'Amortissement Intelligent & Valorisation Patrimoniale */}
-      <div className="rounded-xl border border-line bg-gradient-to-r from-paper to-surface p-4 shadow-xs">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-wash border border-amber/30 text-amber shrink-0">
-              <TrendingDown size={20} />
+      {canViewReports && (
+        <div className="rounded-xl border border-line bg-gradient-to-r from-paper to-surface p-4 shadow-xs">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-wash border border-amber/30 text-amber shrink-0">
+                <TrendingDown size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-ink">Valorisation &amp; Amortissement Comptable</h3>
+                  <span className="rounded bg-amber-wash px-2 py-0.5 text-[10px] font-bold text-amber border border-amber/20">
+                    SYSCOHADA / Pratique Atelier
+                  </span>
+                </div>
+                <p className="text-xs text-ink-soft">
+                  Suivi dynamique de la Valeur Nette Comptable (VNC) et vieillissement du parc d’outillage.
+                </p>
+              </div>
+            </div>
+            {canExportReports && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="border-amber/30 bg-amber-wash/30 text-amber hover:bg-amber-wash hover:border-amber/50"
+                icon={<FileSpreadsheet size={15} />}
+                onClick={handleExportAuditReport}
+              >
+                Rapport d’Audit Patrimonial
+              </Button>
+            )}
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 border-t border-line/60 pt-3">
+            <div>
+              <span className="text-[11px] font-medium text-ink-faint">Valeur Brute d'Acquisition</span>
+              <p className="text-base font-bold text-ink">{formatCurrency(auditSummary.totalAcquisitionCost)}</p>
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-ink">Valorisation &amp; Amortissement Comptable</h3>
-                <span className="rounded bg-amber-wash px-2 py-0.5 text-[10px] font-bold text-amber border border-amber/20">
-                  SYSCOHADA / Pratique Atelier
-                </span>
-              </div>
-              <p className="text-xs text-ink-soft">
-                Suivi dynamique de la Valeur Nette Comptable (VNC) et vieillissement du parc d’outillage.
-              </p>
+              <span className="text-[11px] font-medium text-ink-faint">VNC Active (Résiduelle)</span>
+              <p className="text-base font-bold text-green">{formatCurrency(auditSummary.totalVnc)}</p>
             </div>
-          </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="border-amber/30 bg-amber-wash/30 text-amber hover:bg-amber-wash hover:border-amber/50"
-            icon={<FileSpreadsheet size={15} />}
-            onClick={handleExportAuditReport}
-          >
-            Rapport d’Audit Patrimonial
-          </Button>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 border-t border-line/60 pt-3">
-          <div>
-            <span className="text-[11px] font-medium text-ink-faint">Valeur Brute d'Acquisition</span>
-            <p className="text-base font-bold text-ink">{formatCurrency(auditSummary.totalAcquisitionCost)}</p>
-          </div>
-          <div>
-            <span className="text-[11px] font-medium text-ink-faint">VNC Active (Résiduelle)</span>
-            <p className="text-base font-bold text-green">{formatCurrency(auditSummary.totalVnc)}</p>
-          </div>
-          <div>
-            <span className="text-[11px] font-medium text-ink-faint">Amortissements Cumulés</span>
-            <p className="text-base font-bold text-ink-soft">{formatCurrency(auditSummary.totalAmortization)}</p>
-          </div>
-          <div>
-            <span className="text-[11px] font-medium text-ink-faint">Usure Moyenne du Parc</span>
-            <div className="flex items-center gap-2 mt-0.5">
-              <div className="h-2 flex-1 rounded-full bg-paper-2 overflow-hidden border border-line">
-                <div
-                  className="h-full bg-amber rounded-full"
-                  style={{ width: `${auditSummary.averageAmortizationRate}%` }}
-                />
+            <div>
+              <span className="text-[11px] font-medium text-ink-faint">Amortissements Cumulés</span>
+              <p className="text-base font-bold text-ink-soft">{formatCurrency(auditSummary.totalAmortization)}</p>
+            </div>
+            <div>
+              <span className="text-[11px] font-medium text-ink-faint">Usure Moyenne du Parc</span>
+              <div className="flex items-center gap-2 mt-0.5">
+                <div className="h-2 flex-1 rounded-full bg-paper-2 overflow-hidden border border-line">
+                  <div
+                    className="h-full bg-amber rounded-full"
+                    style={{ width: `${auditSummary.averageAmortizationRate}%` }}
+                  />
+                </div>
+                <span className="text-xs font-bold text-ink">{auditSummary.averageAmortizationRate}%</span>
               </div>
-              <span className="text-xs font-bold text-ink">{auditSummary.averageAmortizationRate}%</span>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Filters & Search Bar */}
       <div className="rounded-xl border border-line bg-surface p-3 shadow-xs space-y-3">
@@ -1209,7 +1221,7 @@ export function Outils({
                     <th className="px-3 py-2.5 min-w-44 border-r border-line">Désignation &amp; Marque</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
                     <th className="px-3 py-2.5 min-w-36 border-r border-line">Emplacement / Magasin</th>
-                    <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">VNC Nette</th>
+                    {canViewFinancial && <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">VNC Nette</th>}
                     <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Statut</th>
                     <th className="px-3 py-2.5 min-w-36 text-right">Actions</th>
@@ -1310,18 +1322,20 @@ export function Outils({
                         </td>
 
                         {/* VNC Nette */}
-                        <td className="px-3 py-2 text-right font-mono font-semibold text-ink border-r border-line">
-                          {acc ? (
-                            <div>
-                              <span className={acc.isFullyAmortized ? 'text-purple-400' : 'text-green'}>
-                                {formatCurrency(acc.vnc)}
-                              </span>
-                              <span className="block text-[10px] text-ink-faint font-normal">{acc.progressPercent}% amorti</span>
-                            </div>
-                          ) : (
-                            <span className="text-ink-faint">—</span>
-                          )}
-                        </td>
+                        {canViewFinancial && (
+                          <td className="px-3 py-2 text-right font-mono font-semibold text-ink border-r border-line">
+                            {acc ? (
+                              <div>
+                                <span className={acc.isFullyAmortized ? 'text-purple-400' : 'text-green'}>
+                                  {formatCurrency(acc.vnc)}
+                                </span>
+                                <span className="block text-[10px] text-ink-faint font-normal">{acc.progressPercent}% amorti</span>
+                              </div>
+                            ) : (
+                              <span className="text-ink-faint">—</span>
+                            )}
+                          </td>
+                        )}
 
                         {/* État */}
                         <td className="px-3 py-2 text-center border-r border-line">
@@ -1413,7 +1427,7 @@ export function Outils({
 
             {/* Tableur Footer Total */}
             <div className="bg-paper border-t border-line px-4 py-2.5 text-xs flex items-center justify-between font-semibold text-ink-soft">
-              <span>Affichés : {displayedTools.length} référence(s) {scopeFilter === 'drafts' ? '(brouillons)' : `· VNC : ${formatCurrency(auditSummary.totalVnc)}`}</span>
+              <span>Affichés : {displayedTools.length} référence(s) {canViewFinancial ? (scopeFilter === 'drafts' ? '(brouillons)' : `· VNC : ${formatCurrency(auditSummary.totalVnc)}`) : ''}</span>
               <span className="text-[11px] text-ink-faint">
                 Cochez des outils pour les affecter ou les transférer par lot vers un magasin
               </span>
@@ -1494,7 +1508,7 @@ export function Outils({
 
                       <p className="font-semibold text-sm text-ink mt-0.5 truncate">{tool.name}</p>
 
-                      {acc ? (
+                      {canViewFinancial && acc ? (
                         <div className="mt-1 flex items-center gap-2 text-[11px]">
                           <span className="text-ink-faint">VNC:</span>
                           <span className="font-bold text-green">{formatCurrency(acc.vnc)}</span>
@@ -1629,76 +1643,98 @@ export function Outils({
               {detail.tool.magasin_name ? <Chip tone="blue">{detail.tool.magasin_name}</Chip> : null}
             </div>
 
-            {/* Fiche Comptable & Amortissement Intelligent */}
-            {(() => {
-              const acc = computeToolAccounting(detail.tool);
-              return (
-                <div className="rounded-xl border border-line bg-surface p-4 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between border-b border-line pb-2.5">
-                    <div className="flex items-center gap-2">
-                      <TrendingDown size={16} className="text-amber" />
-                      <span className="text-xs font-bold text-ink uppercase tracking-wider">État d’Amortissement Intelligent</span>
+            {/* Fiche Comptable / Caractéristiques */}
+            {canViewFinancial ? (
+              (() => {
+                const acc = computeToolAccounting(detail.tool);
+                return (
+                  <div className="rounded-xl border border-line bg-surface p-4 shadow-xs space-y-3">
+                    <div className="flex items-center justify-between border-b border-line pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <TrendingDown size={16} className="text-amber" />
+                        <span className="text-xs font-bold text-ink uppercase tracking-wider">État d’Amortissement Intelligent</span>
+                      </div>
+                      {acc ? (
+                        <span className={cx(
+                          'rounded-full px-2 py-0.5 text-[10px] font-bold border',
+                          acc.statusTone === 'emerald' && 'bg-green-wash text-green border-green/20',
+                          acc.statusTone === 'blue' && 'bg-blue-wash text-blue border-blue/20',
+                          acc.statusTone === 'amber' && 'bg-amber-wash text-amber border-amber/20',
+                          acc.statusTone === 'purple' && 'bg-purple-wash text-purple-700 border-purple-200',
+                          acc.statusTone === 'red' && 'bg-red-wash text-red border-red/20'
+                        )}>
+                          {acc.statusLabel}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-ink-faint">Non valorisé</span>
+                      )}
                     </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+                      <div>
+                        <span className="text-ink-faint block text-[11px]">Marque &amp; Modèle</span>
+                        <span className="font-semibold text-ink">{detail.tool.brand || '—'} {detail.tool.model ? `· ${detail.tool.model}` : ''}</span>
+                      </div>
+                      <div>
+                        <span className="text-ink-faint block text-[11px]">N° de Série</span>
+                        <span className="font-mono text-ink-soft">{detail.tool.serial_number || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-ink-faint block text-[11px]">Année d’Acquisition</span>
+                        <span className="font-semibold text-ink">{detail.tool.acquisition_year || '—'} {acc ? `(${acc.ageYears} an${acc.ageYears > 1 ? 's' : ''})` : ''}</span>
+                      </div>
+                      <div>
+                        <span className="text-ink-faint block text-[11px]">Coût d'Acquisition Initial</span>
+                        <span className="font-bold text-ink">{formatCurrency(detail.tool.acquisition_cost)}</span>
+                      </div>
+                      <div>
+                        <span className="text-ink-faint block text-[11px]">Amortissement Cumulé</span>
+                        <span className="font-bold text-ink-soft">{acc ? formatCurrency(acc.cumulativeAmortization) : '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-ink-faint block text-[11px]">Valeur Nette Comptable (VNC)</span>
+                        <span className="font-bold text-green">{acc ? formatCurrency(acc.vnc) : '—'}</span>
+                      </div>
+                    </div>
+
                     {acc ? (
-                      <span className={cx(
-                        'rounded-full px-2 py-0.5 text-[10px] font-bold border',
-                        acc.statusTone === 'emerald' && 'bg-green-wash text-green border-green/20',
-                        acc.statusTone === 'blue' && 'bg-blue-wash text-blue border-blue/20',
-                        acc.statusTone === 'amber' && 'bg-amber-wash text-amber border-amber/20',
-                        acc.statusTone === 'purple' && 'bg-purple-wash text-purple-700 border-purple-200',
-                        acc.statusTone === 'red' && 'bg-red-wash text-red border-red/20'
-                      )}>
-                        {acc.statusLabel}
-                      </span>
-                    ) : (
-                      <span className="text-[11px] text-ink-faint">Non valorisé</span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
-                    <div>
-                      <span className="text-ink-faint block text-[11px]">Marque &amp; Modèle</span>
-                      <span className="font-semibold text-ink">{detail.tool.brand || '—'} {detail.tool.model ? `· ${detail.tool.model}` : ''}</span>
-                    </div>
-                    <div>
-                      <span className="text-ink-faint block text-[11px]">N° de Série</span>
-                      <span className="font-mono text-ink-soft">{detail.tool.serial_number || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-ink-faint block text-[11px]">Année d’Acquisition</span>
-                      <span className="font-semibold text-ink">{detail.tool.acquisition_year || '—'} {acc ? `(${acc.ageYears} an${acc.ageYears > 1 ? 's' : ''})` : ''}</span>
-                    </div>
-                    <div>
-                      <span className="text-ink-faint block text-[11px]">Coût d'Acquisition Initial</span>
-                      <span className="font-bold text-ink">{formatCurrency(detail.tool.acquisition_cost)}</span>
-                    </div>
-                    <div>
-                      <span className="text-ink-faint block text-[11px]">Amortissement Cumulé</span>
-                      <span className="font-bold text-ink-soft">{acc ? formatCurrency(acc.cumulativeAmortization) : '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-ink-faint block text-[11px]">Valeur Nette Comptable (VNC)</span>
-                      <span className="font-bold text-green">{acc ? formatCurrency(acc.vnc) : '—'}</span>
-                    </div>
-                  </div>
-
-                  {acc ? (
-                    <div className="space-y-1.5 pt-1 border-t border-line/60">
-                      <div className="flex justify-between text-[11px] text-ink-soft">
-                        <span>Progression de l’amortissement ({acc.annualRate}% / an sur {acc.lifespanYears} ans)</span>
-                        <span className="font-bold text-ink">{acc.progressPercent}%</span>
+                      <div className="space-y-1.5 pt-1 border-t border-line/60">
+                        <div className="flex justify-between text-[11px] text-ink-soft">
+                          <span>Progression de l’amortissement ({acc.annualRate}% / an sur {acc.lifespanYears} ans)</span>
+                          <span className="font-bold text-ink">{acc.progressPercent}%</span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-paper overflow-hidden border border-line">
+                          <div
+                            className={cx('h-full rounded-full transition-all', acc.isFullyAmortized ? 'bg-purple-600' : 'bg-amber')}
+                            style={{ width: `${acc.progressPercent}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-2 w-full rounded-full bg-paper overflow-hidden border border-line">
-                        <div
-                          className={cx('h-full rounded-full transition-all', acc.isFullyAmortized ? 'bg-purple-600' : 'bg-amber')}
-                          style={{ width: `${acc.progressPercent}%` }}
-                        />
-                      </div>
-                    </div>
-                  ) : null}
+                    ) : null}
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="rounded-xl border border-line bg-surface p-4 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-line pb-2.5">
+                  <span className="text-xs font-bold text-ink uppercase tracking-wider">Caractéristiques techniques</span>
                 </div>
-              );
-            })()}
+                <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+                  <div>
+                    <span className="text-ink-faint block text-[11px]">Marque &amp; Modèle</span>
+                    <span className="font-semibold text-ink">{detail.tool.brand || '—'} {detail.tool.model ? `· ${detail.tool.model}` : ''}</span>
+                  </div>
+                  <div>
+                    <span className="text-ink-faint block text-[11px]">N° de Série</span>
+                    <span className="font-mono text-ink-soft">{detail.tool.serial_number || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-ink-faint block text-[11px]">Année de mise en service</span>
+                    <span className="font-semibold text-ink">{detail.tool.acquisition_year || '—'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {detail.tool.status_reason ? (
               <Banner tone={detail.tool.status === 'maintenance' ? 'warning' : 'error'} title="Motif du statut">
@@ -1977,37 +2013,39 @@ export function Outils({
           </div>
 
           {/* Section Amortissement & Comptabilité */}
-          <div className="rounded-xl border border-line bg-surface p-3.5 space-y-3">
-            <div className="flex items-center gap-2 border-b border-line pb-2">
-              <TrendingDown size={15} className="text-amber" />
-              <span className="text-xs font-bold text-ink uppercase tracking-wider">Valorisation &amp; Amortissement</span>
-            </div>
+          {canViewFinancial && (
+            <div className="rounded-xl border border-line bg-surface p-3.5 space-y-3">
+              <div className="flex items-center gap-2 border-b border-line pb-2">
+                <TrendingDown size={15} className="text-amber" />
+                <span className="text-xs font-bold text-ink uppercase tracking-wider">Valorisation &amp; Amortissement</span>
+              </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field
-                label="Coût d'acquisition (FCFA)"
-                value={newForm.acquisition_cost}
-                onChange={(event) => setNewForm((f) => ({ ...f, acquisition_cost: event.target.value }))}
-                placeholder="ex. 185000"
-                type="number"
-              />
-              <Field
-                label="Année d'acquisition"
-                value={newForm.acquisition_year}
-                onChange={(event) => setNewForm((f) => ({ ...f, acquisition_year: event.target.value }))}
-                placeholder={String(new Date().getFullYear())}
-                type="number"
-              />
-              <Field
-                label="Durée d'amortissement (ans)"
-                value={newForm.lifespan_years}
-                onChange={(event) => setNewForm((f) => ({ ...f, lifespan_years: event.target.value }))}
-                placeholder="5"
-                type="number"
-                hint="Défaut : 5 ans (20%/an)"
-              />
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field
+                  label="Coût d'acquisition (FCFA)"
+                  value={newForm.acquisition_cost}
+                  onChange={(event) => setNewForm((f) => ({ ...f, acquisition_cost: event.target.value }))}
+                  placeholder="ex. 185000"
+                  type="number"
+                />
+                <Field
+                  label="Année d'acquisition"
+                  value={newForm.acquisition_year}
+                  onChange={(event) => setNewForm((f) => ({ ...f, acquisition_year: event.target.value }))}
+                  placeholder={String(new Date().getFullYear())}
+                  type="number"
+                />
+                <Field
+                  label="Durée d'amortissement (ans)"
+                  value={newForm.lifespan_years}
+                  onChange={(event) => setNewForm((f) => ({ ...f, lifespan_years: event.target.value }))}
+                  placeholder="5"
+                  type="number"
+                  hint="Défaut : 5 ans (20%/an)"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <TextArea
             label="Observations (facultatif)"

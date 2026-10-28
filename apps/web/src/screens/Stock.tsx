@@ -205,6 +205,8 @@ export function Stock({
   const canCorrect = hasPerm('stock.correct') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
   const canPhoto = hasPerm('stock.photo_edit') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
   const canManageRefs = canCreateRef || canEditRef;
+  const canViewFinancial = hasPerm('financial.view') || (!permissions && user.role === 'direction');
+  const canExportReports = hasPerm('reports.export') || (!permissions && user.role === 'direction');
 
   const [activeTab, setActiveTab] = useState<'inventory' | 'journal'>('inventory');
   const [refs, setRefs] = useState<StockRef[]>([]);
@@ -589,8 +591,7 @@ export function Stock({
       'Magasin / Dépôt',
       'Quantité',
       'Unité',
-      'Coût Unitaire (FCFA)',
-      'Valeur Totale (FCFA)',
+      ...(canViewFinancial ? ['Coût Unitaire (FCFA)', 'Valeur Totale (FCFA)'] : []),
       'Seuil Alerte',
       'Statut Stock',
     ];
@@ -602,8 +603,7 @@ export function Stock({
       r.magasin_name ?? r.location ?? '-',
       r.qty,
       r.unit,
-      r.unit_cost ? r.unit_cost : '-',
-      r.unit_cost ? r.qty * r.unit_cost : '-',
+      ...(canViewFinancial ? [r.unit_cost ? r.unit_cost : '-', r.unit_cost ? r.qty * r.unit_cost : '-'] : []),
       r.min_qty,
       r.qty === 0 ? 'Rupture' : r.qty <= r.min_qty ? 'Alerte Seuil' : 'Normal',
     ]);
@@ -611,7 +611,17 @@ export function Stock({
   }
 
   function handleExportPdf() {
-    const headers = ['Code', 'Désignation', 'Marque', 'Catégorie', 'Dépôt', 'Quantité', 'Unité', 'Coût Unit.', 'Valeur Totale', 'État'];
+    const headers = [
+      'Code',
+      'Désignation',
+      'Marque',
+      'Catégorie',
+      'Dépôt',
+      'Quantité',
+      'Unité',
+      ...(canViewFinancial ? ['Coût Unit.', 'Valeur Totale'] : []),
+      'État',
+    ];
     const rows = filtered.map((r) => [
       r.id,
       r.name,
@@ -620,8 +630,7 @@ export function Stock({
       r.magasin_name ?? r.location ?? '-',
       r.qty,
       r.unit,
-      r.unit_cost ? formatCurrency(r.unit_cost) : '-',
-      r.unit_cost ? formatCurrency(r.qty * r.unit_cost) : '-',
+      ...(canViewFinancial ? [r.unit_cost ? formatCurrency(r.unit_cost) : '-', r.unit_cost ? formatCurrency(r.qty * r.unit_cost) : '-'] : []),
       r.qty === 0 ? 'Rupture' : r.qty <= r.min_qty ? 'Alerte' : 'Normal',
     ]);
     exportToPdf(
@@ -631,7 +640,7 @@ export function Stock({
       rows,
       [
         { label: 'Références Totales', value: stats.total },
-        { label: 'Valeur Totale du Stock', value: formatCurrency(totalStockValuation) },
+        ...(canViewFinancial ? [{ label: 'Valeur Totale du Stock', value: formatCurrency(totalStockValuation) }] : []),
         { label: 'Stock Normal', value: stats.normal },
         { label: 'Sous Seuil Alerte', value: stats.warning },
         { label: 'En Rupture', value: stats.empty },
@@ -653,12 +662,16 @@ export function Stock({
           <Button size="sm" icon={<IconRefresh size={16} />} onClick={refresh}>
             Actualiser
           </Button>
-          <Button size="sm" variant="secondary" icon={<Download size={14} />} onClick={handleExportExcel}>
-            Excel
-          </Button>
-          <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={handleExportPdf}>
-            Imprimer
-          </Button>
+          {canExportReports && (
+            <>
+              <Button size="sm" variant="secondary" icon={<Download size={14} />} onClick={handleExportExcel}>
+                Excel
+              </Button>
+              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={handleExportPdf}>
+                Imprimer
+              </Button>
+            </>
+          )}
           {canMove ? (
             <Button
               size="sm"
@@ -811,7 +824,7 @@ export function Stock({
       </div>
 
       {/* KPI Dashboard Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className={cx('grid grid-cols-2 gap-3', canViewFinancial ? 'sm:grid-cols-5' : 'sm:grid-cols-4')}>
         <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Total Articles</span>
@@ -823,15 +836,17 @@ export function Stock({
           </div>
         </div>
 
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Valeur Stock</span>
-            <Coins size={14} className="text-amber" />
+        {canViewFinancial && (
+          <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Valeur Stock</span>
+              <Coins size={14} className="text-amber" />
+            </div>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-lg sm:text-xl font-bold text-green tabular-nums">{formatCurrency(totalStockValuation)}</span>
+            </div>
           </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-lg sm:text-xl font-bold text-green tabular-nums">{formatCurrency(totalStockValuation)}</span>
-          </div>
-        </div>
+        )}
 
         <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
           <div className="flex items-center justify-between">
@@ -1067,8 +1082,12 @@ export function Stock({
                         <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
                         <th className="px-3 py-2.5 min-w-32 border-r border-line">Emplacement / Magasin</th>
                         <th className="px-3 py-2.5 min-w-36 border-r border-line">Stock Disponible</th>
-                        <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Coût Unit.</th>
-                        <th className="px-3 py-2.5 min-w-28 border-r border-line text-right">Valeur Stock</th>
+                        {canViewFinancial && (
+                          <>
+                            <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Coût Unit.</th>
+                            <th className="px-3 py-2.5 min-w-28 border-r border-line text-right">Valeur Stock</th>
+                          </>
+                        )}
                         <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
                         <th className="px-3 py-2.5 min-w-36 text-right">Actions</th>
                       </tr>
@@ -1168,15 +1187,19 @@ export function Stock({
                               <StockBar ref={ref} />
                             </td>
 
-                            {/* Coût Unitaire */}
-                            <td className="px-3 py-2 text-right font-mono text-ink-soft border-r border-line tabular-nums">
-                              {ref.unit_cost ? formatCurrency(ref.unit_cost) : '—'}
-                            </td>
+                            {canViewFinancial && (
+                              <>
+                                {/* Coût Unitaire */}
+                                <td className="px-3 py-2 text-right font-mono text-ink-soft border-r border-line tabular-nums">
+                                  {ref.unit_cost ? formatCurrency(ref.unit_cost) : '—'}
+                                </td>
 
-                            {/* Valeur Totale */}
-                            <td className="px-3 py-2 text-right font-mono font-bold text-ink border-r border-line tabular-nums">
-                              {ref.unit_cost ? formatCurrency(lineValuation) : '—'}
-                            </td>
+                                {/* Valeur Totale */}
+                                <td className="px-3 py-2 text-right font-mono font-bold text-ink border-r border-line tabular-nums">
+                                  {ref.unit_cost ? formatCurrency(lineValuation) : '—'}
+                                </td>
+                              </>
+                            )}
 
                             {/* State Badge */}
                             <td className="px-3 py-2 text-center border-r border-line">
@@ -1257,7 +1280,7 @@ export function Stock({
 
                 {/* Spreadsheet Summary Footer */}
                 <div className="bg-paper border-t border-line px-4 py-2.5 text-xs flex items-center justify-between font-semibold text-ink-soft">
-                  <span>Affichés : {filtered.length} référence(s) · Valeur Stock : {formatCurrency(totalStockValuation)}</span>
+                  <span>Affichés : {filtered.length} référence(s){canViewFinancial ? ` · Valeur Stock : ${formatCurrency(totalStockValuation)}` : ''}</span>
                   <span className="text-[11px] text-ink-faint">
                     Cochez des articles pour les affecter ou les transférer par lot vers un magasin
                   </span>
@@ -1329,7 +1352,7 @@ export function Stock({
                             </span>
                           </div>
 
-                          {ref.unit_cost ? (
+                          {canViewFinancial && ref.unit_cost ? (
                             <div className="mt-1 flex items-center gap-2 text-[11px]">
                               <span className="text-ink-faint">Valeur:</span>
                               <span className="font-bold text-green">{formatCurrency(lineValuation)}</span>
@@ -1573,19 +1596,23 @@ export function Stock({
                 <RefQr id={selected.id} />
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5 border-t border-line/60 pt-3 text-xs sm:grid-cols-3">
+              <div className={cx('grid gap-2.5 border-t border-line/60 pt-3 text-xs', canViewFinancial ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-1')}>
                 <div>
                   <span className="text-ink-faint block text-[11px]">Marque</span>
                   <span className="font-semibold text-ink">{selected.brand || '—'}</span>
                 </div>
-                <div>
-                  <span className="text-ink-faint block text-[11px]">Coût Unitaire</span>
-                  <span className="font-semibold text-ink">{selected.unit_cost ? formatCurrency(selected.unit_cost) : '—'}</span>
-                </div>
-                <div>
-                  <span className="text-ink-faint block text-[11px]">Valeur Stock en Rayon</span>
-                  <span className="font-bold text-green">{selected.unit_cost ? formatCurrency(selected.qty * selected.unit_cost) : '—'}</span>
-                </div>
+                {canViewFinancial && (
+                  <>
+                    <div>
+                      <span className="text-ink-faint block text-[11px]">Coût Unitaire</span>
+                      <span className="font-semibold text-ink">{selected.unit_cost ? formatCurrency(selected.unit_cost) : '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-ink-faint block text-[11px]">Valeur Stock en Rayon</span>
+                      <span className="font-bold text-green">{selected.unit_cost ? formatCurrency(selected.qty * selected.unit_cost) : '—'}</span>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-line">
@@ -1774,21 +1801,23 @@ export function Stock({
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className={cx('grid gap-3', canViewFinancial ? 'sm:grid-cols-2' : 'sm:grid-cols-1')}>
             <Field
               label="Unité de comptage"
               value={refForm.unit}
               onChange={(e) => setRefForm((f) => ({ ...f, unit: e.target.value }))}
               placeholder="u, kg, boîte, l, m..."
             />
-            <Field
-              label="Coût unitaire d'achat (FCFA)"
-              type="number"
-              value={refForm.unit_cost}
-              onChange={(e) => setRefForm((f) => ({ ...f, unit_cost: e.target.value }))}
-              placeholder="ex. 150"
-              hint="Pour le calcul de la valeur globale du stock"
-            />
+            {canViewFinancial && (
+              <Field
+                label="Coût unitaire d'achat (FCFA)"
+                type="number"
+                value={refForm.unit_cost}
+                onChange={(e) => setRefForm((f) => ({ ...f, unit_cost: e.target.value }))}
+                placeholder="ex. 150"
+                hint="Pour le calcul de la valeur globale du stock"
+              />
+            )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

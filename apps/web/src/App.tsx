@@ -223,7 +223,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
             )}
             {visitedViews.has('pointage') && (
               <div className={activeView === 'pointage' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'pointage'}>
-                <Pointage />
+                <Pointage user={user} permissions={permissions} />
               </div>
             )}
             {visitedViews.has('stock') && (

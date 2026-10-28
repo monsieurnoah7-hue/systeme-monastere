@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { writeAudit } from '../lib/audit.js';
 import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth.js';
-import { requirePerm } from '../middleware/permissions.js';
-import { TOOL_STATUSES, type ToolRow, type ToolStatus } from '../types.js';
+import { hasPermission, requirePerm } from '../middleware/permissions.js';
+import { isSuperAdmin } from '../lib/permissions.js';
+import { TOOL_STATUSES, type Role, type ToolRow, type ToolStatus } from '../types.js';
 import { Context } from 'hono';
 
 const PREFIX: Record<string, string> = {
@@ -111,11 +112,20 @@ toolsRoutes.get('/', requirePerm('tools.view'), async (c) => {
                  FROM tools t LEFT JOIN magasins m ON m.id = t.magasin_id
                  ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY t.id`;
   const db = getDb();
-  const [tools, cats, locs] = await Promise.all([
-    db.query(sql, params),
+  const authState = c.get('auth');
+  const userRole = authState?.user?.role;
+  const canViewFinancial = userRole ? (isSuperAdmin(userRole as Role) || await hasPermission(userRole, 'financial.view')) : false;
+
+  const [rawTools, cats, locs] = await Promise.all([
+    db.query<any>(sql, params),
     db.query<{ category: string }>('SELECT DISTINCT category FROM tools ORDER BY category'),
     db.query<{ location: string }>('SELECT DISTINCT location FROM tools ORDER BY location'),
   ]);
+
+  const tools = canViewFinancial
+    ? rawTools
+    : rawTools.map((t) => ({ ...t, acquisition_cost: null }));
+
   return c.json({
     tools,
     facets: { categories: cats.map((r) => r.category), locations: locs.map((r) => r.location) },
@@ -125,9 +135,16 @@ toolsRoutes.get('/', requirePerm('tools.view'), async (c) => {
 toolsRoutes.get('/:id', requirePerm('tools.view'), async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const tool = await db.one(`SELECT t.*, m.name AS magasin_name, m.code AS magasin_code
+  const tool = await db.one<any>(`SELECT t.*, m.name AS magasin_name, m.code AS magasin_code
     FROM tools t LEFT JOIN magasins m ON m.id = t.magasin_id WHERE t.id = $1`, [id]);
   if (!tool) return c.json({ error: 'Outil introuvable.' }, 404);
+
+  const authState = c.get('auth');
+  const userRole = authState?.user?.role;
+  const canViewFinancial = userRole ? (isSuperAdmin(userRole as Role) || await hasPermission(userRole, 'financial.view')) : false;
+  if (!canViewFinancial) {
+    tool.acquisition_cost = null;
+  }
   const events = await db.query<{
     id: number;
     event_type: string;

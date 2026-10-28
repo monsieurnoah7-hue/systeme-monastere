@@ -283,6 +283,7 @@ export function Employees({
   const canPhoto = hasPerm('employees.photo_edit') || (!permissions && user.role === 'direction');
   const canPrintBadge = hasPerm('employees.print_badge') || (!permissions && user.role === 'direction');
   const canManageLeaves = hasPerm('leaves.manage') || (!permissions && user.role === 'direction');
+  const canExportReports = hasPerm('reports.export') || (!permissions && user.role === 'direction');
   const canManage = canCreate || canEdit;
 
   const [activeTab, setActiveTab] = useState<'people' | 'timeoff'>('people');
@@ -757,22 +758,26 @@ export function Employees({
             >
               Actualiser
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Download size={14} />}
-              onClick={handleExportExcel}
-            >
-              Excel
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Printer size={14} />}
-              onClick={handleExportPdf}
-            >
-              Imprimer
-            </Button>
+            {canExportReports && (
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Download size={14} />}
+                  onClick={handleExportExcel}
+                >
+                  Excel
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Printer size={14} />}
+                  onClick={handleExportPdf}
+                >
+                  Imprimer
+                </Button>
+              </>
+            )}
             <Button size="sm" onClick={openLeave} icon={<CalendarIcon size={14} />}>
               Congé / Permission
             </Button>

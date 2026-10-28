@@ -45,6 +45,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Save,
   Search,
   Shield,
   ShieldCheck,
@@ -313,6 +314,7 @@ function AdminSettings({ user }: { user: User }) {
 
   // Core data states
   const [settings, setSettings] = useState<KioskSettings | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState<KioskSettings | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [motifDraft, setMotifDraft] = useState('');
@@ -409,6 +411,7 @@ function AdminSettings({ user }: { user: User }) {
       .then(([setRes, termRes, userRes, empRes, permRes, backupRes]) => {
         if (cancelled) return;
         setSettings(setRes.settings);
+        setSettingsDraft(setRes.settings);
         setTerminals(termRes.terminals);
         setUsers(userRes.users);
         setEmployees(empRes.employees);
@@ -436,17 +439,36 @@ function AdminSettings({ user }: { user: User }) {
     };
   }, [reload, user.role]);
 
-  // Save Settings helper
-  async function saveSettings(patch: Partial<KioskSettings>) {
+  const effectiveSettings = settingsDraft ?? settings;
+
+  const hasUnsavedSettings = useMemo(() => {
+    if (!settings || !settingsDraft) return false;
+    return JSON.stringify(settings) !== JSON.stringify(settingsDraft);
+  }, [settings, settingsDraft]);
+
+  function updateSettingsDraft(patch: Partial<KioskSettings>) {
+    setSettingsDraft((prev) => (prev ? { ...prev, ...patch } : prev));
+  }
+
+  function resetSettingsDraft() {
+    if (settings) {
+      setSettingsDraft(JSON.parse(JSON.stringify(settings)));
+    }
+  }
+
+  // Save Settings helper (exécuté uniquement sur clic explicite)
+  async function handleSaveSettings() {
+    if (!settingsDraft) return;
     setSavingSettings(true);
     setSettingsError(null);
     try {
       const res = await api<{ settings: KioskSettings }>('/api/settings', {
         method: 'PUT',
-        body: JSON.stringify(patch),
+        body: JSON.stringify(settingsDraft),
       });
       setSettings(res.settings);
-      toast('Paramètres enregistrés.', 'success');
+      setSettingsDraft(res.settings);
+      toast('Paramètres d’atelier enregistrés.', 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Enregistrement impossible.';
       setSettingsError(message);
@@ -561,32 +583,32 @@ function AdminSettings({ user }: { user: User }) {
 
   // Workdays & Motifs
   function toggleWorkday(day: number) {
-    if (!settings) return;
-    const workdays = settings.workdays.includes(day)
-      ? settings.workdays.filter((value) => value !== day)
-      : [...settings.workdays, day].sort();
-    void saveSettings({ workdays: workdays.length ? workdays : [1] });
+    if (!effectiveSettings) return;
+    const workdays = effectiveSettings.workdays.includes(day)
+      ? effectiveSettings.workdays.filter((value) => value !== day)
+      : [...effectiveSettings.workdays, day].sort();
+    updateSettingsDraft({ workdays: workdays.length ? workdays : [1] });
   }
 
   function removeMotif(motif: string) {
-    if (!settings) return;
-    const late_motifs = settings.late_motifs.filter((value) => value !== motif);
+    if (!effectiveSettings) return;
+    const late_motifs = effectiveSettings.late_motifs.filter((value) => value !== motif);
     if (late_motifs.length === 0) {
       toast('Au moins un motif de retard doit rester configuré.', 'error');
       return;
     }
-    void saveSettings({ late_motifs });
+    updateSettingsDraft({ late_motifs });
   }
 
   function addMotif() {
     const value = motifDraft.trim();
-    if (!settings || !value) return;
-    if (settings.late_motifs.includes(value)) {
+    if (!effectiveSettings || !value) return;
+    if (effectiveSettings.late_motifs.includes(value)) {
       toast('Ce motif existe déjà.', 'error');
       return;
     }
     setMotifDraft('');
-    void saveSettings({ late_motifs: [...settings.late_motifs, value] });
+    updateSettingsDraft({ late_motifs: [...effectiveSettings.late_motifs, value] });
   }
 
   // Terminal actions
@@ -2010,8 +2032,8 @@ function AdminSettings({ user }: { user: User }) {
                     <label className="mb-1.5 block text-xs font-medium text-ink-soft">Ouverture atelier</label>
                     <input
                       type="time"
-                      value={settings.opening_time}
-                      onChange={(e) => void saveSettings({ opening_time: e.target.value })}
+                      value={effectiveSettings?.opening_time || ''}
+                      onChange={(e) => updateSettingsDraft({ opening_time: e.target.value })}
                       className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
                     />
                   </div>
@@ -2019,8 +2041,8 @@ function AdminSettings({ user }: { user: User }) {
                     <label className="mb-1.5 block text-xs font-medium text-ink-soft">Fermeture atelier</label>
                     <input
                       type="time"
-                      value={settings.closing_time}
-                      onChange={(e) => void saveSettings({ closing_time: e.target.value })}
+                      value={effectiveSettings?.closing_time || ''}
+                      onChange={(e) => updateSettingsDraft({ closing_time: e.target.value })}
                       className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
                     />
                   </div>
@@ -2031,7 +2053,7 @@ function AdminSettings({ user }: { user: User }) {
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-medium text-ink-soft">Tolérance de retard autorisée</label>
                     <span className="font-mono text-xs font-semibold text-amber">
-                      {settings.tolerance_minutes} min
+                      {effectiveSettings?.tolerance_minutes ?? 0} min
                     </span>
                   </div>
                   <input
@@ -2039,8 +2061,8 @@ function AdminSettings({ user }: { user: User }) {
                     min={0}
                     max={120}
                     step={5}
-                    value={settings.tolerance_minutes}
-                    onChange={(e) => void saveSettings({ tolerance_minutes: Number(e.target.value) })}
+                    value={effectiveSettings?.tolerance_minutes ?? 0}
+                    onChange={(e) => updateSettingsDraft({ tolerance_minutes: Number(e.target.value) })}
                     className="mt-2 w-full accent-[#d9480f]"
                   />
                   <p className="mt-1 text-[11px] text-ink-faint">
@@ -2055,7 +2077,7 @@ function AdminSettings({ user }: { user: User }) {
                   <label className="mb-2 block text-xs font-medium text-ink-soft">Jours de travail ouvrés</label>
                   <div className="grid grid-cols-7 gap-1.5">
                     {WEEKDAYS_ORDER.map((day) => {
-                      const isWork = settings.workdays.includes(day);
+                      const isWork = effectiveSettings?.workdays.includes(day) ?? false;
                       return (
                         <button
                           key={day}
@@ -2082,7 +2104,7 @@ function AdminSettings({ user }: { user: User }) {
                 <div>
                   <label className="mb-2 block text-xs font-medium text-ink-soft">Motifs de retard configurés</label>
                   <div className="flex flex-wrap gap-1.5">
-                    {settings.late_motifs.map((motif) => (
+                    {(effectiveSettings?.late_motifs ?? []).map((motif) => (
                       <span
                         key={motif}
                         className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-paper-2 px-2.5 py-1 text-xs text-ink font-medium"
@@ -2130,8 +2152,8 @@ function AdminSettings({ user }: { user: User }) {
                       type="number"
                       min={3}
                       max={60}
-                      value={settings.card_display_seconds}
-                      onChange={(e) => void saveSettings({ card_display_seconds: Number(e.target.value) })}
+                      value={effectiveSettings?.card_display_seconds ?? 5}
+                      onChange={(e) => updateSettingsDraft({ card_display_seconds: Number(e.target.value) })}
                       className="h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
                     />
                   </div>
@@ -2141,19 +2163,49 @@ function AdminSettings({ user }: { user: User }) {
                       type="number"
                       min={7}
                       max={365}
-                      value={settings.selfie_retention_days}
-                      onChange={(e) => void saveSettings({ selfie_retention_days: Number(e.target.value) })}
+                      value={effectiveSettings?.selfie_retention_days ?? 30}
+                      onChange={(e) => updateSettingsDraft({ selfie_retention_days: Number(e.target.value) })}
                       className="h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
                     />
                   </div>
                 </div>
               </CardContent>
 
-              <CardFooter className="flex items-center justify-between border-t border-line bg-paper-2/30 px-5 py-3 text-[11px] text-ink-faint">
-                <span className="flex items-center gap-1.5">
-                  {savingSettings ? <Spinner className="h-3 w-3 text-amber" /> : <CheckCircle2 size={13} className="text-green" />}
-                  Synchronisation automatique vers la base de données
-                </span>
+              <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-paper-2/30 px-5 py-3">
+                <div className="flex items-center gap-2 text-xs">
+                  {hasUnsavedSettings ? (
+                    <span className="flex items-center gap-1.5 font-medium text-amber">
+                      <span className="h-2 w-2 rounded-full bg-amber animate-pulse" />
+                      Modifications en attente d’enregistrement
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 text-ink-faint">
+                      <CheckCircle2 size={14} className="text-green" />
+                      Paramètres synchronisés avec l'atelier
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {hasUnsavedSettings && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={savingSettings}
+                      onClick={resetSettingsDraft}
+                    >
+                      Annuler
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={savingSettings || !hasUnsavedSettings}
+                    onClick={() => void handleSaveSettings()}
+                  >
+                    {savingSettings ? <Spinner className="h-3.5 w-3.5" /> : <Save size={14} />}
+                    Enregistrer
+                  </Button>
+                </div>
               </CardFooter>
             </Card>
 

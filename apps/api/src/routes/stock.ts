@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { writeAudit } from '../lib/audit.js';
 import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth.js';
-import { requirePerm } from '../middleware/permissions.js';
+import { hasPermission, requirePerm } from '../middleware/permissions.js';
+import { isSuperAdmin } from '../lib/permissions.js';
+import type { Role } from '../types.js';
 
 export const stockRoutes = new Hono();
 
@@ -97,9 +99,14 @@ stockRoutes.get('/refs', requirePerm('stock.view'), async (c) => {
       ORDER BY r.name`,
     params,
   );
+  const authState = c.get('auth');
+  const userRole = authState?.user?.role;
+  const canViewFinancial = userRole ? (isSuperAdmin(userRole as Role) || await hasPermission(userRole, 'financial.view')) : false;
+
   return c.json({
     refs: (refs as any[]).map((r) => ({
       ...r,
+      unit_cost: canViewFinancial ? (r.unit_cost !== null ? Number(r.unit_cost) : null) : null,
       min_qty: Number(r.min_qty),
       initial_qty: Number(r.initial_qty),
       qty: Number(r.qty),
