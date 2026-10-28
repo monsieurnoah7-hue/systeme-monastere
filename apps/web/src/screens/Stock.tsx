@@ -75,12 +75,12 @@ const EMPTY_REF: RefForm = {
   unit: 'u',
   location: '',
   magasin_id: '',
-  min_qty: '0',
+  min_qty: '',
   supplier: '',
   brand: '',
   unit_cost: '',
   photo_path: null,
-  initial_qty: '0',
+  initial_qty: '',
 };
 
 function stockState(ref: StockRef): { label: string; tone: 'green' | 'amber' | 'red' } {
@@ -238,7 +238,7 @@ export function Stock({
   const [moveForm, setMoveForm] = useState<MoveForm>({
     ref_id: '',
     move_type: 'out',
-    qty: '1',
+    qty: '',
     beneficiary: '',
     doc_ref: '',
     note: '',
@@ -400,7 +400,7 @@ export function Stock({
             unit: refForm.unit,
             location: refForm.location,
             magasin_id: refForm.magasin_id || null,
-            min_qty: Number(refForm.min_qty),
+            min_qty: Number(refForm.min_qty || 0),
             supplier: refForm.supplier,
             brand: refForm.brand.trim() || null,
             unit_cost: refForm.unit_cost ? Number(refForm.unit_cost) : null,
@@ -417,12 +417,12 @@ export function Stock({
             unit: refForm.unit || 'u',
             location: refForm.location || 'Quincaillerie',
             magasin_id: refForm.magasin_id || undefined,
-            min_qty: Number(refForm.min_qty),
+            min_qty: Number(refForm.min_qty || 0),
             supplier: refForm.supplier,
             brand: refForm.brand.trim() || undefined,
             unit_cost: refForm.unit_cost ? Number(refForm.unit_cost) : undefined,
             photo_path: refForm.photo_path || undefined,
-            initial_qty: Number(refForm.initial_qty),
+            initial_qty: Number(refForm.initial_qty || 0),
           }),
         });
         toast('Référence créée au stock.', 'success');
@@ -1843,6 +1843,7 @@ export function Stock({
             <Field
               label="Seuil d'alerte minimal"
               type="number"
+              placeholder="0"
               value={refForm.min_qty}
               onChange={(e) => setRefForm((f) => ({ ...f, min_qty: e.target.value }))}
             />
@@ -1850,6 +1851,7 @@ export function Stock({
               <Field
                 label="Stock initial"
                 type="number"
+                placeholder="0"
                 value={refForm.initial_qty}
                 onChange={(e) => setRefForm((f) => ({ ...f, initial_qty: e.target.value }))}
               />
@@ -1901,6 +1903,7 @@ export function Stock({
           <Field
             label={moveForm.move_type === 'correction' ? 'Nouveau stock réel compté' : 'Quantité'}
             type="number"
+            placeholder={moveForm.move_type === 'correction' ? 'ex. 15' : '1'}
             value={moveForm.qty}
             onChange={(e) => setMoveForm((f) => ({ ...f, qty: e.target.value }))}
           />

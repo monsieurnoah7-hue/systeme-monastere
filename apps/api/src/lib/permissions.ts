@@ -39,6 +39,7 @@ export const PERMISSION_ACTIONS = [
   'profile.photo_edit_self',
   'terminals.manage',
   'permissions.manage',
+  'scanner.use',
 ] as const;
 
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
@@ -82,6 +83,7 @@ export const PERMISSION_LABELS: Record<PermissionAction, string> = {
   'profile.photo_edit_self': 'Modifier sa propre photo de profil',
   'terminals.manage': 'Gérer les terminaux',
   'permissions.manage': 'Gérer les permissions',
+  'scanner.use': 'Utiliser le scanner QR & codes-barres (App)',
 };
 
 export const PERMISSION_KINDS: Record<PermissionAction, 'view' | 'action'> = {
@@ -123,12 +125,13 @@ export const PERMISSION_KINDS: Record<PermissionAction, 'view' | 'action'> = {
   'profile.photo_edit_self': 'action',
   'terminals.manage': 'action',
   'permissions.manage': 'action',
+  'scanner.use': 'action',
 };
 
 export const PERMISSION_GROUPS: { label: string; actions: PermissionAction[] }[] = [
   {
     label: 'Outils & prêts',
-    actions: ['tools.view', 'tools.create', 'tools.edit', 'tools.delete', 'tools.edit_status', 'tools.photo_edit', 'loans.view', 'loans.create', 'loans.return'],
+    actions: ['tools.view', 'tools.create', 'tools.edit', 'tools.delete', 'tools.edit_status', 'tools.photo_edit', 'loans.view', 'loans.create', 'loans.return', 'scanner.use'],
   },
   {
     label: 'Magasins',
@@ -199,6 +202,7 @@ export const DEFAULT_PERMISSIONS: Record<PermissionAction, Role[]> = {
   'profile.photo_edit_self': ['direction', 'magasinier', 'chef_atelier', 'travailleur'],
   'terminals.manage': ['direction'],
   'permissions.manage': ['direction'],
+  'scanner.use': ['direction'],
 };
 
 export function emptyPermissionMap(): Record<PermissionAction, boolean> {

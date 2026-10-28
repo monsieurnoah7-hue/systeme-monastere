@@ -1462,19 +1462,9 @@ export function Employees({
                   checked={form.create_account}
                   onChange={(e) => {
                     const checked = e.target.checked;
-                    const autoLogin = form.full_name
-                      .trim()
-                      .normalize('NFD')
-                      .replace(/[\u0300-\u036f]/g, '')
-                      .toLowerCase()
-                      .replace(/[^a-z0-9]+/g, '.')
-                      .replace(/^\.+|\.+$/g, '')
-                      .slice(0, 32);
                     setForm((f) => ({
                       ...f,
                       create_account: checked,
-                      account_login: f.account_login || autoLogin,
-                      account_password: f.account_password || (f.pin || 'Monastere2026!'),
                     }));
                   }}
                   className="h-4 w-4 rounded border-line-strong text-amber accent-[#d9480f] focus:ring-amber"
@@ -1496,7 +1486,18 @@ export function Employees({
                     <input
                       type="text"
                       value={form.account_login}
-                      placeholder="Ex : landry.onana"
+                      placeholder={
+                        form.full_name.trim()
+                          ? `Ex : ${form.full_name
+                              .trim()
+                              .normalize('NFD')
+                              .replace(/[\u0300-\u036f]/g, '')
+                              .toLowerCase()
+                              .replace(/[^a-z0-9]+/g, '.')
+                              .replace(/^\.+|\.+$/g, '')
+                              .slice(0, 24)}`
+                          : 'Ex : landry.onana'
+                      }
                       onChange={(e) => setForm({ ...form, account_login: e.target.value.toLowerCase() })}
                       className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
                     />
@@ -1505,7 +1506,7 @@ export function Employees({
                     <label className="mb-1 block text-[11px] font-medium text-ink-soft">Mot de passe temporaire</label>
                     <PasswordInput
                       value={form.account_password}
-                      placeholder="Par défaut : identique au PIN"
+                      placeholder="Par défaut : identique au PIN ou Monastere2026!"
                       onChange={(e) => setForm({ ...form, account_password: e.target.value })}
                       className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
                     />

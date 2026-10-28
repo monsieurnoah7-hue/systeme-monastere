@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requirePerm } from '../middleware/permissions.js';
 
 export const scanRoutes = new Hono();
 
@@ -15,7 +16,7 @@ function stripPrefix(raw: string, prefix: string): string | null {
   return null;
 }
 
-scanRoutes.get('/', requireRole('direction', 'magasinier', 'chef_atelier'), async (c) => {
+scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
   const parsed = query.safeParse(c.req.query());
   if (!parsed.success) return c.json({ error: 'Code requis.' }, 400);
   const rawCode = parsed.data.q.trim();

@@ -23,11 +23,13 @@ import {
 } from '../components/ui';
 import {
   AlertTriangle,
+  ArrowDownRight,
   ArrowUpRight,
   Clock,
   Fingerprint,
   Package,
   RefreshCw,
+  RotateCcw,
   Users,
   Wrench,
   ChevronRight,
@@ -457,12 +459,26 @@ export function Dashboard() {
     return () => {
       cancelled = true;
     };
-  }, [reload, data]);
+  }, [reload]);
 
   useEffect(() => {
+    // Polling d'actualisation toutes les 15 secondes pour les flux atelier en temps réel
+    const interval = setInterval(() => {
+      setReload((v) => v + 1);
+    }, 15000);
     const handleSync = () => setReload((v) => v + 1);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') setReload((v) => v + 1);
+    };
     window.addEventListener('mf-refresh-data', handleSync);
-    return () => window.removeEventListener('mf-refresh-data', handleSync);
+    window.addEventListener('focus', handleSync);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('mf-refresh-data', handleSync);
+      window.removeEventListener('focus', handleSync);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const openTools = useCallback((status: string, title: string) => {
@@ -605,53 +621,77 @@ export function Dashboard() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-bold text-ink flex items-center gap-2">
                 <span>Alertes opérationnelles</span>
-                <AlertTriangle size={16} className="text-amber shrink-0" />
+                <AlertTriangle
+                  size={16}
+                  className={cx(
+                    das05.overdueLoans + das05.lowStock + das05.missingTools + das05.missingOut > 0
+                      ? 'text-amber animate-pulse'
+                      : 'text-emerald-500',
+                  )}
+                />
               </h2>
-              <span className="text-xs text-ink-faint">Action requise</span>
+              <span className="text-xs text-ink-faint flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                Temps réel
+              </span>
             </div>
 
-            <ul className="divide-y divide-line rounded-lg border border-line">
+            <ul className="divide-y divide-line rounded-lg border border-line overflow-hidden">
               {[
                 {
                   label: 'Prêts d’outils en retard de retour',
                   count: das05.overdueLoans,
                   open: () => setDrawer({ kind: 'overdue' }),
+                  desc: 'Outils non restitués dans les délais',
                 },
                 {
                   label: 'Matières & consommables sous le seuil',
                   count: das05.lowStock,
                   open: () => setDrawer({ kind: 'stock' }),
+                  desc: 'Quincaillerie & consommables à recommander',
                 },
                 {
                   label: 'Outils déclarés manquants',
                   count: das05.missingTools,
                   open: () => setDrawer({ kind: 'missingTools' }),
+                  desc: 'Matériels introuvables ou signalés perdus',
                 },
                 {
                   label: 'Départs non pointés au kiosque',
                   count: das05.missingOut,
                   open: () => setDrawer({ kind: 'missingOut' }),
+                  desc: 'Pointages d’entrée non clôturés en sortie',
                 },
               ].map((alert) => (
                 <li key={alert.label}>
                   <button
                     onClick={alert.open}
-                    className="flex w-full items-center justify-between gap-3 bg-surface px-3 py-2.5 text-left transition-colors hover:bg-paper-2"
+                    className="flex w-full items-center justify-between gap-3 bg-surface px-3 py-2.5 text-left transition-colors hover:bg-paper-2 group"
                   >
-                    <span className="flex items-center gap-2 text-xs font-medium text-ink">
-                      <span className={cx('text-ink-faint', alert.count > 0 && 'text-amber')}>
-                        <AlertTriangle size={15} />
+                    <span className="flex items-center gap-2.5 text-xs font-medium text-ink min-w-0">
+                      <span
+                        className={cx(
+                          'shrink-0 p-1 rounded-md transition-colors',
+                          alert.count > 0 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-paper text-ink-faint',
+                        )}
+                      >
+                        <AlertTriangle size={14} />
                       </span>
-                      {alert.label}
+                      <span className="truncate">{alert.label}</span>
                     </span>
-                    <span
-                      className={cx(
-                        'font-mono text-xs font-bold tabular-nums rounded px-2 py-0.5',
-                        alert.count > 0 ? 'bg-amber-wash text-amber' : 'text-ink-faint bg-paper-2',
-                      )}
-                    >
-                      {alert.count}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span
+                        className={cx(
+                          'font-mono text-xs font-bold tabular-nums rounded px-2 py-0.5 border',
+                          alert.count > 0
+                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                            : 'text-ink-faint bg-paper border-line',
+                        )}
+                      >
+                        {alert.count}
+                      </span>
+                      <ChevronRight size={13} className="text-ink-faint group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                    </div>
                   </button>
                 </li>
               ))}
@@ -671,10 +711,58 @@ export function Dashboard() {
 
           <Card className="shadow-card p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-ink">Activité du jour</h2>
-              <span className="text-[11px] text-ink-faint">Flux magasin</span>
+              <div>
+                <h2 className="text-sm font-bold text-ink">Activité du jour</h2>
+                <p className="text-[11px] text-ink-faint">Flux magasin &amp; atelier en temps réel</p>
+              </div>
+              <button
+                onClick={() => setDrawer({ kind: 'movements' })}
+                className="text-xs text-amber hover:underline font-medium inline-flex items-center gap-1"
+              >
+                Journal du jour &rarr;
+              </button>
             </div>
-            <div className="h-40">
+
+            {/* Flux KPI Pills */}
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div
+                onClick={() => setDrawer({ kind: 'movements' })}
+                className="flex flex-col items-center justify-center p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/15 transition-colors"
+                title="Entrées au stock"
+              >
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  <ArrowDownRight size={13} />
+                  <span>Entrées</span>
+                </div>
+                <span className="font-mono text-base font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">{das03.entries}</span>
+              </div>
+
+              <div
+                onClick={() => setDrawer({ kind: 'movements' })}
+                className="flex flex-col items-center justify-center p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-colors"
+                title="Sorties (consommables & prêts)"
+              >
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                  <ArrowUpRight size={13} />
+                  <span>Sorties</span>
+                </div>
+                <span className="font-mono text-base font-bold text-amber-700 dark:text-amber-300 mt-0.5">{das03.exits}</span>
+              </div>
+
+              <div
+                onClick={() => setDrawer({ kind: 'movements' })}
+                className="flex flex-col items-center justify-center p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 cursor-pointer hover:bg-blue-500/15 transition-colors"
+                title="Retours d'outillage"
+              >
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                  <RotateCcw size={13} />
+                  <span>Retours</span>
+                </div>
+                <span className="font-mono text-base font-bold text-blue-700 dark:text-blue-300 mt-0.5">{das03.returns}</span>
+              </div>
+            </div>
+
+            <div className="h-36">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dailyMoves} margin={{ top: 8, right: 4, bottom: 0, left: -20 }}>
                   <XAxis
@@ -694,7 +782,7 @@ export function Dashboard() {
                     cursor={{ fill: 'rgba(0,0,0,0.04)' }}
                     content={<ChartTooltip />}
                   />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={44} isAnimationActive={false}>
                     {dailyMoves.map((bar) => (
                       <Cell
                         key={bar.name}
@@ -757,7 +845,10 @@ function drawerTitle(drawer: DrawerKind | null): string {
 
 function drawerSubtitle(drawer: DrawerKind | null, data: DashboardType): string | undefined {
   if (!drawer) return undefined;
-  if (drawer.kind === 'stock') return `${data.das02.refs} références suivies`;
+  if (drawer.kind === 'stock') return `${data.das05.lowStock} article(s) sous le seuil d’alerte`;
+  if (drawer.kind === 'overdue') return `${data.das05.overdueLoans} prêt(s) d'outils en retard`;
+  if (drawer.kind === 'missingTools') return `${data.das05.missingTools} outil(s) déclaré(s) manquant(s)`;
+  if (drawer.kind === 'missingOut') return `${data.das05.missingOut} départ(s) non pointé(s)`;
   if (drawer.kind === 'attendance') return 'Relevés serveurs en direct';
   return formatDate(data.generatedAt);
 }
@@ -766,9 +857,9 @@ function DrawerContentDetail({
   drawer,
   data,
   tools,
-  refs,
-  loans,
-  loansLoading,
+  refs: _refs,
+  loans: _loans,
+  loansLoading: _loansLoading,
 }: {
   drawer: DrawerKind | null;
   data: DashboardType;
@@ -804,42 +895,56 @@ function DrawerContentDetail({
   }
 
   if (drawer.kind === 'stock') {
-    if (!refs) {
+    const lowList = data.das05.details.lowStock;
+    if (!lowList || lowList.length === 0) {
       return (
-        <div className="flex items-center justify-center gap-2 py-16 text-sm text-ink-soft">
-          <Spinner /> Chargement…
-        </div>
+        <EmptyState
+          title="Stocks conformes"
+          hint="Aucune matière ou quincaillerie sous le seuil d'alerte."
+        />
       );
     }
-    if (refs.length === 0) return <EmptyState title="Aucune référence enregistrée" />;
     return (
-      <div className="space-y-2">
-        {refs.map((ref) => {
-          const low = ref.qty > 0 && ref.qty <= ref.min_qty;
-          const empty = ref.qty <= 0;
-          return (
-            <Card key={ref.id} className="p-3 shadow-xs">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-ink">{ref.name}</p>
-                  <p className="text-[11px] text-ink-faint">
-                    {ref.category} · {ref.location}
-                  </p>
+      <div className="space-y-3">
+        <p className="text-xs text-ink-soft">
+          Articles dont la quantité disponible est inférieure ou égale au seuil de réapprovisionnement :
+        </p>
+        <div className="space-y-2">
+          {lowList.map((ref) => {
+            const empty = ref.qty <= 0;
+            return (
+              <Card key={ref.id} className="p-3 shadow-xs">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-ink">{ref.name}</p>
+                    <p className="text-[11px] text-ink-faint">
+                      {ref.location || 'Magasin de quincaillerie'}
+                    </p>
+                  </div>
+                  <Chip tone={empty ? 'red' : 'amber'}>
+                    {empty ? 'Épuisé (0)' : 'Sous le seuil'}
+                  </Chip>
                 </div>
-                <Chip tone={empty ? 'red' : low ? 'amber' : 'green'}>
-                  {empty ? 'Épuisée' : low ? 'Sous le seuil' : 'Stock correct'}
-                </Chip>
-              </div>
-              <div className="mt-2">
-                <Row
-                  label="Quantité en magasin"
-                  value={`${ref.qty} ${ref.unit} (seuil min : ${ref.min_qty})`}
-                  mono
-                />
-              </div>
-            </Card>
-          );
-        })}
+                <div className="mt-2 text-xs">
+                  <Row
+                    label="Disponible en magasin"
+                    value={`${ref.qty} ${ref.unit} (Seuil d'alerte : ${ref.min_qty})`}
+                    mono
+                  />
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+        <Button
+          variant="secondary"
+          className="w-full text-xs"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('nav-view', { detail: 'stock' }));
+          }}
+        >
+          Ouvrir le module Stock &amp; Quincaillerie &rarr;
+        </Button>
       </div>
     );
   }
@@ -899,25 +1004,138 @@ function DrawerContentDetail({
   }
 
   if (drawer.kind === 'overdue') {
-    if (loansLoading) {
+    const overdueList = data.das05.details.overdueLoans;
+    if (!overdueList || overdueList.length === 0) {
       return (
-        <div className="flex items-center justify-center gap-2 py-16 text-sm text-ink-soft">
-          <Spinner /> Chargement…
-        </div>
+        <EmptyState
+          title="Aucun prêt en retard"
+          hint="Tous les outils sortis ont été restitués ou sont dans leurs délais d'emprunt."
+        />
       );
     }
-    if (loans.length === 0) return <EmptyState title="Aucun prêt en cours" hint="Tous les outils sortis ont été rendus." />;
     return (
-      <ul className="divide-y divide-line rounded-lg border border-line">
-        {loans.map((loan) => (
-          <li key={loan.id} className="bg-surface px-3 py-2.5 text-xs">
-            <p className="font-semibold text-ink">{loan.tool_name}</p>
-            <p className="text-ink-soft">
-              {loan.tool_id} · Emprunté par <strong>{loan.employee_name}</strong> le {formatDate(loan.out_at)}
-            </p>
-          </li>
-        ))}
-      </ul>
+      <div className="space-y-3">
+        <p className="text-xs text-ink-soft">
+          Outils prêtés dont le délai de retour est dépassé :
+        </p>
+        <ul className="divide-y divide-line rounded-lg border border-line">
+          {overdueList.map((loan) => (
+            <li key={loan.id} className="bg-surface px-3 py-2.5 text-xs flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-ink">{loan.tool_name}</p>
+                <p className="text-ink-soft">
+                  <span className="font-mono text-ink-faint">{loan.tool_id}</span> · Emprunté par <strong>{loan.employee_name}</strong> le {formatDate(loan.out_date)}
+                </p>
+                {loan.due_date ? (
+                  <p className="text-[11px] text-rose-500">
+                    Date prévue : {formatDate(loan.due_date)}
+                  </p>
+                ) : null}
+              </div>
+              <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                +{loan.days_overdue ?? 1}j retard
+              </span>
+            </li>
+          ))}
+        </ul>
+        <Button
+          variant="secondary"
+          className="w-full text-xs"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('nav-view', { detail: 'outils' }));
+          }}
+        >
+          Gérer les retours dans Outils &rarr;
+        </Button>
+      </div>
+    );
+  }
+
+  if (drawer.kind === 'missingTools') {
+    const missing = data.das05.details.missingTools;
+    if (!missing || missing.length === 0) {
+      return (
+        <EmptyState
+          title="Aucun outil manquant"
+          hint="Tous les équipements répertoriés sont localisés."
+        />
+      );
+    }
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-ink-soft">
+          Matériels déclarés manquants lors des inventaires ou des chantiers :
+        </p>
+        <ul className="divide-y divide-line rounded-lg border border-line">
+          {missing.map((tool) => (
+            <li key={tool.id} className="bg-surface px-3 py-2.5 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-semibold text-ink">{tool.name}</p>
+                <Chip tone="red">Manquant</Chip>
+              </div>
+              <p className="text-[11px] text-ink-soft mt-0.5">
+                <span className="font-mono text-ink-faint">{tool.id}</span> · {tool.category} · {tool.location}
+              </p>
+              {tool.status_reason ? (
+                <p className="text-[11px] text-ink-faint italic mt-1 bg-paper p-1.5 rounded border border-line">
+                  Motif : {tool.status_reason}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        <Button
+          variant="secondary"
+          className="w-full text-xs"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('nav-view', { detail: 'outils' }));
+          }}
+        >
+          Voir dans le catalogue d'outillage &rarr;
+        </Button>
+      </div>
+    );
+  }
+
+  if (drawer.kind === 'missingOut') {
+    const unclosed = data.das05.details.missingOut;
+    if (!unclosed || unclosed.length === 0) {
+      return (
+        <EmptyState
+          title="Départs régularisés"
+          hint="Tous les pointages d'arrivée ont un pointage de départ enregistré."
+        />
+      );
+    }
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-ink-soft">
+          Travailleurs ayant pointé l'entrée mais sans pointage de départ enregistré au kiosque :
+        </p>
+        <ul className="divide-y divide-line rounded-lg border border-line">
+          {unclosed.map((worker) => (
+            <li key={`${worker.id}-${worker.punch_date ?? ''}`} className="bg-surface px-3 py-2.5 text-xs flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-ink">{worker.full_name}</p>
+                <p className="text-[11px] text-ink-soft">
+                  <span className="font-mono text-ink-faint">{worker.id}</span> · Arrivée à {worker.in_at ?? '—'}
+                  {worker.punch_date ? ` le ${formatDate(worker.punch_date)}` : ''}
+                </p>
+              </div>
+              <Chip tone="amber">Sortie non pointée</Chip>
+            </li>
+          ))}
+        </ul>
+        <Button
+          variant="secondary"
+          className="w-full text-xs"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('nav-view', { detail: 'pointage' }));
+          }}
+        >
+          Ouvrir le registre de pointage &rarr;
+        </Button>
+      </div>
     );
   }
 

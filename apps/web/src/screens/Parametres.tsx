@@ -29,6 +29,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from '../components/ui/separator';
 import {
   AlertTriangle,
+  Ban,
   Camera,
   Check,
   CheckCheck,
@@ -890,12 +891,10 @@ function AdminSettings({ user }: { user: User }) {
 
   // Role management actions (Direction)
   function openCreateRoleModal(defaultArchetype = 'menuisier') {
-    const fallbackArch = ROLE_ARCHETYPES_UI[0]!;
-    const arch = ROLE_ARCHETYPES_UI.find((a) => a.id === defaultArchetype) ?? fallbackArch;
     setRoleForm({
       id: '',
-      name: arch.id === 'clone' || arch.id === 'custom' ? '' : arch.name,
-      description: arch.description,
+      name: '',
+      description: '',
       template: defaultArchetype,
       copyFrom: '',
     });
@@ -905,14 +904,12 @@ function AdminSettings({ user }: { user: User }) {
   }
 
   function selectRoleArchetype(archId: string) {
-    const arch = ROLE_ARCHETYPES_UI.find((a) => a.id === archId);
-    if (!arch) return;
     setRoleForm((f) => ({
       ...f,
       template: archId,
-      name: arch.id === 'clone' || arch.id === 'custom' ? '' : arch.name,
+      name: '',
       id: '',
-      description: arch.description,
+      description: '',
     }));
   }
 
@@ -924,7 +921,8 @@ function AdminSettings({ user }: { user: User }) {
   }
 
   async function handleSaveRole() {
-    const trimmedName = roleForm.name.trim();
+    const selectedArch = ROLE_ARCHETYPES_UI.find((a) => a.id === roleForm.template);
+    const trimmedName = roleForm.name.trim() || (roleModalMode === 'create' && selectedArch && selectedArch.id !== 'custom' && selectedArch.id !== 'clone' ? selectedArch.name : '');
     if (!trimmedName) {
       setRoleError('Le libellé officiel du rôle est requis.');
       return;
@@ -944,7 +942,7 @@ function AdminSettings({ user }: { user: User }) {
         const payload: Record<string, unknown> = {
           id: autoId || undefined,
           name: trimmedName,
-          description: roleForm.description.trim() || undefined,
+          description: roleForm.description.trim() || (selectedArch && selectedArch.id !== 'custom' && selectedArch.id !== 'clone' ? selectedArch.description : undefined) || undefined,
         };
         if (roleForm.template === 'clone' && roleForm.copyFrom) {
           payload.copy_from = roleForm.copyFrom;
@@ -1874,25 +1872,28 @@ function AdminSettings({ user }: { user: User }) {
                                         type="button"
                                         onClick={() => applyColumnPreset(role, 'view_only')}
                                         title="Accorder uniquement les droits de consultation (Lecture seule)"
-                                        className="rounded px-1.5 py-0.5 bg-paper hover:bg-paper-2 border border-line text-ink-soft text-[10px] font-medium transition-colors"
+                                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 bg-paper hover:bg-paper-2 border border-line text-ink-soft hover:text-ink text-[10px] font-medium transition-colors shadow-2xs"
                                       >
-                                        👁️ Lecture
+                                        <Eye size={11} className="text-blue-500 shrink-0" />
+                                        <span>Lecture</span>
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => applyColumnPreset(role, 'all')}
                                         title="Tout cocher pour ce rôle"
-                                        className="rounded px-1.5 py-0.5 bg-paper hover:bg-paper-2 border border-line text-ink-soft text-[10px] font-medium transition-colors"
+                                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 bg-paper hover:bg-paper-2 border border-line text-ink-soft hover:text-ink text-[10px] font-medium transition-colors shadow-2xs"
                                       >
-                                        ⚡ Tout
+                                        <CheckCheck size={11} className="text-emerald-500 shrink-0" />
+                                        <span>Tout</span>
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => applyColumnPreset(role, 'none')}
                                         title="Tout décocher pour ce rôle"
-                                        className="rounded px-1.5 py-0.5 bg-paper hover:bg-paper-2 border border-line text-ink-soft text-[10px] font-medium transition-colors"
+                                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 bg-paper hover:bg-paper-2 border border-line text-ink-soft hover:text-ink text-[10px] font-medium transition-colors shadow-2xs"
                                       >
-                                        ✕ Rien
+                                        <Ban size={11} className="text-rose-500 shrink-0" />
+                                        <span>Rien</span>
                                       </button>
                                     </div>
                                   )}
@@ -3122,7 +3123,14 @@ function AdminSettings({ user }: { user: User }) {
             </Button>
             <Button
               variant="primary"
-              disabled={roleBusy || !roleForm.name.trim()}
+              disabled={
+                roleBusy ||
+                (!roleForm.name.trim() &&
+                  (roleModalMode !== 'create' ||
+                    !ROLE_ARCHETYPES_UI.find((a) => a.id === roleForm.template) ||
+                    ROLE_ARCHETYPES_UI.find((a) => a.id === roleForm.template)?.id === 'custom' ||
+                    ROLE_ARCHETYPES_UI.find((a) => a.id === roleForm.template)?.id === 'clone'))
+              }
               onClick={() => void handleSaveRole()}
             >
               {roleBusy ? <Spinner /> : roleModalMode === 'create' ? 'Créer le rôle & Configurer dans la matrice' : 'Enregistrer les modifications'}
@@ -3209,7 +3217,13 @@ function AdminSettings({ user }: { user: User }) {
                 <input
                   type="text"
                   value={roleForm.name}
-                  placeholder="Ex: Responsable Menuiserie & Scierie"
+                  placeholder={
+                    roleModalMode === 'create' &&
+                    ROLE_ARCHETYPES_UI.find((a) => a.id === roleForm.template) &&
+                    !['custom', 'clone'].includes(roleForm.template)
+                      ? `Ex: ${ROLE_ARCHETYPES_UI.find((a) => a.id === roleForm.template)?.name}`
+                      : 'Ex: Responsable Menuiserie & Scierie'
+                  }
                   onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
                   className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
                 />
@@ -3227,14 +3241,12 @@ function AdminSettings({ user }: { user: User }) {
                     type="text"
                     value={roleForm.id}
                     placeholder={
-                      roleForm.name.trim()
-                        ? roleForm.name
-                            .normalize('NFD')
-                            .replace(/[\u0300-\u036f]/g, '')
-                            .toLowerCase()
-                            .replace(/[^a-z0-9_-]/g, '_')
-                            .replace(/^_+|_+$/g, '')
-                        : 'Généré automatiquement'
+                      (roleForm.name.trim() || ROLE_ARCHETYPES_UI.find((a) => a.id === roleForm.template)?.name || '')
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .toLowerCase()
+                        .replace(/[^a-z0-9_-]/g, '_')
+                        .replace(/^_+|_+$/g, '') || 'Généré automatiquement'
                     }
                     onChange={(e) => setRoleForm({ ...roleForm, id: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') })}
                     className="h-10 w-full rounded-btn border border-line bg-surface/80 px-3 font-mono text-xs text-ink focus:border-amber focus:outline-none"
@@ -3258,7 +3270,13 @@ function AdminSettings({ user }: { user: User }) {
               <textarea
                 rows={2}
                 value={roleForm.description}
-                placeholder="Décrivez brièvement les missions et responsabilités attachées à ce rôle…"
+                placeholder={
+                  roleModalMode === 'create' &&
+                  ROLE_ARCHETYPES_UI.find((a) => a.id === roleForm.template) &&
+                  !['custom', 'clone'].includes(roleForm.template)
+                    ? (ROLE_ARCHETYPES_UI.find((a) => a.id === roleForm.template)?.description ?? 'Décrivez brièvement les missions…')
+                    : 'Décrivez brièvement les missions et responsabilités attachées à ce rôle…'
+                }
                 onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
                 className="w-full rounded-btn border border-line-strong bg-surface p-3 text-xs text-ink focus:border-amber focus:outline-none"
               />

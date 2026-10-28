@@ -206,15 +206,15 @@ export function Outils({
   const [newForm, setNewForm] = useState({
     name: '',
     category: 'Divers',
-    location: 'Magasin',
+    location: '',
     magasin_id: '',
     observations: '',
     brand: '',
     model: '',
     serial_number: '',
     acquisition_cost: '',
-    acquisition_year: String(new Date().getFullYear()),
-    lifespan_years: '5',
+    acquisition_year: '',
+    lifespan_years: '',
     photo_path: null as string | null,
   });
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
@@ -369,7 +369,7 @@ export function Outils({
         body: JSON.stringify({
           name: newForm.name,
           category: newForm.category,
-          location: newForm.location,
+          location: newForm.location.trim() || 'Magasin',
           magasin_id: newForm.magasin_id || undefined,
           observations: newForm.observations || undefined,
           brand: newForm.brand.trim() || undefined,
@@ -386,15 +386,15 @@ export function Outils({
       setNewForm({
         name: '',
         category: 'Divers',
-        location: 'Magasin',
+        location: '',
         magasin_id: '',
         observations: '',
         brand: '',
         model: '',
         serial_number: '',
         acquisition_cost: '',
-        acquisition_year: String(new Date().getFullYear()),
-        lifespan_years: '5',
+        acquisition_year: '',
+        lifespan_years: '',
         photo_path: null,
       });
       refresh();

@@ -1,21 +1,15 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/index.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requirePerm } from '../middleware/permissions.js';
 import { localDate } from '../lib/time.js';
-import type { Role } from '../types.js';
-
-const FULL_ROLES: Role[] = ['direction'];
-const PARTIAL_ROLES: Role[] = ['magasinier', 'chef_atelier'];
 
 export const dashboardRoutes = new Hono();
 
 dashboardRoutes.use('*', requireAuth);
 
-dashboardRoutes.get('/', async (c) => {
+dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
   const role = c.get('auth').user.role;
-  if (!FULL_ROLES.includes(role) && !PARTIAL_ROLES.includes(role)) {
-    return c.json({ error: 'Tableau de bord réservé à la direction, au magasinier et au chef d’atelier.' }, 403);
-  }
   const db = getDb();
   const today = localDate();
 
@@ -47,8 +41,11 @@ dashboardRoutes.get('/', async (c) => {
 
   const movementsToday = await db.one<{ entries: number; exits: number; returns: number }>(
     `SELECT
-        (SELECT count(*)::int FROM stock_movements WHERE move_type = 'in'  AND created_at::date = $1) AS entries,
-        (SELECT count(*)::int FROM stock_movements WHERE move_type = 'out' AND created_at::date = $1) AS exits,
+        (SELECT count(*)::int FROM stock_movements WHERE move_type = 'in' AND created_at::date = $1) AS entries,
+        (
+          (SELECT count(*)::int FROM stock_movements WHERE move_type = 'out' AND created_at::date = $1)
+          + (SELECT count(*)::int FROM loans WHERE out_at::date = $1)
+        ) AS exits,
         (SELECT count(*)::int FROM loans WHERE status = 'returned' AND returned_at::date = $1) AS returns`,
     [today],
   );
@@ -93,15 +90,33 @@ dashboardRoutes.get('/', async (c) => {
   const permissionList = declared.filter((d) => d.kind === 'permission');
   const absenceList = declared.filter((d) => d.kind === 'absence');
 
-  const overdueLoans = await db.query(
-    `SELECT l.id, l.tool_id, t.name AS tool_name, e.full_name AS employee_name, l.out_at::date::text AS out_date
-       FROM loans l JOIN tools t ON t.id = l.tool_id JOIN employees e ON e.id = l.employee_id
-      WHERE l.status = 'out' AND l.out_at < now() - interval '7 days'
-      ORDER BY l.out_at`,
+  const overdueLoans = await db.query<{
+    id: number;
+    tool_id: string;
+    tool_name: string;
+    employee_name: string;
+    out_date: string;
+    due_date: string | null;
+    days_overdue: number;
+  }>(
+    `SELECT l.id, l.tool_id, t.name AS tool_name, e.full_name AS employee_name,
+            to_char(l.out_at, 'YYYY-MM-DD') AS out_date,
+            to_char(l.due_at, 'YYYY-MM-DD') AS due_date,
+            GREATEST(1, ROUND(EXTRACT(EPOCH FROM (now() - COALESCE(l.due_at, l.out_at))) / 86400))::int AS days_overdue
+       FROM loans l
+       JOIN tools t ON t.id = l.tool_id
+       JOIN employees e ON e.id = l.employee_id
+      WHERE l.status = 'out'
+        AND (
+          (l.due_at IS NOT NULL AND l.due_at < now())
+          OR (l.due_at IS NULL AND l.out_at < now() - interval '24 hours')
+        )
+      ORDER BY COALESCE(l.due_at, l.out_at) ASC`,
   );
 
-  const lowStock = await db.query<{ id: number; name: string; qty: number; min_qty: number; unit: string }>(
-    `SELECT r.id, r.name, r.unit, r.min_qty::float AS min_qty, (r.initial_qty + COALESCE(m.qty, 0))::float AS qty
+  const lowStock = await db.query<{ id: number; name: string; qty: number; min_qty: number; unit: string; location: string }>(
+    `SELECT r.id, r.name, r.unit, r.location, r.min_qty::float AS min_qty,
+            (r.initial_qty + COALESCE(m.qty, 0))::float AS qty
        FROM stock_refs r
        LEFT JOIN (
          SELECT ref_id,
@@ -111,16 +126,31 @@ dashboardRoutes.get('/', async (c) => {
            FROM stock_movements GROUP BY ref_id
        ) m ON m.ref_id = r.id
       WHERE (r.initial_qty + COALESCE(m.qty, 0)) <= r.min_qty
-      ORDER BY r.name`,
+      ORDER BY (r.initial_qty + COALESCE(m.qty, 0)) ASC, r.name ASC`,
   );
 
-  const missingTools = await db.query<{ id: string; name: string; category: string; location: string }>(
-    `SELECT id, name, category, location FROM tools WHERE status = 'manquant' ORDER BY id`,
+  const missingTools = await db.query<{ id: string; name: string; category: string; location: string; status_reason: string | null }>(
+    `SELECT id, name, category, location, status_reason FROM tools WHERE status = 'manquant' ORDER BY id`,
   );
 
-  const missingOut = attendanceToday
-    .filter((r) => r.in_at && !r.out_at)
-    .map((r) => ({ id: r.id, full_name: r.full_name, in_at: r.in_at }));
+  const missingOut = await db.query<{ id: string; full_name: string; punch_date: string; in_at: string }>(
+    `SELECT a.employee_id AS id, e.full_name, to_char(a.punch_date, 'YYYY-MM-DD') AS punch_date, to_char(a.server_at, 'HH24:MI') AS in_at
+       FROM attendance a
+       JOIN employees e ON e.id = a.employee_id
+      WHERE a.punch_type = 'in'
+        AND NOT EXISTS (
+          SELECT 1 FROM attendance a2
+           WHERE a2.employee_id = a.employee_id
+             AND a2.punch_date = a.punch_date
+             AND a2.punch_type = 'out'
+        )
+        AND (
+          a.punch_date < $1::date
+          OR (a.punch_date = $1::date AND to_char(now(), 'HH24:MI') > '16:30')
+        )
+      ORDER BY a.punch_date DESC, a.server_at DESC LIMIT 50`,
+    [today],
+  );
 
   const lastMovements = await db.query(
     `SELECT m.created_at::timestamptz::text AS created_at, m.move_type, m.qty::float AS qty, m.beneficiary, r.name AS ref_name, r.unit
@@ -128,7 +158,7 @@ dashboardRoutes.get('/', async (c) => {
       ORDER BY m.created_at DESC LIMIT 12`,
   );
 
-  const showAttendance = FULL_ROLES.includes(role) || PARTIAL_ROLES.includes(role);
+  const showAttendance = true;
 
   const empDeclMap = new Map<string, string>();
   for (const d of declared) empDeclMap.set(d.id, d.kind);

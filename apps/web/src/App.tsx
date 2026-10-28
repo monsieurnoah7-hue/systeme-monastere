@@ -186,7 +186,10 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   }, [allowed]);
 
   const activeView: ViewId | null = allowed.includes(view) ? view : (allowed[0] ?? null);
-  const canScan = activeView !== null && activeView !== 'pointage';
+  const canScan =
+    activeView !== null &&
+    activeView !== 'pointage' &&
+    (user.role === 'direction' || (permissions ? !!permissions['scanner.use'] : false));
 
   return (
     <>

@@ -428,10 +428,10 @@ export type Dashboard = {
     missingTools: number;
     missingOut: number;
     details: {
-      overdueLoans: { id: number; tool_id: string; tool_name: string; employee_name: string; out_date: string }[];
-      lowStock: { id: number; name: string; qty: number; min_qty: number; unit: string }[];
-      missingTools: { id: string; name: string; category: string; location: string }[];
-      missingOut: { id: string; full_name: string; in_at: string | null }[];
+      overdueLoans: { id: number; tool_id: string; tool_name: string; employee_name: string; out_date: string; due_date?: string | null; days_overdue?: number }[];
+      lowStock: { id: number; name: string; qty: number; min_qty: number; unit: string; location?: string }[];
+      missingTools: { id: string; name: string; category: string; location: string; status_reason?: string | null }[];
+      missingOut: { id: string; full_name: string; in_at: string | null; punch_date?: string }[];
       absent: { id: string; fullName: string; jobTitle: string }[];
       conge: { id: string; fullName: string }[];
     };
