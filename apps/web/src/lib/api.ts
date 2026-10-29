@@ -258,6 +258,9 @@ export type Tool = {
   acquisition_year?: number | null;
   acquisition_date?: string | null;
   lifespan_years?: number | null;
+  total_qty?: number;
+  loaned_qty?: number;
+  available_qty?: number;
   created_at: string;
   magasin_name?: string | null;
   magasin_code?: string | null;
@@ -351,10 +354,18 @@ export type ToolEvent = {
 
 export type ToolLoan = {
   id: number;
+  tool_id: string;
+  tool_name?: string;
+  tool_category?: string;
   employee_id: string;
-  full_name: string;
+  full_name?: string;
+  employee_name?: string;
+  qty?: number;
+  returned_qty?: number;
+  remaining_qty?: number;
   out_at: string;
-  due_at: string | null;
+  out_condition?: string;
+  due_at?: string | null;
   motive: string | null;
 };
 

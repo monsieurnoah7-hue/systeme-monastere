@@ -30,10 +30,12 @@ const listQuery = z.object({
 });
 
 const createBody = z.object({
+  id: z.string().optional(),
   name: z.string().min(2),
   category: z.string().min(1).default('Divers'),
   location: z.string().min(1).default('Magasin'),
   magasin_id: z.string().optional(),
+  total_qty: z.coerce.number().int().min(1).default(1).optional(),
   observations: z.string().optional(),
   photo_path: z.string().nullable().optional(),
   brand: z.string().optional(),
@@ -50,6 +52,7 @@ const editBody = z.object({
   category: z.string().min(1).optional(),
   location: z.string().min(1).optional(),
   magasin_id: z.string().optional(),
+  total_qty: z.coerce.number().int().min(1).optional(),
   observations: z.string().optional(),
   photo_path: z.string().nullable().optional(),
   brand: z.string().optional(),
@@ -108,8 +111,19 @@ toolsRoutes.get('/', requirePerm('tools.view'), async (c) => {
     params.push(magasin_id);
     where.push(`t.magasin_id = $${params.length}`);
   }
-  const sql = `SELECT t.*, m.name AS magasin_name, m.code AS magasin_code
-                 FROM tools t LEFT JOIN magasins m ON m.id = t.magasin_id
+  const sql = `SELECT t.*,
+                      COALESCE(t.total_qty, 1)::int AS total_qty,
+                      COALESCE(al.loaned_qty, 0)::int AS loaned_qty,
+                      GREATEST(0, COALESCE(t.total_qty, 1) - COALESCE(al.loaned_qty, 0))::int AS available_qty,
+                      m.name AS magasin_name, m.code AS magasin_code
+                 FROM tools t
+                 LEFT JOIN magasins m ON m.id = t.magasin_id
+                 LEFT JOIN (
+                   SELECT tool_id, SUM(GREATEST(0, qty - COALESCE(returned_qty, 0)))::int AS loaned_qty
+                     FROM loans
+                    WHERE status = 'out'
+                    GROUP BY tool_id
+                 ) al ON al.tool_id = t.id
                  ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY t.id`;
   const db = getDb();
   const authState = c.get('auth');
@@ -135,8 +149,23 @@ toolsRoutes.get('/', requirePerm('tools.view'), async (c) => {
 toolsRoutes.get('/:id', requirePerm('tools.view'), async (c) => {
   const db = getDb();
   const id = c.req.param('id');
-  const tool = await db.one<any>(`SELECT t.*, m.name AS magasin_name, m.code AS magasin_code
-    FROM tools t LEFT JOIN magasins m ON m.id = t.magasin_id WHERE t.id = $1`, [id]);
+  const tool = await db.one<any>(
+    `SELECT t.*,
+            COALESCE(t.total_qty, 1)::int AS total_qty,
+            COALESCE(al.loaned_qty, 0)::int AS loaned_qty,
+            GREATEST(0, COALESCE(t.total_qty, 1) - COALESCE(al.loaned_qty, 0))::int AS available_qty,
+            m.name AS magasin_name, m.code AS magasin_code
+       FROM tools t
+       LEFT JOIN magasins m ON m.id = t.magasin_id
+       LEFT JOIN (
+         SELECT tool_id, SUM(GREATEST(0, qty - COALESCE(returned_qty, 0)))::int AS loaned_qty
+           FROM loans
+          WHERE status = 'out'
+          GROUP BY tool_id
+       ) al ON al.tool_id = t.id
+      WHERE t.id = $1`,
+    [id],
+  );
   if (!tool) return c.json({ error: 'Outil introuvable.' }, 404);
 
   const authState = c.get('auth');
@@ -148,41 +177,54 @@ toolsRoutes.get('/:id', requirePerm('tools.view'), async (c) => {
   const events = await db.query<{
     id: number;
     event_type: string;
+    qty?: number;
     from_status: string | null;
     to_status: string | null;
     actor: string;
     note: string | null;
     created_at: string;
   }>('SELECT * FROM tool_events WHERE tool_id = $1 ORDER BY created_at DESC, id DESC LIMIT 50', [id]);
-  const loan = await db.one<{
+
+  const loans = await db.query<{
     id: number;
+    tool_id: string;
     employee_id: string;
     full_name: string;
+    employee_name: string;
+    qty: number;
+    returned_qty: number;
+    remaining_qty: number;
     out_at: string;
+    out_condition: string;
     due_at: string | null;
     motive: string | null;
   }>(
-    `SELECT l.id, l.employee_id, e.full_name, l.out_at, l.due_at, l.motive
-       FROM loans l JOIN employees e ON e.id = l.employee_id
+    `SELECT l.id, l.tool_id, l.employee_id, e.full_name, e.full_name AS employee_name,
+            COALESCE(l.qty, 1)::int AS qty,
+            COALESCE(l.returned_qty, 0)::int AS returned_qty,
+            GREATEST(0, COALESCE(l.qty, 1) - COALESCE(l.returned_qty, 0))::int AS remaining_qty,
+            l.out_at, l.out_condition, l.due_at, l.motive
+       FROM loans l
+       JOIN employees e ON e.id = l.employee_id
       WHERE l.tool_id = $1 AND l.status = 'out'
-      ORDER BY l.out_at DESC LIMIT 1`,
+      ORDER BY l.out_at DESC`,
     [id],
   );
-  return c.json({ tool, events, loan });
+  return c.json({ tool, events, loans, loan: loans[0] ?? null });
 });
 
 toolsRoutes.post('/', requirePerm('tools.create'), async (c) => {
   const body = createBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) return c.json({ error: 'Nom et catégorie obligatoires.' }, 400);
   const db = getDb();
-  const id = await nextToolId(body.data.category);
+  const id = body.data.id?.trim() ? body.data.id.trim().toUpperCase() : await nextToolId(body.data.category);
   const d = body.data;
   const tool = await db.one<ToolRow>(
     `INSERT INTO tools (
-       id, name, category, location, magasin_id, observations, photo_path,
+       id, name, category, location, magasin_id, total_qty, observations, photo_path,
        brand, model, serial_number, acquisition_cost, acquisition_year, acquisition_date, lifespan_years
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
     [
       id,
@@ -190,6 +232,7 @@ toolsRoutes.post('/', requirePerm('tools.create'), async (c) => {
       d.category.trim(),
       d.location.trim(),
       d.magasin_id || null,
+      d.total_qty ?? 1,
       d.observations?.trim() || null,
       d.photo_path?.trim() || null,
       d.brand?.trim() || null,
@@ -202,9 +245,9 @@ toolsRoutes.post('/', requirePerm('tools.create'), async (c) => {
     ],
   );
   await db.query(
-    `INSERT INTO tool_events (tool_id, event_type, from_status, to_status, actor, note)
-     VALUES ($1, 'creation', NULL, 'disponible', $2, $3)`,
-    [id, actorName(c), 'Création de la fiche outil'],
+    `INSERT INTO tool_events (tool_id, event_type, qty, from_status, to_status, actor, note)
+     VALUES ($1, 'creation', $2, NULL, 'disponible', $3, $4)`,
+    [id, d.total_qty ?? 1, actorName(c), `Création de la référence (${d.total_qty ?? 1} unité(s) initiales)`],
   );
   await writeAudit(db, {
     entity: 'tool',
@@ -231,16 +274,17 @@ toolsRoutes.patch('/:id', requirePerm('tools.edit'), async (c) => {
        name = coalesce($2, name),
        category = coalesce($3, category),
        location = coalesce($4, location),
-       magasin_id = CASE WHEN $5::text IS NOT NULL THEN (CASE WHEN $5 = '' THEN NULL ELSE $5 END) ELSE magasin_id END,
-       observations = CASE WHEN $6::text IS NOT NULL THEN (CASE WHEN $6 = '' THEN NULL ELSE $6 END) ELSE observations END,
-       photo_path = CASE WHEN $7::text IS NOT NULL THEN (CASE WHEN $7 = '' THEN NULL ELSE $7 END) ELSE photo_path END,
-       brand = CASE WHEN $8::text IS NOT NULL THEN (CASE WHEN $8 = '' THEN NULL ELSE $8 END) ELSE brand END,
-       model = CASE WHEN $9::text IS NOT NULL THEN (CASE WHEN $9 = '' THEN NULL ELSE $9 END) ELSE model END,
-       serial_number = CASE WHEN $10::text IS NOT NULL THEN (CASE WHEN $10 = '' THEN NULL ELSE $10 END) ELSE serial_number END,
-       acquisition_cost = CASE WHEN $11::numeric IS NOT NULL THEN $11::numeric ELSE acquisition_cost END,
-       acquisition_year = CASE WHEN $12::int IS NOT NULL THEN $12::int ELSE acquisition_year END,
-       acquisition_date = CASE WHEN $13::date IS NOT NULL THEN $13::date ELSE acquisition_date END,
-       lifespan_years = CASE WHEN $14::int IS NOT NULL THEN $14::int ELSE lifespan_years END
+       total_qty = CASE WHEN $5::int IS NOT NULL THEN $5::int ELSE total_qty END,
+       magasin_id = CASE WHEN $6::text IS NOT NULL THEN (CASE WHEN $6 = '' THEN NULL ELSE $6 END) ELSE magasin_id END,
+       observations = CASE WHEN $7::text IS NOT NULL THEN (CASE WHEN $7 = '' THEN NULL ELSE $7 END) ELSE observations END,
+       photo_path = CASE WHEN $8::text IS NOT NULL THEN (CASE WHEN $8 = '' THEN NULL ELSE $8 END) ELSE photo_path END,
+       brand = CASE WHEN $9::text IS NOT NULL THEN (CASE WHEN $9 = '' THEN NULL ELSE $9 END) ELSE brand END,
+       model = CASE WHEN $10::text IS NOT NULL THEN (CASE WHEN $10 = '' THEN NULL ELSE $10 END) ELSE model END,
+       serial_number = CASE WHEN $11::text IS NOT NULL THEN (CASE WHEN $11 = '' THEN NULL ELSE $11 END) ELSE serial_number END,
+       acquisition_cost = CASE WHEN $12::numeric IS NOT NULL THEN $12::numeric ELSE acquisition_cost END,
+       acquisition_year = CASE WHEN $13::int IS NOT NULL THEN $13::int ELSE acquisition_year END,
+       acquisition_date = CASE WHEN $14::date IS NOT NULL THEN $14::date ELSE acquisition_date END,
+       lifespan_years = CASE WHEN $15::int IS NOT NULL THEN $15::int ELSE lifespan_years END
      WHERE id = $1
      RETURNING *`,
     [
@@ -248,6 +292,7 @@ toolsRoutes.patch('/:id', requirePerm('tools.edit'), async (c) => {
       p.name?.trim() ?? null,
       p.category?.trim() ?? null,
       p.location?.trim() ?? null,
+      p.total_qty !== undefined ? p.total_qty : null,
       p.magasin_id !== undefined ? p.magasin_id : null,
       p.observations !== undefined ? p.observations?.trim() : null,
       p.photo_path !== undefined ? p.photo_path?.trim() : null,
@@ -298,6 +343,91 @@ toolsRoutes.post('/:id/photo', requirePerm('tools.photo_edit'), async (c) => {
     after: { photo_path: body.data.photo_path },
   });
   return c.json({ ok: true, tool });
+});
+
+const toolMovementSchema = z.object({
+  type: z.enum(['in', 'out', 'transfer', 'adjust']),
+  qty: z.coerce.number().int().min(1),
+  magasin_id: z.string().optional(),
+  note: z.string().optional(),
+  doc_ref: z.string().optional(),
+});
+
+toolsRoutes.post('/:id/movement', requirePerm('tools.edit'), async (c) => {
+  const id = c.req.param('id') ?? '';
+  const body = toolMovementSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: body.error.issues[0]?.message ?? 'Paramètres de mouvement invalides.' }, 400);
+
+  const db = getDb();
+  const tool = await db.one<{
+    id: string;
+    total_qty: number;
+    name: string;
+    magasin_id: string | null;
+    status: string;
+    loaned_qty: number;
+  }>(
+    `SELECT t.id, COALESCE(t.total_qty, 1)::int AS total_qty, t.name, t.magasin_id, t.status,
+            COALESCE(al.loaned_qty, 0)::int AS loaned_qty
+       FROM tools t
+       LEFT JOIN (
+         SELECT tool_id, SUM(GREATEST(0, qty - COALESCE(returned_qty, 0)))::int AS loaned_qty
+           FROM loans
+          WHERE status = 'out'
+          GROUP BY tool_id
+       ) al ON al.tool_id = t.id
+      WHERE t.id = $1`,
+    [id],
+  );
+  if (!tool) return c.json({ error: 'Outil introuvable.' }, 404);
+
+  const { type, qty, magasin_id, note, doc_ref } = body.data;
+  let newTotal = tool.total_qty;
+  let eventType = type;
+  let eventNote = note || '';
+
+  if (type === 'in') {
+    newTotal = tool.total_qty + qty;
+    eventNote = `Réception / Entrée de +${qty} unité(s)${doc_ref ? ` (Réf: ${doc_ref})` : ''}${note ? ` — ${note}` : ''}`;
+    await db.query('UPDATE tools SET total_qty = $1, status = CASE WHEN status = \'en_pret\' THEN \'disponible\' ELSE status END WHERE id = $2', [newTotal, id]);
+  } else if (type === 'out') {
+    const available = tool.total_qty - tool.loaned_qty;
+    if (qty > available) {
+      return c.json({ error: `Quantité insuffisante (${available} disponible(s) sur ${tool.total_qty} au total).` }, 400);
+    }
+    newTotal = Math.max(0, tool.total_qty - qty);
+    eventNote = `Sortie définitive / Consommation de -${qty} unité(s)${note ? ` — ${note}` : ''}`;
+    await db.query('UPDATE tools SET total_qty = $1 WHERE id = $2', [newTotal, id]);
+  } else if (type === 'transfer') {
+    if (!magasin_id) return c.json({ error: 'Magasin de destination requis.' }, 400);
+    const targetMagasin = await db.one<{ name: string }>('SELECT name FROM magasins WHERE id = $1', [magasin_id]);
+    await db.query('UPDATE tools SET magasin_id = $1 WHERE id = $2', [magasin_id, id]);
+    eventNote = `Transfert de magasin vers « ${targetMagasin?.name ?? magasin_id} »${note ? ` — ${note}` : ''}`;
+  } else if (type === 'adjust') {
+    if (qty < tool.loaned_qty) {
+      return c.json({ error: `Impossible de réduire le stock à ${qty} : ${tool.loaned_qty} unité(s) sont actuellement en prêt.` }, 400);
+    }
+    newTotal = qty;
+    eventNote = `Inventaire / Régularisation de stock à ${qty} unité(s)${note ? ` — ${note}` : ''}`;
+    await db.query('UPDATE tools SET total_qty = $1 WHERE id = $2', [newTotal, id]);
+  }
+
+  await db.query(
+    `INSERT INTO tool_events (tool_id, event_type, qty, actor, note)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [id, eventType, qty, actorName(c), eventNote],
+  );
+
+  await writeAudit(db, {
+    entity: 'tool',
+    entityId: id,
+    action: `movement_${type}`,
+    after: { total_qty: newTotal, type, qty, note },
+    actorId: actorId(c),
+    actorName: actorName(c),
+  });
+
+  return c.json({ ok: true, total_qty: newTotal, type, qty });
 });
 
 toolsRoutes.patch('/:id/status', requirePerm('tools.edit_status'), async (c) => {

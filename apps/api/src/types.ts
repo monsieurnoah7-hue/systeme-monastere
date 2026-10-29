@@ -54,6 +54,9 @@ export type ToolRow = {
   acquisition_year: number | null;
   acquisition_date: string | null;
   lifespan_years: number | null;
+  total_qty?: number;
+  loaned_qty?: number;
+  available_qty?: number;
   created_at: string;
   magasin_name?: string | null;
   magasin_code?: string | null;

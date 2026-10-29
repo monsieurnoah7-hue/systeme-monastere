@@ -56,6 +56,10 @@ import {
   Layers,
   FolderArchive,
   ArrowRight,
+  Clock,
+  Zap,
+  Edit3,
+  ArrowDownToLine,
 } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { ImagePickerModal } from '../components/ImagePickerModal';
@@ -203,11 +207,39 @@ export function Outils({
 
   const [newOpen, setNewOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'tools' | 'loans'>('tools');
+  const [activeLoans, setActiveLoans] = useState<ToolLoan[]>([]);
+  const [loansSearch, setLoansSearch] = useState('');
+
+  // Reference Quick Movement Hub modal
+  const [movementTool, setMovementTool] = useState<Tool | null>(null);
+  const [movementForm, setMovementForm] = useState<{
+    type: 'in' | 'out' | 'transfer' | 'adjust';
+    qty: number;
+    magasin_id?: string;
+    note: string;
+    doc_ref: string;
+  }>({
+    type: 'in',
+    qty: 1,
+    magasin_id: '',
+    note: '',
+    doc_ref: '',
+  });
+
+  // Edit Active Loan modal
+  const [editLoanFor, setEditLoanFor] = useState<ToolLoan | null>(null);
+  const [editLoanForm, setEditLoanForm] = useState<{ qty: number; motive: string }>({
+    qty: 1,
+    motive: '',
+  });
+
   const [newForm, setNewForm] = useState({
     name: '',
     category: 'Divers',
     location: '',
     magasin_id: '',
+    total_qty: '1',
     observations: '',
     brand: '',
     model: '',
@@ -220,11 +252,21 @@ export function Outils({
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [photoTarget, setPhotoTarget] = useState<{ id?: string; current?: string | null; name?: string } | null>(null);
   const [loanFor, setLoanFor] = useState<Tool | null>(null);
-  const [loanForm, setLoanForm] = useState({ employeeId: '', motive: '' });
+  const [loanForm, setLoanForm] = useState({
+    employeeId: '',
+    motive: '',
+    qty: 1,
+    outCondition: 'bon' as 'bon' | 'passable' | 'usure_normale',
+  });
   const [returnFor, setReturnFor] = useState<ToolLoan | null>(null);
-  const [returnForm, setReturnForm] = useState<{ condition: ToolCondition | 'endommage'; observations: string }>({
+  const [returnForm, setReturnForm] = useState<{
+    condition: ToolCondition | 'lame_a_affuter' | 'endommage';
+    observations: string;
+    qty: number;
+  }>({
     condition: 'bon',
     observations: '',
+    qty: 1,
   });
   const [statusFor, setStatusFor] = useState<Tool | null>(null);
   const [statusForm, setStatusForm] = useState<{ status: ToolStatus; reason: string }>({
@@ -321,6 +363,20 @@ export function Outils({
   }, [refresh]);
 
   useEffect(() => {
+    let cancelled = false;
+    api<{ loans: ToolLoan[] }>('/api/loans?status=out')
+      .then((res) => {
+        if (!cancelled) setActiveLoans(res.loans || []);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveLoans([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reload]);
+
+  useEffect(() => {
     if (!scan) return;
     if (scan.kind === 'tool') {
       setFilters({ q: '', status: '', category: '', location: '', magasin_id: '' });
@@ -337,6 +393,18 @@ export function Outils({
     if (scopeFilter === 'drafts') return draftTools;
     return tools;
   }, [scopeFilter, activeTools, draftTools, tools]);
+
+  const filteredActiveLoans = useMemo(() => {
+    if (!loansSearch.trim()) return activeLoans;
+    const q = loansSearch.toLowerCase().trim();
+    return activeLoans.filter(
+      (l) =>
+        l.tool_id.toLowerCase().includes(q) ||
+        (l.tool_name && l.tool_name.toLowerCase().includes(q)) ||
+        (l.employee_name && l.employee_name.toLowerCase().includes(q)) ||
+        (l.motive && l.motive.toLowerCase().includes(q)),
+    );
+  }, [activeLoans, loansSearch]);
 
   const stats = useMemo(() => {
     const list = scopeFilter === 'drafts' ? draftTools : scopeFilter === 'active' ? activeTools : tools;
@@ -371,6 +439,7 @@ export function Outils({
           category: newForm.category,
           location: newForm.location.trim() || 'Magasin',
           magasin_id: newForm.magasin_id || undefined,
+          total_qty: newForm.total_qty ? Math.max(1, parseInt(newForm.total_qty, 10)) : 1,
           observations: newForm.observations || undefined,
           brand: newForm.brand.trim() || undefined,
           model: newForm.model.trim() || undefined,
@@ -388,6 +457,7 @@ export function Outils({
         category: 'Divers',
         location: '',
         magasin_id: '',
+        total_qty: '1',
         observations: '',
         brand: '',
         model: '',
@@ -556,11 +626,17 @@ export function Outils({
     try {
       await api('/api/loans', {
         method: 'POST',
-        body: JSON.stringify({ toolId: loanFor.id, employeeId: loanForm.employeeId, motive: loanForm.motive }),
+        body: JSON.stringify({
+          toolId: loanFor.id,
+          employeeId: loanForm.employeeId,
+          motive: loanForm.motive,
+          qty: loanForm.qty || 1,
+          outCondition: loanForm.outCondition,
+        }),
       });
-      toast(`Sortie validée pour ${loanFor.name} (${loanFor.id}).`, 'success');
+      toast(`Prêt de ${loanForm.qty || 1} unité(s) validé pour ${loanFor.name} (${loanFor.id}).`, 'success');
       setLoanFor(null);
-      setLoanForm({ employeeId: '', motive: '' });
+      setLoanForm({ employeeId: '', motive: '', qty: 1, outCondition: 'bon' });
       refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Prêt refusé.', 'error');
@@ -573,19 +649,64 @@ export function Outils({
     if (!returnFor) return;
     setBusy(true);
     try {
-      await api(`/api/loans/${returnFor.id}/return`, {
+      const res = await api<{ ok: boolean; returnQty: number; isFullReturn: boolean; remaining: number }>(`/api/loans/${returnFor.id}/return`, {
         method: 'POST',
         body: JSON.stringify({
           condition: returnForm.condition,
           observations: returnForm.observations || undefined,
+          qty: returnForm.qty,
         }),
       });
-      toast('Retour enregistré.', 'success');
+      toast(
+        res.isFullReturn
+          ? 'Retour complet validé.'
+          : `Retour partiel de ${res.returnQty} unité(s) validé (reste ${res.remaining} en prêt).`,
+        'success',
+      );
       setReturnFor(null);
-      setReturnForm({ condition: 'bon', observations: '' });
+      setReturnForm({ condition: 'bon', observations: '', qty: 1 });
       refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Retour refusé.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveEditLoan() {
+    if (!editLoanFor) return;
+    setBusy(true);
+    try {
+      await api(`/api/loans/${editLoanFor.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          qty: editLoanForm.qty,
+          motive: editLoanForm.motive,
+        }),
+      });
+      toast(`Prêt #${editLoanFor.id} réajusté à ${editLoanForm.qty} unité(s).`, 'success');
+      setEditLoanFor(null);
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Ajustement impossible.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitToolMovement() {
+    if (!movementTool) return;
+    setBusy(true);
+    try {
+      await api(`/api/tools/${movementTool.id}/movement`, {
+        method: 'POST',
+        body: JSON.stringify(movementForm),
+      });
+      toast(`Mouvement enregistré pour ${movementTool.name}.`, 'success');
+      setMovementTool(null);
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Erreur lors du mouvement.', 'error');
     } finally {
       setBusy(false);
     }
@@ -786,7 +907,187 @@ export function Outils({
         </div>
       </div>
 
-      {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
+      {/* Navigation Principale Outillage : Références vs Prêts en cours */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('tools')}
+            className={cx(
+              'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all',
+              activeTab === 'tools'
+                ? 'bg-amber text-white shadow-xs'
+                : 'bg-paper text-ink-soft hover:text-ink hover:bg-paper-2 border border-line',
+            )}
+          >
+            <IconWrench size={16} />
+            <span>Outils &amp; Références</span>
+            <span
+              className={cx(
+                'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
+                activeTab === 'tools' ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
+              )}
+            >
+              {tools.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('loans')}
+            className={cx(
+              'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all',
+              activeTab === 'loans'
+                ? 'bg-amber text-white shadow-xs'
+                : 'bg-paper text-ink-soft hover:text-ink hover:bg-paper-2 border border-line',
+            )}
+          >
+            <Clock size={16} />
+            <span>Prêts &amp; Sorties en cours</span>
+            <span
+              className={cx(
+                'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
+                activeLoans.length > 0
+                  ? activeTab === 'loans'
+                    ? 'bg-white/25 text-white'
+                    : 'bg-amber text-white shadow-xs'
+                  : 'bg-surface text-ink-faint',
+              )}
+            >
+              {activeLoans.length}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'loans' ? (
+        <div className="space-y-3">
+          {/* Active Loans Search & Overview */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-xl border border-line bg-surface shadow-xs">
+            <div className="relative w-full sm:max-w-md">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
+                <IconSearch size={16} />
+              </span>
+              <input
+                value={loansSearch}
+                onChange={(e) => setLoansSearch(e.target.value)}
+                placeholder="Rechercher emprunteur, outil, code ou chantier..."
+                className="h-10 w-full rounded-lg border border-line bg-paper pl-9 pr-3 text-xs sm:text-sm focus:border-amber focus:bg-surface focus:outline-none transition-all"
+              />
+            </div>
+
+            <div className="text-xs font-semibold text-ink-soft self-end sm:self-auto">
+              <span>{filteredActiveLoans.length} prêt{filteredActiveLoans.length > 1 ? 's' : ''} actif{filteredActiveLoans.length > 1 ? 's' : ''} sur les chantiers</span>
+            </div>
+          </div>
+
+          {filteredActiveLoans.length === 0 ? (
+            <EmptyState
+              title="Aucun prêt d’outil en cours"
+              hint="Tous les outils et matériels sont actuellement disponibles dans leurs magasins et dépôts respectifs."
+            />
+          ) : (
+            <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                      <th className="px-3 py-2.5 min-w-28 border-r border-line">Réf. Outil</th>
+                      <th className="px-3 py-2.5 min-w-44 border-r border-line">Désignation Matériel</th>
+                      <th className="px-3 py-2.5 min-w-36 border-r border-line">Travailleur Emprunteur</th>
+                      <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Quantité Prêtée</th>
+                      <th className="px-3 py-2.5 min-w-32 border-r border-line">Date de Sortie</th>
+                      <th className="px-3 py-2.5 min-w-44 border-r border-line">Motif / Chantier</th>
+                      <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État Sortie</th>
+                      <th className="px-3 py-2.5 min-w-44 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {filteredActiveLoans.map((loan) => (
+                      <tr key={loan.id} className="hover:bg-paper-2/40 transition-colors">
+                        <td className="px-3 py-2 font-mono font-bold text-amber border-r border-line">
+                          <div className="flex items-center gap-1.5">
+                            <IconQr size={13} className="text-ink-faint shrink-0" />
+                            <span>{loan.tool_id}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 font-medium text-ink border-r border-line">
+                          <span className="font-semibold">{loan.tool_name ?? 'Matériel'}</span>
+                          {loan.tool_category ? (
+                            <span className="block text-[10px] text-ink-faint">{loan.tool_category}</span>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 font-medium text-ink border-r border-line">
+                          <span className="font-semibold">{loan.employee_name ?? loan.full_name ?? '—'}</span>
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-line">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-wash border border-amber/30 px-2.5 py-0.5 text-xs font-bold text-amber tabular-nums">
+                            {loan.qty ?? 1} unité{(loan.qty ?? 1) > 1 ? 's' : ''}
+                          </span>
+                          {(loan.returned_qty ?? 0) > 0 && (
+                            <span className="block text-[10px] text-ink-faint">
+                              ({loan.returned_qty} retourné{(loan.returned_qty ?? 0) > 1 ? 's' : ''})
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-ink-soft border-r border-line font-mono text-[11px] tabular-nums">
+                          {formatDateTime(loan.out_at)}
+                        </td>
+                        <td className="px-3 py-2 text-ink border-r border-line">
+                          <span className="font-medium">{loan.motive}</span>
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-line">
+                          <span className="inline-block rounded bg-paper px-2 py-0.5 text-[10px] font-medium text-ink-soft border border-line">
+                            {loan.out_condition ?? 'bon'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {canManage && (
+                              <button
+                                onClick={() => {
+                                  setEditLoanFor(loan);
+                                  setEditLoanForm({
+                                    qty: loan.qty ?? 1,
+                                    motive: loan.motive ?? '',
+                                  });
+                                }}
+                                className="rounded border border-line bg-paper px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all flex items-center gap-1"
+                                title="Ajuster la quantité prêtée ou le motif"
+                              >
+                                <Edit3 size={11} />
+                                <span>Ajuster</span>
+                              </button>
+                            )}
+                            {canReturn && (
+                              <button
+                                onClick={() => {
+                                  setReturnFor(loan);
+                                  setReturnForm({
+                                    condition: 'bon',
+                                    observations: '',
+                                    qty: loan.remaining_qty ?? loan.qty ?? 1,
+                                  });
+                                }}
+                                className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs hover:bg-amber-2 active:scale-95 transition-all flex items-center gap-1"
+                              >
+                                <ArrowDownToLine size={11} />
+                                <span>Retour</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2.5">
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
           <button
@@ -1221,10 +1522,11 @@ export function Outils({
                     <th className="px-3 py-2.5 min-w-44 border-r border-line">Désignation &amp; Marque</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
                     <th className="px-3 py-2.5 min-w-36 border-r border-line">Emplacement / Magasin</th>
+                    <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Stock &amp; Dispo</th>
                     {canViewFinancial && <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">VNC Nette</th>}
                     <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Statut</th>
-                    <th className="px-3 py-2.5 min-w-36 text-right">Actions</th>
+                    <th className="px-3 py-2.5 min-w-44 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -1321,6 +1623,35 @@ export function Outils({
                           )}
                         </td>
 
+                        {/* Stock & Dispo */}
+                        <td className="px-3 py-2 text-center border-r border-line">
+                          <div className="flex flex-col items-center">
+                            <div className="flex items-center gap-1 font-mono font-bold">
+                              <span
+                                className={cx(
+                                  'text-sm font-bold',
+                                  (tool.available_qty ?? (tool.status === 'disponible' ? 1 : 0)) > 0
+                                    ? 'text-green'
+                                    : 'text-red',
+                                )}
+                              >
+                                {tool.available_qty ?? (tool.status === 'disponible' ? 1 : 0)}
+                              </span>
+                              <span className="text-[10px] text-ink-faint font-normal">/</span>
+                              <span className="text-xs text-ink">{tool.total_qty ?? 1}</span>
+                            </div>
+                            <span className="text-[9px] uppercase tracking-wider text-ink-faint">
+                              {(tool.loaned_qty ?? 0) > 0 ? (
+                                <span className="text-amber font-semibold">
+                                  {tool.loaned_qty} prêté{(tool.loaned_qty ?? 0) > 1 ? 's' : ''}
+                                </span>
+                              ) : (
+                                <span>unités</span>
+                              )}
+                            </span>
+                          </div>
+                        </td>
+
                         {/* VNC Nette */}
                         {canViewFinancial && (
                           <td className="px-3 py-2 text-right font-mono font-semibold text-ink border-r border-line">
@@ -1372,11 +1703,36 @@ export function Outils({
                         {/* Actions Rapides */}
                         <td className="px-3 py-2 text-right">
                           <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                            {canLoan && tool.status === 'disponible' ? (
+                            {canManage && (
+                              <button
+                                onClick={() => {
+                                  setMovementTool(tool);
+                                  setMovementForm({
+                                    type: 'in',
+                                    qty: 1,
+                                    magasin_id: tool.magasin_id || '',
+                                    note: '',
+                                    doc_ref: '',
+                                  });
+                                }}
+                                className="rounded border border-amber/30 bg-amber-wash/60 px-2 py-1 text-[11px] font-semibold text-amber hover:bg-amber hover:text-white active:scale-95 transition-all flex items-center gap-1 shadow-2xs"
+                                title="Mouvement de stock (Arrivage, Sortie chantier, Transfert, Régularisation)"
+                              >
+                                <Zap size={11} />
+                                <span>Mvt</span>
+                              </button>
+                            )}
+
+                            {canLoan && ((tool.available_qty ?? (tool.status === 'disponible' ? 1 : 0)) > 0) ? (
                               <button
                                 onClick={() => {
                                   setLoanFor(tool);
-                                  setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
+                                  setLoanForm({
+                                    employeeId: employees[0]?.id ?? '',
+                                    motive: '',
+                                    qty: 1,
+                                    outCondition: 'bon',
+                                  });
                                 }}
                                 className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs hover:bg-amber-2 active:scale-95 transition-all"
                               >
@@ -1519,14 +1875,36 @@ export function Outils({
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-ink-faint pt-2 border-t border-line/60">
-                    <span className="truncate max-w-[150px]">
-                      {tool.magasin_name ? (
-                        tool.magasin_name
-                      ) : (
-                        <strong className="text-amber">📁 Brouillon</strong>
+                    <div className="flex items-center gap-1.5 font-mono text-xs">
+                      <span className="font-bold text-ink">
+                        <span className={(tool.available_qty ?? 1) > 0 ? 'text-green' : 'text-red'}>
+                          {tool.available_qty ?? (tool.status === 'disponible' ? 1 : 0)}
+                        </span>
+                        /{tool.total_qty ?? 1}
+                      </span>
+                      {(tool.loaned_qty ?? 0) > 0 && (
+                        <span className="text-[10px] text-amber font-semibold">({tool.loaned_qty} prêté)</span>
                       )}
-                    </span>
+                    </div>
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {canManage && (
+                        <button
+                          onClick={() => {
+                            setMovementTool(tool);
+                            setMovementForm({
+                              type: 'in',
+                              qty: 1,
+                              magasin_id: tool.magasin_id || '',
+                              note: '',
+                              doc_ref: '',
+                            });
+                          }}
+                          className="rounded border border-amber/30 bg-amber-wash/60 px-2 py-1 text-[11px] font-semibold text-amber hover:bg-amber hover:text-white"
+                          title="Mouvement stock"
+                        >
+                          <Zap size={11} />
+                        </button>
+                      )}
                       {(canEdit || canDelete) && (
                         <>
                           {canEdit && (
@@ -1552,11 +1930,16 @@ export function Outils({
                           )}
                         </>
                       )}
-                      {canLoan && tool.status === 'disponible' ? (
+                      {canLoan && ((tool.available_qty ?? (tool.status === 'disponible' ? 1 : 0)) > 0) ? (
                         <button
                           onClick={() => {
                             setLoanFor(tool);
-                            setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
+                            setLoanForm({
+                              employeeId: employees[0]?.id ?? '',
+                              motive: '',
+                              qty: 1,
+                              outCondition: 'bon',
+                            });
                           }}
                           className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white"
                         >
@@ -1572,6 +1955,8 @@ export function Outils({
               );
             })}
           </div>
+        </>
+      )}
         </>
       )}
 
@@ -1768,17 +2153,72 @@ export function Outils({
               </div>
             </Card>
 
-            {(canLoan || canReturn || canEditStatus || canEdit || canDelete) ? (
+            {/* Stock & Disponibilité de la référence */}
+            <div className="rounded-xl border border-line bg-paper p-3.5 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint">
+                  Stock Référence
+                </span>
+                <p className="text-xs font-semibold text-ink mt-0.5">
+                  Unités physiques associées à ce code QR
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-ink-faint">Dispo</span>
+                  <p className="text-base font-bold text-green tabular-nums">
+                    {detail.tool.available_qty ?? (detail.tool.status === 'disponible' ? 1 : 0)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-ink-faint">Prêté</span>
+                  <p className="text-base font-bold text-amber tabular-nums">
+                    {detail.tool.loaned_qty ?? 0}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-ink-faint">Total</span>
+                  <p className="text-base font-bold text-ink tabular-nums">
+                    {detail.tool.total_qty ?? 1}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {(canLoan || canReturn || canEditStatus || canEdit || canDelete || canManage) ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {canLoan && detail.tool.status === 'disponible' ? (
+                {canManage ? (
+                  <Button
+                    variant="secondary"
+                    icon={<Zap size={14} className="text-amber" />}
+                    onClick={() => {
+                      setMovementTool(detail.tool);
+                      setMovementForm({
+                        type: 'in',
+                        qty: 1,
+                        magasin_id: detail.tool.magasin_id || '',
+                        note: '',
+                        doc_ref: '',
+                      });
+                    }}
+                  >
+                    Mouvement de stock
+                  </Button>
+                ) : null}
+                {canLoan && (detail.tool.available_qty ?? (detail.tool.status === 'disponible' ? 1 : 0)) > 0 ? (
                   <Button
                     variant="primary"
                     onClick={() => {
                       setLoanFor(detail.tool);
-                      setLoanForm({ employeeId: employees[0]?.id ?? '', motive: '' });
+                      setLoanForm({
+                        employeeId: employees[0]?.id ?? '',
+                        motive: '',
+                        qty: 1,
+                        outCondition: 'bon',
+                      });
                     }}
                   >
-                    Prêter cet outil
+                    Prêter ({detail.tool.available_qty ?? 1} dispo)
                   </Button>
                 ) : null}
                 {canReturn && detail.loan ? (
@@ -1786,7 +2226,11 @@ export function Outils({
                     variant="primary"
                     onClick={() => {
                       setReturnFor(detail.loan);
-                      setReturnForm({ condition: 'bon', observations: '' });
+                      setReturnForm({
+                        condition: 'bon',
+                        observations: '',
+                        qty: detail.loan?.remaining_qty ?? detail.loan?.qty ?? 1,
+                      });
                     }}
                   >
                     Enregistrer le retour
@@ -1973,12 +2417,21 @@ export function Outils({
               hint="Préfixe généré (ex: RBT, SCI, PER...)"
             />
             <Field
-              label="Numéro de série (facultatif)"
-              value={newForm.serial_number}
-              onChange={(event) => setNewForm((f) => ({ ...f, serial_number: event.target.value }))}
-              placeholder="ex. SN-8849201"
+              label="Quantité initiale en stock"
+              value={newForm.total_qty}
+              onChange={(event) => setNewForm((f) => ({ ...f, total_qty: event.target.value }))}
+              placeholder="1"
+              type="number"
+              hint="Nombre d'unités physiques sous cette référence"
             />
           </div>
+
+          <Field
+            label="Numéro de série / lot (facultatif)"
+            value={newForm.serial_number}
+            onChange={(event) => setNewForm((f) => ({ ...f, serial_number: event.target.value }))}
+            placeholder="ex. SN-8849201"
+          />
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -2055,7 +2508,7 @@ export function Outils({
         </div>
       </Modal>
 
-      {/* Modal Prêt */}
+      {/* Modal Prêt avec gestion de quantité et état de sortie */}
       <Modal
         open={!!loanFor}
         title={loanFor ? `Prêter : ${loanFor.id} · ${loanFor.name}` : 'Prêt'}
@@ -2065,71 +2518,444 @@ export function Outils({
             <Button onClick={() => setLoanFor(null)}>Annuler</Button>
             <Button
               variant="primary"
-              disabled={busy || !loanForm.employeeId || loanForm.motive.trim().length < 2}
+              disabled={Boolean(
+                busy ||
+                !loanForm.employeeId ||
+                loanForm.motive.trim().length < 2 ||
+                (loanForm.qty || 1) <= 0 ||
+                (loanFor && (loanForm.qty || 1) > (loanFor.available_qty ?? 1)),
+              )}
               onClick={() => void createLoan()}
             >
-              {busy ? <Spinner /> : 'Confirmer le prêt'}
+              {busy ? <Spinner /> : `Confirmer le prêt (${loanForm.qty || 1} unité${(loanForm.qty || 1) > 1 ? 's' : ''})`}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
+          {loanFor && (
+            <div className="rounded-xl border border-line bg-paper p-3 flex items-center justify-between">
+              <div>
+                <span className="font-mono text-xs font-bold text-amber">{loanFor.id}</span>
+                <p className="text-xs font-bold text-ink">{loanFor.name}</p>
+                <p className="text-[11px] text-ink-faint">
+                  {loanFor.category} · {loanFor.magasin_name ?? loanFor.location}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-ink-faint">Disponible</span>
+                <p className="text-base font-bold text-green tabular-nums">
+                  {loanFor.available_qty ?? (loanFor.status === 'disponible' ? 1 : 0)} / {loanFor.total_qty ?? 1}
+                </p>
+              </div>
+            </div>
+          )}
+
           <SelectField
             label="Travailleur bénéficiaire"
             value={loanForm.employeeId}
             onChange={(event) => setLoanForm((f) => ({ ...f, employeeId: event.target.value }))}
           >
+            <option value="">— Sélectionner un salarié / menuisier —</option>
             {employees.map((employee) => (
               <option key={employee.id} value={employee.id}>
                 {employee.full_name} — {employee.job_title}
               </option>
             ))}
           </SelectField>
+
+          {/* Quantité prêtée avec stepper */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-ink">
+              Quantité à prêter <span className="text-red">*</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setLoanForm((f) => ({ ...f, qty: Math.max(1, (f.qty || 1) - 1) }))}
+                className="h-10 w-10 rounded-lg border border-line bg-paper text-ink font-bold text-base hover:bg-paper-2 active:scale-95 transition-all flex items-center justify-center"
+              >
+                -
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={loanFor?.available_qty ?? 1}
+                value={loanForm.qty || 1}
+                onChange={(event) => {
+                  const val = parseInt(event.target.value, 10);
+                  const maxAllowed = loanFor?.available_qty ?? 1;
+                  setLoanForm((f) => ({
+                    ...f,
+                    qty: isNaN(val) ? 1 : Math.min(maxAllowed, Math.max(1, val)),
+                  }));
+                }}
+                className="h-10 w-24 rounded-lg border border-line bg-surface text-center font-bold text-base text-ink focus:border-amber focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const maxAllowed = loanFor?.available_qty ?? 1;
+                  setLoanForm((f) => ({ ...f, qty: Math.min(maxAllowed, (f.qty || 1) + 1) }));
+                }}
+                className="h-10 w-10 rounded-lg border border-line bg-paper text-ink font-bold text-base hover:bg-paper-2 active:scale-95 transition-all flex items-center justify-center"
+              >
+                +
+              </button>
+              <span className="text-xs text-ink-faint">
+                (max {loanFor?.available_qty ?? 1} disponible{(loanFor?.available_qty ?? 1) > 1 ? 's' : ''})
+              </span>
+            </div>
+          </div>
+
           <Field
             label="Motif / Chantier"
             value={loanForm.motive}
             onChange={(event) => setLoanForm((f) => ({ ...f, motive: event.target.value }))}
-            placeholder="ex. Pose des portes chapelle nord"
+            placeholder="ex. Pose des menuiseries chapelle nord"
           />
+
+          <SelectField
+            label="État physique au départ"
+            value={loanForm.outCondition}
+            onChange={(event) =>
+              setLoanForm((f) => ({
+                ...f,
+                outCondition: event.target.value as 'bon' | 'passable' | 'usure_normale',
+              }))
+            }
+          >
+            <option value="bon">Bon état (prêt normal)</option>
+            <option value="passable">Passable (fonctionnel)</option>
+            <option value="usure_normale">Usure normale d'usage</option>
+          </SelectField>
+
           <p className="text-xs text-ink-faint">
             L’horodatage officiel sera consigné au serveur lors de la validation.
           </p>
         </div>
       </Modal>
 
-      {/* Modal Retour */}
+      {/* Modal Retour Prêt (support retour partiel / total) */}
       <Modal
         open={!!returnFor}
-        title={returnFor ? `Retour prêt #${returnFor.id}` : 'Retour'}
+        title={returnFor ? `Retour prêt #${returnFor.id} · ${returnFor.tool_name ?? returnFor.tool_id}` : 'Retour'}
         onClose={() => setReturnFor(null)}
         footer={
           <>
             <Button onClick={() => setReturnFor(null)}>Annuler</Button>
-            <Button variant="primary" disabled={busy} onClick={() => void confirmReturn()}>
-              {busy ? <Spinner /> : 'Valider le retour'}
+            <Button variant="primary" disabled={busy || returnForm.qty <= 0} onClick={() => void confirmReturn()}>
+              {busy ? <Spinner /> : `Valider le retour (${returnForm.qty} unité${returnForm.qty > 1 ? 's' : ''})`}
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
-          <SelectField
-            label="État au retour"
-            value={returnForm.condition}
-            onChange={(event) =>
-              setReturnForm((f) => ({ ...f, condition: event.target.value as ToolCondition | 'endommage' }))
-            }
-          >
-            <option value="bon">Bon état (opérationnel)</option>
-            <option value="a_reparer">À réparer (maintenance)</option>
-            <option value="endommage">Endommagé (incident)</option>
-          </SelectField>
-          <TextArea
-            label="Observations"
-            value={returnForm.observations}
-            onChange={(event) => setReturnForm((f) => ({ ...f, observations: event.target.value }))}
-            placeholder="Usure anormale, pièces manquantes…"
-          />
-        </div>
+        {returnFor && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-line bg-paper p-3 flex items-center justify-between">
+              <div>
+                <span className="font-mono text-xs font-bold text-amber">{returnFor.tool_id}</span>
+                <p className="text-xs font-bold text-ink">{returnFor.tool_name}</p>
+                <p className="text-[11px] text-ink-faint">
+                  Emprunteur : {returnFor.employee_name ?? returnFor.full_name}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-ink-faint">En prêt</span>
+                <p className="text-sm font-bold text-ink">
+                  {returnFor.remaining_qty ?? returnFor.qty ?? 1} unité(s)
+                </p>
+              </div>
+            </div>
+
+            {/* Quantité retournée avec stepper */}
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-ink">
+                Quantité retournée <span className="text-red">*</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReturnForm((f) => ({ ...f, qty: Math.max(1, f.qty - 1) }))}
+                  className="h-10 w-10 rounded-lg border border-line bg-paper text-ink font-bold text-base hover:bg-paper-2 active:scale-95 transition-all flex items-center justify-center"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={returnFor.remaining_qty ?? returnFor.qty ?? 1}
+                  value={returnForm.qty}
+                  onChange={(e) => {
+                    const maxVal = returnFor.remaining_qty ?? returnFor.qty ?? 1;
+                    const val = parseInt(e.target.value, 10);
+                    setReturnForm((f) => ({ ...f, qty: isNaN(val) ? 1 : Math.min(maxVal, Math.max(1, val)) }));
+                  }}
+                  className="h-10 w-24 rounded-lg border border-line bg-surface text-center font-bold text-base text-ink focus:border-amber focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const maxVal = returnFor.remaining_qty ?? returnFor.qty ?? 1;
+                    setReturnForm((f) => ({ ...f, qty: Math.min(maxVal, f.qty + 1) }));
+                  }}
+                  className="h-10 w-10 rounded-lg border border-line bg-paper text-ink font-bold text-base hover:bg-paper-2 active:scale-95 transition-all flex items-center justify-center"
+                >
+                  +
+                </button>
+                <span className="text-xs text-ink-faint">
+                  sur {returnFor.remaining_qty ?? returnFor.qty ?? 1} unité(s)
+                </span>
+              </div>
+              {returnForm.qty < (returnFor.remaining_qty ?? returnFor.qty ?? 1) && (
+                <p className="mt-1 text-[11px] text-amber font-semibold">
+                  ⚠️ Retour partiel : {(returnFor.remaining_qty ?? returnFor.qty ?? 1) - returnForm.qty} unité(s) resteront en prêt chez l'emprunteur.
+                </p>
+              )}
+            </div>
+
+            <SelectField
+              label="Diagnostic technique & État au retour"
+              value={returnForm.condition}
+              onChange={(event) =>
+                setReturnForm((f) => ({
+                  ...f,
+                  condition: event.target.value as ToolCondition | 'lame_a_affuter' | 'endommage',
+                }))
+              }
+            >
+              <option value="bon">Bon état (réintégration immédiate au stock disponible)</option>
+              <option value="lame_a_affuter">Lame / Fer à affûter (aiguisage atelier menuiserie)</option>
+              <option value="a_reparer">À réparer (maintenance interne requise)</option>
+              <option value="endommage">Endommagé (incident de chantier)</option>
+              <option value="hors_service">Hors service (irréparable / réforme)</option>
+            </SelectField>
+
+            <TextArea
+              label="Observations & Détails techniques"
+              value={returnForm.observations}
+              onChange={(event) => setReturnForm((f) => ({ ...f, observations: event.target.value }))}
+              placeholder="Constat d'usure, affûtage requis, pièces manquantes…"
+            />
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Ajustement Quantité Prêtée */}
+      <Modal
+        open={!!editLoanFor}
+        title={editLoanFor ? `Ajuster le prêt #${editLoanFor.id} · ${editLoanFor.tool_name ?? editLoanFor.tool_id}` : 'Ajuster prêt'}
+        onClose={() => setEditLoanFor(null)}
+        footer={
+          <>
+            <Button onClick={() => setEditLoanFor(null)}>Annuler</Button>
+            <Button
+              variant="primary"
+              disabled={busy || editLoanForm.qty <= 0}
+              onClick={() => void saveEditLoan()}
+            >
+              {busy ? <Spinner /> : 'Enregistrer la modification'}
+            </Button>
+          </>
+        }
+      >
+        {editLoanFor && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-line bg-paper p-3 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-amber">{editLoanFor.tool_id}</span>
+                <span className="text-xs text-ink-faint">Sorti le {formatDateTime(editLoanFor.out_at)}</span>
+              </div>
+              <p className="text-xs font-bold text-ink">{editLoanFor.tool_name}</p>
+              <p className="text-xs text-ink-soft">
+                Emprunteur : <strong>{editLoanFor.employee_name ?? editLoanFor.full_name}</strong>
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-ink">
+                Quantité prêtée corrigée <span className="text-red">*</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditLoanForm((f) => ({ ...f, qty: Math.max(1, f.qty - 1) }))}
+                  className="h-10 w-10 rounded-lg border border-line bg-paper text-ink font-bold text-base hover:bg-paper-2 active:scale-95 transition-all flex items-center justify-center"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  value={editLoanForm.qty}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setEditLoanForm((f) => ({ ...f, qty: isNaN(val) ? 1 : Math.max(1, val) }));
+                  }}
+                  className="h-10 w-24 rounded-lg border border-line bg-surface text-center font-bold text-base text-ink focus:border-amber focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setEditLoanForm((f) => ({ ...f, qty: f.qty + 1 }))}
+                  className="h-10 w-10 rounded-lg border border-line bg-paper text-ink font-bold text-base hover:bg-paper-2 active:scale-95 transition-all flex items-center justify-center"
+                >
+                  +
+                </button>
+                <span className="text-xs text-ink-faint">unités sorties</span>
+              </div>
+              <p className="mt-1 text-[11px] text-ink-faint">
+                Permet de rectifier immédiatement une erreur de saisie ou un ajout d'outils remis au même travailleur.
+              </p>
+            </div>
+
+            <Field
+              label="Motif / Chantier"
+              value={editLoanForm.motive}
+              onChange={(e) => setEditLoanForm((f) => ({ ...f, motive: e.target.value }))}
+              placeholder="ex. Travaux menuiserie chantier Fébé"
+            />
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Mouvements de Stock Référence (Arrivage, Sortie Chantier, Transfert, Inventaire) */}
+      <Modal
+        open={!!movementTool}
+        title={movementTool ? `Mouvement : ${movementTool.id} · ${movementTool.name}` : 'Mouvement'}
+        onClose={() => setMovementTool(null)}
+        footer={
+          <>
+            <Button onClick={() => setMovementTool(null)}>Annuler</Button>
+            <Button
+              variant="primary"
+              disabled={busy || movementForm.qty <= 0}
+              onClick={() => void submitToolMovement()}
+            >
+              {busy ? <Spinner /> : 'Valider le mouvement'}
+            </Button>
+          </>
+        }
+      >
+        {movementTool && (
+          <div className="space-y-4">
+            {/* Header info */}
+            <div className="rounded-xl border border-line bg-paper p-3 flex items-center justify-between">
+              <div>
+                <span className="font-mono text-xs font-bold text-amber">{movementTool.id}</span>
+                <p className="text-xs font-bold text-ink">{movementTool.name}</p>
+                <p className="text-[11px] text-ink-faint">{movementTool.magasin_name ?? movementTool.location}</p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-ink-faint">Stock Actuel</span>
+                <p className="text-base font-bold text-ink tabular-nums">
+                  <span className="text-green">{movementTool.available_qty ?? 1} dispo</span> / {movementTool.total_qty ?? 1} total
+                </p>
+              </div>
+            </div>
+
+            {/* Type selector */}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-ink">Type d'opération</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {[
+                  { key: 'in', label: 'Arrivage (+)', sub: 'Entrée stock' },
+                  { key: 'out', label: 'Sortie (-)', sub: 'Chantier ext.' },
+                  { key: 'transfer', label: 'Transfert', sub: 'Inter-dépôt' },
+                  { key: 'adjust', label: 'Inventaire', sub: 'Régularisation' },
+                ].map(({ key, label, sub }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() =>
+                      setMovementForm((f) => ({
+                        ...f,
+                        type: key as 'in' | 'out' | 'transfer' | 'adjust',
+                      }))
+                    }
+                    className={cx(
+                      'p-2 rounded-xl text-left border transition-all',
+                      movementForm.type === key
+                        ? 'border-amber bg-amber-wash/50 shadow-2xs'
+                        : 'border-line bg-surface hover:bg-paper',
+                    )}
+                  >
+                    <div className={cx('text-xs font-bold', movementForm.type === key ? 'text-amber' : 'text-ink')}>
+                      {label}
+                    </div>
+                    <div className="text-[10px] text-ink-faint">{sub}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quantité avec stepper */}
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-ink">
+                {movementForm.type === 'adjust' ? 'Nouveau stock total constaté' : 'Quantité concernée'}{' '}
+                <span className="text-red">*</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMovementForm((f) => ({ ...f, qty: Math.max(1, f.qty - 1) }))}
+                  className="h-10 w-10 rounded-lg border border-line bg-paper text-ink font-bold text-base hover:bg-paper-2 active:scale-95 transition-all flex items-center justify-center"
+                >
+                  -
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  value={movementForm.qty}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setMovementForm((f) => ({ ...f, qty: isNaN(val) ? 1 : Math.max(1, val) }));
+                  }}
+                  className="h-10 w-24 rounded-lg border border-line bg-surface text-center font-bold text-base text-ink focus:border-amber focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMovementForm((f) => ({ ...f, qty: f.qty + 1 }))}
+                  className="h-10 w-10 rounded-lg border border-line bg-paper text-ink font-bold text-base hover:bg-paper-2 active:scale-95 transition-all flex items-center justify-center"
+                >
+                  +
+                </button>
+                <span className="text-xs text-ink-faint">unité(s)</span>
+              </div>
+            </div>
+
+            {/* Si transfert inter-dépôts, sélection du magasin destinataire */}
+            {movementForm.type === 'transfer' && (
+              <SelectField
+                label="Magasin ou Atelier de destination"
+                value={movementForm.magasin_id ?? ''}
+                onChange={(e) => setMovementForm((f) => ({ ...f, magasin_id: e.target.value }))}
+              >
+                <option value="">— Sélectionner le magasin destinataire —</option>
+                {magasins
+                  .filter((m) => m.id !== movementTool.magasin_id)
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} ({m.code})
+                    </option>
+                  ))}
+              </SelectField>
+            )}
+
+            <Field
+              label="N° Bon / Pièce justificative"
+              value={movementForm.doc_ref}
+              onChange={(e) => setMovementForm((f) => ({ ...f, doc_ref: e.target.value }))}
+              placeholder="ex. BL-2026-042 ou BC-MENUISERIE-08"
+            />
+
+            <TextArea
+              label="Motif / Observation"
+              value={movementForm.note}
+              onChange={(e) => setMovementForm((f) => ({ ...f, note: e.target.value }))}
+              placeholder="Détail du mouvement, destination chantier, état..."
+            />
+          </div>
+        )}
       </Modal>
 
       {/* Modal Statut */}

@@ -332,6 +332,13 @@ CREATE INDEX IF NOT EXISTS attendance_emp_date_idx ON attendance(employee_id, pu
 CREATE INDEX IF NOT EXISTS attendance_terminal_idx ON attendance(terminal_id);
 
 CREATE INDEX IF NOT EXISTS audit_entity_idx ON audit_log(entity, entity_id);
+
+-- Migration 008: Quantités d'outils par référence, prêts quantitatifs & retours partiels
+ALTER TABLE tools ADD COLUMN IF NOT EXISTS total_qty int NOT NULL DEFAULT 1;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS qty int NOT NULL DEFAULT 1;
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS returned_qty int NOT NULL DEFAULT 0;
+ALTER TABLE tool_events ADD COLUMN IF NOT EXISTS qty int NOT NULL DEFAULT 1;
+CREATE INDEX IF NOT EXISTS loans_tool_active_idx ON loans(tool_id, status);
 `;
 
-export const MIGRATION_NAME = '007_performance_indices_and_scale';
+export const MIGRATION_NAME = '008_tool_reference_quantities_and_movements';

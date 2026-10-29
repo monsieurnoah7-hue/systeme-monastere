@@ -36,8 +36,17 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
 
   if (toolId) {
     const tool = await db.one(
-      `SELECT t.*, l.employee_id AS loan_employee_id, e.full_name AS loan_employee_name, l.id AS loan_id, l.motive AS loan_motive, l.out_at AS loan_out_at
+      `SELECT t.*,
+              COALESCE(t.total_qty, 1)::int AS total_qty,
+              COALESCE(al.loaned_qty, 0)::int AS loaned_qty,
+              GREATEST(0, COALESCE(t.total_qty, 1) - COALESCE(al.loaned_qty, 0))::int AS available_qty,
+              l.employee_id AS loan_employee_id, e.full_name AS loan_employee_name, l.id AS loan_id, l.motive AS loan_motive, l.out_at AS loan_out_at,
+              COALESCE(l.qty, 1)::int AS loan_qty
          FROM tools t
+         LEFT JOIN (
+           SELECT tool_id, SUM(GREATEST(0, qty - COALESCE(returned_qty, 0)))::int AS loaned_qty
+             FROM loans WHERE status = 'out' GROUP BY tool_id
+         ) al ON al.tool_id = t.id
          LEFT JOIN loans l ON l.tool_id = t.id AND l.status = 'out'
          LEFT JOIN employees e ON e.id = l.employee_id
         WHERE t.id = $1`,
@@ -70,8 +79,17 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
 
   // raw id fallbacks
   const tool = await db.one(
-    `SELECT t.*, l.employee_id AS loan_employee_id, e.full_name AS loan_employee_name, l.id AS loan_id
+    `SELECT t.*,
+            COALESCE(t.total_qty, 1)::int AS total_qty,
+            COALESCE(al.loaned_qty, 0)::int AS loaned_qty,
+            GREATEST(0, COALESCE(t.total_qty, 1) - COALESCE(al.loaned_qty, 0))::int AS available_qty,
+            l.employee_id AS loan_employee_id, e.full_name AS loan_employee_name, l.id AS loan_id,
+            COALESCE(l.qty, 1)::int AS loan_qty
        FROM tools t
+       LEFT JOIN (
+         SELECT tool_id, SUM(GREATEST(0, qty - COALESCE(returned_qty, 0)))::int AS loaned_qty
+           FROM loans WHERE status = 'out' GROUP BY tool_id
+       ) al ON al.tool_id = t.id
        LEFT JOIN loans l ON l.tool_id = t.id AND l.status = 'out'
        LEFT JOIN employees e ON e.id = l.employee_id
       WHERE t.id = $1`,
