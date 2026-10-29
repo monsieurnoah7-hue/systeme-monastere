@@ -52,10 +52,12 @@ const LOAN_COND_LABEL: Record<string, string> = {
 export function Espace({
   scan,
   user,
+  permissions,
   onNavigate,
 }: {
   scan?: ScanResult | null;
   user?: User | null;
+  permissions?: Record<string, boolean> | null;
   onNavigate?: (view: ViewId) => void;
 }) {
   const [overview, setOverview] = useState<MyOverview | null>(null);
@@ -64,11 +66,12 @@ export function Espace({
   const [error, setError] = useState<string | null>(null);
 
   // Workers tabs
-  const [tab, setTab] = useState<'presences' | 'retards' | 'conges' | 'outillage' | 'catalogue'>('presences');
+  const [tab, setTab] = useState<'presences' | 'retards' | 'conges' | 'outillage' | 'catalogue' | 'profil'>('presences');
   const [magasinFilter, setMagasinFilter] = useState<string>('all');
 
-  // Direction Profile Form
+  // Profile Form (Direction & Authorized Users)
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
+  const [login, setLogin] = useState(user?.login ?? '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -77,6 +80,7 @@ export function Espace({
   const [profileError, setProfileError] = useState<string | null>(null);
 
   const isDirection = user?.role === 'direction';
+  const canEditLogin = isDirection || Boolean(permissions?.['profile.login_edit']) || Boolean(permissions?.['users.manage']);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,7 +105,8 @@ export function Espace({
 
   useEffect(() => {
     if (user?.display_name) setDisplayName(user.display_name);
-  }, [user?.display_name]);
+    if (user?.login) setLogin(user.login);
+  }, [user?.display_name, user?.login]);
 
   async function handleUpdateProfile(e: FormEvent) {
     e.preventDefault();
@@ -110,6 +115,20 @@ export function Espace({
     setProfileError(null);
     try {
       const payload: Record<string, string> = {};
+      const trimmedLogin = login.trim().toLowerCase();
+      if (trimmedLogin && trimmedLogin !== (user?.login ?? '').toLowerCase()) {
+        if (!canEditLogin) {
+          setProfileError('Vous n’avez pas le privilège requis pour modifier votre identifiant.');
+          setProfileSaving(false);
+          return;
+        }
+        if (trimmedLogin.length < 3) {
+          setProfileError('L’identifiant doit comporter au moins 3 caractères.');
+          setProfileSaving(false);
+          return;
+        }
+        payload.login = trimmedLogin;
+      }
       if (displayName.trim() && displayName.trim() !== user?.display_name) {
         payload.display_name = displayName.trim();
       }
@@ -147,8 +166,10 @@ export function Espace({
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      if (res.user?.display_name) {
-        setDisplayName(res.user.display_name);
+      if (res.user) {
+        if (res.user.display_name) setDisplayName(res.user.display_name);
+        if (res.user.login) setLogin(res.user.login);
+        window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: res.user }));
       }
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : 'Échec de la mise à jour.');
@@ -210,8 +231,34 @@ export function Espace({
             </div>
 
             <form onSubmit={handleUpdateProfile} className="mt-4 space-y-4">
+              {/* Decoy hidden inputs to prevent Chrome / Edge aggressive autofill */}
+              <div style={{ display: 'none' }} aria-hidden="true">
+                <input type="text" name="fake_account_user" tabIndex={-1} autoComplete="off" />
+                <input type="password" name="fake_account_pass" tabIndex={-1} autoComplete="off" />
+              </div>
+
+              <Field
+                label="Identifiant de connexion"
+                name="user_account_login"
+                id="user_account_login"
+                value={login}
+                autoComplete="off"
+                disabled={!canEditLogin}
+                onChange={(e) => setLogin(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
+                placeholder="ex. direction"
+                hint={
+                  canEditLogin
+                    ? 'Lettres minuscules, chiffres, points et tirets (min. 3 caractères)'
+                    : 'Modification réservée à la Direction ou ayants droit'
+                }
+                required
+              />
+
               <Field
                 label="Nom ou libellé d'affichage"
+                name="user_account_display_name"
+                id="user_account_display_name"
+                autoComplete="off"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="ex. Direction du Monastère"
@@ -225,21 +272,30 @@ export function Espace({
                 <div className="space-y-3">
                   <Field
                     label="Mot de passe actuel"
+                    name="profile_current_password"
+                    id="profile_current_password"
                     type="password"
+                    autoComplete="off"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Requis uniquement si vous changez le mot de passe"
                   />
                   <Field
                     label="Nouveau mot de passe"
+                    name="profile_new_password"
+                    id="profile_new_password"
                     type="password"
+                    autoComplete="new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Minimum 6 caractères"
                   />
                   <Field
                     label="Confirmer le nouveau mot de passe"
+                    name="profile_confirm_password"
+                    id="profile_confirm_password"
                     type="password"
+                    autoComplete="new-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Répétez le mot de passe"
@@ -445,6 +501,7 @@ export function Espace({
           { value: 'conges', label: `Congés (${leaves.length})`, icon: <FileCheck2 size={14} /> },
           { value: 'outillage', label: `Mes Outils (${loansHistory.length})`, icon: <IconWrench size={14} /> },
           { value: 'catalogue', label: 'Matériel Disponible', icon: <IconBox size={14} /> },
+          { value: 'profil', label: 'Mon Compte', icon: <KeyRound size={14} /> },
         ]}
       />
 
@@ -727,6 +784,112 @@ export function Espace({
               hint="Tous les outils de ce magasin sont actuellement en cours d'utilisation ou en maintenance."
             />
           )}
+        </div>
+      )}
+
+      {/* ONGLET 6 : MON COMPTE & IDENTIFIANTS */}
+      {tab === 'profil' && (
+        <div className="max-w-2xl">
+          <Card className="p-5 shadow-card">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <div>
+                <h2 className="text-base font-bold text-ink">Mon Compte &amp; Sécurité</h2>
+                <p className="text-xs text-ink-soft">Gérez vos informations de connexion et mot de passe</p>
+              </div>
+              <span className="rounded-full bg-surface-2 px-2.5 py-1 font-mono text-xs font-semibold text-ink-soft">
+                login : {user?.login}
+              </span>
+            </div>
+
+            <form onSubmit={handleUpdateProfile} className="mt-4 space-y-4">
+              <div style={{ display: 'none' }} aria-hidden="true">
+                <input type="text" name="fake_account_user" tabIndex={-1} autoComplete="off" />
+                <input type="password" name="fake_account_pass" tabIndex={-1} autoComplete="off" />
+              </div>
+
+              <Field
+                label="Identifiant de connexion"
+                name="collaborator_login"
+                id="collaborator_login"
+                value={login}
+                autoComplete="off"
+                disabled={!canEditLogin}
+                onChange={(e) => setLogin(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
+                placeholder="ex. landry.onana"
+                hint={
+                  canEditLogin
+                    ? 'Autorisé pour votre profil (lettres, chiffres, points et tirets)'
+                    : 'Modification réservée à la Direction ou ayants droit'
+                }
+                required
+              />
+
+              <Field
+                label="Nom complet affiché"
+                name="collaborator_name"
+                id="collaborator_name"
+                autoComplete="off"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="ex. Landry ONANA"
+                required
+              />
+
+              <div className="border-t border-line/60 pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                  Changer de mot de passe (optionnel)
+                </p>
+                <div className="space-y-3">
+                  <Field
+                    label="Mot de passe actuel"
+                    name="collaborator_current_password"
+                    id="collaborator_current_password"
+                    type="password"
+                    autoComplete="off"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Requis uniquement si vous changez le mot de passe"
+                  />
+                  <Field
+                    label="Nouveau mot de passe"
+                    name="collaborator_new_password"
+                    id="collaborator_new_password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Minimum 6 caractères"
+                  />
+                  <Field
+                    label="Confirmer le nouveau mot de passe"
+                    name="collaborator_confirm_password"
+                    id="collaborator_confirm_password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Répétez le mot de passe"
+                  />
+                </div>
+              </div>
+
+              {profileError && (
+                <div className="rounded-lg bg-red-wash/60 border border-red/20 p-2.5 text-xs font-medium text-red">
+                  {profileError}
+                </div>
+              )}
+              {profileSuccess && (
+                <div className="rounded-lg bg-green-wash border border-green/20 p-2.5 text-xs font-medium text-green flex items-center gap-2">
+                  <CheckCircle2 size={16} />
+                  <span>{profileSuccess}</span>
+                </div>
+              )}
+
+              <Button type="submit" variant="primary" loading={profileSaving} className="w-full">
+                {profileSaving ? 'Enregistrement…' : 'Enregistrer les modifications'}
+              </Button>
+            </form>
+          </Card>
         </div>
       )}
     </div>

@@ -290,12 +290,13 @@ CREATE TABLE IF NOT EXISTS roles (
   is_system boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+UPDATE roles SET is_system = true WHERE id IN ('direction', 'magasinier', 'chef_atelier', 'travailleur');
 INSERT INTO roles (id, name, description, is_system) VALUES
   ('direction', 'Direction (Super-Admin)', 'Gouvernance intégrale du monastère et du C.F.T., gestion des rôles et droits', true),
-  ('magasinier', 'Magasinier', 'Gestion de l''outillage, des dépôts, de la quincaillerie et des stocks', false),
-  ('chef_atelier', 'Chef d''atelier', 'Supervision des équipes, des plannings d''atelier et des présences', false),
-  ('travailleur', 'Travailleur / Menuisier', 'Consultation personnelle de son espace, de ses outils et de ses fiches', false)
-ON CONFLICT (id) DO NOTHING;
+  ('magasinier', 'Magasinier', 'Gestion de l''outillage, des dépôts, de la quincaillerie et des stocks', true),
+  ('chef_atelier', 'Chef d''atelier', 'Supervision des équipes, des plannings d''atelier et des présences', true),
+  ('travailleur', 'Travailleur / Menuisier', 'Consultation personnelle de son espace, de ses outils et de ses fiches', true)
+ON CONFLICT (id) DO UPDATE SET is_system = true;
 ALTER TABLE loans ADD COLUMN IF NOT EXISTS out_condition text DEFAULT 'bon';
 ALTER TABLE loans ADD COLUMN IF NOT EXISTS return_notes text;
 CREATE TABLE IF NOT EXISTS app_permissions (

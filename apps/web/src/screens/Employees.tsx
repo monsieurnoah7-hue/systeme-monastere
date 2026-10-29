@@ -1386,10 +1386,21 @@ export function Employees({
             </div>
           </div>
 
+          {/* Decoy hidden inputs to prevent Chrome / Edge aggressive autofill on worker form */}
+          <div style={{ display: 'none' }} aria-hidden="true">
+            <input type="text" name="fake_worker_username" tabIndex={-1} autoComplete="off" />
+            <input type="password" name="fake_worker_password" tabIndex={-1} autoComplete="off" />
+          </div>
+
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-soft">Nom complet</label>
             <input
               type="text"
+              name="worker_full_name"
+              id="worker_full_name"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
               value={form.full_name}
               placeholder="Ex : Landry ONANA"
               onChange={(e) => {
@@ -1441,6 +1452,11 @@ export function Employees({
               Code secret PIN de pointage {editing ? '(Optionnel - laisser vide pour conserver)' : '(4 à 6 chiffres)'}
             </label>
             <PasswordInput
+              name="worker_punch_pin"
+              id="worker_punch_pin"
+              autoComplete="new-password"
+              data-lpignore="true"
+              data-1p-ignore="true"
               inputMode="numeric"
               maxLength={6}
               value={form.pin}
@@ -1680,6 +1696,10 @@ export function Employees({
         }
       >
         <div className="space-y-4">
+          <div style={{ display: 'none' }} aria-hidden="true">
+            <input type="text" name="fake_pin_user" tabIndex={-1} autoComplete="off" />
+            <input type="password" name="fake_pin_pass" tabIndex={-1} autoComplete="off" />
+          </div>
           <p className="text-xs text-ink-soft">
             {pinModalFor?.has_pin
               ? `Modification sécurisée du code secret PIN pour ${pinModalFor?.full_name}.`

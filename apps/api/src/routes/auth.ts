@@ -5,6 +5,7 @@ import { env } from '../env.js';
 import { getDb } from '../db/index.js';
 import { hashPassword, randomToken, sha256, verifyPassword } from '../lib/crypto.js';
 import { requireAuth, SESSION_COOKIE } from '../middleware/auth.js';
+import { hasPermission } from '../middleware/permissions.js';
 import type { UserRow } from '../types.js';
 
 const loginSchema = z.object({
@@ -102,6 +103,13 @@ authRoutes.get('/me', requireAuth, async (c) => {
 });
 
 const profileSchema = z.object({
+  login: z
+    .string()
+    .trim()
+    .min(3, 'L’identifiant doit comporter au moins 3 caractères.')
+    .max(40, 'L’identifiant ne peut dépasser 40 caractères.')
+    .regex(/^[a-zA-Z0-9_.-]+$/, 'L’identifiant ne peut contenir que des lettres, chiffres, tirets, underscores et points.')
+    .optional(),
   display_name: z.string().min(2).max(100).optional(),
   current_password: z.string().optional(),
   new_password: z.string().min(6).max(100).optional(),
@@ -117,11 +125,33 @@ authRoutes.patch('/profile', requireAuth, async (c) => {
   const auth = c.get('auth');
   const userId = auth.user.id;
 
-  const current = await db.one<{ id: number; password_hash: string; employee_id: string | null }>(
-    'SELECT id, password_hash, employee_id FROM users WHERE id = $1',
+  const current = await db.one<{ id: number; login: string; password_hash: string; employee_id: string | null }>(
+    'SELECT id, login, password_hash, employee_id FROM users WHERE id = $1',
     [userId],
   );
   if (!current) return c.json({ error: 'Utilisateur introuvable.' }, 404);
+
+  let newLogin: string | undefined = undefined;
+  if (body.data.login !== undefined) {
+    const rawLogin = body.data.login.trim().toLowerCase();
+    if (rawLogin && rawLogin !== current.login.toLowerCase()) {
+      const canEditLogin =
+        auth.user.role === 'direction' ||
+        (await hasPermission(auth.user.role, 'profile.login_edit')) ||
+        (await hasPermission(auth.user.role, 'users.manage'));
+      if (!canEditLogin) {
+        return c.json({ error: 'Vous n’avez pas le privilège requis pour modifier votre identifiant de connexion.' }, 403);
+      }
+      const conflict = await db.one<{ id: number }>(
+        'SELECT id FROM users WHERE lower(login) = $1 AND id <> $2',
+        [rawLogin, userId],
+      );
+      if (conflict) {
+        return c.json({ error: `L’identifiant « ${rawLogin} » est déjà utilisé par un autre compte.` }, 409);
+      }
+      newLogin = rawLogin;
+    }
+  }
 
   if (body.data.new_password) {
     if (!body.data.current_password || !verifyPassword(body.data.current_password, current.password_hash)) {
@@ -135,11 +165,12 @@ authRoutes.patch('/profile', requireAuth, async (c) => {
 
   await db.query(
     `UPDATE users SET
-       display_name = coalesce($1, display_name),
-       password_hash = coalesce($2, password_hash),
-       photo_path = CASE WHEN $3::text IS NOT NULL THEN (CASE WHEN $3 = '' THEN NULL ELSE $3 END) ELSE photo_path END
-     WHERE id = $4`,
-    [newName ?? null, newHash ?? null, newPhoto !== undefined ? (newPhoto || '') : null, userId],
+       login = coalesce($1, login),
+       display_name = coalesce($2, display_name),
+       password_hash = coalesce($3, password_hash),
+       photo_path = CASE WHEN $4::text IS NOT NULL THEN (CASE WHEN $4 = '' THEN NULL ELSE $4 END) ELSE photo_path END
+     WHERE id = $5`,
+    [newLogin ?? null, newName ?? null, newHash ?? null, newPhoto !== undefined ? (newPhoto || '') : null, userId],
   );
 
   // Si l'utilisateur est lié à une fiche travailleur, synchroniser la photo

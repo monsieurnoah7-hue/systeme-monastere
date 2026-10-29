@@ -326,8 +326,9 @@ permissionsRoutes.delete('/roles/:id', requireRole('direction'), async (c) => {
   const db = getDb();
   const role = await db.one<{ id: string; is_system: boolean }>('SELECT id, is_system FROM roles WHERE id = $1', [id]);
   if (!role) return c.json({ error: 'Rôle introuvable.' }, 404);
-  if (role.is_system || id === 'direction') {
-    return c.json({ error: 'Ce rôle système ne peut pas être supprimé.' }, 400);
+  const SYSTEM_ROLE_IDS = ['direction', 'chef_atelier', 'magasinier', 'travailleur'];
+  if (role.is_system || SYSTEM_ROLE_IDS.includes(id)) {
+    return c.json({ error: 'Ce rôle système est fondamental et ne peut pas être supprimé.' }, 400);
   }
 
   const assigned = await db.one<{ count: string }>('SELECT count(*)::text AS count FROM users WHERE role = $1', [id]);

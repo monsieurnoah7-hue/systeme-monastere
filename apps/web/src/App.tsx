@@ -246,7 +246,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
             )}
             {visitedViews.has('espace') && (
               <div className={activeView === 'espace' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'espace'}>
-                <Espace scan={scan} user={user} onNavigate={setView} />
+                <Espace scan={scan} user={user} permissions={permissions} onNavigate={setView} />
               </div>
             )}
             {visitedViews.has('parametres') && (

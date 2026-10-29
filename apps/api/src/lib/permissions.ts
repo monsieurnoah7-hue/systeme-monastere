@@ -37,6 +37,7 @@ export const PERMISSION_ACTIONS = [
   'users.view',
   'users.manage',
   'profile.photo_edit_self',
+  'profile.login_edit',
   'terminals.manage',
   'permissions.manage',
   'scanner.use',
@@ -81,6 +82,7 @@ export const PERMISSION_LABELS: Record<PermissionAction, string> = {
   'users.view': 'Consulter les comptes',
   'users.manage': 'Gérer les comptes',
   'profile.photo_edit_self': 'Modifier sa propre photo de profil',
+  'profile.login_edit': 'Modifier son propre identifiant de connexion (login)',
   'terminals.manage': 'Gérer les terminaux',
   'permissions.manage': 'Gérer les permissions',
   'scanner.use': 'Utiliser le scanner QR & codes-barres (App)',
@@ -123,6 +125,7 @@ export const PERMISSION_KINDS: Record<PermissionAction, 'view' | 'action'> = {
   'users.view': 'view',
   'users.manage': 'action',
   'profile.photo_edit_self': 'action',
+  'profile.login_edit': 'action',
   'terminals.manage': 'action',
   'permissions.manage': 'action',
   'scanner.use': 'action',
@@ -159,7 +162,7 @@ export const PERMISSION_GROUPS: { label: string; actions: PermissionAction[] }[]
   },
   {
     label: 'Administration & profil',
-    actions: ['users.view', 'users.manage', 'profile.photo_edit_self', 'terminals.manage', 'permissions.manage'],
+    actions: ['users.view', 'users.manage', 'profile.photo_edit_self', 'profile.login_edit', 'terminals.manage', 'permissions.manage'],
   },
 ];
 
@@ -200,6 +203,7 @@ export const DEFAULT_PERMISSIONS: Record<PermissionAction, Role[]> = {
   'users.view': ['direction'],
   'users.manage': ['direction'],
   'profile.photo_edit_self': ['direction', 'magasinier', 'chef_atelier', 'travailleur'],
+  'profile.login_edit': ['direction'],
   'terminals.manage': ['direction'],
   'permissions.manage': ['direction'],
   'scanner.use': ['direction'],

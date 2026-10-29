@@ -1004,7 +1004,7 @@ function AdminSettings({ user }: { user: User }) {
       employee_id: empId,
       display_name: f.display_name.trim() ? f.display_name : emp.full_name,
       login: f.login.trim() ? f.login : normalizedLogin,
-      password: f.password.trim() ? f.password : 'Monastere2026!',
+      password: f.password,
       role: availableRoles.some((r) => r.id === suggestedRole) ? suggestedRole : (availableRoles[0]?.id ?? 'travailleur'),
     }));
   }
@@ -1017,6 +1017,18 @@ function AdminSettings({ user }: { user: User }) {
       });
       toast(`Rôle « ${role.name} » supprimé avec succès.`, 'success');
       setDeleteRoleConfirm(null);
+      setPermDraft((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev };
+        for (const act of Object.keys(next)) {
+          if (next[act]) {
+            const row = { ...next[act] };
+            delete row[role.id];
+            next[act] = row;
+          }
+        }
+        return next;
+      });
       setReload((v) => v + 1);
       window.dispatchEvent(new CustomEvent('permissions:updated'));
       window.dispatchEvent(new CustomEvent('roles-updated'));
@@ -1029,9 +1041,11 @@ function AdminSettings({ user }: { user: User }) {
 
   // Dynamic available roles list with user count
   const availableRoles = useMemo<RoleInfo[]>(() => {
+    const isSystemRole = (id: string) => ['direction', 'chef_atelier', 'magasinier', 'travailleur'].includes(id);
     if (permMatrix?.rolesDetail && permMatrix.rolesDetail.length > 0) {
       return permMatrix.rolesDetail.map((r) => ({
         ...r,
+        is_system: r.is_system || isSystemRole(r.id),
         user_count: users.filter((u) => u.role === r.id).length,
       }));
     }
@@ -1039,7 +1053,7 @@ function AdminSettings({ user }: { user: User }) {
       id: r,
       name: ROLE_LABEL[r] ?? r,
       description: ROLE_DESC[r] ?? null,
-      is_system: r === 'direction',
+      is_system: isSystemRole(r),
       user_count: users.filter((u) => u.role === r).length,
     }));
   }, [permMatrix?.rolesDetail, users]);
@@ -1726,7 +1740,7 @@ function AdminSettings({ user }: { user: User }) {
                         >
                           Modifier
                         </Button>
-                        {!isRootDirection && !r.is_system ? (
+                        {!isRootDirection && !r.is_system && !['direction', 'chef_atelier', 'magasinier', 'travailleur'].includes(r.id) ? (
                           <Button
                             size="sm"
                             variant="danger"
@@ -1813,11 +1827,11 @@ function AdminSettings({ user }: { user: User }) {
                     <span>Glissez horizontalement pour configurer tous les rôles</span>
                     <span className="font-mono font-bold text-amber">← →</span>
                   </div>
-                  <div className="overflow-x-auto scroll-thin">
-                    <table className="w-full min-w-[620px] text-left">
-                      <thead className="border-b border-line bg-paper-2/60 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+                  <div className="max-h-[72vh] overflow-y-auto overflow-x-auto scroll-thin relative border-b border-line">
+                    <table className="w-full min-w-[680px] text-left border-separate border-spacing-0">
+                      <thead className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
                         <tr>
-                          <th className="sticky left-0 top-0 z-20 bg-surface-2 px-4 py-3 border-r border-line min-w-[200px] sm:min-w-[260px]">
+                          <th className="sticky left-0 top-0 z-30 bg-surface-2/95 backdrop-blur-md px-4 py-3 border-r border-b border-line min-w-[200px] sm:min-w-[260px] shadow-[2px_2px_4px_rgba(0,0,0,0.12)]">
                             <div className="flex items-center justify-between">
                               <span>Module &amp; Action</span>
                               <span className="text-[10px] lowercase font-normal text-ink-faint">({permMatrix.actions.length} permissions)</span>
@@ -1826,11 +1840,11 @@ function AdminSettings({ user }: { user: User }) {
                           {permMatrix.roles.map((role) => {
                             const isDir = role === 'direction';
                             const roleDetail = availableRoles.find((ar) => ar.id === role);
-                            const isSystem = ['direction', 'magasinier', 'chef_atelier', 'travailleur'].includes(role);
+                            const isSystem = ['direction', 'magasinier', 'chef_atelier', 'travailleur'].includes(role) || Boolean(roleDetail?.is_system);
                             const roleName = roleDetail?.name ?? ROLE_LABEL[role] ?? role;
 
                             return (
-                              <th key={role} className="px-3 py-3 text-center min-w-[130px] border-r border-line/60 align-top">
+                              <th key={role} className="sticky top-0 z-20 bg-surface-2/95 backdrop-blur-md px-3 py-3 text-center min-w-[130px] border-r border-b border-line/60 align-top shadow-[0_2px_4px_rgba(0,0,0,0.12)]">
                                 <div className="flex flex-col items-center gap-1.5">
                                   <div className="flex items-center gap-1">
                                     <span
@@ -1903,11 +1917,11 @@ function AdminSettings({ user }: { user: User }) {
                           })}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-line text-sm">
+                      <tbody className="text-sm">
                         {permMatrix.groups.map((group) => (
                           <Fragment key={group.label}>
-                            <tr className="bg-paper-2/70 font-semibold text-ink text-xs uppercase tracking-wide">
-                              <td colSpan={permMatrix.roles.length + 1} className="sticky left-0 px-4 py-2 text-ink-soft bg-paper-2/90 font-bold border-b border-line/60">
+                            <tr className="bg-paper-2/80 font-semibold text-ink text-xs uppercase tracking-wide">
+                              <td colSpan={permMatrix.roles.length + 1} className="sticky left-0 px-4 py-2 text-ink-soft bg-paper-2/95 backdrop-blur-xs font-bold border-b border-line/60">
                                 {group.label}
                               </td>
                             </tr>
@@ -1916,7 +1930,7 @@ function AdminSettings({ user }: { user: User }) {
                               const isView = meta?.kind === 'view' || action.endsWith('.view');
                               return (
                                 <tr key={action} className="hover:bg-paper-2/30 transition-colors group">
-                                  <td className="sticky left-0 bg-surface group-hover:bg-paper-2/40 px-4 py-2.5 border-r border-line z-10 min-w-[200px] sm:min-w-[260px]">
+                                  <td className="sticky left-0 bg-surface group-hover:bg-paper-2/50 px-4 py-2.5 border-r border-b border-line/40 z-10 min-w-[200px] sm:min-w-[260px]">
                                     <div className="flex items-center justify-between gap-2">
                                       <div className="min-w-0 pr-2">
                                         <div className="font-medium text-ink text-xs truncate">{meta?.label ?? action}</div>
@@ -1946,7 +1960,7 @@ function AdminSettings({ user }: { user: User }) {
                                   {permMatrix.roles.map((role) => {
                                     if (role === 'direction') {
                                       return (
-                                        <td key={role} className="px-3 py-2 text-center min-w-[110px] border-r border-line/40">
+                                        <td key={role} className="px-3 py-2 text-center min-w-[110px] border-r border-b border-line/40">
                                           <span
                                             className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-green/30 bg-green/10 text-green"
                                             title="Privilège garanti pour la Direction"
@@ -1960,7 +1974,7 @@ function AdminSettings({ user }: { user: User }) {
                                     const isChecked = !!permDraft[action]?.[role];
                                     const roleName = availableRoles.find((ar) => ar.id === role)?.name ?? ROLE_LABEL[role] ?? role;
                                     return (
-                                      <td key={role} className="px-3 py-2 text-center min-w-[110px] border-r border-line/40">
+                                      <td key={role} className="px-3 py-2 text-center min-w-[110px] border-r border-b border-line/40">
                                         <button
                                           type="button"
                                           role="checkbox"
@@ -2800,6 +2814,12 @@ function AdminSettings({ user }: { user: User }) {
             );
           })()}
 
+          {/* Decoy hidden inputs to prevent Chrome / Edge from injecting admin credentials */}
+          <div style={{ display: 'none' }} aria-hidden="true">
+            <input type="text" name="fake_user_name_autofill" tabIndex={-1} autoComplete="off" />
+            <input type="password" name="fake_user_pass_autofill" tabIndex={-1} autoComplete="off" />
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Rattacher à un travailleur (Recommandé)</label>
@@ -2821,6 +2841,11 @@ function AdminSettings({ user }: { user: User }) {
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Nom complet affiché</label>
               <input
                 type="text"
+                name="new_user_display_name"
+                id="new_user_display_name"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
                 value={userForm.display_name}
                 placeholder="Ex : Landry ONANA"
                 onChange={(e) => {
@@ -2849,6 +2874,11 @@ function AdminSettings({ user }: { user: User }) {
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Identifiant de connexion</label>
               <input
                 type="text"
+                name="new_user_login"
+                id="new_user_login"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
                 value={userForm.login}
                 placeholder="Ex : landry.onana"
                 onChange={(e) => setUserForm({ ...userForm, login: e.target.value.toLowerCase() })}
@@ -2859,6 +2889,11 @@ function AdminSettings({ user }: { user: User }) {
             <div>
               <label className="mb-1.5 block text-xs font-medium text-ink-soft">Mot de passe temporaire</label>
               <PasswordInput
+                name="new_user_password"
+                id="new_user_password"
+                autoComplete="new-password"
+                data-lpignore="true"
+                data-1p-ignore="true"
                 value={userForm.password}
                 placeholder="Au moins 6 caractères"
                 onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
@@ -2870,6 +2905,11 @@ function AdminSettings({ user }: { user: User }) {
           <div>
             <label className="mb-1.5 block text-xs font-medium text-ink-soft">Confirmer le mot de passe</label>
             <PasswordInput
+              name="new_user_confirm_password"
+              id="new_user_confirm_password"
+              autoComplete="new-password"
+              data-lpignore="true"
+              data-1p-ignore="true"
               value={userForm.confirmPassword}
               placeholder="Répétez le mot de passe"
               onChange={(e) => setUserForm({ ...userForm, confirmPassword: e.target.value })}

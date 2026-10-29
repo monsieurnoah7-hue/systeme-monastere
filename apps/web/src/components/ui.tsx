@@ -187,6 +187,7 @@ export function PageHeader({
 export function PasswordInput({
   className,
   inputMode,
+  autoComplete,
   ...props
 }: InputHTMLAttributes<HTMLInputElement>) {
   const [show, setShow] = useState(false);
@@ -195,6 +196,9 @@ export function PasswordInput({
       <input
         type={show ? 'text' : 'password'}
         inputMode={inputMode}
+        autoComplete={autoComplete ?? 'new-password'}
+        data-lpignore="true"
+        data-1p-ignore="true"
         className={cx(className, 'pr-9')}
         {...props}
       />
@@ -217,6 +221,7 @@ export function Field({
   hint,
   className,
   type,
+  autoComplete,
   'aria-invalid': ariaInvalid,
   ...rest
 }: InputHTMLAttributes<HTMLInputElement> & { label?: string; hint?: string }) {
@@ -232,6 +237,9 @@ export function Field({
         <input
           id={id}
           type={effectiveType}
+          autoComplete={autoComplete ?? (isPassword ? 'new-password' : 'off')}
+          data-lpignore="true"
+          data-1p-ignore="true"
           aria-invalid={ariaInvalid}
           className={cx(
             'h-9 w-full rounded-btn border bg-surface px-3 text-xs text-ink placeholder:text-ink-faint',
