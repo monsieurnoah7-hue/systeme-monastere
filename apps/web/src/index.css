@@ -131,6 +131,11 @@
     caret-color: #f1f5f9 !important;
     transition: background-color 5000s ease-in-out 0s;
   }
+  /* Supprimer l'icône de révélation native de mot de passe (Edge / IE / Windows) pour éviter le double œil */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none !important;
+  }
 }
 
 @utility num {

@@ -695,8 +695,11 @@ export function Stock({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
-            Stock &amp; Matières
+            Matières &amp; Quincaillerie
           </h1>
+          <p className="text-xs text-ink-faint mt-0.5">
+            Bois massif, visserie, colles &amp; fournitures consommées
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -1969,7 +1972,7 @@ export function Stock({
       {/* Modal Mouvement de Stock (Hub Entrée / Sortie / Transfert / Correction) */}
       <Modal
         open={moveOpen}
-        title="⚡ Hub de Mouvement de Stock"
+        title="⚡ Mouvement Matières & Quincaillerie"
         onClose={() => setMoveOpen(false)}
         footer={
           <>
@@ -2007,6 +2010,17 @@ export function Stock({
           return (
             <div className="space-y-4">
               {formError ? <Banner tone="error">{formError}</Banner> : null}
+
+              {/* Notice Pédagogique Google Material HMI */}
+              <div className="rounded-xl border border-line bg-paper px-3 py-2 text-[11px] text-ink-soft flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-amber">💡</span>
+                  <span>Gestion des <strong>fournitures &amp; consommables</strong> (bois, visserie, colles, abrasifs...).</span>
+                </div>
+                <span className="text-ink-faint hidden sm:inline">
+                  Pour les machines &amp; outils (ex. <em>Agrafeuse OUT-001</em>), voir <strong>Parc Matériel</strong>.
+                </span>
+              </div>
 
               {/* Mode Selector : 4 Actions */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
@@ -2066,7 +2080,22 @@ export function Stock({
 
               {/* Target Reference Selector */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-ink">Article concerné</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-ink">Article de quincaillerie / matière</label>
+                  {canManageRefs && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMoveOpen(false);
+                        openCreate();
+                      }}
+                      className="text-[11px] text-amber hover:underline font-semibold flex items-center gap-1"
+                    >
+                      <IconPlus size={12} />
+                      <span>Nouvelle matière</span>
+                    </button>
+                  )}
+                </div>
                 <SelectField
                   label=""
                   value={moveForm.ref_id}
@@ -2076,12 +2105,47 @@ export function Stock({
                     setMoveForm((f) => ({ ...f, ref_id: e.target.value }));
                   }}
                 >
-                  {refs.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} (Stock actuel : {r.qty} {r.unit})
+                  {refs.length === 0 ? (
+                    <option value="" disabled>
+                      ⚠️ Aucun consommable enregistré pour le moment
                     </option>
-                  ))}
+                  ) : (
+                    refs.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} (Stock actuel : {r.qty} {r.unit})
+                      </option>
+                    ))
+                  )}
                 </SelectField>
+
+                {refs.length === 0 && (
+                  <div className="rounded-xl border border-amber/30 bg-amber-wash/40 p-3 text-xs space-y-2 mt-2">
+                    <p className="text-amber font-semibold flex items-center gap-1.5">
+                      <AlertTriangle size={15} />
+                      Votre registre de quincaillerie &amp; matières est actuellement vide.
+                    </p>
+                    <p className="text-ink-soft text-[11px] leading-relaxed">
+                      Vous n’avez pas encore enregistré de consommables (vis, colle, abrasifs, bois).
+                      Si vous souhaitez prêter ou déplacer un appareil durable comme <strong>l'Agrafeuse OUT-001</strong>,
+                      rendez-vous dans le module <strong>Parc Matériel &amp; Machines</strong>.
+                    </p>
+                    {canManageRefs && (
+                      <div className="pt-1">
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => {
+                            setMoveOpen(false);
+                            openCreate();
+                          }}
+                          icon={<IconPlus size={13} />}
+                        >
+                          Créer un premier consommable
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Reference Info Badge */}

@@ -65,20 +65,19 @@ export function Login({ onLogin }: { onLogin: (user: User) => void }) {
             <Field
               label="Identifiant"
               value={login}
-              autoComplete="username"
+              autoComplete="off"
               onChange={(event) => setLogin(event.target.value)}
-              placeholder="ex. magasinier"
+              placeholder="ex. admin ou matricule"
               aria-invalid={error ? true : undefined}
-              autoFocus
               required
             />
             <Field
               label="Mot de passe"
               type="password"
               value={password}
-              autoComplete="current-password"
+              autoComplete="new-password"
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="••••••••"
+              placeholder="Saisissez votre mot de passe"
               aria-invalid={error ? true : undefined}
               required
             />

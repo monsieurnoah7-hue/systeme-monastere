@@ -834,8 +834,11 @@ export function Outils({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
-            Outils &amp; Machines
+            Parc Matériel &amp; Machines
           </h1>
+          <p className="text-xs text-ink-faint mt-0.5">
+            Équipements durables, outillage d’atelier &amp; prêts réversibles
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

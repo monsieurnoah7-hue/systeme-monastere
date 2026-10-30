@@ -199,7 +199,7 @@ export function PasswordInput({
         autoComplete={autoComplete ?? 'new-password'}
         data-lpignore="true"
         data-1p-ignore="true"
-        className={cx(className, 'pr-9')}
+        className={cx(className, 'pr-9 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden')}
         {...props}
       />
       <button
@@ -243,7 +243,7 @@ export function Field({
           aria-invalid={ariaInvalid}
           className={cx(
             'h-9 w-full rounded-btn border bg-surface px-3 text-xs text-ink placeholder:text-ink-faint',
-            isPassword ? 'pr-9' : '',
+            isPassword ? 'pr-9 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden' : '',
             'transition-colors duration-[120ms] focus:outline-none focus:ring-2',
             ariaInvalid
               ? 'border-red focus:border-red focus:ring-red/15'
