@@ -272,6 +272,11 @@ export type Magasin = {
   code: string;
   description: string | null;
   active: boolean;
+  can_lend?: boolean;
+  can_receive_in?: boolean;
+  can_deliver_out?: boolean;
+  can_transfer?: boolean;
+  manager_name?: string | null;
   created_at: string;
   tools_count?: number;
   stock_count?: number;

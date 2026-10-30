@@ -344,6 +344,13 @@ CREATE INDEX IF NOT EXISTS loans_tool_active_idx ON loans(tool_id, status);
 ALTER TABLE stock_movements DROP CONSTRAINT IF EXISTS stock_movements_move_type_check;
 ALTER TABLE stock_movements ADD CONSTRAINT stock_movements_move_type_check CHECK (move_type IN ('in','out','correction','transfer'));
 ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS target_magasin_id text REFERENCES magasins(id);
+
+-- Migration 010: Permissions opérationnelles et capacités par magasin (prêts, arrivages, sorties, transferts)
+ALTER TABLE magasins ADD COLUMN IF NOT EXISTS can_lend boolean NOT NULL DEFAULT true;
+ALTER TABLE magasins ADD COLUMN IF NOT EXISTS can_receive_in boolean NOT NULL DEFAULT true;
+ALTER TABLE magasins ADD COLUMN IF NOT EXISTS can_deliver_out boolean NOT NULL DEFAULT true;
+ALTER TABLE magasins ADD COLUMN IF NOT EXISTS can_transfer boolean NOT NULL DEFAULT true;
+ALTER TABLE magasins ADD COLUMN IF NOT EXISTS manager_name text;
 `;
 
-export const MIGRATION_NAME = '009_stock_movements_extension';
+export const MIGRATION_NAME = '010_magasin_capabilities';

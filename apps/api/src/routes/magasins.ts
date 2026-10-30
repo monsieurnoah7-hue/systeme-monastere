@@ -11,6 +11,11 @@ export type MagasinRow = {
   code: string;
   description: string | null;
   active: boolean;
+  can_lend: boolean;
+  can_receive_in: boolean;
+  can_deliver_out: boolean;
+  can_transfer: boolean;
+  manager_name: string | null;
   created_at: string;
   tools_count?: number;
   stock_count?: number;
@@ -20,6 +25,11 @@ const createBody = z.object({
   name: z.string().min(2),
   code: z.string().min(1).max(10),
   description: z.string().optional(),
+  can_lend: z.boolean().optional(),
+  can_receive_in: z.boolean().optional(),
+  can_deliver_out: z.boolean().optional(),
+  can_transfer: z.boolean().optional(),
+  manager_name: z.string().optional(),
 });
 
 const patchBody = z.object({
@@ -27,6 +37,11 @@ const patchBody = z.object({
   code: z.string().min(1).max(10).optional(),
   description: z.string().optional(),
   active: z.boolean().optional(),
+  can_lend: z.boolean().optional(),
+  can_receive_in: z.boolean().optional(),
+  can_deliver_out: z.boolean().optional(),
+  can_transfer: z.boolean().optional(),
+  manager_name: z.string().nullable().optional(),
 });
 
 async function nextMagasinId(): Promise<string> {
@@ -61,8 +76,19 @@ magasinsRoutes.post('/', requirePerm('magasins.manage'), async (c) => {
   if (exists) return c.json({ error: 'Ce code magasin existe déjà.' }, 409);
   const id = await nextMagasinId();
   const magasin = await db.one<MagasinRow>(
-    `INSERT INTO magasins (id, name, code, description) VALUES ($1, $2, $3, $4) RETURNING *`,
-    [id, body.data.name.trim(), code, body.data.description?.trim() || null],
+    `INSERT INTO magasins (id, name, code, description, can_lend, can_receive_in, can_deliver_out, can_transfer, manager_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    [
+      id,
+      body.data.name.trim(),
+      code,
+      body.data.description?.trim() || null,
+      body.data.can_lend ?? true,
+      body.data.can_receive_in ?? true,
+      body.data.can_deliver_out ?? true,
+      body.data.can_transfer ?? true,
+      body.data.manager_name?.trim() || null,
+    ],
   );
   await writeAudit(db, {
     entity: 'magasin',
@@ -89,13 +115,29 @@ magasinsRoutes.patch('/:id', requirePerm('magasins.manage'), async (c) => {
     if (dup) return c.json({ error: 'Ce code magasin existe déjà.' }, 409);
   }
   const updated = await db.one<MagasinRow>(
-    `UPDATE magasins SET name = $2, code = $3, description = $4, active = $5 WHERE id = $1 RETURNING *`,
+    `UPDATE magasins
+        SET name = $2,
+            code = $3,
+            description = $4,
+            active = $5,
+            can_lend = $6,
+            can_receive_in = $7,
+            can_deliver_out = $8,
+            can_transfer = $9,
+            manager_name = $10
+      WHERE id = $1
+      RETURNING *`,
     [
       id,
       patch.name?.trim() ?? before.name,
       patch.code?.trim().toUpperCase() ?? before.code,
       patch.description === undefined ? before.description : patch.description.trim() || null,
       patch.active ?? before.active,
+      patch.can_lend ?? before.can_lend,
+      patch.can_receive_in ?? before.can_receive_in,
+      patch.can_deliver_out ?? before.can_deliver_out,
+      patch.can_transfer ?? before.can_transfer,
+      patch.manager_name === undefined ? before.manager_name : patch.manager_name?.trim() || null,
     ],
   );
   await writeAudit(db, {
@@ -196,19 +238,27 @@ magasinsRoutes.get('/:id', requirePerm('magasins.view'), async (c) => {
   const db = getDb();
   const magasin = await db.one<MagasinRow>('SELECT * FROM magasins WHERE id = $1', [id]);
   if (!magasin) return c.json({ error: 'Magasin introuvable.' }, 404);
-  const [tools, stock] = await Promise.all([
+  const [tools, stock, loans] = await Promise.all([
     db.query(
-      `SELECT id, name, category, status, condition, status_reason FROM tools WHERE magasin_id = $1 ORDER BY name`,
+      `SELECT t.id, t.name, t.category, t.status, t.condition, t.status_reason,
+              t.brand, t.model, t.serial_number, t.photo_path, t.acquisition_cost, t.total_qty,
+              l.id AS loan_id, l.employee_id AS loan_employee_id, e.full_name AS loan_employee_name,
+              l.qty AS loan_qty, l.out_at AS loan_out_at
+         FROM tools t
+         LEFT JOIN loans l ON l.tool_id = t.id AND l.status = 'en_cours'
+         LEFT JOIN employees e ON e.id = l.employee_id
+        WHERE t.magasin_id = $1
+        ORDER BY t.name`,
       [id],
     ),
     db.query(
-      `SELECT r.id, r.name, r.category, r.unit, r.min_qty,
+      `SELECT r.id, r.name, r.category, r.unit, r.min_qty, r.unit_cost, r.photo_path, r.supplier, r.brand, r.location,
               (r.initial_qty + COALESCE(m.qty, 0))::float AS qty
          FROM stock_refs r
          LEFT JOIN (
            SELECT ref_id,
                   sum(CASE WHEN move_type = 'in' THEN qty
-                           WHEN move_type = 'out' THEN -qty
+                           WHEN move_type IN ('out', 'transfer') THEN -qty
                            WHEN move_type = 'correction' THEN qty END) AS qty
              FROM stock_movements GROUP BY ref_id
          ) m ON m.ref_id = r.id
@@ -216,6 +266,16 @@ magasinsRoutes.get('/:id', requirePerm('magasins.view'), async (c) => {
         ORDER BY r.name`,
       [id],
     ),
+    db.query(
+      `SELECT l.id, l.tool_id, t.name AS tool_name, l.employee_id, e.full_name AS employee_name,
+              l.qty, l.out_at, l.motive, l.out_condition
+         FROM loans l
+         JOIN tools t ON t.id = l.tool_id
+         JOIN employees e ON e.id = l.employee_id
+        WHERE t.magasin_id = $1 AND l.status = 'en_cours'
+        ORDER BY l.out_at DESC`,
+      [id],
+    ),
   ]);
-  return c.json({ magasin, tools, stock });
+  return c.json({ magasin, tools, stock, loans });
 });
