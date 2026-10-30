@@ -10,13 +10,11 @@ import {
 } from '../lib/api';
 import {
   Button,
-  Card,
   Chip,
   Drawer,
   EmptyState,
   Field,
   Modal,
-  PageHeader,
   Skeleton,
   TextArea,
   useToast,
@@ -37,6 +35,8 @@ import {
   UserCheck,
   ArrowUpRight,
   ArrowDownLeft,
+  Warehouse,
+  ChevronRight,
 } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { formatCurrency } from '../lib/accounting';
@@ -102,11 +102,11 @@ function MagasinQr({ id }: { id: string }) {
     };
   }, [id]);
   return (
-    <span className="grid h-28 w-28 shrink-0 place-items-center rounded-xl border border-line bg-white p-2 shadow-xs">
+    <span className="grid h-28 w-28 shrink-0 place-items-center rounded-2xl border border-line bg-white p-2 shadow-xs">
       {src ? (
         <img src={src} alt={`QR ${id}`} className="h-full w-full object-contain" />
       ) : (
-        <IconBox size={28} className="text-ink-faint" />
+        <Warehouse size={28} className="text-ink-faint" />
       )}
     </span>
   );
@@ -122,9 +122,9 @@ function MagasinDoorLabel({
   stockCount: number;
 }) {
   return (
-    <div className="a4-page py-8" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
+    <div className="a4-page py-8" style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif' }}>
       <div
-        className="mx-auto flex flex-col justify-between overflow-hidden rounded-2xl border-4 border-gray-900 bg-white p-8 text-gray-900 shadow-xl"
+        className="mx-auto flex flex-col justify-between overflow-hidden rounded-[24px] border-4 border-gray-900 bg-white p-8 text-gray-900 shadow-xl"
         style={{ width: '160mm', minHeight: '110mm', boxSizing: 'border-box' }}
       >
         {/* En-tête officiel Monastère */}
@@ -140,14 +140,14 @@ function MagasinDoorLabel({
               </p>
             </div>
           </div>
-          <span className="rounded bg-gray-100 border border-gray-400 px-3 py-1 font-mono text-[10pt] font-black text-gray-950">
+          <span className="rounded-lg bg-gray-100 border border-gray-400 px-3 py-1 font-mono text-[10pt] font-black text-gray-950">
             {magasin.code}
           </span>
         </div>
 
         {/* Corps : Grand QR Code + Détails Local */}
         <div className="flex items-center gap-6 py-4">
-          <div className="grid h-[38mm] w-[38mm] shrink-0 place-items-center rounded-xl border border-gray-300 bg-white p-1">
+          <div className="grid h-[38mm] w-[38mm] shrink-0 place-items-center rounded-2xl border border-gray-300 bg-white p-1">
             <MagasinQr id={magasin.id} />
           </div>
 
@@ -160,15 +160,15 @@ function MagasinDoorLabel({
             </p>
             {magasin.manager_name && (
               <p className="text-[8.5pt] text-gray-900 font-semibold">
-                👤 Responsable référent : {magasin.manager_name}
+                Responsable : {magasin.manager_name}
               </p>
             )}
             <div className="flex flex-wrap gap-2 pt-2 text-[7.5pt]">
-              <span className="rounded bg-gray-100 border border-gray-300 px-2 py-0.5 font-bold">
-                🧰 {toolsCount} Machine(s) &amp; Outils
+              <span className="rounded-md bg-gray-100 border border-gray-300 px-2 py-0.5 font-bold">
+                {toolsCount} Machine(s) &amp; Outils
               </span>
-              <span className="rounded bg-gray-100 border border-gray-300 px-2 py-0.5 font-bold">
-                📦 {stockCount} Réf. Quincaillerie
+              <span className="rounded-md bg-gray-100 border border-gray-300 px-2 py-0.5 font-bold">
+                {stockCount} Réf. Matières
               </span>
             </div>
           </div>
@@ -425,7 +425,7 @@ export function Magasins({
         method: 'POST',
         body: JSON.stringify({ ids: [transferToolItem.id], magasin_id: transferTargetId }),
       });
-      toast(`Outil transféré vers le nouveau magasin.`, 'success');
+      toast(`Machine transférée vers le nouveau magasin.`, 'success');
       setTransferToolItem(null);
       setTransferTargetId('');
       if (selectedId) void loadDetail(selectedId);
@@ -444,7 +444,7 @@ export function Magasins({
     setActionBusy(true);
     try {
       await api(`/api/tools/${deleteToolItem.id}`, { method: 'DELETE' });
-      toast(`Outil « ${deleteToolItem.name} » supprimé.`, 'success');
+      toast(`Machine « ${deleteToolItem.name} » supprimée.`, 'success');
       setDeleteToolItem(null);
       if (selectedId) void loadDetail(selectedId);
       setReloadKey((k) => k + 1);
@@ -656,36 +656,48 @@ export function Magasins({
   const availableToolsForLoan = detail?.tools.filter((t) => t.status === 'disponible') ?? [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5 pb-10">
       {portal}
-      <PageHeader
-        title="Magasins, Dépôts &amp; Ateliers"
-        actions={
-          canManage ? (
-            <Button variant="primary" icon={<IconPlus size={16} />} onClick={openNew}>
-              Nouveau magasin
-            </Button>
-          ) : undefined
-        }
-      />
 
-      {/* Barre de recherche principale */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <IconSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Rechercher par nom de magasin, code (ex. MAG-001) ou responsable…"
-            className="w-full rounded-xl border border-line bg-surface py-2.5 pl-9 pr-3 text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none focus:ring-2 focus:ring-amber/20"
-          />
+      {/* Header Mobile-First & Responsive */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
+            Magasins &amp; Dépôts
+          </h1>
+          <p className="text-xs text-ink-faint mt-0.5">
+            Gestion des ateliers, locaux de stockage et parcs locaux
+          </p>
         </div>
+
+        {canManage && (
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<IconPlus size={16} />}
+            onClick={openNew}
+            className="self-start sm:self-auto rounded-xl shadow-xs"
+          >
+            Nouveau magasin
+          </Button>
+        )}
+      </div>
+
+      {/* Barre de recherche concise sans rognage de texte */}
+      <div className="relative w-full">
+        <IconSearch size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Rechercher un magasin ou responsable…"
+          className="w-full rounded-2xl border border-line bg-surface py-2.5 pl-10 pr-4 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all"
+        />
       </div>
 
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-36 rounded-xl" />
+            <Skeleton key={i} className="h-40 rounded-[22px]" />
           ))}
         </div>
       ) : error ? (
@@ -699,11 +711,12 @@ export function Magasins({
         <EmptyState
           icon={<IconBox size={28} />}
           title="Aucun magasin enregistré"
-          hint={canManage ? 'Créez votre premier magasin, atelier ou local de stockage pour organiser les parcs.' : undefined}
+          hint={canManage ? 'Créez votre premier magasin, atelier ou local pour organiser les stocks.' : undefined}
           action={canManage ? <Button variant="primary" onClick={openNew}>Créer un magasin</Button> : undefined}
         />
       ) : (
-        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+        /* iOS-Style Grouped Cards Grid (Mobile-First, Pure Vector SVGs, Zero Emojis) */
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((m) => (
             <button
               key={m.id}
@@ -711,68 +724,94 @@ export function Magasins({
                 setSelectedId(m.id);
                 setDrawerTab('tools');
               }}
-              className="text-left group transition-all"
+              className="w-full text-left group active:scale-[0.985] transition-transform duration-150"
             >
-              <Card hover className="h-full flex flex-col justify-between transition-all group-hover:border-amber/50 space-y-3 p-4">
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-charcoal text-xs font-black text-amber border border-line">
-                        {m.code}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-ink group-hover:text-amber transition-colors">
-                          {m.name}
-                        </p>
-                        <p className="truncate text-xs text-ink-soft">
-                          {m.description || 'Atelier & local de stockage'}
-                        </p>
-                      </div>
+              <div className="rounded-[22px] border border-line bg-surface p-4 sm:p-5 shadow-xs hover:border-amber/40 hover:shadow-md transition-all flex flex-col justify-between gap-3">
+                {/* Ligne 1 : SF Icon Squircle + Titre + Code + Chevron */}
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-amber-wash text-amber border border-amber/20 shadow-xs">
+                      <Warehouse size={20} />
                     </div>
-                    {!m.active && <Chip tone="red">Inactif</Chip>}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="text-sm font-bold text-ink truncate group-hover:text-amber transition-colors">
+                          {m.name}
+                        </h3>
+                        <span className="font-mono text-[10px] font-bold text-amber px-2 py-0.5 rounded-full bg-amber-wash border border-amber/30 shrink-0">
+                          {m.code}
+                        </span>
+                      </div>
+                      {m.manager_name && (
+                        <p className="text-[11px] text-ink-soft flex items-center gap-1 mt-0.5 truncate">
+                          <UserCheck size={12} className="text-amber shrink-0" />
+                          <span>Resp : {m.manager_name}</span>
+                        </p>
+                      )}
+                    </div>
                   </div>
 
-                  {m.manager_name && (
-                    <div className="mt-2.5 flex items-center gap-1.5 text-xs text-ink-soft font-medium">
-                      <UserCheck size={13} className="text-amber shrink-0" />
-                      <span className="truncate">Resp : <strong>{m.manager_name}</strong></span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                    {!m.active && <Chip tone="red">Inactif</Chip>}
+                    <ChevronRight size={18} className="text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                </div>
 
-                  {/* Badges de capacités opérationnelles du magasin */}
-                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                {/* Description */}
+                {m.description && (
+                  <p className="text-xs text-ink-faint line-clamp-2 leading-relaxed">
+                    {m.description}
+                  </p>
+                )}
+
+                {/* iOS Grouped Capsules: Métriques & Capacités */}
+                <div className="pt-2 border-t border-line/60 flex flex-col gap-2.5">
+                  {/* Deux capsules iOS Grouped */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl bg-paper px-3 py-2 flex items-center justify-between border border-line/60">
+                      <span className="text-[11px] text-ink-faint flex items-center gap-1.5 font-medium">
+                        <Wrench size={12} className="text-amber shrink-0" /> Machines
+                      </span>
+                      <span className="text-xs font-bold text-ink tabular-nums">
+                        {m.tools_count ?? 0}
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl bg-paper px-3 py-2 flex items-center justify-between border border-line/60">
+                      <span className="text-[11px] text-ink-faint flex items-center gap-1.5 font-medium">
+                        <Package size={12} className="text-sky-400 shrink-0" /> Matières
+                      </span>
+                      <span className="text-xs font-bold text-ink tabular-nums">
+                        {m.stock_count ?? 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Capacités avec Icônes Vectorielles Pures */}
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {m.can_lend !== false && (
-                      <span className="inline-flex items-center gap-1 rounded bg-paper px-2 py-0.5 text-[10px] font-semibold text-green border border-line">
-                        🤝 Prêts autorisés
+                      <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-green border border-line">
+                        <Zap size={10} className="text-green" /> Prêts
                       </span>
                     )}
                     {m.can_receive_in !== false && (
-                      <span className="inline-flex items-center gap-1 rounded bg-paper px-2 py-0.5 text-[10px] font-semibold text-sky-400 border border-line">
-                        📥 Entrées
+                      <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-sky-400 border border-line">
+                        <ArrowDownLeft size={10} className="text-sky-400" /> Entrées
                       </span>
                     )}
                     {m.can_deliver_out !== false && (
-                      <span className="inline-flex items-center gap-1 rounded bg-paper px-2 py-0.5 text-[10px] font-semibold text-amber border border-line">
-                        📤 Sorties
+                      <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-amber border border-line">
+                        <ArrowUpRight size={10} className="text-amber" /> Sorties
+                      </span>
+                    )}
+                    {m.can_transfer !== false && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-purple-400 border border-line">
+                        <ArrowRightLeft size={10} className="text-purple-400" /> Transferts
                       </span>
                     )}
                   </div>
                 </div>
-
-                <div className="pt-2 border-t border-line/60 flex items-center justify-between text-xs text-ink-soft">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1 font-semibold text-ink">
-                      <Wrench size={13} className="text-amber" /> {m.tools_count ?? 0} machine{(m.tools_count ?? 0) > 1 ? 's' : ''}
-                    </span>
-                    <span className="flex items-center gap-1 font-semibold text-ink">
-                      <Package size={13} className="text-sky-400" /> {m.stock_count ?? 0} matière{(m.stock_count ?? 0) > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <span className="text-[11px] font-semibold text-amber group-hover:translate-x-0.5 transition-transform">
-                    Ouvrir ›
-                  </span>
-                </div>
-              </Card>
+              </div>
             </button>
           ))}
         </div>
@@ -786,7 +825,7 @@ export function Magasins({
         title={detail?.magasin.name ?? 'Tableau de bord Magasin'}
         subtitle={
           detail
-            ? `${detail.magasin.code} · ${detail.tools.length} machine(s) · ${detail.stock.length} matière(s) · ${detail.loans.length} prêt(s) actif(s)`
+            ? `${detail.magasin.code} · ${detail.tools.length} machine(s) · ${detail.stock.length} matière(s) · ${detail.loans.length} prêt(s)`
             : undefined
         }
         onClose={() => {
@@ -798,17 +837,17 @@ export function Magasins({
         {detailLoading || !detail ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 rounded-xl" />
+              <Skeleton key={i} className="h-16 rounded-2xl" />
             ))}
           </div>
         ) : (
           <div className="space-y-4">
             {/* Barre d'en-tête du magasin avec actions globales */}
-            <div className="rounded-xl border border-line bg-paper p-3.5 space-y-3">
+            <div className="rounded-[20px] border border-line bg-paper p-3.5 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-charcoal border border-line px-2 py-0.5 font-mono text-xs font-bold text-amber">
+                    <span className="rounded-full bg-charcoal border border-line px-2.5 py-0.5 font-mono text-xs font-bold text-amber">
                       {detail.magasin.code}
                     </span>
                     <h2 className="text-base font-bold text-ink">{detail.magasin.name}</h2>
@@ -870,7 +909,7 @@ export function Magasins({
 
               {/* Barre d'opérations directes pour ce magasin */}
               <div className="pt-2 border-t border-line/60 flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-semibold text-ink-faint mr-1">Actions locales :</span>
+                <span className="text-[11px] font-semibold text-ink-faint mr-1">Actions :</span>
                 {detail.magasin.can_lend !== false && canLendGlobal && (
                   <Button
                     size="sm"
@@ -884,7 +923,7 @@ export function Magasins({
                       setLoanModalOpen(true);
                     }}
                   >
-                    🤝 Nouveau Prêt
+                    Prêter une machine
                   </Button>
                 )}
 
@@ -935,26 +974,26 @@ export function Magasins({
                       setDeleteFor(detail.magasin);
                     }}
                   >
-                    Supprimer le magasin
+                    Supprimer
                   </Button>
                 )}
               </div>
             </div>
 
-            {/* Navigation Sub-Tabs dans le magasin */}
-            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
+            {/* Navigation Sub-Tabs dans le magasin (Responsive Grouped Segment) */}
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 p-1 rounded-2xl bg-paper-2 border border-line">
               <button
                 type="button"
                 onClick={() => setDrawerTab('tools')}
                 className={cx(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+                  'flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all',
                   drawerTab === 'tools'
                     ? 'bg-amber text-white shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper'
                 )}
               >
                 <Wrench size={13} />
-                <span>Matériel &amp; Machines</span>
+                <span>Machines</span>
                 <span
                   className={cx(
                     'rounded-full px-1.5 py-0.2 text-[10px] font-bold',
@@ -969,14 +1008,14 @@ export function Magasins({
                 type="button"
                 onClick={() => setDrawerTab('stock')}
                 className={cx(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+                  'flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all',
                   drawerTab === 'stock'
                     ? 'bg-amber text-white shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper'
                 )}
               >
                 <Package size={13} />
-                <span>Matières &amp; Quincaillerie</span>
+                <span>Matières</span>
                 <span
                   className={cx(
                     'rounded-full px-1.5 py-0.2 text-[10px] font-bold',
@@ -991,14 +1030,14 @@ export function Magasins({
                 type="button"
                 onClick={() => setDrawerTab('loans')}
                 className={cx(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+                  'flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all',
                   drawerTab === 'loans'
                     ? 'bg-amber text-white shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper'
                 )}
               >
                 <Clock size={13} />
-                <span>Prêts en cours</span>
+                <span>Prêts</span>
                 <span
                   className={cx(
                     'rounded-full px-1.5 py-0.2 text-[10px] font-bold',
@@ -1018,14 +1057,14 @@ export function Magasins({
                   type="button"
                   onClick={() => setDrawerTab('settings')}
                   className={cx(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ml-auto',
+                    'flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all sm:ml-auto col-span-2 sm:col-span-1',
                     drawerTab === 'settings'
                       ? 'bg-blue text-white shadow-xs'
                       : 'text-ink-soft hover:text-ink hover:bg-paper'
                   )}
                 >
                   <ShieldCheck size={13} />
-                  <span>Droits &amp; Réglages</span>
+                  <span>Droits</span>
                 </button>
               )}
             </div>
@@ -1033,19 +1072,13 @@ export function Magasins({
             {/* Barre de recherche dans le contenu du magasin */}
             {drawerTab !== 'settings' && (
               <div className="relative">
-                <IconSearch size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
+                <IconSearch size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
                 <input
                   type="text"
                   value={drawerFilter}
                   onChange={(e) => setDrawerFilter(e.target.value)}
-                  placeholder={
-                    drawerTab === 'tools'
-                      ? 'Rechercher une machine, marque ou référence dans ce magasin…'
-                      : drawerTab === 'stock'
-                        ? 'Rechercher une matière, visserie, colle dans ce magasin…'
-                        : 'Rechercher un prêt en cours ou un ouvrier emprunteur…'
-                  }
-                  className="w-full rounded-xl border border-line bg-surface py-2 pl-8 pr-8 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none"
+                  placeholder="Rechercher dans ce magasin…"
+                  className="w-full rounded-2xl border border-line bg-surface py-2 pl-9 pr-8 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none"
                 />
                 {drawerFilter && (
                   <button
@@ -1066,18 +1099,18 @@ export function Magasins({
                     Aucune machine ou outil trouvé dans ce magasin.
                   </p>
                 ) : (
-                  <div className="divide-y divide-line rounded-xl border border-line bg-surface overflow-hidden">
+                  <div className="divide-y divide-line rounded-2xl border border-line bg-surface overflow-hidden">
                     {filteredTools.map((t) => (
                       <div
                         key={t.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 hover:bg-paper-2/40 transition-colors"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 hover:bg-paper-2/40 transition-colors"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[11px] font-bold text-amber">{t.id}</span>
                             <p className="text-xs font-bold text-ink">{t.name}</p>
                             {t.brand && (
-                              <span className="rounded bg-paper px-1.5 py-0.2 text-[10px] font-semibold text-ink-soft border border-line">
+                              <span className="rounded-md bg-paper px-1.5 py-0.2 text-[10px] font-semibold text-ink-soft border border-line">
                                 {t.brand}
                               </span>
                             )}
@@ -1087,7 +1120,7 @@ export function Magasins({
                             Catégorie : {t.category} · État : <strong>{t.condition}</strong>
                             {t.loan_employee_name ? (
                               <span className="text-amber ml-2 font-medium">
-                                🤝 Emprunté par : {t.loan_employee_name} ({formatDateTime(t.loan_out_at ?? '')})
+                                Emprunté par : {t.loan_employee_name} ({formatDateTime(t.loan_out_at ?? '')})
                               </span>
                             ) : null}
                           </p>
@@ -1134,7 +1167,8 @@ export function Magasins({
                               }}
                               className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green text-white shadow-xs hover:bg-green-2 active:scale-95 transition-all"
                             >
-                              <span>↩️ Retourner</span>
+                              <ArrowDownLeft size={12} />
+                              <span>Retourner</span>
                             </button>
                           )}
 
@@ -1147,7 +1181,7 @@ export function Magasins({
                                   setTransferTargetId('');
                                 }}
                                 className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border border-line hover:border-amber hover:text-amber text-ink-soft bg-surface-2 transition-colors"
-                                title="Transférer vers un autre atelier ou magasin"
+                                title="Transférer vers un autre magasin"
                               >
                                 <ArrowRightLeft size={12} />
                                 <span>Transférer</span>
@@ -1178,18 +1212,18 @@ export function Magasins({
                     Aucune matière ou quincaillerie trouvée dans ce magasin.
                   </p>
                 ) : (
-                  <div className="divide-y divide-line rounded-xl border border-line bg-surface overflow-hidden">
+                  <div className="divide-y divide-line rounded-2xl border border-line bg-surface overflow-hidden">
                     {filteredStock.map((s) => (
                       <div
                         key={s.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 hover:bg-paper-2/40 transition-colors"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 hover:bg-paper-2/40 transition-colors"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-[11px] font-bold text-sky-400">REF-{s.id}</span>
                             <p className="text-xs font-bold text-ink">{s.name}</p>
                             {s.brand && (
-                              <span className="rounded bg-paper px-1.5 py-0.2 text-[10px] font-semibold text-ink-soft border border-line">
+                              <span className="rounded-md bg-paper px-1.5 py-0.2 text-[10px] font-semibold text-ink-soft border border-line">
                                 {s.brand}
                               </span>
                             )}
@@ -1210,7 +1244,7 @@ export function Magasins({
                               {s.qty} {s.unit}
                             </span>
                             <span className="text-[10px] text-ink-faint">
-                              {s.qty <= s.min_qty ? '⚠️ Sous seuil' : 'Normal'}
+                              {s.qty <= s.min_qty ? 'Sous seuil' : 'Normal'}
                             </span>
                           </div>
 
@@ -1227,10 +1261,11 @@ export function Magasins({
                                   setStockMoveNote('');
                                   setStockMoveModalOpen(true);
                                 }}
-                                className="px-2 py-1 rounded text-xs font-semibold text-green bg-green/10 border border-green/30 hover:bg-green hover:text-white transition-all"
+                                className="px-2 py-1 rounded-lg text-xs font-semibold text-green bg-green/10 border border-green/30 hover:bg-green hover:text-white transition-all flex items-center gap-1"
                                 title="Entrée de stock dans ce magasin"
                               >
-                                + Entrée
+                                <ArrowDownLeft size={12} />
+                                <span>Entrée</span>
                               </button>
                             )}
 
@@ -1246,10 +1281,11 @@ export function Magasins({
                                   setStockMoveNote('');
                                   setStockMoveModalOpen(true);
                                 }}
-                                className="px-2 py-1 rounded text-xs font-semibold text-amber bg-amber-wash border border-amber/30 hover:bg-amber hover:text-white transition-all"
+                                className="px-2 py-1 rounded-lg text-xs font-semibold text-amber bg-amber-wash border border-amber/30 hover:bg-amber hover:text-white transition-all flex items-center gap-1"
                                 title="Sortie pour chantier ou atelier"
                               >
-                                - Sortie
+                                <ArrowUpRight size={12} />
+                                <span>Sortie</span>
                               </button>
                             )}
 
@@ -1260,7 +1296,7 @@ export function Magasins({
                                   setTransferStockItem({ id: s.id, name: s.name });
                                   setTransferTargetId('');
                                 }}
-                                className="p-1 rounded text-ink-soft hover:text-sky-400 hover:bg-paper border border-line transition-colors"
+                                className="p-1 rounded-lg text-ink-soft hover:text-sky-400 hover:bg-paper border border-line transition-colors"
                                 title="Transférer vers un autre magasin"
                               >
                                 <ArrowRightLeft size={13} />
@@ -1283,11 +1319,11 @@ export function Magasins({
                     Aucun prêt en cours pour le matériel de ce magasin.
                   </p>
                 ) : (
-                  <div className="divide-y divide-line rounded-xl border border-line bg-surface overflow-hidden">
+                  <div className="divide-y divide-line rounded-2xl border border-line bg-surface overflow-hidden">
                     {detail.loans.map((l) => (
                       <div
                         key={l.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 hover:bg-paper-2/40 transition-colors"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 hover:bg-paper-2/40 transition-colors"
                       >
                         <div>
                           <div className="flex items-center gap-2">
@@ -1314,7 +1350,8 @@ export function Magasins({
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green text-white shadow-xs hover:bg-green-2 active:scale-95 transition-all self-start sm:self-auto"
                         >
-                          <span>↩️ Valider le retour</span>
+                          <ArrowDownLeft size={12} />
+                          <span>Valider le retour</span>
                         </button>
                       </div>
                     ))}
@@ -1325,7 +1362,7 @@ export function Magasins({
 
             {/* TAB 4 : DROITS & CONFIGURATION DU MAGASIN */}
             {drawerTab === 'settings' && canManage && (
-              <div className="rounded-xl border border-line bg-surface p-4 space-y-4">
+              <div className="rounded-[20px] border border-line bg-surface p-4 sm:p-5 space-y-4">
                 <div>
                   <h3 className="text-sm font-bold text-ink">Capacités &amp; Droits opérationnels du local</h3>
                   <p className="text-xs text-ink-soft mt-0.5">
@@ -1333,8 +1370,8 @@ export function Magasins({
                   </p>
                 </div>
 
-                <div className="space-y-3 pt-2">
-                  <label className="flex items-start gap-3 p-3 rounded-xl border border-line bg-paper cursor-pointer hover:border-line-strong transition-colors">
+                <div className="space-y-2.5 pt-1">
+                  <label className="flex items-start gap-3 p-3 rounded-2xl border border-line bg-paper cursor-pointer hover:border-line-strong transition-colors">
                     <input
                       type="checkbox"
                       checked={form.can_lend}
@@ -1349,7 +1386,7 @@ export function Magasins({
                     </div>
                   </label>
 
-                  <label className="flex items-start gap-3 p-3 rounded-xl border border-line bg-paper cursor-pointer hover:border-line-strong transition-colors">
+                  <label className="flex items-start gap-3 p-3 rounded-2xl border border-line bg-paper cursor-pointer hover:border-line-strong transition-colors">
                     <input
                       type="checkbox"
                       checked={form.can_receive_in}
@@ -1364,7 +1401,7 @@ export function Magasins({
                     </div>
                   </label>
 
-                  <label className="flex items-start gap-3 p-3 rounded-xl border border-line bg-paper cursor-pointer hover:border-line-strong transition-colors">
+                  <label className="flex items-start gap-3 p-3 rounded-2xl border border-line bg-paper cursor-pointer hover:border-line-strong transition-colors">
                     <input
                       type="checkbox"
                       checked={form.can_deliver_out}
@@ -1379,7 +1416,7 @@ export function Magasins({
                     </div>
                   </label>
 
-                  <label className="flex items-start gap-3 p-3 rounded-xl border border-line bg-paper cursor-pointer hover:border-line-strong transition-colors">
+                  <label className="flex items-start gap-3 p-3 rounded-2xl border border-line bg-paper cursor-pointer hover:border-line-strong transition-colors">
                     <input
                       type="checkbox"
                       checked={form.can_transfer}
@@ -1436,7 +1473,7 @@ export function Magasins({
         }
       >
         <div className="space-y-3.5">
-          {formError && <div className="rounded-lg bg-red-wash px-3 py-2 text-xs text-red font-medium">{formError}</div>}
+          {formError && <div className="rounded-xl bg-red-wash px-3 py-2 text-xs text-red font-medium">{formError}</div>}
           <Field
             label="Nom du magasin ou atelier"
             value={form.name}
@@ -1469,7 +1506,7 @@ export function Magasins({
           <div className="pt-2 border-t border-line space-y-2">
             <p className="text-xs font-bold text-ink">Droits d’opération alloués à ce local :</p>
             <div className="grid gap-2 sm:grid-cols-2 text-xs">
-              <label className="flex items-center gap-2 p-2 rounded-lg bg-paper border border-line cursor-pointer">
+              <label className="flex items-center gap-2 p-2.5 rounded-xl bg-paper border border-line cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.can_lend}
@@ -1479,7 +1516,7 @@ export function Magasins({
                 <span>Prêts &amp; retours autorisés</span>
               </label>
 
-              <label className="flex items-center gap-2 p-2 rounded-lg bg-paper border border-line cursor-pointer">
+              <label className="flex items-center gap-2 p-2.5 rounded-xl bg-paper border border-line cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.can_receive_in}
@@ -1489,7 +1526,7 @@ export function Magasins({
                 <span>Arrivages directs</span>
               </label>
 
-              <label className="flex items-center gap-2 p-2 rounded-lg bg-paper border border-line cursor-pointer">
+              <label className="flex items-center gap-2 p-2.5 rounded-xl bg-paper border border-line cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.can_deliver_out}
@@ -1499,7 +1536,7 @@ export function Magasins({
                 <span>Sorties chantiers</span>
               </label>
 
-              <label className="flex items-center gap-2 p-2 rounded-lg bg-paper border border-line cursor-pointer">
+              <label className="flex items-center gap-2 p-2.5 rounded-xl bg-paper border border-line cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.can_transfer}
@@ -1516,7 +1553,7 @@ export function Magasins({
       {/* Modal Prêt Rapide depuis ce Magasin */}
       <Modal
         open={loanModalOpen}
-        title="🤝 Prêter une machine de ce magasin"
+        title="Prêter une machine de ce magasin"
         onClose={() => setLoanModalOpen(false)}
         footer={
           <>
@@ -1543,7 +1580,7 @@ export function Magasins({
               className="w-full rounded-xl border border-line bg-paper p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
             >
               {availableToolsForLoan.length === 0 ? (
-                <option value="">⚠️ Aucune machine disponible actuellement dans ce magasin</option>
+                <option value="">Aucune machine disponible actuellement dans ce magasin</option>
               ) : (
                 availableToolsForLoan.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -1591,7 +1628,7 @@ export function Magasins({
       {/* Modal Retour de Matériel dans ce Magasin */}
       <Modal
         open={returnModalOpen}
-        title="↩️ Enregistrer le retour de matériel"
+        title="Enregistrer le retour de matériel"
         onClose={() => setReturnModalOpen(false)}
         footer={
           <>
@@ -1617,9 +1654,9 @@ export function Magasins({
               onChange={(e) => setReturnCondition(e.target.value as typeof returnCondition)}
               className="w-full rounded-xl border border-line bg-paper p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
             >
-              <option value="bon">✅ Bon état (Prêt à l'emploi)</option>
-              <option value="a_reparer">⚠️ À réparer (Lame à affûter, charbon usé…)</option>
-              <option value="hors_service">❌ Hors service (En panne irréversible)</option>
+              <option value="bon">Bon état (Prêt à l'emploi)</option>
+              <option value="a_reparer">À réparer (Lame à affûter, charbon usé…)</option>
+              <option value="hors_service">Hors service (En panne irréversible)</option>
             </select>
           </div>
 
@@ -1644,7 +1681,7 @@ export function Magasins({
       {/* Modal Mouvement Stock dans ce Magasin */}
       <Modal
         open={stockMoveModalOpen}
-        title={stockMoveType === 'in' ? '📥 Entrée de stock dans ce magasin' : '📤 Sortie pour chantier'}
+        title={stockMoveType === 'in' ? 'Entrée de stock dans ce magasin' : 'Sortie pour chantier'}
         onClose={() => setStockMoveModalOpen(false)}
         footer={
           <>
@@ -1750,7 +1787,7 @@ export function Magasins({
       >
         <div className="space-y-4">
           {deleteError && (
-            <div className="rounded-lg bg-red-wash px-3 py-2 text-xs text-red font-medium">
+            <div className="rounded-xl bg-red-wash px-3 py-2 text-xs text-red font-medium">
               {deleteError}
             </div>
           )}
@@ -1761,7 +1798,7 @@ export function Magasins({
           </p>
 
           {deleteFor && ((deleteFor.tools_count ?? 0) > 0 || (deleteFor.stock_count ?? 0) > 0) ? (
-            <div className="rounded-xl border border-amber/30 bg-amber-wash/40 p-3.5 space-y-3">
+            <div className="rounded-2xl border border-amber/30 bg-amber-wash/40 p-3.5 space-y-3">
               <div className="flex items-start gap-2 text-xs text-amber-900 dark:text-amber">
                 <IconAlert size={16} className="shrink-0 mt-0.5" />
                 <span>
@@ -1777,7 +1814,7 @@ export function Magasins({
                 <select
                   value={deleteTargetMagasinId}
                   onChange={(e) => setDeleteTargetMagasinId(e.target.value)}
-                  className="w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-xs text-ink focus:border-amber focus:outline-none"
+                  className="w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-xs text-ink focus:border-amber focus:outline-none"
                 >
                   <option value="">-- Sélectionnez le magasin de destination --</option>
                   {magasins
@@ -1831,7 +1868,7 @@ export function Magasins({
           <select
             value={transferTargetId}
             onChange={(e) => setTransferTargetId(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+            className="w-full rounded-xl border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
           >
             <option value="">-- Choisir le magasin destinataire --</option>
             {magasins.map((m) => (
@@ -1895,7 +1932,7 @@ export function Magasins({
           <select
             value={transferTargetId}
             onChange={(e) => setTransferTargetId(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+            className="w-full rounded-xl border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
           >
             <option value="">-- Choisir le magasin destinataire --</option>
             {magasins.map((m) => (
