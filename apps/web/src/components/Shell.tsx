@@ -251,18 +251,13 @@ export function Shell({
         ========================================================================= */}
         <aside className="no-print hidden w-60 shrink-0 flex-col border-r border-line bg-surface lg:flex">
           {/* Logo Brand Header */}
-          <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-line bg-surface-2/40">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-charcoal border border-line p-1 shadow-xs">
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-line bg-surface-2/30">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-charcoal border border-line p-1 shadow-xs ring-1 ring-white/5">
               <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-6 w-6 object-contain" />
             </div>
             <div className="leading-tight min-w-0 flex-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold tracking-tight text-ink truncate">C.F.T. Menuiserie</span>
-                <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.2 text-[9px] font-bold text-emerald-400 border border-emerald-500/20">
-                  ACTIF
-                </span>
-              </div>
-              <p className="text-[10px] text-ink-faint truncate font-medium">Bénédictins Mont Fébé</p>
+              <span className="block text-xs font-bold tracking-tight text-ink truncate">C.F.T. Menuiserie</span>
+              <p className="text-[10px] text-ink-faint truncate font-medium mt-0.5">Bénédictins Mont Fébé</p>
             </div>
           </div>
 
@@ -420,31 +415,37 @@ export function Shell({
 
           {/* Main Scrollable Content with Antigravity Top Bar */}
           <main className="min-h-0 flex-1 overflow-y-auto scroll-thin flex flex-col">
-            {/* Desktop Topbar Header */}
-            <div className="no-print hidden lg:flex items-center justify-between px-6 py-2.5 border-b border-line bg-surface-2/40 backdrop-blur sticky top-0 z-10 text-xs">
-              <div className="flex items-center gap-2 text-ink-soft">
-                <span className="font-semibold text-ink">C.F.T.</span>
-                <span className="text-ink-faint">/</span>
-                <span className="text-ink-faint">Système Monastère</span>
-                <span className="text-ink-faint">/</span>
-                <span className="font-semibold text-sky-400 capitalize">
+            {/* Desktop Topbar Header - macOS / Apple Design */}
+            <div className="no-print hidden lg:flex items-center justify-between px-6 py-2.5 border-b border-line/60 bg-surface/75 backdrop-blur-md sticky top-0 z-10 text-xs">
+              {/* Breadcrumb section */}
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-ink tracking-tight">C.F.T.</span>
+                <span className="text-ink-faint/50 text-[10px]">/</span>
+                <span className="text-ink-faint text-[11px]">Système Monastère</span>
+                <span className="text-ink-faint/50 text-[10px]">/</span>
+                <span className="font-semibold text-amber text-[11px] tracking-wide">
                   {NAV.find((n) => n.id === view)?.label ?? view}
                 </span>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface border border-line text-[11px] text-ink-soft font-mono">
-                  <span className={cx('h-1.5 w-1.5 rounded-full', isOnline ? 'bg-green animate-pulse' : 'bg-amber')} />
-                  <span>{isOnline ? 'Système opérationnel' : 'Mode 2G / Hors-ligne (Cache local actif)'}</span>
-                </div>
+              {/* Action & Status right section */}
+              <div className="flex items-center gap-2.5">
+                {/* Offline pill indicator shown ONLY when disconnected */}
+                {!isOnline && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-wash border border-amber/30 text-[11px] text-amber font-medium shadow-xs">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber animate-ping" />
+                    <span>Mode hors-ligne (Cache local)</span>
+                  </div>
+                )}
+
                 {onScan && (
                   <button
                     onClick={onScan}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-line text-xs font-medium text-ink hover:text-amber hover:border-amber/40 transition-colors shadow-xs"
-                    title="Scanner un code QR"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-line text-xs font-semibold text-ink hover:text-amber hover:border-amber/40 transition-all shadow-xs active:scale-95"
+                    title="Scanner un code QR (Caméra)"
                   >
-                    <QrCode size={13} className="text-amber" />
-                    <span>Scan QR</span>
+                    <QrCode size={14} className="text-amber" />
+                    <span>Scanner QR</span>
                   </button>
                 )}
               </div>
