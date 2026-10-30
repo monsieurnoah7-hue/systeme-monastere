@@ -299,7 +299,9 @@ async function main() {
   await db.close();
 }
 
-main().catch((err) => {
-  console.error('Erreur :', err);
-  process.exit(1);
-});
+if (process.argv[1] && process.argv[1].includes('setup-cftm-employees')) {
+  main().catch((err) => {
+    console.error('Erreur :', err);
+    process.exit(1);
+  });
+}
