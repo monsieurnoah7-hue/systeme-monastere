@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, type Magasin, type ScanResult, type StockMovement, type StockRef, type User } from '../lib/api';
+import { api, type Employee, type Magasin, type ScanResult, type StockMovement, type StockRef, type User } from '../lib/api';
 import { QR_PREFIX, qrDataUrl } from '../lib/qr';
 import { MOVE_LABEL, MOVE_TONE, formatDateTime } from '../lib/labels';
 import {
@@ -39,6 +39,13 @@ import {
   Layers,
   FolderArchive,
   ArrowRight,
+  Zap,
+  Clock,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Scale,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { usePrintSheet } from '../lib/print';
@@ -62,9 +69,10 @@ type RefForm = {
 
 type MoveForm = {
   ref_id: string;
-  move_type: 'in' | 'out' | 'correction';
+  move_type: 'in' | 'out' | 'transfer' | 'correction';
   qty: string;
   beneficiary: string;
+  target_magasin_id: string;
   doc_ref: string;
   note: string;
 };
@@ -72,7 +80,7 @@ type MoveForm = {
 const EMPTY_REF: RefForm = {
   name: '',
   category: '',
-  unit: 'u',
+  unit: '',
   location: '',
   magasin_id: '',
   min_qty: '',
@@ -220,7 +228,7 @@ export function Stock({
   const [magasinFilter, setMagasinFilter] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  const [journalType, setJournalType] = useState<'' | 'in' | 'out' | 'correction'>('');
+  const [journalType, setJournalType] = useState<'' | 'in' | 'out' | 'transfer' | 'correction'>('');
   const [journalFrom, setJournalFrom] = useState('');
   const [journalTo, setJournalTo] = useState('');
   const [journalQ, setJournalQ] = useState('');
@@ -234,12 +242,15 @@ export function Stock({
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [moveTargetRef, setMoveTargetRef] = useState<StockRef | null>(null);
   const [moveForm, setMoveForm] = useState<MoveForm>({
     ref_id: '',
     move_type: 'out',
-    qty: '',
+    qty: '1',
     beneficiary: '',
+    target_magasin_id: '',
     doc_ref: '',
     note: '',
   });
@@ -268,12 +279,14 @@ export function Stock({
       api<{ refs: StockRef[] }>('/api/stock/refs'),
       api<{ movements: StockMovement[] }>(`/api/stock/movements?${moveParams.toString()}`),
       api<{ magasins: Magasin[] }>('/api/magasins').catch(() => ({ magasins: [] })),
+      api<{ employees: Employee[] }>('/api/employees').catch(() => ({ employees: [] })),
     ])
-      .then(([refsRes, movesRes, magRes]) => {
+      .then(([refsRes, movesRes, magRes, empRes]) => {
         if (cancelled) return;
         setRefs(refsRes.refs);
         setMovements(movesRes.movements.slice(0, 100));
         setMagasins(magRes.magasins.filter((m) => m.active));
+        setEmployees(empRes.employees.filter((e) => e.active));
         setError(null);
       })
       .catch((err) => {
@@ -436,12 +449,18 @@ export function Stock({
     }
   }
 
-  function openMove(type: 'in' | 'out' | 'correction', refId?: number) {
+  function openMove(type: 'in' | 'out' | 'transfer' | 'correction' = 'out', refItem?: StockRef | number) {
+    const target = typeof refItem === 'number'
+      ? refs.find((r) => r.id === refItem) ?? null
+      : refItem ?? (refs[0] ?? null);
+
+    setMoveTargetRef(target);
     setMoveForm({
-      ref_id: refId ? String(refId) : (refs[0]?.id ? String(refs[0].id) : ''),
+      ref_id: target ? String(target.id) : (refs[0]?.id ? String(refs[0].id) : ''),
       move_type: type,
-      qty: '1',
+      qty: '',
       beneficiary: '',
+      target_magasin_id: '',
       doc_ref: '',
       note: '',
     });
@@ -453,13 +472,35 @@ export function Stock({
     setBusy(true);
     setFormError(null);
     try {
+      const parsedQty = Number(moveForm.qty);
+      if (moveForm.move_type === 'correction') {
+        if (moveForm.qty === '' || isNaN(parsedQty) || parsedQty < 0) {
+          setFormError('Veuillez saisir le comptage réel constaté (supérieur ou égal à 0).');
+          setBusy(false);
+          return;
+        }
+      } else {
+        if (moveForm.qty === '' || isNaN(parsedQty) || parsedQty <= 0) {
+          setFormError('Veuillez saisir une quantité valide (supérieure à 0).');
+          setBusy(false);
+          return;
+        }
+      }
+
+      if (moveForm.move_type === 'transfer' && !moveForm.target_magasin_id) {
+        setFormError('Veuillez sélectionner le magasin ou atelier de destination.');
+        setBusy(false);
+        return;
+      }
+
       const res = await api<{ qty: number }>('/api/stock/movements', {
         method: 'POST',
         body: JSON.stringify({
           ref_id: Number(moveForm.ref_id),
           move_type: moveForm.move_type,
-          qty: Number(moveForm.qty),
+          qty: parsedQty,
           beneficiary: moveForm.beneficiary || undefined,
+          target_magasin_id: moveForm.target_magasin_id || undefined,
           doc_ref: moveForm.doc_ref || undefined,
           note: moveForm.note || undefined,
         }),
@@ -673,23 +714,36 @@ export function Stock({
             </>
           )}
           {canMove ? (
-            <Button
-              size="sm"
-              icon={<IconArrowOut size={16} />}
-              onClick={() => openMove('out')}
-            >
-              Sortie
-            </Button>
-          ) : null}
-          {canManageRefs ? (
             <>
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<Zap size={15} />}
+                onClick={() => openMove('out')}
+                title="Ouvrir le Hub de Mouvement (Entrée, Sortie, Transfert, Ajustement)"
+              >
+                ⚡ Mouvement
+              </Button>
               <Button
                 size="sm"
                 icon={<IconArrowIn size={16} />}
                 onClick={() => openMove('in')}
+                title="Enregistrer un arrivage ou entrée de stock"
               >
-                Entrée
+                + Entrée
               </Button>
+              <Button
+                size="sm"
+                icon={<IconArrowOut size={16} />}
+                onClick={() => openMove('out')}
+                title="Enregistrer une sortie chantier ou atelier"
+              >
+                - Sortie
+              </Button>
+            </>
+          ) : null}
+          {canManageRefs ? (
+            <>
               <Button
                 size="sm"
                 variant="secondary"
@@ -726,8 +780,66 @@ export function Stock({
         </div>
       </div>
 
-      {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2.5">
+      {/* Navigation Principale Stock : Matières vs Journal des Entrées / Sorties */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('inventory')}
+            className={cx(
+              'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all',
+              activeTab === 'inventory'
+                ? 'bg-amber text-white shadow-xs'
+                : 'bg-paper text-ink-soft hover:text-ink hover:bg-paper-2 border border-line',
+            )}
+          >
+            <IconBox size={16} />
+            <span>Matières &amp; Quincaillerie</span>
+            <span
+              className={cx(
+                'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
+                activeTab === 'inventory' ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
+              )}
+            >
+              {refs.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('journal')}
+            className={cx(
+              'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all',
+              activeTab === 'journal'
+                ? 'bg-amber text-white shadow-xs'
+                : 'bg-paper text-ink-soft hover:text-ink hover:bg-paper-2 border border-line',
+            )}
+          >
+            <Clock size={16} />
+            <span>Journal des Entrées / Sorties</span>
+            <span
+              className={cx(
+                'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
+                activeTab === 'journal' ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
+              )}
+            >
+              {movements.length}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {error ? (
+        <div>
+          <Banner tone="error">{error}</Banner>
+        </div>
+      ) : null}
+
+      {/* Tab 1: Inventaire & Tableur Pro */}
+      {activeTab === 'inventory' ? (
+        <div className="space-y-4">
+          {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2.5">
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
           <button
             type="button"
@@ -882,52 +994,8 @@ export function Stock({
         </div>
       </div>
 
-      {/* Main Tabs (Inventaire / Journal) */}
-      <div className="flex items-center gap-1 border-b border-line">
-        <button
-          onClick={() => setActiveTab('inventory')}
-          className={cx(
-            'flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition-all',
-            activeTab === 'inventory'
-              ? 'border-amber text-amber'
-              : 'border-transparent text-ink-soft hover:text-ink',
-          )}
-        >
-          <IconBox size={16} />
-          <span>Inventaire & Tableur</span>
-          <span className="rounded-full bg-paper px-2 py-0.5 text-[10px] text-ink-faint border border-line">
-            {filtered.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('journal')}
-          className={cx(
-            'flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition-all',
-            activeTab === 'journal'
-              ? 'border-amber text-amber'
-              : 'border-transparent text-ink-soft hover:text-ink',
-          )}
-        >
-          <IconHistory size={16} />
-          <span>Journal des Mouvements</span>
-          <span className="rounded-full bg-paper px-2 py-0.5 text-[10px] text-ink-faint border border-line">
-            {movements.length}
-          </span>
-        </button>
-      </div>
-
-      {error ? (
-        <div>
-          <Banner tone="error">{error}</Banner>
-        </div>
-      ) : null}
-
-      {/* Tab 1: Inventaire & Tableur Pro */}
-      {activeTab === 'inventory' ? (
-        <div className="space-y-3">
-          {/* Filters Bar */}
-          <div className="rounded-xl border border-line bg-surface p-3 shadow-xs flex flex-wrap items-center gap-2.5">
+      {/* Filters Bar */}
+      <div className="rounded-xl border border-line bg-surface p-3 shadow-xs flex flex-wrap items-center gap-2.5">
             <div className="relative min-w-52 flex-1">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
                 <IconSearch size={16} />
@@ -1220,18 +1288,25 @@ export function Stock({
                                 {canMove ? (
                                   <>
                                     <button
-                                      onClick={() => openMove('out', ref.id)}
+                                      onClick={() => openMove('out', ref)}
                                       title="Enregistrer une sortie"
-                                      className="rounded border border-line bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-line-strong active:scale-95 transition-all"
+                                      className="rounded border border-amber/30 bg-amber-wash px-2 py-1 text-[11px] font-semibold text-amber hover:bg-amber hover:text-white active:scale-95 transition-all flex items-center gap-1"
                                     >
                                       - Sortie
                                     </button>
                                     <button
-                                      onClick={() => openMove('in', ref.id)}
+                                      onClick={() => openMove('in', ref)}
                                       title="Enregistrer une entrée"
-                                      className="rounded border border-line bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-line-strong active:scale-95 transition-all"
+                                      className="rounded border border-green/30 bg-green/10 px-2 py-1 text-[11px] font-semibold text-green hover:bg-green hover:text-white active:scale-95 transition-all flex items-center gap-1"
                                     >
                                       + Entrée
+                                    </button>
+                                    <button
+                                      onClick={() => openMove('out', ref)}
+                                      title="Hub de Mouvement (Transfert, Ajustement, Sortie, Entrée)"
+                                      className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all"
+                                    >
+                                      <Zap size={13} className="text-amber" />
                                     </button>
                                   </>
                                 ) : null}
@@ -1390,20 +1465,27 @@ export function Stock({
                             </>
                           )}
                           {canMove ? (
-                            <button
-                              onClick={() => openMove('out', ref.id)}
-                              className="rounded border border-line bg-surface-2 px-2.5 py-1 text-xs font-medium text-ink-soft hover:text-ink active:scale-95"
-                            >
-                              - Sortie
-                            </button>
-                          ) : null}
-                          {canManageRefs ? (
-                            <button
-                              onClick={() => openMove('in', ref.id)}
-                              className="rounded border border-line bg-surface-2 px-2.5 py-1 text-xs font-medium text-ink-soft hover:text-ink active:scale-95"
-                            >
-                              + Entrée
-                            </button>
+                            <>
+                              <button
+                                onClick={() => openMove('out', ref)}
+                                className="rounded border border-amber/30 bg-amber-wash px-2.5 py-1 text-xs font-semibold text-amber hover:bg-amber hover:text-white active:scale-95 transition-all"
+                              >
+                                - Sortie
+                              </button>
+                              <button
+                                onClick={() => openMove('in', ref)}
+                                className="rounded border border-green/30 bg-green/10 px-2.5 py-1 text-xs font-semibold text-green hover:bg-green hover:text-white active:scale-95 transition-all"
+                              >
+                                + Entrée
+                              </button>
+                              <button
+                                onClick={() => openMove('out', ref)}
+                                className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all"
+                                title="Hub Mouvement"
+                              >
+                                <Zap size={14} className="text-amber" />
+                              </button>
+                            </>
                           ) : null}
                         </div>
                       </div>
@@ -1426,6 +1508,7 @@ export function Stock({
                 { value: '', label: 'Tous' },
                 { value: 'in', label: 'Entrées' },
                 { value: 'out', label: 'Sorties' },
+                { value: 'transfer', label: 'Transferts' },
                 { value: 'correction', label: 'Corrections' },
               ].map((opt) => (
                 <button
@@ -1504,10 +1587,17 @@ export function Stock({
                           {move.ref_name}
                         </td>
                         <td className="px-3 py-2 text-right font-mono font-bold text-ink border-r border-line tabular-nums">
-                          {move.move_type === 'out' ? `-${move.qty}` : `+${move.qty}`} {move.unit ?? 'u'}
+                          {move.move_type === 'out' || move.move_type === 'transfer' ? `-${move.qty}` : `+${move.qty}`} {move.unit ?? 'u'}
                         </td>
                         <td className="px-3 py-2 text-ink-soft border-r border-line">
-                          <div>{move.beneficiary ?? '—'}</div>
+                          {move.move_type === 'transfer' ? (
+                            <div className="font-semibold text-blue">
+                              Vers {move.target_magasin_name ?? 'autre magasin / atelier'}
+                            </div>
+                          ) : (
+                            <div>{move.beneficiary ?? '—'}</div>
+                          )}
+                          {move.doc_ref ? <div className="text-[10px] font-mono text-ink-soft">Doc: {move.doc_ref}</div> : null}
                           {move.note ? <div className="text-[10px] text-ink-faint">{move.note}</div> : null}
                         </td>
                         <td className="px-3 py-2 text-right text-ink-faint">
@@ -1617,35 +1707,45 @@ export function Stock({
 
               <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-line">
                 {canMove ? (
-                  <Button
-                    size="sm"
-                    icon={<IconArrowOut size={16} />}
-                    onClick={() => {
-                      openMove('out', selected.id);
-                    }}
-                  >
-                    Sortie
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon={<Zap size={14} />}
+                      onClick={() => openMove('out', selected)}
+                    >
+                      ⚡ Mouvement
+                    </Button>
+                    <Button
+                      size="sm"
+                      icon={<IconArrowOut size={16} />}
+                      onClick={() => openMove('out', selected)}
+                    >
+                      Sortie
+                    </Button>
+                    <Button
+                      size="sm"
+                      icon={<IconArrowIn size={16} />}
+                      onClick={() => openMove('in', selected)}
+                    >
+                      Entrée
+                    </Button>
+                    <Button
+                      size="sm"
+                      icon={<ArrowRightLeft size={14} />}
+                      onClick={() => openMove('transfer', selected)}
+                    >
+                      Transfert
+                    </Button>
+                  </>
                 ) : null}
-                {canMove && (
-                  <Button
-                    size="sm"
-                    icon={<IconArrowIn size={16} />}
-                    onClick={() => {
-                      openMove('in', selected.id);
-                    }}
-                  >
-                    Entrée
-                  </Button>
-                )}
                 {canCorrect && (
                   <Button
                     size="sm"
-                    onClick={() => {
-                      openMove('correction', selected.id);
-                    }}
+                    icon={<Scale size={14} />}
+                    onClick={() => openMove('correction', selected)}
                   >
-                    Ajuster inventaire
+                    Régulariser
                   </Button>
                 )}
                 {canEditRef && (
@@ -1866,71 +1966,332 @@ export function Stock({
         </div>
       </Modal>
 
-      {/* Modal Mouvement de Stock (In / Out / Correction) */}
+      {/* Modal Mouvement de Stock (Hub Entrée / Sortie / Transfert / Correction) */}
       <Modal
         open={moveOpen}
-        title={
-          moveForm.move_type === 'out'
-            ? 'Sortie de matériel / Quincaillerie'
-            : moveForm.move_type === 'in'
-              ? 'Entrée de marchandises'
-              : 'Ajustement d’inventaire (Correction)'
-        }
+        title="⚡ Hub de Mouvement de Stock"
         onClose={() => setMoveOpen(false)}
         footer={
           <>
             <Button onClick={() => setMoveOpen(false)}>Annuler</Button>
-            <Button variant="primary" disabled={busy || !moveForm.ref_id || Number(moveForm.qty) <= 0} onClick={() => void saveMove()}>
+            <Button
+              variant="primary"
+              disabled={
+                busy ||
+                !moveForm.ref_id ||
+                moveForm.qty === '' ||
+                (moveForm.move_type !== 'correction' && Number(moveForm.qty) <= 0) ||
+                (moveForm.move_type === 'correction' && Number(moveForm.qty) < 0) ||
+                (moveForm.move_type === 'transfer' && !moveForm.target_magasin_id)
+              }
+              onClick={() => void saveMove()}
+            >
               {busy ? <Spinner /> : 'Valider l’opération'}
             </Button>
           </>
         }
       >
-        <div className="space-y-4">
-          {formError ? <Banner tone="error">{formError}</Banner> : null}
-          <SelectField
-            label="Article concerné"
-            value={moveForm.ref_id}
-            onChange={(e) => setMoveForm((f) => ({ ...f, ref_id: e.target.value }))}
-          >
-            {refs.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name} (en rayon : {r.qty} {r.unit})
-              </option>
-            ))}
-          </SelectField>
+        {(() => {
+          const currentRef = refs.find((r) => String(r.id) === String(moveForm.ref_id)) ?? moveTargetRef;
+          const parsedQty = Number(moveForm.qty);
+          const hasQty = moveForm.qty !== '' && !isNaN(parsedQty);
+          const projectedQty = currentRef
+            ? moveForm.move_type === 'in'
+              ? currentRef.qty + (hasQty ? parsedQty : 0)
+              : moveForm.move_type === 'out' || moveForm.move_type === 'transfer'
+                ? currentRef.qty - (hasQty ? parsedQty : 0)
+                : (hasQty ? parsedQty : currentRef.qty)
+            : 0;
+          const isOverdrawn = currentRef && (moveForm.move_type === 'out' || moveForm.move_type === 'transfer') && hasQty && projectedQty < 0;
 
-          <Field
-            label={moveForm.move_type === 'correction' ? 'Nouveau stock réel compté' : 'Quantité'}
-            type="number"
-            placeholder={moveForm.move_type === 'correction' ? 'ex. 15' : '1'}
-            value={moveForm.qty}
-            onChange={(e) => setMoveForm((f) => ({ ...f, qty: e.target.value }))}
-          />
+          return (
+            <div className="space-y-4">
+              {formError ? <Banner tone="error">{formError}</Banner> : null}
 
-          {moveForm.move_type === 'out' ? (
-            <Field
-              label="Bénéficiaire / Chantier"
-              value={moveForm.beneficiary}
-              onChange={(e) => setMoveForm((f) => ({ ...f, beneficiary: e.target.value }))}
-              placeholder="ex. Frère Économe / Portes réfectoire"
-            />
-          ) : null}
+              {/* Mode Selector : 4 Actions */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
+                <button
+                  type="button"
+                  onClick={() => setMoveForm((f) => ({ ...f, move_type: 'out' }))}
+                  className={cx(
+                    'flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all',
+                    moveForm.move_type === 'out'
+                      ? 'bg-amber text-white shadow-xs'
+                      : 'text-ink-soft hover:text-ink hover:bg-paper',
+                  )}
+                >
+                  <ArrowUpRight size={14} />
+                  <span>Sortie Chantier</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMoveForm((f) => ({ ...f, move_type: 'in' }))}
+                  className={cx(
+                    'flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all',
+                    moveForm.move_type === 'in'
+                      ? 'bg-green text-white shadow-xs'
+                      : 'text-ink-soft hover:text-ink hover:bg-paper',
+                  )}
+                >
+                  <ArrowDownLeft size={14} />
+                  <span>Arrivage / Entrée</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMoveForm((f) => ({ ...f, move_type: 'transfer' }))}
+                  className={cx(
+                    'flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all',
+                    moveForm.move_type === 'transfer'
+                      ? 'bg-blue text-white shadow-xs'
+                      : 'text-ink-soft hover:text-ink hover:bg-paper',
+                  )}
+                >
+                  <ArrowRightLeft size={14} />
+                  <span>Transfert Dépôt</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMoveForm((f) => ({ ...f, move_type: 'correction' }))}
+                  className={cx(
+                    'flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all',
+                    moveForm.move_type === 'correction'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-ink-soft hover:text-ink hover:bg-paper',
+                  )}
+                >
+                  <Scale size={14} />
+                  <span>Régularisation</span>
+                </button>
+              </div>
 
-          <Field
-            label="N° bon / Référence document (optionnel)"
-            value={moveForm.doc_ref}
-            onChange={(e) => setMoveForm((f) => ({ ...f, doc_ref: e.target.value }))}
-            placeholder="ex. Facture FAC-2024-88"
-          />
+              {/* Target Reference Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-ink">Article concerné</label>
+                <SelectField
+                  label=""
+                  value={moveForm.ref_id}
+                  onChange={(e) => {
+                    const found = refs.find((r) => String(r.id) === e.target.value) ?? null;
+                    setMoveTargetRef(found);
+                    setMoveForm((f) => ({ ...f, ref_id: e.target.value }));
+                  }}
+                >
+                  {refs.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name} (Stock actuel : {r.qty} {r.unit})
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
 
-          <TextArea
-            label="Motif / Observations"
-            value={moveForm.note}
-            onChange={(e) => setMoveForm((f) => ({ ...f, note: e.target.value }))}
-            placeholder="Précisions utiles sur le mouvement…"
-          />
-        </div>
+              {/* Reference Info Badge */}
+              {currentRef ? (
+                <div className="flex items-center justify-between rounded-xl border border-line bg-paper p-3 text-xs">
+                  <div className="flex items-center gap-3">
+                    {currentRef.photo_path ? (
+                      <img
+                        src={currentRef.photo_path}
+                        alt={currentRef.name}
+                        className="h-10 w-10 rounded-lg object-cover border border-line shadow-2xs"
+                      />
+                    ) : (
+                      <span className="grid h-10 w-10 place-items-center rounded-lg bg-surface border border-line text-ink-faint">
+                        <IconBox size={18} />
+                      </span>
+                    )}
+                    <div>
+                      <div className="font-bold text-ink">{currentRef.name}</div>
+                      <div className="text-[11px] text-ink-faint">
+                        {currentRef.category} · {currentRef.magasin_name ?? 'Sans magasin'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="block text-[10px] uppercase tracking-wider text-ink-faint font-semibold">En Rayon</span>
+                    <span className="text-base font-bold text-ink tabular-nums">
+                      {currentRef.qty} <span className="text-xs font-normal text-ink-soft">{currentRef.unit}</span>
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Quantity Stepper & Projected Stock */}
+              <div className="rounded-xl border border-line bg-surface p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-ink">
+                    {moveForm.move_type === 'correction'
+                      ? 'Nouveau stock réel physique compté'
+                      : moveForm.move_type === 'out'
+                        ? 'Quantité à sortir'
+                        : moveForm.move_type === 'transfer'
+                          ? 'Quantité à transférer'
+                          : 'Quantité reçue / entrée'}
+                  </label>
+                  {currentRef && (
+                    <span className="text-[11px] font-semibold text-ink-soft">
+                      Unité : <strong className="text-ink">{currentRef.unit || 'unités'}</strong>
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = Number(moveForm.qty) || 0;
+                      const next = moveForm.move_type === 'correction' ? Math.max(0, cur - 1) : Math.max(1, cur - 1);
+                      setMoveForm((f) => ({ ...f, qty: String(next) }));
+                    }}
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-paper text-ink hover:bg-paper-2 active:scale-95 transition-all"
+                  >
+                    <Minus size={16} />
+                  </button>
+
+                  <input
+                    type="number"
+                    min={moveForm.move_type === 'correction' ? '0' : '1'}
+                    value={moveForm.qty}
+                    onChange={(e) => setMoveForm((f) => ({ ...f, qty: e.target.value }))}
+                    placeholder={
+                      moveForm.move_type === 'correction'
+                        ? (currentRef ? `Actuel : ${currentRef.qty}` : 'ex. 15')
+                        : 'ex. 5'
+                    }
+                    className="h-10 flex-1 rounded-xl border border-line bg-paper px-3 text-center text-sm font-bold text-ink tabular-nums focus:border-amber focus:outline-none"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = Number(moveForm.qty) || 0;
+                      setMoveForm((f) => ({ ...f, qty: String(cur + 1) }));
+                    }}
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-paper text-ink hover:bg-paper-2 active:scale-95 transition-all"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+
+                {/* Quick Addition Chips */}
+                {moveForm.move_type !== 'correction' && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] text-ink-faint font-medium mr-1">Ajout rapide:</span>
+                    {[1, 5, 10, 25, 50, 100].map((step) => (
+                      <button
+                        key={step}
+                        type="button"
+                        onClick={() => {
+                          const cur = Number(moveForm.qty) || 0;
+                          setMoveForm((f) => ({ ...f, qty: String(cur + step) }));
+                        }}
+                        className="rounded-lg border border-line bg-paper px-2 py-0.5 text-[11px] font-semibold text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all"
+                      >
+                        +{step}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Projected Stock Display */}
+                {currentRef && hasQty && (
+                  <div
+                    className={cx(
+                      'flex items-center justify-between rounded-lg p-2.5 text-xs border font-medium transition-colors',
+                      isOverdrawn
+                        ? 'border-red/40 bg-red-500/10 text-red'
+                        : 'border-line/70 bg-paper text-ink',
+                    )}
+                  >
+                    <span>
+                      {isOverdrawn
+                        ? '⚠️ Stock insuffisant en rayon !'
+                        : 'Stock projeté après opération :'}
+                    </span>
+                    <span className="font-bold tabular-nums">
+                      {currentRef.qty} →{' '}
+                      <span className={isOverdrawn ? 'text-red font-black' : 'text-green'}>
+                        {projectedQty} {currentRef.unit}
+                      </span>
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Contextual Fields: Out (Beneficiary / Site) */}
+              {moveForm.move_type === 'out' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ink">Bénéficiaire / Chantier / Atelier</label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <SelectField
+                      label=""
+                      value={employees.some((e) => e.full_name === moveForm.beneficiary) ? moveForm.beneficiary : ''}
+                      onChange={(e) => setMoveForm((f) => ({ ...f, beneficiary: e.target.value }))}
+                    >
+                      <option value="">— Ouvrier / Agent —</option>
+                      {employees.map((e) => (
+                        <option key={e.id} value={e.full_name}>
+                          {e.full_name} ({e.job_title || 'Atelier'})
+                        </option>
+                      ))}
+                    </SelectField>
+                    <input
+                      type="text"
+                      placeholder="Ou saisir chantier / atelier..."
+                      value={moveForm.beneficiary}
+                      onChange={(e) => setMoveForm((f) => ({ ...f, beneficiary: e.target.value }))}
+                      className="h-10 rounded-xl border border-line bg-paper px-3 text-xs text-ink focus:border-amber focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Contextual Fields: Transfer (Target Warehouse) */}
+              {moveForm.move_type === 'transfer' && (
+                <SelectField
+                  label="Magasin / Atelier de destination"
+                  value={moveForm.target_magasin_id}
+                  onChange={(e) => setMoveForm((f) => ({ ...f, target_magasin_id: e.target.value }))}
+                  required
+                >
+                  <option value="">— Choisir le magasin destinataire —</option>
+                  {magasins
+                    .filter((m) => m.id !== currentRef?.magasin_id)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                </SelectField>
+              )}
+
+              {/* Contextual Fields: In (Supplier / Receipt) */}
+              {moveForm.move_type === 'in' && (
+                <Field
+                  label="Fournisseur / Provenance"
+                  value={moveForm.beneficiary}
+                  onChange={(e) => setMoveForm((f) => ({ ...f, beneficiary: e.target.value }))}
+                  placeholder={currentRef?.supplier ? `ex. ${currentRef.supplier}` : 'ex. Quincaillerie Centrale, Spax...'}
+                />
+              )}
+
+              {/* Common Fields : Document Reference */}
+              <Field
+                label="N° bon / Référence document (optionnel)"
+                value={moveForm.doc_ref}
+                onChange={(e) => setMoveForm((f) => ({ ...f, doc_ref: e.target.value }))}
+                placeholder="ex. Facture FAC-2024-88, Bon de livraison BL-042..."
+              />
+
+              {/* Common Fields : Note / Observations */}
+              <TextArea
+                label="Motif / Observations"
+                value={moveForm.note}
+                onChange={(e) => setMoveForm((f) => ({ ...f, note: e.target.value }))}
+                placeholder="Observations ou détails sur le mouvement…"
+              />
+            </div>
+          );
+        })()}
       </Modal>
 
       {/* Modal Photo Quincaillerie & Matériels (Caméra / Galerie / Même Groupe) */}

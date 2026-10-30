@@ -339,6 +339,11 @@ ALTER TABLE loans ADD COLUMN IF NOT EXISTS qty int NOT NULL DEFAULT 1;
 ALTER TABLE loans ADD COLUMN IF NOT EXISTS returned_qty int NOT NULL DEFAULT 0;
 ALTER TABLE tool_events ADD COLUMN IF NOT EXISTS qty int NOT NULL DEFAULT 1;
 CREATE INDEX IF NOT EXISTS loans_tool_active_idx ON loans(tool_id, status);
+
+-- Migration 009: Extension mouvements de stock (transfert inter-magasins, traçabilité renforcée)
+ALTER TABLE stock_movements DROP CONSTRAINT IF EXISTS stock_movements_move_type_check;
+ALTER TABLE stock_movements ADD CONSTRAINT stock_movements_move_type_check CHECK (move_type IN ('in','out','correction','transfer'));
+ALTER TABLE stock_movements ADD COLUMN IF NOT EXISTS target_magasin_id text REFERENCES magasins(id);
 `;
 
-export const MIGRATION_NAME = '008_tool_reference_quantities_and_movements';
+export const MIGRATION_NAME = '009_stock_movements_extension';

@@ -40,9 +40,10 @@ const patchRefBody = z.object({
 
 const movementBody = z.object({
   ref_id: z.coerce.number().int().positive(),
-  move_type: z.enum(['in', 'out', 'correction']),
-  qty: z.number().refine((v) => v !== 0, 'Quantité non nulle attendue.'),
+  move_type: z.enum(['in', 'out', 'correction', 'transfer']),
+  qty: z.coerce.number().refine((v) => v !== 0, 'Quantité non nulle attendue.'),
   beneficiary: z.string().optional(),
+  target_magasin_id: z.string().optional(),
   doc_ref: z.string().optional(),
   note: z.string().optional(),
 });
@@ -55,6 +56,9 @@ type StockRefRow = {
   location: string;
   min_qty: string;
   supplier: string | null;
+  brand: string | null;
+  unit_cost: string | null;
+  photo_path: string | null;
   initial_qty: string;
 };
 
@@ -64,7 +68,9 @@ async function refQty(refId: number): Promise<number> {
        FROM stock_refs r
        LEFT JOIN (
          SELECT ref_id,
-                sum(CASE WHEN move_type IN ('in', 'correction') THEN qty ELSE -qty END) AS qty
+                sum(CASE WHEN move_type = 'in' THEN qty
+                         WHEN move_type IN ('out', 'transfer') THEN -qty
+                         WHEN move_type = 'correction' THEN qty END) AS qty
            FROM stock_movements
           GROUP BY ref_id
        ) m ON m.ref_id = r.id
@@ -87,7 +93,7 @@ stockRoutes.get('/refs', requirePerm('stock.view'), async (c) => {
             (
               r.initial_qty + COALESCE(
                 (SELECT sum(CASE WHEN sm.move_type = 'in' THEN sm.qty
-                                 WHEN sm.move_type = 'out' THEN -sm.qty
+                                 WHEN sm.move_type IN ('out', 'transfer') THEN -sm.qty
                                  WHEN sm.move_type = 'correction' THEN sm.qty END)
                    FROM stock_movements sm
                   WHERE sm.ref_id = r.id), 0
@@ -126,12 +132,17 @@ stockRoutes.get('/movements', requirePerm('stock.view'), async (c) => {
   if (moveType) { params.push(moveType); where.push(`m.move_type = $${params.length}`); }
   if (from) { params.push(from); where.push(`m.created_at::date >= $${params.length}`); }
   if (to) { params.push(to); where.push(`m.created_at::date <= $${params.length}`); }
-  if (q) { params.push(`%${q.toLowerCase()}%`); where.push(`(lower(r.name) LIKE $${params.length} OR lower(coalesce(m.beneficiary,'')) LIKE $${params.length} OR lower(coalesce(m.actor,'')) LIKE $${params.length})`); }
+  if (q) {
+    params.push(`%${q.toLowerCase()}%`);
+    where.push(`(lower(r.name) LIKE $${params.length} OR lower(coalesce(m.beneficiary,'')) LIKE $${params.length} OR lower(coalesce(m.actor,'')) LIKE $${params.length} OR lower(coalesce(m.doc_ref,'')) LIKE $${params.length})`);
+  }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const movements = await getDb().query(
-    `SELECT m.*, r.name AS ref_name, r.unit
+    `SELECT m.*, r.name AS ref_name, r.unit,
+            tm.name AS target_magasin_name
        FROM stock_movements m
        JOIN stock_refs r ON r.id = m.ref_id
+       LEFT JOIN magasins tm ON tm.id = m.target_magasin_id
        ${whereSql}
       ORDER BY m.created_at DESC
       LIMIT 200`,
@@ -286,14 +297,20 @@ stockRoutes.post(
     if (data.move_type === 'correction' && role !== 'magasinier' && role !== 'direction') {
       return c.json({ error: 'Seul le magasinier ou la direction peut corriger le stock.' }, 403);
     }
+    if (data.move_type === 'transfer' && role !== 'magasinier' && role !== 'direction') {
+      return c.json({ error: 'Seul le magasinier ou la direction peut effectuer un transfert inter-dépôts.' }, 403);
+    }
     if (data.move_type !== 'out' && role === 'chef_atelier') {
       return c.json({ error: 'Le chef d’atelier ne peut enregistrer qu’une sortie de matériel.' }, 403);
     }
     if (data.move_type === 'correction' && !data.note?.trim()) {
-      return c.json({ error: 'Le motif est obligatoire pour une correction (CDC stock).' }, 400);
+      return c.json({ error: 'Le motif est obligatoire pour une régularisation d’inventaire.' }, 400);
     }
     if (data.move_type === 'out' && !data.beneficiary?.trim()) {
-      return c.json({ error: 'Le bénéficiaire est obligatoire pour une sortie.' }, 400);
+      return c.json({ error: 'Le bénéficiaire ou chantier est obligatoire pour une sortie.' }, 400);
+    }
+    if (data.move_type === 'transfer' && !data.target_magasin_id?.trim()) {
+      return c.json({ error: 'Le magasin de destination est obligatoire pour un transfert.' }, 400);
     }
 
     const db = getDb();
@@ -301,24 +318,103 @@ stockRoutes.post(
     if (!ref) return c.json({ error: 'Référence introuvable.' }, 404);
 
     const current = await refQty(data.ref_id);
-    const next = data.move_type === 'out' ? current - data.qty : current + data.qty;
-    if (next < 0) {
-      return c.json(
-        { error: `Stock insuffisant : ${current} ${ref.unit} disponibles, ${data.qty} ${ref.unit} demandés.` },
-        409,
+
+    let next = current;
+    let storedQty = data.qty;
+    let note = data.note?.trim() || null;
+    let beneficiary = data.beneficiary?.trim() || null;
+
+    if (data.move_type === 'out') {
+      next = current - data.qty;
+      if (next < 0) {
+        return c.json(
+          { error: `Stock insuffisant : ${current} ${ref.unit} disponibles, ${data.qty} ${ref.unit} demandés.` },
+          409,
+        );
+      }
+    } else if (data.move_type === 'in') {
+      next = current + data.qty;
+    } else if (data.move_type === 'transfer') {
+      next = current - data.qty;
+      if (next < 0) {
+        return c.json(
+          { error: `Stock insuffisant pour transfert : ${current} ${ref.unit} disponibles, ${data.qty} demandés.` },
+          409,
+        );
+      }
+      const targetMag = await db.one<{ id: string; name: string }>('SELECT id, name FROM magasins WHERE id = $1', [data.target_magasin_id]);
+      if (!targetMag) return c.json({ error: 'Magasin destinataire introuvable.' }, 404);
+      beneficiary = `Transfert vers ${targetMag.name}`;
+
+      // Réception dans le magasin cible
+      const existingInTarget = await db.one<StockRefRow>(
+        'SELECT * FROM stock_refs WHERE lower(name) = lower($1) AND magasin_id = $2',
+        [ref.name, data.target_magasin_id],
       );
+      if (existingInTarget) {
+        await db.query(
+          `INSERT INTO stock_movements (ref_id, move_type, qty, beneficiary, doc_ref, note, actor)
+           VALUES ($1, 'in', $2, $3, $4, $5, $6)`,
+          [
+            existingInTarget.id,
+            data.qty,
+            'Transfert entrant',
+            data.doc_ref?.trim() || null,
+            `Reçu par transfert depuis ${ref.location || 'quincaillerie'}`,
+            actorName(c),
+          ],
+        );
+      } else {
+        const createdTarget = await db.one<StockRefRow>(
+          `INSERT INTO stock_refs (name, category, unit, location, magasin_id, min_qty, supplier, brand, unit_cost, photo_path, initial_qty)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0) RETURNING *`,
+          [
+            ref.name,
+            ref.category,
+            ref.unit,
+            targetMag.name,
+            data.target_magasin_id,
+            Number(ref.min_qty || 0),
+            ref.supplier,
+            ref.brand,
+            ref.unit_cost,
+            ref.photo_path,
+          ],
+        );
+        if (createdTarget) {
+          await db.query(
+            `INSERT INTO stock_movements (ref_id, move_type, qty, beneficiary, doc_ref, note, actor)
+             VALUES ($1, 'in', $2, $3, $4, $5, $6)`,
+            [
+              createdTarget.id,
+              data.qty,
+              'Transfert entrant',
+              data.doc_ref?.trim() || null,
+              `Création de fiche suite au transfert reçu depuis ${ref.location || 'quincaillerie'}`,
+              actorName(c),
+            ],
+          );
+        }
+      }
+    } else if (data.move_type === 'correction') {
+      // data.qty est le nouveau stock réel compté physiquement
+      const delta = data.qty - current;
+      storedQty = delta;
+      next = data.qty;
+      note = `Inventaire physique : ${current} → ${data.qty} (écart : ${delta > 0 ? '+' : ''}${delta})${data.note ? ' · ' + data.note.trim() : ''}`;
     }
 
     const movement = await db.one(
-      `INSERT INTO stock_movements (ref_id, move_type, qty, beneficiary, doc_ref, note, actor)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      `INSERT INTO stock_movements (ref_id, move_type, qty, beneficiary, target_magasin_id, doc_ref, note, actor)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [
         data.ref_id,
         data.move_type,
-        data.qty,
-        data.beneficiary?.trim() || null,
+        storedQty,
+        beneficiary,
+        data.target_magasin_id?.trim() || null,
         data.doc_ref?.trim() || null,
-        data.note?.trim() || null,
+        note,
         actorName(c),
       ],
     );
@@ -326,10 +422,10 @@ stockRoutes.post(
       entity: 'stock_movement',
       entityId: String(movement?.id ?? ''),
       action: data.move_type,
-      after: { ref_id: data.ref_id, qty: data.qty, next, beneficiary: data.beneficiary, note: data.note },
+      after: { ref_id: data.ref_id, qty: storedQty, next, beneficiary, note },
       actorId: actorId(c),
       actorName: actorName(c),
-      reason: data.note?.trim() || null,
+      reason: note,
     });
     return c.json({ movement, qty: next }, 201);
   },

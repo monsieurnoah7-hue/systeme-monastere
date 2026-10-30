@@ -43,12 +43,14 @@ export const MOVE_LABEL: Record<string, string> = {
   in: 'Entrée',
   out: 'Sortie',
   correction: 'Correction',
+  transfer: 'Transfert',
 };
 
-export const MOVE_TONE: Record<string, 'green' | 'red' | 'amber'> = {
+export const MOVE_TONE: Record<string, 'green' | 'red' | 'amber' | 'blue'> = {
   in: 'green',
   out: 'red',
   correction: 'amber',
+  transfer: 'blue',
 };
 
 export const WORKDAY_LABEL: Record<number, string> = {

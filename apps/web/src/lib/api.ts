@@ -400,9 +400,11 @@ export type StockRef = {
 export type StockMovement = {
   id: number;
   ref_id: number;
-  move_type: 'in' | 'out' | 'correction';
+  move_type: 'in' | 'out' | 'correction' | 'transfer';
   qty: number;
   beneficiary: string | null;
+  target_magasin_id?: string | null;
+  target_magasin_name?: string | null;
   doc_ref: string | null;
   note: string | null;
   actor: string;

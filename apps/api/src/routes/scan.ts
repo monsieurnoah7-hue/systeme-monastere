@@ -68,7 +68,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
       `SELECT r.*, (r.initial_qty + COALESCE(m.qty, 0))::text AS qty
          FROM stock_refs r
          LEFT JOIN (
-           SELECT ref_id, sum(CASE WHEN move_type = 'in' THEN qty WHEN move_type = 'out' THEN -qty WHEN move_type = 'correction' THEN qty END) AS qty
+           SELECT ref_id, sum(CASE WHEN move_type = 'in' THEN qty WHEN move_type IN ('out', 'transfer') THEN -qty WHEN move_type = 'correction' THEN qty END) AS qty
              FROM stock_movements GROUP BY ref_id
          ) m ON m.ref_id = r.id
         WHERE r.id = $1`,
