@@ -669,10 +669,14 @@ export async function syncOfficialCftmData(db: Sql): Promise<void> {
   }
 
   // 6. Synchroniser les Kits d'Établis officiels, leurs outils et traçabilité de dotation
-  const activeKitIds = CFTM_KITS.map((k) => `KIT-${k.code}-${String(k.etabli_num).padStart(2, '0')}`);
-  if (activeKitIds.length > 0) {
-    const placeholders = activeKitIds.map((_, i) => `$${i + 1}`).join(', ');
-    await db.query(`DELETE FROM etabli_kits WHERE id NOT IN (${placeholders})`, activeKitIds);
+  try {
+    const activeKitIds = CFTM_KITS.map((k) => `KIT-${k.code}-${String(k.etabli_num).padStart(2, '0')}`);
+    if (activeKitIds.length > 0) {
+      const placeholders = activeKitIds.map((_, i) => `$${i + 1}`).join(', ');
+      await db.query(`DELETE FROM etabli_kits WHERE id NOT IN (${placeholders})`, activeKitIds);
+    }
+  } catch {
+    // Si la table n'existe pas encore
   }
 
   for (const kit of CFTM_KITS) {
