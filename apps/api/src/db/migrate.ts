@@ -1,6 +1,7 @@
 import { env } from '../env.js';
 import { DDL, MIGRATION_DDL, MIGRATION_NAME } from './ddl.js';
 import { getDb } from './index.js';
+import { syncOfficialCftmData } from './cftm-data.js';
 
 // Un seul aller-retour par lot : verrou conseil inclus dans la même
 // requête multi-énoncés → transaction implicite unique, les cold starts
@@ -35,6 +36,7 @@ export async function migrate(): Promise<void> {
   await runSql(DDL);
   await runSql(MIGRATION_DDL);
   await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [MIGRATION_NAME]);
+  await syncOfficialCftmData(getDb());
 }
 
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {
