@@ -11,6 +11,7 @@ import {
   SegmentedControl,
   Skeleton,
   StatCard,
+  cx,
 } from '../components/ui';
 import {
   IconAlert,
@@ -512,26 +513,33 @@ export function Espace({
             <EmptyState icon={<IconHistory size={24} />} title="Aucun pointage récent" />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm table-rhythm">
                 <thead>
                   <tr className="border-b border-line bg-surface-2/60 text-left text-xs uppercase tracking-wider text-ink-faint">
-                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3 col-lead">Date</th>
                     <th className="px-4 py-3">Arrivée</th>
                     <th className="px-4 py-3">Début Pause</th>
                     <th className="px-4 py-3">Reprise Pause</th>
                     <th className="px-4 py-3">Départ</th>
-                    <th className="px-4 py-3">Statut</th>
+                    <th className="px-4 py-3 text-right">Statut</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {historyRows.map((h) => (
-                    <tr key={h.date} className="hover:bg-surface-2/50 transition-colors">
-                      <td className="px-4 py-3 font-semibold text-ink">{formatDate(h.date)}</td>
+                  {historyRows.map((h, idx) => (
+                    <tr
+                      key={h.date}
+                      className={cx(
+                        'transition-colors',
+                        idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                        'hover:bg-amber-wash/20',
+                      )}
+                    >
+                      <td className="px-4 py-3 font-semibold text-ink col-lead">{formatDate(h.date)}</td>
                       <td className="px-4 py-3 font-mono font-medium text-ink">{h.in_at ?? '-'}</td>
                       <td className="px-4 py-3 font-mono text-ink-soft">{h.break_in ?? '-'}</td>
                       <td className="px-4 py-3 font-mono text-ink-soft">{h.break_out ?? '-'}</td>
                       <td className="px-4 py-3 font-mono font-medium text-ink">{h.out_at ?? '-'}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-right">
                         {h.late_minutes > 0 ? (
                           <Chip tone="amber">Retard {h.late_minutes} min</Chip>
                         ) : h.in_at ? (

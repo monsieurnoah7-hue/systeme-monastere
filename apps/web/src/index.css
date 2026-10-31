@@ -169,6 +169,41 @@
   user-select: none;
 }
 
+/* =========================================================================
+   Ergonomie Cognitive Google Material 3 : Rythme Visuel Lignes & Colonnes
+   ========================================================================= */
+
+/* Alternance de densité chromatique (Zebra Striping adaptatif) */
+.table-rhythm tbody tr:nth-child(odd) {
+  background-color: rgba(22, 25, 34, 0.95); /* Assise sombre profonde */
+}
+
+.table-rhythm tbody tr:nth-child(even) {
+  background-color: rgba(28, 33, 44, 0.45); /* Échelon de contraste doux (+4% luminance) */
+}
+
+.table-rhythm tbody tr {
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.table-rhythm tbody tr:hover {
+  background-color: rgba(255, 85, 0, 0.09) !important; /* Focalisation ambrée sans éblouissement */
+}
+
+/* Colonnes à contraste ergonomique */
+.col-lead {
+  background-color: rgba(12, 14, 18, 0.25); /* Ancrage visuel pour la lecture en F */
+}
+
+.col-actions {
+  background-color: rgba(12, 14, 18, 0.18); /* Atténuation périphérique pour éviter le bruit */
+}
+
+.table-rhythm tbody tr:hover .col-lead,
+.table-rhythm tbody tr:hover .col-actions {
+  background-color: transparent; /* Fluidité unifiée au survol */
+}
+
 @utility scroll-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--color-line-strong) transparent;

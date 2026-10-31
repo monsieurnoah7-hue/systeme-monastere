@@ -975,22 +975,29 @@ function DrawerContentDetail({
     if (data.das04.detail.length === 0) return <EmptyState title="Aucun travailleur actif" />;
     return (
       <div className="overflow-hidden rounded-lg border border-line">
-        <table className="w-full text-left">
+        <table className="w-full text-left table-rhythm">
           <thead className="border-b border-line bg-paper-2 text-[11px] uppercase font-semibold text-ink-faint">
             <tr>
-              <th className="px-3 py-2">Travailleur</th>
+              <th className="px-3 py-2 col-lead">Travailleur</th>
               <th className="px-3 py-2">Arrivée</th>
               <th className="px-3 py-2">Départ</th>
-              <th className="px-3 py-2">Statut</th>
+              <th className="px-3 py-2 text-right">Statut</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line text-xs">
-            {data.das04.detail.map((row) => (
-              <tr key={row.id} className="hover:bg-paper-2/40">
-                <td className="px-3 py-2.5 font-medium text-ink">{row.fullName}</td>
+            {data.das04.detail.map((row, idx) => (
+              <tr
+                key={row.id}
+                className={cx(
+                  'transition-colors',
+                  idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                  'hover:bg-amber-wash/20',
+                )}
+              >
+                <td className="px-3 py-2.5 font-medium text-ink col-lead">{row.fullName}</td>
                 <td className="px-3 py-2.5 font-mono tabular-nums">{row.inAt ?? '—'}</td>
                 <td className="px-3 py-2.5 font-mono tabular-nums">{row.outAt ?? 'En poste'}</td>
-                <td className="px-3 py-2.5">
+                <td className="px-3 py-2.5 text-right">
                   <Chip tone={row.status === 'late' ? 'amber' : row.status === 'absent' ? 'grey' : 'green'}>
                     {row.status === 'late' ? `Retard ${row.lateMinutes}m` : row.status === 'absent' ? 'Absent' : 'Présent'}
                   </Chip>

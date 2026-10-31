@@ -925,15 +925,15 @@ export function Employees({
           <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
             {/* Desktop & Tablet Tableur */}
             <div className="hidden sm:block overflow-x-auto scroll-thin">
-              <table className="w-full text-left border-collapse text-xs">
+              <table className="w-full text-left border-collapse text-xs table-rhythm">
                 <thead>
                   <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                    <th className="px-2.5 py-2.5 w-12 border-r border-line text-center">Photo</th>
-                    <th className="px-3 py-2.5 min-w-44 border-r border-line">Identité &amp; Métier</th>
+                    <th className="px-2.5 py-2.5 w-12 border-r border-line text-center col-lead">Photo</th>
+                    <th className="px-3 py-2.5 min-w-44 border-r border-line col-lead">Identité &amp; Métier</th>
                     <th className="px-3 py-2.5 min-w-32 border-r border-line text-center">État d’aujourd’hui</th>
                     <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">Badge QR</th>
                     <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">Statut</th>
-                    <th className="px-3 py-2.5 min-w-48 text-right">Actions rapides</th>
+                    <th className="px-3 py-2.5 min-w-48 text-right col-actions">Actions rapides</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -944,15 +944,19 @@ export function Employees({
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((employee) => (
+                    filtered.map((employee, idx) => (
                       <tr
                         key={employee.id}
                         onClick={() => setDetailFor(employee)}
-                        className="hover:bg-surface-2/60 cursor-pointer transition-colors group"
+                        className={cx(
+                          'cursor-pointer transition-colors group',
+                          idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                          'hover:bg-amber-wash/20',
+                        )}
                       >
-                        {/* Photo Thumbnail */}
+                        {/* Photo Thumbnail (Pilier Ancrage 1) */}
                         <td
-                          className="px-2 py-1.5 text-center border-r border-line"
+                          className="px-2 py-1.5 text-center border-r border-line col-lead"
                           onClick={(e) => {
                             if (canPhoto) {
                               e.stopPropagation();
@@ -977,43 +981,45 @@ export function Employees({
                           </span>
                         </td>
 
-                        {/* Name & Title */}
-                        <td className="px-3 py-2 border-r border-line">
+                        {/* Name & Title (Pilier Ancrage 2) */}
+                        <td className="px-3 py-2 border-r border-line col-lead">
                           <div className="font-semibold text-ink text-xs">{employee.full_name}</div>
                           <div className="text-[11px] text-ink-soft">
                             {employee.job_title} · <span className="font-mono text-ink-faint">{employee.id}</span>
                           </div>
                         </td>
 
-                        {/* Today Attendance */}
+                        {/* Today Attendance (Colonne Donnée 1) */}
                         <td className="px-3 py-2 border-r border-line text-center">
                           {dayChip(employee)}
                         </td>
 
-                        {/* QR Badge */}
-                        <td className="px-3 py-2 border-r border-line text-center font-mono text-xs font-semibold text-ink tabular-nums">
-                          {employee.badge_token ?? '—'}
+                        {/* QR Badge (Colonne Donnée 2 - Format Métrique Capsule) */}
+                        <td className="px-3 py-2 border-r border-line text-center">
+                          <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-paper-2 border border-line text-slate-200 tabular-nums shadow-2xs">
+                            {employee.badge_token ?? '—'}
+                          </span>
                         </td>
 
-                        {/* Status */}
+                        {/* Status (Colonne Donnée 3 - Badge Haute Visibilité) */}
                         <td className="px-3 py-2 border-r border-line text-center">
                           <span
                             className={cx(
-                              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border',
+                              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold border tracking-wider uppercase shadow-2xs',
                               employee.active
-                                ? 'border-green/20 bg-green-wash text-green'
+                                ? 'border-green/30 bg-green-wash text-green'
                                 : 'border-line bg-grey-wash text-ink-faint',
                             )}
                           >
-                            <span className={cx('h-1.5 w-1.5 rounded-full', employee.active ? 'bg-green' : 'bg-ink-faint')} />
+                            <span className={cx('h-1.5 w-1.5 rounded-full', employee.active ? 'bg-green animate-pulse' : 'bg-ink-faint')} />
                             {employee.active ? 'Actif' : 'Inactif'}
                           </span>
                         </td>
 
-                        {/* Quick Actions */}
-                        <td className="px-3 py-1.5 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
-                            <Button size="sm" variant="ghost" onClick={() => setDetailFor(employee)}>
+                        {/* Quick Actions (Colonne Clôture) */}
+                        <td className="px-3 py-1.5 text-right col-actions" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button size="sm" variant="secondary" className="text-xs font-bold border border-line shadow-xs hover:border-amber" onClick={() => setDetailFor(employee)}>
                               Détail
                             </Button>
                             {(canEdit || canPrintBadge) && (
@@ -1349,10 +1355,10 @@ export function Employees({
                     <p className="text-xs text-ink-soft">Aucun pointage enregistré.</p>
                   ) : (
                     <div className="overflow-hidden rounded-xl border border-line bg-surface">
-                      <table className="w-full text-left sheet-grid text-xs">
+                      <table className="w-full text-left sheet-grid text-xs table-rhythm">
                         <thead>
                           <tr>
-                            <th className="sheet-th">Date</th>
+                            <th className="sheet-th col-lead">Date</th>
                             <th className="sheet-th text-center">Arrivée</th>
                             <th className="sheet-th text-center">Pause</th>
                             <th className="sheet-th text-center">Départ</th>
@@ -1360,9 +1366,16 @@ export function Employees({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-line">
-                          {detail.history.map((row) => (
-                            <tr key={row.date} className="hover:bg-paper-2/40">
-                              <td className="sheet-cell font-mono tabular-nums">{row.date}</td>
+                          {detail.history.map((row, idx) => (
+                            <tr
+                              key={row.date}
+                              className={cx(
+                                'transition-colors',
+                                idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                                'hover:bg-amber-wash/20',
+                              )}
+                            >
+                              <td className="sheet-cell font-mono tabular-nums col-lead font-semibold">{row.date}</td>
                               <td className="sheet-cell text-center font-mono tabular-nums text-green font-semibold">
                                 {row.inAt ?? '—'}
                               </td>

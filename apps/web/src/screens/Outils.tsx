@@ -992,22 +992,29 @@ export function Outils({
           ) : (
             <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-xs table-rhythm">
                   <thead>
                     <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                      <th className="px-3 py-2.5 min-w-28 border-r border-line">Réf. Outil</th>
-                      <th className="px-3 py-2.5 min-w-44 border-r border-line">Désignation Matériel</th>
+                      <th className="px-3 py-2.5 min-w-28 border-r border-line col-lead">Réf. Outil</th>
+                      <th className="px-3 py-2.5 min-w-44 border-r border-line col-lead">Désignation Matériel</th>
                       <th className="px-3 py-2.5 min-w-36 border-r border-line">Travailleur Emprunteur</th>
                       <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Quantité Prêtée</th>
                       <th className="px-3 py-2.5 min-w-32 border-r border-line">Date de Sortie</th>
                       <th className="px-3 py-2.5 min-w-44 border-r border-line">Motif / Chantier</th>
                       <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État Sortie</th>
-                      <th className="px-3 py-2.5 min-w-44 text-right">Actions</th>
+                      <th className="px-3 py-2.5 min-w-44 text-right col-actions">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {filteredActiveLoans.map((loan) => (
-                      <tr key={loan.id} className="hover:bg-paper-2/40 transition-colors">
+                    {filteredActiveLoans.map((loan, idx) => (
+                      <tr
+                        key={loan.id}
+                        className={cx(
+                          'transition-colors',
+                          idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                          'hover:bg-amber-wash/20',
+                        )}
+                      >
                         <td className="px-3 py-2 font-mono font-bold text-amber border-r border-line">
                           <div className="flex items-center gap-1.5">
                             <IconQr size={13} className="text-ink-faint shrink-0" />
@@ -1504,11 +1511,11 @@ export function Outils({
           {/* Tableur Google Sheets Style */}
           <div className={cx('rounded-xl border border-line bg-surface shadow-xs overflow-hidden', viewMode === 'cards' ? 'hidden' : 'hidden sm:block')}>
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
+              <table className="w-full text-left border-collapse text-xs table-rhythm">
                 <thead>
                   <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
                     {canManage && (
-                      <th className="px-2.5 py-2.5 w-10 text-center border-r border-line">
+                      <th className="px-2.5 py-2.5 w-10 text-center border-r border-line col-lead">
                         <input
                           type="checkbox"
                           checked={displayedTools.length > 0 && selectedToolIds.size === displayedTools.length}
@@ -1518,22 +1525,22 @@ export function Outils({
                         />
                       </th>
                     )}
-                    <th className="px-2.5 py-2.5 w-12 border-r border-line text-center">Photo</th>
-                    <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-24 border-r border-line">
+                    <th className="px-2.5 py-2.5 w-12 border-r border-line text-center col-lead">Photo</th>
+                    <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-24 border-r border-line col-lead">
                       Réf / Code QR
                     </th>
-                    <th className="px-3 py-2.5 min-w-44 border-r border-line">Désignation &amp; Marque</th>
+                    <th className="px-3 py-2.5 min-w-44 border-r border-line col-lead">Désignation &amp; Marque</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
                     <th className="px-3 py-2.5 min-w-36 border-r border-line">Emplacement / Magasin</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Stock &amp; Dispo</th>
                     {canViewFinancial && <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">VNC Nette</th>}
                     <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Statut</th>
-                    <th className="px-3 py-2.5 min-w-44 text-right">Actions</th>
+                    <th className="px-3 py-2.5 min-w-44 text-right col-actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {displayedTools.map((tool) => {
+                  {displayedTools.map((tool, idx) => {
                     const acc = computeToolAccounting(tool);
                     const isSelected = selectedToolIds.has(tool.id);
                     return (
@@ -1542,7 +1549,12 @@ export function Outils({
                         onClick={() => setSelectedId(tool.id)}
                         className={cx(
                           'cursor-pointer transition-colors group',
-                          isSelected ? 'bg-amber-wash/40 hover:bg-amber-wash/50' : 'hover:bg-paper-2/40',
+                          isSelected
+                            ? 'bg-amber-wash/40 hover:bg-amber-wash/50'
+                            : idx % 2 === 0
+                            ? 'bg-surface/95'
+                            : 'bg-surface-2/45',
+                          'hover:bg-amber-wash/20',
                         )}
                       >
                         {/* Checkbox */}

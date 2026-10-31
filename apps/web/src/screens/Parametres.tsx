@@ -1393,27 +1393,32 @@ function AdminSettings({ user }: { user: User }) {
             <CardContent className="p-0">
               {/* Desktop Table (Antigravity Grid with vertical borders) */}
               <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-xs table-rhythm">
                   <thead>
                     <tr className="border-b border-line bg-paper-2 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
-                      <th className="py-2.5 px-3 text-center w-12 border-r border-line">Photo</th>
-                      <th className="py-2.5 px-4 border-r border-line">Utilisateur &amp; Identifiant</th>
+                      <th className="py-2.5 px-3 text-center w-12 border-r border-line col-lead">Photo</th>
+                      <th className="py-2.5 px-4 border-r border-line col-lead">Utilisateur &amp; Identifiant</th>
                       <th className="py-2.5 px-4 border-r border-line">Rôle attribué</th>
                       <th className="py-2.5 px-4 border-r border-line">Fiche travailleur liée</th>
                       <th className="py-2.5 px-3 text-center border-r border-line">Statut</th>
-                      <th className="py-2.5 px-4 text-right">Actions</th>
+                      <th className="py-2.5 px-4 text-right col-actions">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {filteredUsers.map((account) => {
+                    {filteredUsers.map((account, idx) => {
                       const employee = account.employee_id ? employeesById.get(account.employee_id) : undefined;
                       const theme = ROLE_THEME[account.role] ?? DEFAULT_ROLE_THEME;
                       return (
                         <tr
                           key={account.id}
                           className={cx(
-                            'transition-colors hover:bg-paper-2/40',
-                            !account.active && 'bg-paper/30 opacity-75',
+                            'transition-colors',
+                            !account.active
+                              ? 'bg-paper/30 opacity-75'
+                              : idx % 2 === 0
+                              ? 'bg-surface/95'
+                              : 'bg-surface-2/45',
+                            'hover:bg-amber-wash/20',
                           )}
                         >
                           {/* Photo Avatar */}
@@ -2546,22 +2551,26 @@ function AdminSettings({ user }: { user: User }) {
                 <>
                   {/* Desktop Table (Antigravity Grid with vertical borders) */}
                   <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
+                    <table className="w-full text-left border-collapse text-xs table-rhythm">
                       <thead>
                         <tr className="border-b border-line bg-paper-2 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
-                          <th className="py-2.5 px-4 border-r border-line">Date &amp; Heure de capture</th>
+                          <th className="py-2.5 px-4 border-r border-line col-lead">Date &amp; Heure de capture</th>
                           <th className="py-2.5 px-4 border-r border-line">Type d'instantané</th>
                           <th className="py-2.5 px-4 text-center border-r border-line">Volume archive</th>
-                          <th className="py-2.5 px-4 text-right">Action</th>
+                          <th className="py-2.5 px-4 text-right col-actions">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line">
-                        {backups.map((backup) => {
+                        {backups.map((backup, idx) => {
                           const info = formatHumanBackupLabel(backup.pathname, backup.uploadedAt);
                           return (
                             <tr
                               key={backup.pathname}
-                              className="transition-colors hover:bg-paper-2/40"
+                              className={cx(
+                                'transition-colors',
+                                idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                                'hover:bg-amber-wash/20',
+                              )}
                             >
                               {/* Date & Heure */}
                               <td className="py-2.5 px-4 border-r border-line">

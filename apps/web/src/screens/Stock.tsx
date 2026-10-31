@@ -1132,11 +1132,11 @@ export function Stock({
               {/* Tableur Google Sheets Style (Desktop & Tablette) */}
               <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden hidden sm:block">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
+                  <table className="w-full text-left border-collapse text-xs table-rhythm">
                     <thead>
                       <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
                         {canManageRefs && (
-                          <th className="px-2.5 py-2.5 w-10 text-center border-r border-line">
+                          <th className="px-2.5 py-2.5 w-10 text-center border-r border-line col-lead">
                             <input
                               type="checkbox"
                               checked={filtered.length > 0 && selectedRefIds.size === filtered.length}
@@ -1146,8 +1146,8 @@ export function Stock({
                             />
                           </th>
                         )}
-                        <th className="px-2.5 py-2.5 w-12 border-r border-line text-center">Photo</th>
-                        <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-44 border-r border-line">
+                        <th className="px-2.5 py-2.5 w-12 border-r border-line text-center col-lead">Photo</th>
+                        <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-44 border-r border-line col-lead">
                           Désignation &amp; Marque
                         </th>
                         <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
@@ -1160,11 +1160,11 @@ export function Stock({
                           </>
                         )}
                         <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
-                        <th className="px-3 py-2.5 min-w-36 text-right">Actions</th>
+                        <th className="px-3 py-2.5 min-w-36 text-right col-actions">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
-                      {filtered.map((ref) => {
+                      {filtered.map((ref, idx) => {
                         const state = stockState(ref);
                         const lineValuation = Number(ref.qty || 0) * Number(ref.unit_cost || 0);
                         const isSelected = selectedRefIds.has(ref.id);
@@ -1174,7 +1174,12 @@ export function Stock({
                             onClick={() => setSelectedId(ref.id)}
                             className={cx(
                               'cursor-pointer transition-colors group',
-                              isSelected ? 'bg-amber-wash/40 hover:bg-amber-wash/50' : 'hover:bg-paper-2/40',
+                              isSelected
+                                ? 'bg-amber-wash/40 hover:bg-amber-wash/50'
+                                : idx % 2 === 0
+                                ? 'bg-surface/95'
+                                : 'bg-surface-2/45',
+                              'hover:bg-amber-wash/20',
                             )}
                           >
                             {/* Checkbox */}
@@ -1566,20 +1571,27 @@ export function Stock({
           ) : (
             <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-xs table-rhythm">
                   <thead>
                     <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                      <th className="px-3 py-2.5 min-w-36 border-r border-line">Date & Heure</th>
+                      <th className="px-3 py-2.5 min-w-36 border-r border-line col-lead">Date & Heure</th>
                       <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Type</th>
-                      <th className="px-3 py-2.5 min-w-44 border-r border-line">Article</th>
+                      <th className="px-3 py-2.5 min-w-44 border-r border-line col-lead">Article</th>
                       <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Quantité</th>
                       <th className="px-3 py-2.5 min-w-36 border-r border-line">Bénéficiaire / Motif</th>
-                      <th className="px-3 py-2.5 min-w-28 text-right">Agent</th>
+                      <th className="px-3 py-2.5 min-w-28 text-right col-actions">Agent</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {movements.map((move) => (
-                      <tr key={move.id} className="hover:bg-paper-2 transition-colors">
+                    {movements.map((move, idx) => (
+                      <tr
+                        key={move.id}
+                        className={cx(
+                          'transition-colors',
+                          idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                          'hover:bg-amber-wash/20',
+                        )}
+                      >
                         <td className="px-3 py-2 font-mono text-ink-faint tabular-nums border-r border-line">
                           {formatDateTime(move.created_at)}
                         </td>

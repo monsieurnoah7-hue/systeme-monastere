@@ -831,10 +831,10 @@ export function Pointage({
           {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
           <div className={cx('overflow-hidden rounded-xl border border-line bg-surface shadow-card', viewMode === 'cards' && 'hidden sm:block')}>
             <div className="overflow-x-auto scroll-thin touch-pan-x overscroll-x-contain">
-              <table className="w-full text-left sheet-grid min-w-[760px]">
+              <table className="w-full text-left sheet-grid min-w-[760px] table-rhythm">
                 <thead>
                   <tr>
-                    <th className="sheet-th sticky-col min-w-[190px]">Travailleur / ID</th>
+                    <th className="sheet-th sticky-col min-w-[190px] col-lead">Travailleur / ID</th>
                     <th className="sheet-th w-28 text-center">Arrivée (In)</th>
                     <th className="sheet-th w-28 text-center">Départ (Out)</th>
                     <th className="sheet-th w-32 text-center bg-amber-wash/20 font-bold text-ink">Statut</th>
@@ -844,13 +844,20 @@ export function Pointage({
                   </tr>
                 </thead>
                 <tbody className="text-xs divide-y divide-line">
-                  {filteredAttendance.map((row) => {
+                  {filteredAttendance.map((row, idx) => {
                     const isPresent = row.status === 'present';
                     const isLate = row.status === 'late';
                     return (
-                      <tr key={row.id} className="hover:bg-paper-2/40 transition-colors">
+                      <tr
+                        key={row.id}
+                        className={cx(
+                          'transition-colors',
+                          idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                          'hover:bg-amber-wash/20',
+                        )}
+                      >
                         {/* Sticky Worker Column */}
-                        <td className="sheet-cell sticky-col bg-surface">
+                        <td className={cx('sheet-cell sticky-col col-lead', idx % 2 === 0 ? 'bg-surface' : 'bg-[#181d28]')}>
                           <div className="flex items-center gap-2.5">
                             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-paper-2 text-[10px] font-bold text-ink-soft border border-line">
                               {initials(row.fullName)}
