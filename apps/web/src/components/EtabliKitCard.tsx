@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   type EtabliKit,
   type EtabliKitItem,
@@ -9,7 +9,6 @@ import { QrCode } from './QrCode';
 import { QR_PREFIX } from '../lib/qr';
 import {
   Button,
-  Chip,
   Modal,
   Spinner,
   useToast,
@@ -23,7 +22,8 @@ import {
   Building,
   ShieldCheck,
   User,
-  Box,
+  Search,
+  ChevronRight,
 } from 'lucide-react';
 
 interface EtabliKitCardProps {
@@ -46,6 +46,8 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [selectedItemForEdit, setSelectedItemForEdit] = useState<EtabliKitItem | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterState, setFilterState] = useState<'all' | 'alert'>('all');
 
   // Audit state
   const [auditStatus, setAuditStatus] = useState<'conforme' | 'anomalie' | 'incomplet'>('conforme');
@@ -81,7 +83,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
         }),
       });
 
-      toast(`Contrôle Inopiné validé pour l'établi N°${kit.etabli_number}.`, 'success');
+      toast(`Audit enregistré pour l'établi N°${kit.etabli_number}.`, 'success');
       setShowAuditModal(false);
       onRefresh?.();
     } catch (err) {
@@ -98,7 +100,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
         method: 'PATCH',
         body: JSON.stringify({ condition, is_present: isPresent }),
       });
-      toast(`Statut de "${selectedItemForEdit.name}" mis à jour.`, 'success');
+      toast(`Outil "${selectedItemForEdit.name}" mis à jour.`, 'success');
       setSelectedItemForEdit(null);
       onRefresh?.();
     } catch (err) {
@@ -111,89 +113,85 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
   const anomalies = total - present;
   const percentage = total > 0 ? Math.round((present / total) * 100) : 100;
 
-  return (
-    <div className="space-y-6">
-      {/* Kit Banner Header */}
-      <div className="rounded-2xl border border-slate-700/60 bg-gradient-to-br from-slate-900/90 via-slate-800/80 to-slate-900/90 p-5 shadow-xl backdrop-blur">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="relative">
-              {kit.employee_photo ? (
-                <img
-                  src={kit.employee_photo}
-                  alt={kit.employee_name}
-                  className="h-16 w-16 rounded-2xl border-2 border-emerald-500/40 object-cover shadow-lg"
-                />
-              ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-700 bg-slate-800 text-slate-400">
-                  <User className="h-8 w-8" />
-                </div>
-              )}
-              <span className="absolute -bottom-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-slate-950 shadow">
-                #{kit.etabli_number}
-              </span>
-            </div>
+  // Filtered tools
+  const filteredItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return items.filter((it) => {
+      if (filterState === 'alert' && it.is_present && it.condition === 'bon') return false;
+      if (!q) return true;
+      return (
+        it.name.toLowerCase().includes(q) ||
+        it.tool_code.toLowerCase().includes(q) ||
+        String(it.item_num) === q
+      );
+    });
+  }, [items, searchQuery, filterState]);
 
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg font-bold text-slate-100">
-                  Établi N°{kit.etabli_number} — {kit.employee_name}
-                </h3>
-                <Chip tone="neutral">
-                  {kit.code}
-                </Chip>
+  return (
+    <div className="space-y-4">
+      {/* =========================================================================
+          1. CARTE MAÎTRESSE ÉTABLI (Design Apple iOS Card — Zéro chevauchement)
+      ========================================================================= */}
+      <div className="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 p-4 shadow-xl">
+        {/* Identité Établi */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-shrink-0">
+            {kit.employee_photo ? (
+              <img
+                src={kit.employee_photo}
+                alt={kit.employee_name}
+                className="h-12 w-12 rounded-xl border border-emerald-500/30 object-cover shadow"
+              />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-400">
+                <User className="h-6 w-6" />
               </div>
-              <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
-                <Building className="h-3.5 w-3.5 text-slate-400" />
-                <span>Dotation : </span>
-                <span className="font-semibold text-slate-300">{kit.source_magasin_name}</span>
-                <span className="text-slate-600">•</span>
-                <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                <span>{kit.location}</span>
-              </p>
-            </div>
+            )}
+            <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-black text-slate-950 shadow">
+              #{kit.etabli_number}
+            </span>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowPrintModal(true)}
-              className="gap-2"
-            >
-              <Printer className="h-4 w-4" />
-              <span>Planche QR Codes</span>
-            </Button>
-            {canManage && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={openAudit}
-                className="gap-2 bg-emerald-600 hover:bg-emerald-500 text-white"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                <span>Contrôle Inopiné</span>
-              </Button>
-            )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="truncate text-base font-bold text-slate-100">
+                Établi N°{kit.etabli_number}
+              </h3>
+              <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400 border border-emerald-500/20">
+                {kit.code}
+              </span>
+            </div>
+            <p className="truncate text-xs text-slate-400 mt-0.5">
+              {kit.employee_name}
+            </p>
+            <p className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5 truncate">
+              <Building className="h-3 w-3 text-slate-400 flex-shrink-0" />
+              <span className="truncate">{kit.source_magasin_name}</span>
+              <span>•</span>
+              <MapPin className="h-3 w-3 text-slate-400 flex-shrink-0" />
+              <span className="truncate">{kit.location}</span>
+            </p>
           </div>
         </div>
 
-        {/* Status Bar */}
-        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-4 rounded-xl bg-slate-950/60 p-3.5 border border-slate-800">
-          <div>
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-              Complétude du Kit
+        {/* 2 Blocs Métriques Aérés (50% / 50% — Aucun texte écrasé) */}
+        <div className="mt-4 grid grid-cols-2 gap-2.5">
+          {/* Bloc 1 : Santé du Kit */}
+          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Complétude
             </span>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-100">{percentage}%</span>
-              <span className="text-xs text-slate-400">
-                ({present}/{total} conformes)
+            <div className="mt-1 flex items-baseline gap-1.5">
+              <span className={`text-xl font-black ${percentage === 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {percentage}%
+              </span>
+              <span className="text-[11px] text-slate-400 font-medium">
+                ({present}/{total})
               </span>
             </div>
-            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
               <div
-                className={`h-full rounded-full transition-all duration-500 ${
+                className={`h-full rounded-full transition-all duration-300 ${
                   percentage === 100 ? 'bg-emerald-500' : percentage >= 80 ? 'bg-amber-500' : 'bg-rose-500'
                 }`}
                 style={{ width: `${percentage}%` }}
@@ -201,173 +199,205 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
             </div>
           </div>
 
-          <div>
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-              Dernier Contrôle
-            </span>
-            <div className="mt-1 text-sm font-semibold text-slate-200">
-              {kit.last_audited_at
-                ? new Date(kit.last_audited_at).toLocaleDateString('fr-FR', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
-                : 'Initialisé (26/10/2026)'}
-            </div>
-            <p className="text-xs text-slate-400">
-              Par : {kit.last_audited_by || 'Direction & Chef Atelier'}
-            </p>
-          </div>
-
-          <div>
-            <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-              Statut Opérationnel
+          {/* Bloc 2 : Dernier Audit */}
+          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Dernier Audit
             </span>
             <div className="mt-1">
               <span
-                className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold ${
-                  anomalies === 0
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                className={`inline-flex items-center gap-1 text-xs font-semibold ${
+                  anomalies === 0 ? 'text-emerald-400' : 'text-amber-400'
                 }`}
               >
                 {anomalies === 0 ? (
                   <>
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    Kit Intact & Conforme
+                    Conforme
                   </>
                 ) : (
                   <>
                     <AlertTriangle className="h-3.5 w-3.5" />
-                    {anomalies} outil(s) à signaler
+                    {anomalies} anomalie{anomalies > 1 ? 's' : ''}
                   </>
                 )}
               </span>
             </div>
-          </div>
-
-          <div className="flex items-center justify-end">
-            <div className="text-right">
-              <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                Passeport Établi
-              </span>
-              <div className="mt-0.5 text-xs font-mono font-bold text-slate-300">
-                {kit.id}
-              </div>
+            <div className="mt-1 text-[11px] text-slate-400 truncate">
+              {kit.last_audited_at
+                ? new Date(kit.last_audited_at).toLocaleDateString('fr-FR', {
+                    day: 'numeric',
+                    month: 'short',
+                  })
+                : 'Initialisé'}
+              {kit.last_audited_by ? ` • ${kit.last_audited_by.split(' ')[0]}` : ''}
             </div>
           </div>
         </div>
+
+        {/* 2 Boutons d'Action Ergonomiques Apple */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {canManage && (
+            <button
+              type="button"
+              onClick={openAudit}
+              className="flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-emerald-500 active:scale-[0.98]"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              <span>Contrôle Flash</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowPrintModal(true)}
+            className={`flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-xs font-bold text-slate-200 transition-all hover:bg-slate-700 active:scale-[0.98] ${
+              !canManage ? 'col-span-2' : ''
+            }`}
+          >
+            <Printer className="h-4 w-4 text-slate-400" />
+            <span>QR Codes Planche</span>
+          </button>
+        </div>
       </div>
 
-      {/* Grid of Tools in Kit */}
-      <div className="space-y-3">
+      {/* =========================================================================
+          2. LISTE DES OUTILS DU KIT (Apple Grouped Rows — Zéro coupure de texte)
+      ========================================================================= */}
+      <div className="space-y-2.5">
         <div className="flex items-center justify-between">
-          <h4 className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-            <Box className="h-4 w-4 text-emerald-400" />
-            Inventaire des {items.length} Outils du Kit
-          </h4>
-          <span className="text-xs text-slate-400">
-            QR codes personnalisés : <code className="text-emerald-400 font-mono">CFTM-{kit.code}-...</code>
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+            Boîte à Outils ({total} pièces)
           </span>
-        </div>
 
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((item) => {
-            const isOk = item.is_present && item.condition === 'bon';
-            return (
-              <div
-                key={item.id}
-                onClick={() => canManage && setSelectedItemForEdit(item)}
-                className={`group relative flex items-center justify-between rounded-xl border p-3 transition-all ${
-                  canManage ? 'cursor-pointer hover:border-slate-500 hover:shadow-md' : ''
-                } ${
-                  isOk
-                    ? 'border-slate-800 bg-slate-900/60'
-                    : 'border-amber-500/40 bg-amber-500/5'
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setFilterState('all')}
+              className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-all ${
+                filterState === 'all'
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Tous ({total})
+            </button>
+            {anomalies > 0 && (
+              <button
+                type="button"
+                onClick={() => setFilterState('alert')}
+                className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-all ${
+                  filterState === 'alert'
+                    ? 'bg-amber-500 text-slate-950 font-bold'
+                    : 'text-amber-400 hover:underline'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-800 text-xs font-mono font-bold text-slate-300">
-                    {String(item.item_num).padStart(2, '0')}
-                  </span>
-                  <div>
-                    <h5 className="text-sm font-semibold text-slate-200 line-clamp-1">
-                      {item.name}
-                    </h5>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[11px] font-mono text-slate-400">
-                        {item.tool_code}
-                      </span>
-                      <span className="text-[11px] text-slate-400">
-                        • {item.qty} {item.unit}
-                      </span>
+                Alertes ({anomalies})
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Barre de Recherche Simple */}
+        <div className="relative">
+          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Filtrer un outil (marteau, ciseau, équerre...)"
+            className="h-9 w-full rounded-xl border border-slate-800 bg-slate-900/80 pl-9 pr-3 text-xs text-slate-200 placeholder-slate-400 focus:border-emerald-500 focus:outline-none"
+          />
+        </div>
+
+        {/* Liste verticale en rangées 100% Mobile & Drawer Friendly */}
+        <div className="divide-y divide-slate-800/80 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40">
+          {filteredItems.length === 0 ? (
+            <div className="p-4 text-center text-xs text-slate-400">
+              Aucun outil ne correspond à la recherche.
+            </div>
+          ) : (
+            filteredItems.map((item) => {
+              const isOk = item.is_present && item.condition === 'bon';
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => canManage && setSelectedItemForEdit(item)}
+                  className={`group flex items-center justify-between gap-3 p-3 transition-colors ${
+                    canManage ? 'cursor-pointer hover:bg-slate-800/60 active:bg-slate-800' : ''
+                  } ${!isOk ? 'bg-amber-500/5' : ''}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-800 font-mono text-xs font-bold text-slate-300">
+                      {String(item.item_num).padStart(2, '0')}
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-200 leading-snug">
+                        {item.name}
+                      </p>
+                      <p className="flex items-center gap-1.5 font-mono text-[10px] text-slate-400 mt-0.5">
+                        <span className="text-emerald-400 font-semibold">{item.tool_code}</span>
+                        <span>•</span>
+                        <span>{item.qty} {item.unit}</span>
+                      </p>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                      item.condition === 'bon' && item.is_present
-                        ? 'bg-emerald-500/10 text-emerald-400'
-                        : item.condition === 'a_affuter'
-                        ? 'bg-amber-500/15 text-amber-400'
-                        : item.condition === 'manquant'
-                        ? 'bg-rose-500/15 text-rose-400'
-                        : 'bg-indigo-500/15 text-indigo-400'
-                    }`}
-                  >
-                    {!item.is_present ? 'Manquant' : item.condition.replace('_', ' ')}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Audit History */}
-      {audits.length > 0 && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-3">
-            <History className="h-4 w-4 text-slate-400" />
-            Historique des Contrôles Inopinés & Audits
-          </h4>
-          <div className="divide-y divide-slate-800/80">
-            {audits.map((a) => (
-              <div key={a.id} className="py-2.5 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`flex h-2 w-2 rounded-full ${
-                      a.status === 'conforme'
-                        ? 'bg-emerald-400'
-                        : a.status === 'anomalie'
-                        ? 'bg-amber-400'
-                        : 'bg-rose-400'
-                    }`}
-                  />
-                  <div>
-                    <span className="font-semibold text-slate-200">
-                      Audit par {a.auditor_name}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span
+                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                        isOk
+                          ? 'bg-emerald-500/10 text-emerald-400'
+                          : item.condition === 'a_affuter'
+                          ? 'bg-amber-500/15 text-amber-400'
+                          : item.condition === 'manquant' || !item.is_present
+                          ? 'bg-rose-500/15 text-rose-400'
+                          : 'bg-indigo-500/15 text-indigo-400'
+                      }`}
+                    >
+                      {!item.is_present ? 'Manquant' : item.condition.replace('_', ' ')}
                     </span>
-                    {a.anomalies_note && (
-                      <p className="text-slate-400 mt-0.5 italic text-[11px]">
-                        « {a.anomalies_note} »
-                      </p>
+                    {canManage && (
+                      <ChevronRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5" />
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-right">
-                  <span className="font-mono text-slate-400">
-                    {a.items_present_count}/{a.items_total_count} outils
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* =========================================================================
+          3. HISTORIQUE DES AUDITS INOPINÉS
+      ========================================================================= */}
+      {audits.length > 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-3.5">
+          <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-2.5">
+            <History className="h-3.5 w-3.5 text-slate-400" />
+            Historique des Contrôles Inopinés
+          </h4>
+          <div className="divide-y divide-slate-800/80">
+            {audits.slice(0, 3).map((a) => (
+              <div key={a.id} className="py-2 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`h-2 w-2 flex-shrink-0 rounded-full ${
+                      a.status === 'conforme' ? 'bg-emerald-400' : 'bg-amber-400'
+                    }`}
+                  />
+                  <span className="truncate font-medium text-slate-300">
+                    {a.auditor_name}
                   </span>
-                  <span className="text-slate-400">
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 text-slate-400 text-[11px]">
+                  <span>{a.items_present_count}/{a.items_total_count}</span>
+                  <span>•</span>
+                  <span>
                     {new Date(a.audited_at).toLocaleDateString('fr-FR', {
                       day: 'numeric',
                       month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
                     })}
                   </span>
                 </div>
@@ -377,7 +407,9 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
         </div>
       )}
 
-      {/* Modal Audit Inopiné */}
+      {/* =========================================================================
+          4. MODAL CONTRÔLE FLASH INOPINÉ (Ergonomie tactile rapide)
+      ========================================================================= */}
       <Modal
         open={showAuditModal}
         title={`Contrôle Inopiné — Établi N°${kit.etabli_number}`}
@@ -394,19 +426,18 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
               disabled={isAuditing}
               className="bg-emerald-600 text-white"
             >
-              {isAuditing ? <Spinner className="h-4 w-4" /> : 'Enregistrer le Contrôle'}
+              {isAuditing ? <Spinner /> : 'Valider le Contrôle'}
             </Button>
           </div>
         }
       >
         <div className="space-y-4">
-          <div className="rounded-lg bg-slate-800/50 p-3 text-xs text-slate-300">
-            Vérifiez la présence et l'état des outils sur l'établi de{' '}
-            <strong className="text-slate-100">{kit.employee_name}</strong>. Cliquez sur un
-            outil si une anomalie est constatée.
+          <div className="rounded-xl bg-slate-800/50 p-3 text-xs text-slate-300">
+            Artisan contrôlé : <strong className="text-white">{kit.employee_name}</strong>.  
+            Tous les outils sont présélectionnés <em>« Conformes »</em>. Cliquez sur un outil pour changer son statut.
           </div>
 
-          <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-800">
+          <div className="max-h-72 overflow-y-auto space-y-1.5 divide-y divide-slate-800 pr-1">
             {items.map((it) => {
               const current = itemAuditStates[it.id] || {
                 is_present: it.is_present,
@@ -414,10 +445,10 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
               };
               return (
                 <div key={it.id} className="pt-1.5 flex items-center justify-between text-xs">
-                  <span className="font-medium text-slate-200">
+                  <span className="font-medium text-slate-200 truncate pr-2">
                     {it.item_num}. {it.name}
                   </span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       type="button"
                       onClick={() =>
@@ -429,10 +460,10 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                       className={`rounded px-2 py-1 font-semibold text-[11px] ${
                         current.is_present && current.condition === 'bon'
                           ? 'bg-emerald-500 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                          : 'bg-slate-800 text-slate-400'
                       }`}
                     >
-                      ✓ Conforme
+                      ✓ Bon
                     </button>
                     <button
                       type="button"
@@ -445,7 +476,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                       className={`rounded px-2 py-1 font-semibold text-[11px] ${
                         current.is_present && current.condition === 'a_affuter'
                           ? 'bg-amber-500 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                          : 'bg-slate-800 text-slate-400'
                       }`}
                     >
                       À affûter
@@ -461,7 +492,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                       className={`rounded px-2 py-1 font-semibold text-[11px] ${
                         !current.is_present
                           ? 'bg-rose-500 text-white'
-                          : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                          : 'bg-slate-800 text-slate-400'
                       }`}
                     >
                       Manquant
@@ -472,7 +503,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
             })}
           </div>
 
-          <div className="space-y-2 pt-2">
+          <div className="space-y-2 pt-2 border-t border-slate-800">
             <label className="text-xs font-semibold text-slate-300">
               Résultat global du contrôle
             </label>
@@ -486,7 +517,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                     : 'bg-slate-800 text-slate-400'
                 }`}
               >
-                ✓ Conforme (100%)
+                ✓ Conforme
               </button>
               <button
                 type="button"
@@ -497,7 +528,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                     : 'bg-slate-800 text-slate-400'
                 }`}
               >
-                ⚠ Anomalie mineure
+                ⚠ Anomalie
               </button>
               <button
                 type="button"
@@ -508,14 +539,14 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                     : 'bg-slate-800 text-slate-400'
                 }`}
               >
-                ✕ Incomplet / Perte
+                ✕ Incomplet
               </button>
             </div>
 
             <textarea
               value={auditNotes}
               onChange={(e) => setAuditNotes(e.target.value)}
-              placeholder="Remarques / actions correctives éventuelles..."
+              placeholder="Observation pour le magasinier ou le chef d'atelier..."
               className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-xs text-slate-200 focus:border-emerald-500 focus:outline-none"
               rows={2}
             />
@@ -523,7 +554,9 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
         </div>
       </Modal>
 
-      {/* Modal Planche d'Impression QR Codes */}
+      {/* =========================================================================
+          5. MODAL PLANCHE QR CODES (Impression A4)
+      ========================================================================= */}
       <Modal
         open={showPrintModal}
         title={`Planche QR Codes — Établi N°${kit.etabli_number}`}
@@ -540,57 +573,49 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
               className="gap-2 bg-emerald-600 text-white"
             >
               <Printer className="h-4 w-4" />
-              <span>Lancer l'impression</span>
+              <span>Imprimer la Planche</span>
             </Button>
           </div>
         }
       >
         <div className="space-y-4">
-          <div className="rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300">
-            Cette planche est formatée pour être imprimée sur feuille adhésive A4. Le grand QR
-            code est à coller sur la servante ou le panneau mural, et les mini-étiquettes sur les
-            manches des outils.
-          </div>
-
-          {/* Grand QR Code Maître */}
-          <div className="rounded-xl border border-slate-700 bg-white p-4 text-slate-900 text-center">
-            <div className="text-xs font-black uppercase tracking-wider text-slate-600">
-              CFTM • MONASTÈRE BÉNÉDICTIN MONT-FÉBÉ
+          <div className="rounded-xl border border-slate-700 bg-white p-4 text-slate-950 text-center">
+            <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+              CFTM • MONASTÈRE MONT-FÉBÉ
             </div>
             <div className="text-base font-black text-slate-950 mt-0.5">
               PASSEPORT ÉTABLI N°{kit.etabli_number}
             </div>
             <div className="text-xs font-bold text-slate-700">
-              {kit.employee_name} — {kit.employee_job}
+              {kit.employee_name}
             </div>
 
             <div className="my-3 flex justify-center">
-              <QrCode value={`${QR_PREFIX.kit}${kit.id}`} size={160} />
+              <QrCode value={`${QR_PREFIX.kit}${kit.id}`} size={150} />
             </div>
 
-            <div className="font-mono text-xs font-bold text-slate-800">{kit.id}</div>
+            <div className="font-mono text-xs font-bold text-slate-900">{kit.id}</div>
             <div className="text-[10px] text-slate-500 mt-1">
-              Dotation : {kit.source_magasin_name} • {kit.location}
+              {kit.source_magasin_name} • {kit.location}
             </div>
           </div>
 
-          {/* Mini étiquettes d'outils */}
-          <div className="max-h-60 overflow-y-auto space-y-2 border-t border-slate-800 pt-3">
+          <div className="max-h-52 overflow-y-auto space-y-1.5 border-t border-slate-800 pt-3">
             <span className="text-xs font-bold text-slate-300">
-              Mini-étiquettes avec initiales ({items.length} outils)
+              Mini-étiquettes d'outils ({items.length})
             </span>
             <div className="grid grid-cols-2 gap-2">
-              {items.slice(0, 10).map((it) => (
+              {items.map((it) => (
                 <div
                   key={it.id}
-                  className="flex items-center gap-2 rounded border border-slate-700 bg-slate-800 p-2 text-[11px]"
+                  className="flex items-center gap-2 rounded border border-slate-700 bg-slate-800 p-1.5 text-[11px]"
                 >
-                  <QrCode value={`CFTM:TOOL:${it.tool_code}`} size={36} />
+                  <QrCode value={`CFTM:TOOL:${it.tool_code}`} size={32} />
                   <div className="min-w-0">
                     <div className="font-mono font-bold text-emerald-400 truncate">
                       {it.tool_code}
                     </div>
-                    <div className="text-slate-300 truncate">{it.name}</div>
+                    <div className="text-slate-300 truncate text-[10px]">{it.name}</div>
                   </div>
                 </div>
               ))}
@@ -599,10 +624,12 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
         </div>
       </Modal>
 
-      {/* Modal Modification d'un outil */}
+      {/* =========================================================================
+          6. MODAL MODIFICATION UNITAIRE D'UN OUTIL
+      ========================================================================= */}
       <Modal
         open={!!selectedItemForEdit}
-        title={selectedItemForEdit ? `Gestion Outil : ${selectedItemForEdit.name}` : ''}
+        title={selectedItemForEdit ? `Outil : ${selectedItemForEdit.name}` : ''}
         onClose={() => setSelectedItemForEdit(null)}
         footer={
           <div className="flex justify-end">
@@ -614,30 +641,30 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
       >
         {selectedItemForEdit && (
           <div className="space-y-4 text-xs">
-            <div className="rounded-lg bg-slate-800/60 p-3 text-slate-300 space-y-1">
+            <div className="rounded-xl bg-slate-800/60 p-3 text-slate-300 space-y-1">
               <div>
-                <span className="text-slate-400">Code Outil :</span>{' '}
+                <span className="text-slate-400">Code Unitaire :</span>{' '}
                 <strong className="font-mono text-emerald-400">{selectedItemForEdit.tool_code}</strong>
               </div>
               <div>
                 <span className="text-slate-400">Établi :</span>{' '}
-                <strong className="text-slate-200">N°{kit.etabli_number} ({kit.employee_name})</strong>
+                <strong className="text-white">N°{kit.etabli_number} ({kit.employee_name})</strong>
               </div>
               <div>
-                <span className="text-slate-400">Dotation d'origine :</span>{' '}
+                <span className="text-slate-400">Dotation :</span>{' '}
                 <strong className="text-slate-200">{kit.source_magasin_name}</strong>
               </div>
             </div>
 
             <div className="space-y-2">
-              <span className="font-semibold text-slate-200">État de l'outil :</span>
+              <span className="font-semibold text-slate-200">Modifier l'état :</span>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant={selectedItemForEdit.condition === 'bon' ? 'primary' : 'secondary'}
                   size="sm"
                   onClick={() => handleUpdateItemCondition('bon', true)}
                 >
-                  ✓ Bon état (En service)
+                  ✓ Bon état (Actif)
                 </Button>
                 <Button
                   variant={selectedItemForEdit.condition === 'a_affuter' ? 'primary' : 'secondary'}
@@ -659,7 +686,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                   onClick={() => handleUpdateItemCondition('manquant', false)}
                   className="text-rose-400"
                 >
-                  ✕ Manquant / Perdu
+                  ✕ Manquant
                 </Button>
               </div>
             </div>
