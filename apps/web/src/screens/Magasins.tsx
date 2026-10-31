@@ -42,6 +42,8 @@ import {
   ArrowDownLeft,
   Warehouse,
   ChevronRight,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { formatCurrency } from '../lib/accounting';
@@ -216,6 +218,7 @@ export function Magasins({
   const [reloadKey, setReloadKey] = useState(0);
   const [q, setQ] = useState('');
   const [activeCategory, setActiveCategory] = useState<LocationCategory>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<MagasinDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -707,28 +710,62 @@ export function Magasins({
         )}
       </div>
 
-      {/* Barre de recherche concise sans rognage de texte */}
-      <div className="relative w-full">
-        <IconSearch size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Rechercher un magasin, bureau, atelier, salle ou responsable…"
-          className="w-full rounded-2xl border border-line bg-surface py-2.5 pl-10 pr-4 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
-        />
-        {q && (
+      {/* Barre d'outils Apple : Recherche + Sélecteur de vue Grille / Liste */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div className="relative flex-1">
+          <IconSearch size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Rechercher un magasin, bureau, atelier, salle ou responsable…"
+            className="w-full rounded-xl border border-line/70 dark:border-white/[0.08] bg-surface dark:bg-[#151922] py-2.5 pl-10 pr-9 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-slate-400 dark:focus:border-white/20 focus:outline-none transition-all shadow-2xs"
+          />
+          {q && (
+            <button
+              type="button"
+              onClick={() => setQ('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs font-semibold px-1.5 py-0.5 rounded-md hover:bg-paper"
+            >
+              Effacer
+            </button>
+          )}
+        </div>
+
+        {/* Sélecteur Apple : Vue Grille vs Vue Liste (Mobile-First) */}
+        <div className="p-1 rounded-xl bg-paper dark:bg-white/[0.04] border border-line/60 dark:border-white/[0.06] inline-flex items-center gap-1 self-end sm:self-auto shrink-0">
           <button
             type="button"
-            onClick={() => setQ('')}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs font-semibold px-1.5 py-0.5 rounded-md hover:bg-paper"
+            onClick={() => setViewMode('grid')}
+            className={cx(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+              viewMode === 'grid'
+                ? 'bg-surface dark:bg-[#1C212D] text-ink shadow-xs font-semibold border border-line/60 dark:border-white/[0.08]'
+                : 'text-ink-soft hover:text-ink',
+            )}
+            title="Affichage en Grille Bento"
           >
-            Effacer
+            <LayoutGrid size={14} />
+            <span className="hidden sm:inline">Grille</span>
           </button>
-        )}
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={cx(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+              viewMode === 'list'
+                ? 'bg-surface dark:bg-[#1C212D] text-ink shadow-xs font-semibold border border-line/60 dark:border-white/[0.08]'
+                : 'text-ink-soft hover:text-ink',
+            )}
+            title="Affichage en Liste (Optimisé Mobile)"
+          >
+            <List size={14} />
+            <span className="hidden sm:inline">Liste</span>
+          </button>
+        </div>
       </div>
 
       {/* Apple Segmented Control Filter Bar (Sober, minimaliste, affordance native) */}
-      <div className="p-1 rounded-2xl bg-paper border border-line/60 inline-flex items-center gap-1 overflow-x-auto max-w-full no-scrollbar">
+      <div className="p-1 rounded-2xl bg-paper dark:bg-white/[0.04] border border-line/60 dark:border-white/[0.06] inline-flex items-center gap-1 overflow-x-auto max-w-full no-scrollbar">
         {LOCATION_CATEGORIES.map((cat) => {
           const count = categoryCounts[cat.id] ?? 0;
           if (cat.id !== 'all' && count === 0) return null;
@@ -741,7 +778,7 @@ export function Magasins({
               className={cx(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-150 shrink-0',
                 isSelected
-                  ? 'bg-surface text-ink shadow-xs font-semibold border border-line/60'
+                  ? 'bg-surface dark:bg-[#1C212D] text-ink shadow-xs font-semibold border border-line/60 dark:border-white/[0.08]'
                   : 'text-ink-soft hover:text-ink hover:bg-surface/50',
               )}
             >
@@ -749,7 +786,7 @@ export function Magasins({
               <span
                 className={cx(
                   'text-[10px] font-mono tabular-nums px-1.5 py-0.2 rounded-full',
-                  isSelected ? 'bg-paper text-ink font-semibold' : 'text-ink-faint',
+                  isSelected ? 'bg-paper dark:bg-white/10 text-ink font-semibold' : 'text-ink-faint',
                 )}
               >
                 {count}
@@ -762,7 +799,7 @@ export function Magasins({
       {loading ? (
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 rounded-[22px]" />
+            <Skeleton key={i} className="h-36 rounded-2xl" />
           ))}
         </div>
       ) : error ? (
@@ -783,8 +820,74 @@ export function Magasins({
             </Button>
           ) : (canManage ? <Button variant="primary" onClick={openNew}>Créer un magasin</Button> : undefined)}
         />
+      ) : viewMode === 'list' ? (
+        /* VUE LISTE APPLE (Grouped Table / 100% Mobile-First) */
+        <div className="rounded-2xl border border-line/70 dark:border-white/[0.08] bg-surface dark:bg-[#151922] divide-y divide-line/60 dark:divide-white/[0.06] overflow-hidden shadow-2xs">
+          {filtered.map((m) => {
+            const visuals = getLocationVisuals(m);
+            const IconComponent = visuals.Icon;
+            return (
+              <button
+                key={m.id}
+                onClick={() => {
+                  setSelectedId(m.id);
+                  setDrawerTab('tools');
+                }}
+                className="w-full text-left p-3.5 sm:px-4 sm:py-3.5 flex items-center justify-between gap-3 hover:bg-paper/60 dark:hover:bg-white/[0.02] active:bg-paper transition-colors group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={cx(
+                      'grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-transform group-hover:scale-105',
+                      visuals.iconBg,
+                      visuals.iconText,
+                    )}
+                  >
+                    <IconComponent size={20} strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-ink truncate group-hover:text-ink-soft transition-colors">
+                        {m.name}
+                      </h3>
+                      <span className="font-mono text-[10px] font-semibold text-ink-faint bg-paper px-1.5 py-0.2 rounded border border-line/50 shrink-0">
+                        {m.code}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-ink-faint">
+                      <span className="inline-flex items-center gap-1 font-medium">
+                        <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', visuals.dotColor)} />
+                        {visuals.categoryLabel}
+                      </span>
+                      {m.manager_name && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate max-w-[200px] text-ink-soft">{m.manager_name}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="hidden sm:flex items-center gap-2.5 text-xs text-ink-soft font-medium">
+                    <span>
+                      <strong className="text-ink font-semibold tabular-nums">{m.tools_count ?? 0}</strong> machine{(m.tools_count ?? 0) > 1 ? 's' : ''}
+                    </span>
+                    <span className="text-ink-faint">•</span>
+                    <span>
+                      <strong className="text-ink font-semibold tabular-nums">{m.stock_count ?? 0}</strong> matière{(m.stock_count ?? 0) > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {!m.active && <Chip tone="red">Inactif</Chip>}
+                  <ChevronRight size={16} className="text-ink-faint group-hover:text-ink group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </button>
+            );
+          })}
+        </div>
       ) : (
-        /* Apple Human Interface Watermark Cards (Icône agrandie en filigrane d'arrière-plan) */
+        /* VUE GRILLE BENTO APPLE (Aérée, épurée, sans superposition parasitaire) */
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((m) => {
             const visuals = getLocationVisuals(m);
@@ -798,97 +901,66 @@ export function Magasins({
                 }}
                 className="w-full text-left group active:scale-[0.99] transition-transform duration-150"
               >
-                <div
-                  className={cx(
-                    'relative overflow-hidden rounded-2xl border border-line/70 bg-surface p-4 sm:p-5 hover:border-line-hover hover:shadow-xs transition-all duration-200 flex flex-col justify-between gap-3 min-h-[145px]',
-                    visuals.borderHover,
-                  )}
-                >
-                  {/* Icône de catégorie agrandie en filigrane d'arrière-plan (Apple Watermark) */}
-                  <div
-                    aria-hidden="true"
-                    className="absolute -right-3 -bottom-3 pointer-events-none select-none transition-all duration-300 ease-out group-hover:scale-110 group-hover:-rotate-3"
-                  >
-                    <IconComponent
-                      size={100}
-                      strokeWidth={1.2}
-                      className={cx(
-                        'transition-opacity duration-300 opacity-[0.05] dark:opacity-[0.08] group-hover:opacity-[0.13] dark:group-hover:opacity-[0.16]',
-                        visuals.watermarkColor,
-                      )}
-                    />
-                  </div>
-
-                  {/* Premier plan Z-10 : Lisibilité et aération totale */}
-                  <div className="relative z-10 flex flex-col gap-2">
-                    {/* Ligne 1 : Statut catégorie avec puce + Code abrégé + Chevron */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-soft">
-                          <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', visuals.dotColor)} />
-                          {visuals.categoryLabel}
-                        </span>
-                        <span className="font-mono text-[10px] text-ink-faint bg-paper px-1.5 py-0.5 rounded border border-line/50 shrink-0">
-                          {m.code}
-                        </span>
+                <div className="rounded-2xl border border-line/70 dark:border-white/[0.08] bg-surface dark:bg-[#151922] p-4 sm:p-4.5 hover:border-slate-400 dark:hover:border-white/20 hover:shadow-xs transition-all duration-150 flex flex-col justify-between gap-3 min-h-[135px]">
+                  {/* Ligne 1 : Squircle Icon + Info Titre & Code */}
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div
+                        className={cx(
+                          'grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-transform group-hover:scale-105',
+                          visuals.iconBg,
+                          visuals.iconText,
+                        )}
+                      >
+                        <IconComponent size={20} strokeWidth={1.75} />
                       </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {!m.active && <Chip tone="red">Inactif</Chip>}
-                        <ChevronRight
-                          size={15}
-                          className="text-ink-faint group-hover:text-ink group-hover:translate-x-0.5 transition-all"
-                        />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="text-[14px] font-semibold text-ink tracking-tight truncate group-hover:text-ink-soft transition-colors">
+                            {m.name}
+                          </h3>
+                          <span className="font-mono text-[10px] font-semibold text-ink-faint bg-paper px-1.5 py-0.2 rounded border border-line/50 shrink-0">
+                            {m.code}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-ink-soft">
+                          <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', visuals.dotColor)} />
+                          <span className="text-[11px] font-medium truncate">{visuals.categoryLabel}</span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Nom de l'emplacement */}
-                    <h3 className="text-[15px] font-semibold text-ink tracking-tight truncate group-hover:text-ink-soft transition-colors">
-                      {m.name}
-                    </h3>
-
-                    {/* Responsable & Description */}
-                    {m.manager_name && (
-                      <p className="text-xs text-ink-soft flex items-center gap-1.5 font-medium truncate">
-                        <UserCheck size={12} className="text-ink-faint shrink-0" />
-                        <span className="truncate">{m.manager_name}</span>
-                      </p>
-                    )}
-
-                    {m.description && (
-                      <p className="text-xs text-ink-faint line-clamp-1 leading-normal">
-                        {m.description}
-                      </p>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                      {!m.active && <Chip tone="red">Inactif</Chip>}
+                      <ChevronRight
+                        size={15}
+                        className="text-ink-faint group-hover:text-ink group-hover:translate-x-0.5 transition-all"
+                      />
+                    </div>
                   </div>
 
-                  {/* Ligne basse : Métriques sobres Apple HIG */}
-                  <div className="relative z-10 pt-2.5 border-t border-line/50 flex items-center justify-between text-xs text-ink-soft">
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1 font-medium">
-                        <Wrench size={12} className="text-ink-faint" />
-                        <span className="text-ink font-semibold tabular-nums">{m.tools_count ?? 0}</span>
-                        <span className="text-ink-faint text-[11px]">
-                          machine{(m.tools_count ?? 0) > 1 ? 's' : ''}
-                        </span>
+                  {/* Ligne 2 : Responsable si assigné */}
+                  {m.manager_name && (
+                    <p className="text-xs text-ink-soft flex items-center gap-1.5 font-medium truncate">
+                      <UserCheck size={12} className="text-ink-faint shrink-0" />
+                      <span className="truncate">{m.manager_name}</span>
+                    </p>
+                  )}
+
+                  {/* Ligne 3 : Métriques sobres */}
+                  <div className="pt-2 border-t border-line/50 flex items-center justify-between text-xs text-ink-soft">
+                    <div className="flex items-center gap-2.5 font-medium">
+                      <span>
+                        <strong className="text-ink font-semibold tabular-nums">{m.tools_count ?? 0}</strong> machine{(m.tools_count ?? 0) > 1 ? 's' : ''}
                       </span>
                       <span className="text-ink-faint">•</span>
-                      <span className="flex items-center gap-1 font-medium">
-                        <Package size={12} className="text-ink-faint" />
-                        <span className="text-ink font-semibold tabular-nums">{m.stock_count ?? 0}</span>
-                        <span className="text-ink-faint text-[11px]">
-                          matière{(m.stock_count ?? 0) > 1 ? 's' : ''}
-                        </span>
+                      <span>
+                        <strong className="text-ink font-semibold tabular-nums">{m.stock_count ?? 0}</strong> matière{(m.stock_count ?? 0) > 1 ? 's' : ''}
                       </span>
                     </div>
-
-                    <div className="text-[11px] font-medium text-ink-faint">
-                      {m.can_lend === false ? (
-                        <span className="text-ink-soft">Consultation</span>
-                      ) : (
-                        <span className="text-ink-soft">Prêt actif</span>
-                      )}
-                    </div>
+                    <span className="text-[11px] font-medium text-ink-faint">
+                      {m.can_lend === false ? 'Consultation' : 'Prêt actif'}
+                    </span>
                   </div>
                 </div>
               </button>
@@ -927,99 +999,97 @@ export function Magasins({
               const drawerVisuals = getLocationVisuals(detail.magasin);
               const DrawerIcon = drawerVisuals.Icon;
               return (
-                <div className="relative overflow-hidden rounded-[22px] border border-line bg-paper p-4 space-y-3 shadow-xs">
-                  {/* Filigrane d'arrière-plan dans le Drawer */}
-                  <div
-                    aria-hidden="true"
-                    className="absolute -right-4 -bottom-4 pointer-events-none select-none"
-                  >
-                    <DrawerIcon
-                      size={120}
-                      strokeWidth={1.2}
+                <div className="rounded-2xl border border-line/70 dark:border-white/[0.08] bg-surface dark:bg-[#151922] p-4 sm:p-5 space-y-4 shadow-xs">
+                  {/* Ligne 1 : En-tête pleine largeur sans rognage de texte */}
+                  <div className="flex items-start gap-3.5">
+                    <div
                       className={cx(
-                        'opacity-[0.05] dark:opacity-[0.08]',
-                        drawerVisuals.watermarkColor,
+                        'grid h-12 w-12 shrink-0 place-items-center rounded-2xl',
+                        drawerVisuals.iconBg,
+                        drawerVisuals.iconText,
                       )}
-                    />
+                    >
+                      <DrawerIcon size={24} strokeWidth={1.75} />
+                    </div>
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-semibold text-ink-faint bg-paper px-2 py-0.5 rounded-md border border-line/50">
+                          {detail.magasin.code}
+                        </span>
+                        <span className="text-xs text-ink-soft flex items-center gap-1.5 font-medium">
+                          <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', drawerVisuals.dotColor)} />
+                          {drawerVisuals.categoryLabel}
+                        </span>
+                        {!detail.magasin.active && <Chip tone="red">Inactif</Chip>}
+                      </div>
+                      <h2 className="text-lg font-bold text-ink leading-snug break-words">
+                        {detail.magasin.name}
+                      </h2>
+                    </div>
                   </div>
 
-                  <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div
-                        className={cx(
-                          'grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-transform',
-                          drawerVisuals.iconBg,
-                          drawerVisuals.iconText,
-                        )}
-                      >
-                        <DrawerIcon size={22} strokeWidth={1.75} />
-                      </div>
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs font-medium text-ink-faint bg-paper px-2 py-0.5 rounded border border-line/50">
-                            {detail.magasin.code}
-                          </span>
-                          <h2 className="text-base font-semibold text-ink">{detail.magasin.name}</h2>
-                          <span className="text-xs text-ink-soft flex items-center gap-1.5 font-medium">
-                            <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', drawerVisuals.dotColor)} />
-                            {drawerVisuals.categoryLabel}
-                          </span>
-                          {!detail.magasin.active && <Chip tone="red">Inactif</Chip>}
-                        </div>
-                        <p className="text-xs text-ink-soft">
-                          {detail.magasin.description || 'Local logistique et parc d’outillage'}
+                  {/* Responsable & Description en pleine largeur */}
+                  {(detail.magasin.manager_name || detail.magasin.description) && (
+                    <div className="space-y-1.5 text-xs text-ink-soft bg-paper/50 rounded-xl p-3 border border-line/50">
+                      {detail.magasin.manager_name && (
+                        <p className="flex items-center gap-2 font-medium text-ink">
+                          <UserCheck size={14} className="text-ink-faint shrink-0" />
+                          <span>Responsable : <strong>{detail.magasin.manager_name}</strong></span>
                         </p>
-                        {detail.magasin.manager_name && (
-                          <p className="text-xs text-ink font-medium flex items-center gap-1.5">
-                            <UserCheck size={13} className="text-ink-faint" />
-                            Responsable désigné : {detail.magasin.manager_name}
-                          </p>
-                        )}
-                      </div>
+                      )}
+                      {detail.magasin.description && (
+                        <p className="text-ink-faint leading-relaxed break-words">
+                          {detail.magasin.description}
+                        </p>
+                      )}
                     </div>
+                  )}
 
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<IconPrinter size={15} />}
-                    onClick={() => {
-                      print(
-                        <MagasinDoorLabel
-                          magasin={detail.magasin}
-                          toolsCount={detail.tools.length}
-                          stockCount={detail.stock.length}
-                        />
-                      );
-                    }}
-                    title="Imprimer l'étiquette QR officielle pour la porte du magasin"
-                  >
-                    Étiquette Porte
-                  </Button>
-
-                  {canExport && (
+                  {/* Actions de gestion : Grille 3 colonnes responsive */}
+                  <div className="grid grid-cols-3 gap-2 pt-1 border-t border-line/60">
                     <Button
                       size="sm"
                       variant="secondary"
-                      icon={<Download size={14} />}
-                      onClick={handleExportMagasinInventory}
-                      title="Télécharger l'inventaire complet de ce magasin en PDF et Excel"
+                      icon={<IconPrinter size={14} />}
+                      onClick={() => {
+                        print(
+                          <MagasinDoorLabel
+                            magasin={detail.magasin}
+                            toolsCount={detail.tools.length}
+                            stockCount={detail.stock.length}
+                          />
+                        );
+                      }}
+                      title="Imprimer l'étiquette QR officielle pour la porte du magasin"
+                      className="w-full justify-center text-xs"
                     >
-                      Inventaire
+                      Étiquette
                     </Button>
-                  )}
 
-                  {canManage && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => openEdit(detail.magasin)}
-                    >
-                      Modifier
-                    </Button>
-                  )}
-                </div>
-              </div>
+                    {canExport && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        icon={<Download size={14} />}
+                        onClick={handleExportMagasinInventory}
+                        title="Télécharger l'inventaire complet de ce magasin en PDF et Excel"
+                        className="w-full justify-center text-xs"
+                      >
+                        Inventaire
+                      </Button>
+                    )}
+
+                    {canManage && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => openEdit(detail.magasin)}
+                        className="w-full justify-center text-xs"
+                      >
+                        Modifier
+                      </Button>
+                    )}
+                  </div>
 
               {/* Barre d'opérations directes pour ce magasin */}
               <div className="pt-2 border-t border-line/60 flex flex-wrap items-center gap-2">

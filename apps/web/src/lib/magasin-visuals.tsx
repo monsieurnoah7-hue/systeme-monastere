@@ -91,7 +91,7 @@ const CATEGORY_DEFINITIONS: Record<
     dotColor: 'bg-sky-500',
     pillBg: 'bg-sky-500/[0.06] dark:bg-sky-400/10',
     pillText: 'text-sky-700 dark:text-sky-300',
-    borderHover: 'hover:border-sky-500/30',
+    borderHover: 'hover:border-slate-300 dark:hover:border-white/20',
   },
   atelier: {
     // Apple System Amber / Warm Craft
@@ -102,7 +102,7 @@ const CATEGORY_DEFINITIONS: Record<
     dotColor: 'bg-amber-500',
     pillBg: 'bg-amber-500/[0.06] dark:bg-amber-400/10',
     pillText: 'text-amber-700 dark:text-amber-300',
-    borderHover: 'hover:border-amber-500/30',
+    borderHover: 'hover:border-slate-300 dark:hover:border-white/20',
   },
   magasin: {
     // Apple System Indigo / Inventory
@@ -113,7 +113,7 @@ const CATEGORY_DEFINITIONS: Record<
     dotColor: 'bg-indigo-500',
     pillBg: 'bg-indigo-500/[0.06] dark:bg-indigo-400/10',
     pillText: 'text-indigo-700 dark:text-indigo-300',
-    borderHover: 'hover:border-indigo-500/30',
+    borderHover: 'hover:border-slate-300 dark:hover:border-white/20',
   },
   matiere: {
     // Apple System Emerald / Raw Wood & Materials
@@ -124,7 +124,7 @@ const CATEGORY_DEFINITIONS: Record<
     dotColor: 'bg-emerald-500',
     pillBg: 'bg-emerald-500/[0.06] dark:bg-emerald-400/10',
     pillText: 'text-emerald-700 dark:text-emerald-300',
-    borderHover: 'hover:border-emerald-500/30',
+    borderHover: 'hover:border-slate-300 dark:hover:border-white/20',
   },
   salle: {
     // Apple System Teal / Learning & Pedagogy
@@ -135,7 +135,7 @@ const CATEGORY_DEFINITIONS: Record<
     dotColor: 'bg-teal-500',
     pillBg: 'bg-teal-500/[0.06] dark:bg-teal-400/10',
     pillText: 'text-teal-700 dark:text-teal-300',
-    borderHover: 'hover:border-teal-500/30',
+    borderHover: 'hover:border-slate-300 dark:hover:border-white/20',
   },
   economat: {
     // Apple System Warm Ochre / Provisions & Reserves
@@ -146,7 +146,7 @@ const CATEGORY_DEFINITIONS: Record<
     dotColor: 'bg-yellow-600',
     pillBg: 'bg-yellow-600/[0.06] dark:bg-yellow-500/10',
     pillText: 'text-yellow-800 dark:text-yellow-200',
-    borderHover: 'hover:border-yellow-600/30',
+    borderHover: 'hover:border-slate-300 dark:hover:border-white/20',
   },
   hebergement: {
     // Apple System Rose / Community Living
@@ -157,7 +157,7 @@ const CATEGORY_DEFINITIONS: Record<
     dotColor: 'bg-rose-500',
     pillBg: 'bg-rose-500/[0.06] dark:bg-rose-400/10',
     pillText: 'text-rose-700 dark:text-rose-300',
-    borderHover: 'hover:border-rose-500/30',
+    borderHover: 'hover:border-slate-300 dark:hover:border-white/20',
   },
   maintenance: {
     // Apple System Coral Red / Maintenance & SAV
@@ -168,7 +168,7 @@ const CATEGORY_DEFINITIONS: Record<
     dotColor: 'bg-rose-500',
     pillBg: 'bg-rose-500/[0.06] dark:bg-rose-400/10',
     pillText: 'text-rose-700 dark:text-rose-300',
-    borderHover: 'hover:border-rose-500/30',
+    borderHover: 'hover:border-slate-300 dark:hover:border-white/20',
   },
 };
 
