@@ -21,6 +21,7 @@ import { stockRoutes } from './routes/stock.js';
 import { terminalsRoutes } from './routes/terminals.js';
 import { toolsRoutes } from './routes/tools.js';
 import { usersRoutes } from './routes/users.js';
+import { kitsRoutes } from './routes/kits.js';
 
 export const app = new Hono();
 
@@ -58,5 +59,6 @@ app.route('/api/permissions', permissionsRoutes);
 app.route('/api/scan', scanRoutes);
 app.route('/api/cron', cronRoutes);
 app.route('/api/admin', adminRoutes);
+app.route('/api/kits', kitsRoutes);
 
 app.notFound((c) => c.json({ error: 'Route introuvable.' }, 404));

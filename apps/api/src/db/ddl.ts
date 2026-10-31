@@ -351,6 +351,53 @@ ALTER TABLE magasins ADD COLUMN IF NOT EXISTS can_receive_in boolean NOT NULL DE
 ALTER TABLE magasins ADD COLUMN IF NOT EXISTS can_deliver_out boolean NOT NULL DEFAULT true;
 ALTER TABLE magasins ADD COLUMN IF NOT EXISTS can_transfer boolean NOT NULL DEFAULT true;
 ALTER TABLE magasins ADD COLUMN IF NOT EXISTS manager_name text;
+
+-- Migration 011: Kits d'établis & boîtes à outils intelligentes avec traçabilité par QR code
+CREATE TABLE IF NOT EXISTS etabli_kits (
+  id text PRIMARY KEY,
+  employee_id text NOT NULL REFERENCES employees(id),
+  etabli_number int NOT NULL,
+  code text NOT NULL UNIQUE,
+  location text NOT NULL,
+  source_magasin_id text NOT NULL REFERENCES magasins(id),
+  status text NOT NULL DEFAULT 'actif' CHECK (status IN ('actif', 'en_revision', 'cloture')),
+  notes text,
+  last_audited_at timestamptz,
+  last_audited_by text,
+  last_audit_status text DEFAULT 'conforme' CHECK (last_audit_status IN ('conforme', 'anomalie', 'incomplet')),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS etabli_kits_emp_idx ON etabli_kits(employee_id);
+CREATE INDEX IF NOT EXISTS etabli_kits_source_idx ON etabli_kits(source_magasin_id);
+
+CREATE TABLE IF NOT EXISTS etabli_kit_items (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  kit_id text NOT NULL REFERENCES etabli_kits(id) ON DELETE CASCADE,
+  item_num int NOT NULL,
+  name text NOT NULL,
+  qty int NOT NULL DEFAULT 1,
+  unit text NOT NULL DEFAULT 'pièce',
+  tool_code text NOT NULL UNIQUE,
+  condition text NOT NULL DEFAULT 'bon' CHECK (condition IN ('bon', 'a_affuter', 'a_reparer', 'manquant', 'reforme')),
+  is_present boolean NOT NULL DEFAULT true,
+  notes text,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS etabli_kit_items_kit_idx ON etabli_kit_items(kit_id);
+CREATE INDEX IF NOT EXISTS etabli_kit_items_tool_code_idx ON etabli_kit_items(tool_code);
+
+CREATE TABLE IF NOT EXISTS etabli_kit_audits (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  kit_id text NOT NULL REFERENCES etabli_kits(id) ON DELETE CASCADE,
+  audited_by text NOT NULL,
+  auditor_name text,
+  status text NOT NULL CHECK (status IN ('conforme', 'anomalie', 'incomplet')),
+  items_present_count int NOT NULL,
+  items_total_count int NOT NULL,
+  anomalies_note text,
+  audited_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS etabli_kit_audits_kit_idx ON etabli_kit_audits(kit_id, audited_at DESC);
 `;
 
-export const MIGRATION_NAME = '010_magasin_capabilities';
+export const MIGRATION_NAME = '011_etabli_kits_system';

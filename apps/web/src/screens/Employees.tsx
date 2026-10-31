@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type Employee, type EmployeeDetail, type Leave, type ScanResult, type TodayEmployee, type User } from '../lib/api';
+import { api, type Employee, type EmployeeDetail, type Leave, type ScanResult, type TodayEmployee, type User, type EtabliKit, type EtabliKitItem } from '../lib/api';
 import { QR_PREFIX } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { formatDate, initials } from '../lib/labels';
+import { EtabliKitCard } from '../components/EtabliKitCard';
 import {
   Banner,
   Button,
@@ -338,6 +339,8 @@ export function Employees({
   const [detailFor, setDetailFor] = useState<Employee | null>(null);
   const [detail, setDetail] = useState<EmployeeDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [employeeKit, setEmployeeKit] = useState<{ kit: EtabliKit | null; items: EtabliKitItem[] } | null>(null);
+  const [activeDetailTab, setActiveDetailTab] = useState<'profil' | 'etabli'>('profil');
   const { print, portal } = usePrintSheet();
 
   useEffect(() => {
@@ -349,16 +352,27 @@ export function Employees({
   useEffect(() => {
     if (!detailFor) {
       setDetail(null);
+      setEmployeeKit(null);
       return;
     }
     let cancelled = false;
     setDetailLoading(true);
-    api<EmployeeDetail>(`/api/employees/${detailFor.id}/detail`)
-      .then((res) => {
-        if (!cancelled) setDetail(res);
+    setActiveDetailTab('profil');
+    Promise.all([
+      api<EmployeeDetail>(`/api/employees/${detailFor.id}/detail`),
+      api<{ kit: EtabliKit | null; items: EtabliKitItem[] }>(`/api/kits/by-employee/${detailFor.id}`).catch(() => ({ kit: null, items: [] })),
+    ])
+      .then(([resDetail, resKit]) => {
+        if (!cancelled) {
+          setDetail(resDetail);
+          setEmployeeKit(resKit);
+        }
       })
       .catch(() => {
-        if (!cancelled) setDetail(null);
+        if (!cancelled) {
+          setDetail(null);
+          setEmployeeKit(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setDetailLoading(false);
@@ -1239,76 +1253,139 @@ export function Employees({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <StatBox label="Jours ce mois" value={String(detail.month.daysPresent)} />
-              <StatBox label="Retards" value={String(detail.month.lateCount)} tone={detail.month.lateCount > 0 ? 'amber' : undefined} />
-              <StatBox label="Pauses" value={String(detail.month.breaks)} />
+            {/* Tab Selector: Profil vs Établi / Kit d'outils */}
+            <div className="flex items-center gap-2 border-b border-line pb-2">
+              <button
+                type="button"
+                onClick={() => setActiveDetailTab('profil')}
+                className={cx(
+                  'px-3 py-1.5 text-xs font-bold rounded-lg transition-all',
+                  activeDetailTab === 'profil'
+                    ? 'bg-amber text-slate-950 shadow-xs'
+                    : 'text-ink-soft hover:text-ink hover:bg-paper-2',
+                )}
+              >
+                Fiche & Pointages
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveDetailTab('etabli')}
+                className={cx(
+                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all',
+                  activeDetailTab === 'etabli'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-ink-soft hover:text-ink hover:bg-paper-2',
+                )}
+              >
+                <span>Établi & Boîte à Outils</span>
+                {employeeKit?.kit ? (
+                  <span className="rounded-full bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 text-[10px] font-mono">
+                    N°{employeeKit.kit.etabli_number}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-ink-faint">(Non doté)</span>
+                )}
+              </button>
             </div>
 
-            {detail.openLoans.length > 0 && (
-              <section>
-                <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-faint">
-                  Outils détenus en cours ({detail.openLoans.length})
-                </h3>
-                <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-                  {detail.openLoans.map((loan) => (
-                    <li key={loan.id} className="flex items-center justify-between gap-3 p-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-ink">{loan.tool_name}</p>
-                        <p className="text-[11px] text-ink-soft">
-                          {loan.category} · sorti le {String(loan.out_at).slice(0, 10)}
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-amber-wash border border-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber">
-                        En prêt
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            <section>
-              <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-faint">Historique 30 derniers jours</h3>
-              {detail.history.length === 0 ? (
-                <p className="text-xs text-ink-soft">Aucun pointage enregistré.</p>
-              ) : (
-                <div className="overflow-hidden rounded-xl border border-line bg-surface">
-                  <table className="w-full text-left sheet-grid text-xs">
-                    <thead>
-                      <tr>
-                        <th className="sheet-th">Date</th>
-                        <th className="sheet-th text-center">Arrivée</th>
-                        <th className="sheet-th text-center">Pause</th>
-                        <th className="sheet-th text-center">Départ</th>
-                        <th className="sheet-th text-center">Retard</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-line">
-                      {detail.history.map((row) => (
-                        <tr key={row.date} className="hover:bg-paper-2/40">
-                          <td className="sheet-cell font-mono tabular-nums">{row.date}</td>
-                          <td className="sheet-cell text-center font-mono tabular-nums text-green font-semibold">
-                            {row.inAt ?? '—'}
-                          </td>
-                          <td className="sheet-cell text-center font-mono tabular-nums text-ink-faint">
-                            {row.breakIn ? `${row.breakIn} → ${row.breakOut ?? '…'}` : '—'}
-                          </td>
-                          <td className="sheet-cell text-center font-mono tabular-nums text-ink-soft">{row.outAt ?? '—'}</td>
-                          <td className="sheet-cell text-center font-mono tabular-nums">
-                            {row.lateMinutes > 0 ? (
-                              <span className="text-amber font-bold">+{row.lateMinutes}m</span>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {activeDetailTab === 'etabli' ? (
+              <div className="space-y-4">
+                {employeeKit?.kit ? (
+                  <EtabliKitCard
+                    kit={employeeKit.kit}
+                    items={employeeKit.items}
+                    canManage={canEdit}
+                    onRefresh={() => {
+                      if (detailFor) {
+                        api<{ kit: EtabliKit | null; items: EtabliKitItem[] }>(`/api/kits/by-employee/${detailFor.id}`)
+                          .then((res) => setEmployeeKit(res))
+                          .catch(() => {});
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="rounded-xl border border-dashed border-line p-6 text-center text-xs text-ink-soft">
+                    <p className="font-semibold text-ink">Aucun kit d'établi nominatif affecté.</p>
+                    <p className="mt-1">
+                      Les kits d'établis fixes sont réservés aux artisans et postes dotés selon l'inventaire officiel du CFTM.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-3 gap-3">
+                  <StatBox label="Jours ce mois" value={String(detail.month.daysPresent)} />
+                  <StatBox label="Retards" value={String(detail.month.lateCount)} tone={detail.month.lateCount > 0 ? 'amber' : undefined} />
+                  <StatBox label="Pauses" value={String(detail.month.breaks)} />
                 </div>
-              )}
-            </section>
+
+                {detail.openLoans.length > 0 && (
+                  <section>
+                    <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-faint">
+                      Outils empruntés au magasin ({detail.openLoans.length})
+                    </h3>
+                    <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+                      {detail.openLoans.map((loan) => (
+                        <li key={loan.id} className="flex items-center justify-between gap-3 p-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold text-ink">{loan.tool_name}</p>
+                            <p className="text-[11px] text-ink-soft">
+                              {loan.category} · sorti le {String(loan.out_at).slice(0, 10)}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-amber-wash border border-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber">
+                            En prêt
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+
+                <section>
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-faint">Historique 30 derniers jours</h3>
+                  {detail.history.length === 0 ? (
+                    <p className="text-xs text-ink-soft">Aucun pointage enregistré.</p>
+                  ) : (
+                    <div className="overflow-hidden rounded-xl border border-line bg-surface">
+                      <table className="w-full text-left sheet-grid text-xs">
+                        <thead>
+                          <tr>
+                            <th className="sheet-th">Date</th>
+                            <th className="sheet-th text-center">Arrivée</th>
+                            <th className="sheet-th text-center">Pause</th>
+                            <th className="sheet-th text-center">Départ</th>
+                            <th className="sheet-th text-center">Retard</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-line">
+                          {detail.history.map((row) => (
+                            <tr key={row.date} className="hover:bg-paper-2/40">
+                              <td className="sheet-cell font-mono tabular-nums">{row.date}</td>
+                              <td className="sheet-cell text-center font-mono tabular-nums text-green font-semibold">
+                                {row.inAt ?? '—'}
+                              </td>
+                              <td className="sheet-cell text-center font-mono tabular-nums text-ink-faint">
+                                {row.breakIn ? `${row.breakIn} → ${row.breakOut ?? '…'}` : '—'}
+                              </td>
+                              <td className="sheet-cell text-center font-mono tabular-nums text-ink-soft">{row.outAt ?? '—'}</td>
+                              <td className="sheet-cell text-center font-mono tabular-nums">
+                                {row.lateMinutes > 0 ? (
+                                  <span className="text-amber font-bold">+{row.lateMinutes}m</span>
+                                ) : (
+                                  '—'
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
           </div>
         ) : (
           <Banner tone="error">Fiche introuvable.</Banner>

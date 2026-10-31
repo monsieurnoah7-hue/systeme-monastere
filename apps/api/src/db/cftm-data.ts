@@ -1,6 +1,7 @@
 import type { Sql } from './index.js';
 import { hashPassword } from '../lib/crypto.js';
 import { CFTM_TOOLS, CFTM_STOCK_REFS } from './cftm-inventory-data.js';
+import { CFTM_KITS } from './cftm-kits-data.js';
 
 const BADGE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
@@ -663,6 +664,44 @@ export async function syncOfficialCftmData(db: Sql): Promise<void> {
         `INSERT INTO stock_refs (name, category, unit, location, magasin_id, min_qty, initial_qty, brand, supplier)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [s.name, s.category, s.unit, s.location, s.magasin_id, s.min_qty, s.initial_qty, s.brand || null, s.supplier || null],
+      );
+    }
+  }
+
+  // 6. Synchroniser les 23 Kits d'Établis officiels, leurs outils et traçabilité de dotation
+  for (const kit of CFTM_KITS) {
+    const kitId = `KIT-${kit.code}-${String(kit.etabli_num).padStart(2, '0')}`;
+    await db.query(
+      `INSERT INTO etabli_kits (id, employee_id, etabli_number, code, location, source_magasin_id, status, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, 'actif', $7)
+       ON CONFLICT (id) DO UPDATE
+       SET employee_id = EXCLUDED.employee_id,
+           etabli_number = EXCLUDED.etabli_number,
+           code = EXCLUDED.code,
+           location = EXCLUDED.location,
+           source_magasin_id = EXCLUDED.source_magasin_id,
+           notes = EXCLUDED.notes`,
+      [
+        kitId,
+        kit.emp_id,
+        kit.etabli_num,
+        kit.code,
+        kit.location,
+        kit.source_mag,
+        `Dotation certifiée d'atelier pour ${kit.name} (${kit.job})`,
+      ],
+    );
+
+    // Insérer / synchroniser les outils du kit
+    for (const item of kit.items) {
+      await db.query(
+        `INSERT INTO etabli_kit_items (kit_id, item_num, name, qty, unit, tool_code, condition, is_present)
+         VALUES ($1, $2, $3, $4, $5, $6, 'bon', true)
+         ON CONFLICT (tool_code) DO UPDATE
+         SET name = EXCLUDED.name,
+             qty = EXCLUDED.qty,
+             unit = EXCLUDED.unit`,
+        [kitId, item.item_num, item.name, item.qty, item.unit, item.tool_code],
       );
     }
   }

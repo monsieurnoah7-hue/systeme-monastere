@@ -521,8 +521,59 @@ export type ScanResult =
   | { kind: 'employee'; employee: { id: string; full_name: string; job_title: string; photo_path: string | null; active: boolean }; code: string; via: string }
   | { kind: 'stock'; ref: StockRef; code: string }
   | { kind: 'terminal'; terminal: { id: string; name: string }; code: string }
+  | { kind: 'etabli_kit'; kit: EtabliKit; items: EtabliKitItem[]; code: string }
+  | { kind: 'etabli_kit_item'; item: EtabliKitItem & { kit_code: string; etabli_location: string; employee_name: string; employee_job: string; employee_photo: string | null }; code: string }
   | { kind: 'ignored'; reason: string }
   | { kind: 'unknown'; code: string };
+
+export type EtabliKit = {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_job: string;
+  employee_photo: string | null;
+  etabli_number: number;
+  code: string;
+  location: string;
+  source_magasin_id: string;
+  source_magasin_name: string;
+  source_magasin_code: string;
+  status: string;
+  notes: string | null;
+  last_audited_at: string | null;
+  last_audited_by: string | null;
+  last_audit_status: string | null;
+  created_at: string;
+  items_total: number;
+  items_present: number;
+  items_anomalies: number;
+};
+
+export type EtabliKitItem = {
+  id: number;
+  kit_id: string;
+  item_num: number;
+  name: string;
+  qty: number;
+  unit: string;
+  tool_code: string;
+  condition: 'bon' | 'a_affuter' | 'a_reparer' | 'manquant' | 'reforme';
+  is_present: boolean;
+  notes: string | null;
+  updated_at: string;
+};
+
+export type EtabliKitAudit = {
+  id: number;
+  kit_id: string;
+  audited_by: string;
+  auditor_name: string;
+  status: 'conforme' | 'anomalie' | 'incomplet';
+  items_present_count: number;
+  items_total_count: number;
+  anomalies_note: string | null;
+  audited_at: string;
+};
 
 export type EmployeeDetail = {
   employee: Employee;

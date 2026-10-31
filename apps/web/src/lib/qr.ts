@@ -6,6 +6,7 @@ export const QR_PREFIX = {
   punch: 'montfebe:punch:',
   stock: 'montfebe:stock:',
   magasin: 'montfebe:magasin:',
+  kit: 'montfebe:kit:',
 } as const;
 
 export async function qrDataUrl(text: string, width = 220): Promise<string> {

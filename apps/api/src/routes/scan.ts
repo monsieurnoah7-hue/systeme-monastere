@@ -25,14 +25,30 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
   let toolId = stripPrefix(rawCode, 'montfebe:tool:');
   let badgeToken = stripPrefix(rawCode, 'montfebe:badge:');
   let stockId = stripPrefix(rawCode, 'montfebe:stock:');
+  let kitId = stripPrefix(rawCode, 'montfebe:kit:');
   if (stripPrefix(rawCode, 'montfebe:punch:')) {
     return c.json({ kind: 'ignored', reason: 'QR de pointage : utilisez la borne.' });
   }
-  if (!toolId && !badgeToken && !stockId && upper.startsWith('MONTFEBE')) {
+  if (!toolId && !badgeToken && !stockId && !kitId && upper.startsWith('MONTFEBE')) {
     return c.json({ kind: 'unknown', code: rawCode });
   }
 
   const db = getDb();
+
+  if (kitId) {
+    const kit = await db.one(`
+      SELECT k.*, e.full_name AS employee_name, e.job_title AS employee_job, e.photo_path AS employee_photo,
+             m.name AS source_magasin_name
+        FROM etabli_kits k
+        JOIN employees e ON e.id = k.employee_id
+        JOIN magasins m ON m.id = k.source_magasin_id
+       WHERE k.id = $1 OR k.code = $1
+    `, [kitId.toUpperCase()]);
+    if (kit) {
+      const items = await db.query(`SELECT * FROM etabli_kit_items WHERE kit_id = $1 ORDER BY item_num ASC`, [kit.id]);
+      return c.json({ kind: 'etabli_kit', kit, items, code: rawCode });
+    }
+  }
 
   if (toolId) {
     const tool = await db.one(
@@ -105,6 +121,33 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
 
   const terminal = await db.one(`SELECT id, name FROM terminals WHERE id = $1 AND active = true`, [upper]);
   if (terminal) return c.json({ kind: 'terminal', terminal, code: rawCode });
+
+  // Direct kit match by id or code
+  const directKit = await db.one(`
+    SELECT k.*, e.full_name AS employee_name, e.job_title AS employee_job, e.photo_path AS employee_photo,
+           m.name AS source_magasin_name
+      FROM etabli_kits k
+      JOIN employees e ON e.id = k.employee_id
+      JOIN magasins m ON m.id = k.source_magasin_id
+     WHERE k.id = $1 OR k.code = $1
+  `, [upper]);
+  if (directKit) {
+    const items = await db.query(`SELECT * FROM etabli_kit_items WHERE kit_id = $1 ORDER BY item_num ASC`, [directKit.id]);
+    return c.json({ kind: 'etabli_kit', kit: directKit, items, code: rawCode });
+  }
+
+  // Direct kit item match by tool_code
+  const kitItem = await db.one(`
+    SELECT i.*, k.code AS kit_code, k.location AS etabli_location,
+           e.full_name AS employee_name, e.job_title AS employee_job, e.photo_path AS employee_photo
+      FROM etabli_kit_items i
+      JOIN etabli_kits k ON k.id = i.kit_id
+      JOIN employees e ON e.id = k.employee_id
+     WHERE i.tool_code = $1
+  `, [upper]);
+  if (kitItem) {
+    return c.json({ kind: 'etabli_kit_item', item: kitItem, code: rawCode });
+  }
 
   return c.json({ kind: 'unknown', code: rawCode });
 });
