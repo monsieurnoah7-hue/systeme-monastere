@@ -1,5 +1,6 @@
 import type { Sql } from './index.js';
 import { hashPassword } from '../lib/crypto.js';
+import { CFTM_TOOLS, CFTM_STOCK_REFS } from './cftm-inventory-data.js';
 
 const BADGE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
@@ -609,6 +610,47 @@ export async function syncOfficialCftmData(db: Sql): Promise<void> {
              role = EXCLUDED.role,
              employee_id = EXCLUDED.employee_id`,
         [emp.login, pwdHash, emp.userDisplay || emp.name, emp.role || 'direction', emp.id],
+      );
+    }
+  }
+
+  // 4. Synchroniser le parc d'outillage & machines officielles (CFTM_TOOLS)
+  for (const t of CFTM_TOOLS) {
+    await db.query(
+      `INSERT INTO tools (id, name, category, location, magasin_id, condition, status, brand, model)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (id) DO UPDATE
+       SET name = EXCLUDED.name,
+           category = EXCLUDED.category,
+           location = EXCLUDED.location,
+           magasin_id = EXCLUDED.magasin_id,
+           condition = EXCLUDED.condition,
+           status = EXCLUDED.status,
+           brand = EXCLUDED.brand,
+           model = EXCLUDED.model`,
+      [t.id, t.name, t.category, t.location, t.magasin_id, t.condition, t.status, t.brand || null, t.model || null],
+    );
+  }
+
+  // 5. Synchroniser le catalogue et stock de consommables / matières premières (CFTM_STOCK_REFS)
+  for (const s of CFTM_STOCK_REFS) {
+    const existing = await db.query<{ id: number }>(
+      `SELECT id FROM stock_refs WHERE name = $1 AND magasin_id = $2 LIMIT 1`,
+      [s.name, s.magasin_id],
+    );
+    const existingRef = existing[0];
+    if (existingRef) {
+      await db.query(
+        `UPDATE stock_refs
+            SET category = $1, unit = $2, location = $3, min_qty = $4, brand = $5, supplier = $6
+          WHERE id = $7`,
+        [s.category, s.unit, s.location, s.min_qty, s.brand || null, s.supplier || null, existingRef.id],
+      );
+    } else {
+      await db.query(
+        `INSERT INTO stock_refs (name, category, unit, location, magasin_id, min_qty, initial_qty, brand, supplier)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [s.name, s.category, s.unit, s.location, s.magasin_id, s.min_qty, s.initial_qty, s.brand || null, s.supplier || null],
       );
     }
   }
