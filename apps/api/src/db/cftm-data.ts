@@ -351,6 +351,7 @@ export const CFTM_STAFF: {
   name: string;
   job: string;
   category: string;
+  photo_path?: string;
   login?: string;
   role?: string;
   userDisplay?: string;
@@ -361,6 +362,7 @@ export const CFTM_STAFF: {
     name: 'Père Elie TEKAM TAGHUEN, OSB',
     job: 'Directeur Général',
     category: 'Direction',
+    photo_path: '/photos/employees/EMP-001.webp',
     login: 'direction',
     role: 'direction',
     userDisplay: 'Père Elie TEKAM TAGHUEN (DG)',
@@ -370,6 +372,7 @@ export const CFTM_STAFF: {
     name: 'Frère François MEKELI, OSB',
     job: 'Surveillant Général',
     category: 'Direction',
+    photo_path: '/photos/employees/EMP-002.webp',
     login: 'mekeli',
     role: 'direction',
     userDisplay: 'Frère François MEKELI (SG)',
@@ -379,6 +382,7 @@ export const CFTM_STAFF: {
     name: 'M. KOUOMOU Désiré',
     job: 'Directeur de Formation & Informaticien',
     category: 'Direction Pédagogique',
+    photo_path: '/photos/employees/EMP-003.webp',
     login: 'kouomou',
     role: 'direction',
     userDisplay: 'M. KOUOMOU Désiré (DF & IT)',
@@ -388,6 +392,7 @@ export const CFTM_STAFF: {
     name: 'M. KAMGA Innocent',
     job: 'Directeur des Projets',
     category: 'Direction',
+    photo_path: '/photos/employees/EMP-004.webp',
     login: 'kamga',
     role: 'direction',
     userDisplay: 'M. KAMGA Innocent (DP)',
@@ -397,6 +402,7 @@ export const CFTM_STAFF: {
     name: 'Mme ÉTOGA Joséphine',
     job: 'Caissière / Économe',
     category: 'Administration',
+    photo_path: '/photos/employees/EMP-005.webp',
     login: 'etoga',
     role: 'direction',
     userDisplay: 'Mme ÉTOGA Joséphine (Économe)',
@@ -408,6 +414,7 @@ export const CFTM_STAFF: {
     name: 'M. LAWSON ADODO François',
     job: 'Chef Contrôleur des Travaux',
     category: 'Production',
+    photo_path: '/photos/employees/EMP-006.webp',
     login: 'chef',
     role: 'chef_atelier',
     userDisplay: 'M. LAWSON ADODO François (Chef CT)',
@@ -417,6 +424,7 @@ export const CFTM_STAFF: {
     name: 'M. MVOGO Médard',
     job: 'Adj. Contrôleur des Travaux',
     category: 'Production',
+    photo_path: '/photos/employees/EMP-007.webp',
     login: 'mvogo',
     role: 'chef_atelier',
     userDisplay: 'M. MVOGO Médard (Adj. CT)',
@@ -426,6 +434,7 @@ export const CFTM_STAFF: {
     name: 'M. MINKOUMBA ABONDO Clément',
     job: 'Coursier & Resp. Livraisons',
     category: 'Logistique',
+    photo_path: '/photos/employees/EMP-008.webp',
     login: 'magasinier',
     role: 'magasinier',
     userDisplay: 'M. MINKOUMBA ABONDO Clément (Logistique)',
@@ -489,23 +498,24 @@ export const CFTM_STAFF: {
     name: 'M. AHANGA EMARAM Sylvain',
     job: 'Technicien Menuisier',
     category: 'Technique',
+    photo_path: '/photos/employees/EMP-016.webp',
     login: 'ouvrier',
     role: 'travailleur',
     userDisplay: 'M. AHANGA EMARAM Sylvain',
   },
-  { id: 'EMP-017', name: 'M. BAHETEN Jean Marcel', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-018', name: 'M. EVA Michel', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-019', name: 'M. MVOMO Frédéric', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-020', name: 'M. NDOE ATEBA Pierre Désiré', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-021', name: 'Mme NGO NDOGO Juliette', job: 'Technicienne Menuisière', category: 'Technique' },
-  { id: 'EMP-022', name: 'M. NLEND Dagobert', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-023', name: 'M. NTSAMA FOUDA Paul Olivier', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-024', name: 'M. NYA NJONWE Douglas', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-025', name: 'M. OBIONDA Claude François', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-026', name: 'M. OLAMA TSALA Philippe', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-027', name: 'M. TASSIE Patrice', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-028', name: 'M. TIEMBOMBA Mohammed', job: 'Technicien Menuisier', category: 'Technique' },
-  { id: 'EMP-029', name: 'M. TOUNA ONGUENE Adolphe', job: 'Technicien Menuisier', category: 'Technique' },
+  { id: 'EMP-017', name: 'M. BAHETEN Jean Marcel', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-017.webp' },
+  { id: 'EMP-018', name: 'M. EVA Michel', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-018.webp' },
+  { id: 'EMP-019', name: 'M. MVOMO Frédéric', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-019.webp' },
+  { id: 'EMP-020', name: 'M. NDOE ATEBA Pierre Désiré', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-020.webp' },
+  { id: 'EMP-021', name: 'Mme NGO NDOGO Juliette', job: 'Technicienne Menuisière', category: 'Technique', photo_path: '/photos/employees/EMP-021.webp' },
+  { id: 'EMP-022', name: 'M. NLEND Dagobert', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-022.webp' },
+  { id: 'EMP-023', name: 'M. NTSAMA FOUDA Paul Olivier', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-023.webp' },
+  { id: 'EMP-024', name: 'M. NYA NJONWE Douglas', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-024.webp' },
+  { id: 'EMP-025', name: 'M. OBIONDA Claude François', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-025.webp' },
+  { id: 'EMP-026', name: 'M. OLAMA TSALA Philippe', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-026.webp' },
+  { id: 'EMP-027', name: 'M. TASSIE Patrice', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-027.webp' },
+  { id: 'EMP-028', name: 'M. TIEMBOMBA Mohammed', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-028.webp' },
+  { id: 'EMP-029', name: 'M. TOUNA ONGUENE Adolphe', job: 'Technicien Menuisier', category: 'Technique', photo_path: '/photos/employees/EMP-029.webp' },
 
   // 6. TÂCHERONS DU CFTM
   { id: 'EMP-030', name: 'M. BIYIHA Jean Roussel', job: 'Tâcheron', category: 'Tâcheron' },
@@ -537,7 +547,7 @@ export const CFTM_STAFF: {
   { id: 'EMP-054', name: 'M. WAMBO Jules', job: 'Technicien Autocom', category: 'Maintenance' },
 
   // 8. SÉCURITÉ & RESTAURATION / INTENDANCE
-  { id: 'EMP-055', name: 'M. ABDOULAYE NJARAYAM', job: 'Vigile', category: 'Sécurité' },
+  { id: 'EMP-055', name: 'M. ABDOULAYE NJARAYAM', job: 'Vigile', category: 'Sécurité', photo_path: '/photos/employees/EMP-055.webp' },
   { id: 'EMP-056', name: 'M. NDOUBAIDI Zachée', job: 'Veilleur (nuit)', category: 'Sécurité' },
   { id: 'EMP-057', name: 'Mme AWONO BELLA Marie Évelyne', job: 'Cuisinière', category: 'Restauration' },
   { id: 'EMP-058', name: 'Mlle CHEKAM Audrey', job: 'Cuisinière', category: 'Restauration' },
@@ -579,15 +589,16 @@ export async function syncOfficialCftmData(db: Sql): Promise<void> {
   for (const emp of CFTM_STAFF) {
     const badge = generateBadge(idx);
     await db.query(
-      `INSERT INTO employees (id, full_name, job_title, badge_token, pin_hash, active)
-       VALUES ($1, $2, $3, $4, $5, true)
+      `INSERT INTO employees (id, full_name, job_title, photo_path, badge_token, pin_hash, active)
+       VALUES ($1, $2, $3, $4, $5, $6, true)
        ON CONFLICT (id) DO UPDATE
        SET full_name = EXCLUDED.full_name,
            job_title = EXCLUDED.job_title,
+           photo_path = CASE WHEN EXCLUDED.photo_path IS NOT NULL THEN EXCLUDED.photo_path ELSE employees.photo_path END,
            badge_token = EXCLUDED.badge_token,
            pin_hash = COALESCE(employees.pin_hash, EXCLUDED.pin_hash),
            active = true`,
-      [emp.id, emp.name, emp.job, badge, defaultPinHash],
+      [emp.id, emp.name, emp.job, emp.photo_path || null, badge, defaultPinHash],
     );
     idx++;
   }
@@ -603,13 +614,14 @@ export async function syncOfficialCftmData(db: Sql): Promise<void> {
 
       const pwdHash = hashPassword(pwd);
       await db.query(
-        `INSERT INTO users (login, password_hash, display_name, role, employee_id, active)
-         VALUES ($1, $2, $3, $4, $5, true)
+        `INSERT INTO users (login, password_hash, display_name, role, employee_id, photo_path, active)
+         VALUES ($1, $2, $3, $4, $5, $6, true)
          ON CONFLICT (login) DO UPDATE
          SET display_name = EXCLUDED.display_name,
              role = EXCLUDED.role,
-             employee_id = EXCLUDED.employee_id`,
-        [emp.login, pwdHash, emp.userDisplay || emp.name, emp.role || 'direction', emp.id],
+             employee_id = EXCLUDED.employee_id,
+             photo_path = CASE WHEN EXCLUDED.photo_path IS NOT NULL THEN EXCLUDED.photo_path ELSE users.photo_path END`,
+        [emp.login, pwdHash, emp.userDisplay || emp.name, emp.role || 'direction', emp.id, emp.photo_path || null],
       );
     }
   }
