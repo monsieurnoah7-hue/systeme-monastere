@@ -727,8 +727,8 @@ export function Magasins({
         )}
       </div>
 
-      {/* iOS Segmented Pill Filter Bar (Navigation tactile, affordance & catégorisation) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar -mx-1 px-1">
+      {/* Apple Segmented Control Filter Bar (Sober, minimaliste, affordance native) */}
+      <div className="p-1 rounded-2xl bg-paper border border-line/60 inline-flex items-center gap-1 overflow-x-auto max-w-full no-scrollbar">
         {LOCATION_CATEGORIES.map((cat) => {
           const count = categoryCounts[cat.id] ?? 0;
           if (cat.id !== 'all' && count === 0) return null;
@@ -739,19 +739,17 @@ export function Magasins({
               type="button"
               onClick={() => setActiveCategory(cat.id)}
               className={cx(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-150 active:scale-95 shrink-0',
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-150 shrink-0',
                 isSelected
-                  ? 'bg-ink text-surface shadow-xs font-bold ring-1 ring-ink/10'
-                  : 'bg-paper text-ink-soft hover:text-ink hover:bg-paper-2 border border-line/60',
+                  ? 'bg-surface text-ink shadow-xs font-semibold border border-line/60'
+                  : 'text-ink-soft hover:text-ink hover:bg-surface/50',
               )}
             >
               <span>{cat.shortLabel}</span>
               <span
                 className={cx(
-                  'rounded-full px-1.5 py-0.2 text-[10px] font-bold tabular-nums',
-                  isSelected
-                    ? 'bg-surface/20 text-surface'
-                    : 'bg-surface text-ink-faint border border-line/50',
+                  'text-[10px] font-mono tabular-nums px-1.5 py-0.2 rounded-full',
+                  isSelected ? 'bg-paper text-ink font-semibold' : 'text-ink-faint',
                 )}
               >
                 {count}
@@ -786,7 +784,7 @@ export function Magasins({
           ) : (canManage ? <Button variant="primary" onClick={openNew}>Créer un magasin</Button> : undefined)}
         />
       ) : (
-        /* iOS-Style Grouped Cards Grid (Mobile-First, Pure Vector SVGs, Zero Emojis) */
+        /* Apple Human Interface Minimalist Cards (Sobriété absolue, affordance épurée) */
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((m) => {
             const visuals = getLocationVisuals(m);
@@ -798,55 +796,45 @@ export function Magasins({
                   setSelectedId(m.id);
                   setDrawerTab('tools');
                 }}
-                className="w-full text-left group active:scale-[0.985] transition-transform duration-150"
+                className="w-full text-left group active:scale-[0.99] transition-transform duration-150"
               >
-                <div className={cx(
-                  'rounded-[22px] border border-line bg-surface p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-3',
-                  visuals.borderHover
-                )}>
-                  {/* Ligne 1 : Apple iOS Squircle Icon + Titre + Code + Chevron */}
+                <div
+                  className={cx(
+                    'rounded-2xl border border-line/70 bg-surface p-4 sm:p-4.5 hover:border-line-hover hover:shadow-xs transition-all duration-150 flex flex-col justify-between gap-3',
+                    visuals.borderHover,
+                  )}
+                >
+                  {/* Ligne 1 : Minimalist Squircle + Nom & Code + Chevron */}
                   <div className="flex items-start justify-between gap-2.5">
                     <div className="flex items-center gap-3 min-w-0">
                       <div
                         className={cx(
-                          'relative grid h-12 w-12 shrink-0 place-items-center rounded-[16px] text-white shadow-md transition-transform duration-200 group-hover:scale-105',
-                          `bg-gradient-to-br ${visuals.gradient} ${visuals.shadow} ring-1 ring-white/20`,
+                          'relative grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-transform duration-150 group-hover:scale-105',
+                          visuals.iconBg,
+                          visuals.iconText,
                         )}
                       >
-                        <IconComponent size={22} className="drop-shadow-xs" />
+                        <IconComponent size={20} strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="text-sm font-bold text-ink truncate group-hover:text-amber transition-colors">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-semibold text-ink truncate group-hover:text-ink-soft transition-colors">
                             {m.name}
                           </h3>
-                          <span
-                            className={cx(
-                              'font-mono text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0',
-                              visuals.softBg,
-                              visuals.text,
-                              visuals.border,
-                            )}
-                          >
+                          <span className="font-mono text-[10px] text-ink-faint bg-paper px-1.5 py-0.5 rounded border border-line/50 shrink-0">
                             {m.code}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <span
-                            className={cx(
-                              'text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border shrink-0',
-                              visuals.softBg,
-                              visuals.text,
-                              visuals.border,
-                            )}
-                          >
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-ink-soft flex-wrap">
+                          <span className="inline-flex items-center gap-1.5 font-medium">
+                            <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', visuals.dotColor)} />
                             {visuals.categoryLabel}
                           </span>
                           {m.manager_name && (
-                            <p className="text-[11px] text-ink-soft flex items-center gap-1 truncate">
-                              <UserCheck size={11} className={cx('shrink-0', visuals.text)} />
-                              <span className="truncate">{m.manager_name}</span>
-                            </p>
+                            <>
+                              <span className="text-ink-faint">•</span>
+                              <span className="text-ink-faint truncate max-w-[140px]">{m.manager_name}</span>
+                            </>
                           )}
                         </div>
                       </div>
@@ -854,68 +842,50 @@ export function Magasins({
 
                     <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
                       {!m.active && <Chip tone="red">Inactif</Chip>}
-                      <div className="h-7 w-7 rounded-full grid place-items-center bg-paper/60 border border-line/60 group-hover:border-amber/40 group-hover:bg-amber-wash/40 transition-colors">
-                        <ChevronRight size={15} className="text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all" />
-                      </div>
+                      <ChevronRight
+                        size={15}
+                        className="text-ink-faint group-hover:text-ink group-hover:translate-x-0.5 transition-all"
+                      />
                     </div>
                   </div>
 
-                  {/* Description */}
+                  {/* Description si présente */}
                   {m.description && (
-                    <p className="text-xs text-ink-faint line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-ink-faint line-clamp-1 leading-normal">
                       {m.description}
                     </p>
                   )}
 
-                {/* iOS Grouped Capsules: Métriques & Capacités */}
-                <div className="pt-2 border-t border-line/60 flex flex-col gap-2.5">
-                  {/* Deux capsules iOS Grouped */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl bg-paper px-3 py-2 flex items-center justify-between border border-line/60">
-                      <span className="text-[11px] text-ink-faint flex items-center gap-1.5 font-medium">
-                        <Wrench size={12} className="text-amber shrink-0" /> Machines
+                  {/* Ligne basse : Métriques sobres Apple HIG (Pas de badges criards) */}
+                  <div className="pt-2 border-t border-line/50 flex items-center justify-between text-xs text-ink-soft">
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1 font-medium">
+                        <Wrench size={12} className="text-ink-faint" />
+                        <span className="text-ink font-semibold tabular-nums">{m.tools_count ?? 0}</span>
+                        <span className="text-ink-faint text-[11px]">
+                          machine{(m.tools_count ?? 0) > 1 ? 's' : ''}
+                        </span>
                       </span>
-                      <span className="text-xs font-bold text-ink tabular-nums">
-                        {m.tools_count ?? 0}
+                      <span className="text-ink-faint">•</span>
+                      <span className="flex items-center gap-1 font-medium">
+                        <Package size={12} className="text-ink-faint" />
+                        <span className="text-ink font-semibold tabular-nums">{m.stock_count ?? 0}</span>
+                        <span className="text-ink-faint text-[11px]">
+                          matière{(m.stock_count ?? 0) > 1 ? 's' : ''}
+                        </span>
                       </span>
                     </div>
 
-                    <div className="rounded-xl bg-paper px-3 py-2 flex items-center justify-between border border-line/60">
-                      <span className="text-[11px] text-ink-faint flex items-center gap-1.5 font-medium">
-                        <Package size={12} className="text-sky-400 shrink-0" /> Matières
-                      </span>
-                      <span className="text-xs font-bold text-ink tabular-nums">
-                        {m.stock_count ?? 0}
-                      </span>
+                    <div className="text-[11px] font-medium text-ink-faint">
+                      {m.can_lend === false ? (
+                        <span className="text-ink-soft">Consultation</span>
+                      ) : (
+                        <span className="text-ink-soft">Prêt actif</span>
+                      )}
                     </div>
-                  </div>
-
-                  {/* Capacités avec Icônes Vectorielles Pures */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {m.can_lend !== false && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-green border border-line">
-                        <Zap size={10} className="text-green" /> Prêts
-                      </span>
-                    )}
-                    {m.can_receive_in !== false && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-sky-400 border border-line">
-                        <ArrowDownLeft size={10} className="text-sky-400" /> Entrées
-                      </span>
-                    )}
-                    {m.can_deliver_out !== false && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-amber border border-line">
-                        <ArrowUpRight size={10} className="text-amber" /> Sorties
-                      </span>
-                    )}
-                    {m.can_transfer !== false && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold text-purple-400 border border-line">
-                        <ArrowRightLeft size={10} className="text-purple-400" /> Transferts
-                      </span>
-                    )}
                   </div>
                 </div>
-              </div>
-            </button>
+              </button>
             );
           })}
         </div>
@@ -956,33 +926,21 @@ export function Magasins({
                     <div className="flex items-start gap-3 min-w-0">
                       <div
                         className={cx(
-                          'relative grid h-12 w-12 shrink-0 place-items-center rounded-[16px] text-white shadow-md ring-1 ring-white/20',
-                          `bg-gradient-to-br ${drawerVisuals.gradient} ${drawerVisuals.shadow}`,
+                          'grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-transform',
+                          drawerVisuals.iconBg,
+                          drawerVisuals.iconText,
                         )}
                       >
-                        <DrawerIcon size={22} className="drop-shadow-xs" />
+                        <DrawerIcon size={22} strokeWidth={1.75} />
                       </div>
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className={cx(
-                              'rounded-full border px-2.5 py-0.5 font-mono text-xs font-bold',
-                              drawerVisuals.softBg,
-                              drawerVisuals.text,
-                              drawerVisuals.border,
-                            )}
-                          >
+                          <span className="font-mono text-xs font-medium text-ink-faint bg-paper px-2 py-0.5 rounded border border-line/50">
                             {detail.magasin.code}
                           </span>
-                          <h2 className="text-base font-bold text-ink">{detail.magasin.name}</h2>
-                          <span
-                            className={cx(
-                              'text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border',
-                              drawerVisuals.softBg,
-                              drawerVisuals.text,
-                              drawerVisuals.border,
-                            )}
-                          >
+                          <h2 className="text-base font-semibold text-ink">{detail.magasin.name}</h2>
+                          <span className="text-xs text-ink-soft flex items-center gap-1.5 font-medium">
+                            <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', drawerVisuals.dotColor)} />
                             {drawerVisuals.categoryLabel}
                           </span>
                           {!detail.magasin.active && <Chip tone="red">Inactif</Chip>}
@@ -991,8 +949,8 @@ export function Magasins({
                           {detail.magasin.description || 'Local logistique et parc d’outillage'}
                         </p>
                         {detail.magasin.manager_name && (
-                          <p className="text-xs text-ink font-semibold flex items-center gap-1.5">
-                            <UserCheck size={13} className={drawerVisuals.text} />
+                          <p className="text-xs text-ink font-medium flex items-center gap-1.5">
+                            <UserCheck size={13} className="text-ink-faint" />
                             Responsable désigné : {detail.magasin.manager_name}
                           </p>
                         )}
