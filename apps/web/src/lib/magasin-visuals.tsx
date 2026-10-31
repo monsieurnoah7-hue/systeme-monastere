@@ -50,6 +50,7 @@ export interface VisualTheme {
   pillBg: string;
   pillText: string;
   borderHover: string;
+  watermarkColor: string;
 }
 
 /**
@@ -275,5 +276,6 @@ export function getLocationVisuals(m: { code?: string | null; name: string }): V
     pillBg: def.pillBg,
     pillText: def.pillText,
     borderHover: def.borderHover,
+    watermarkColor: def.iconText,
   };
 }

@@ -784,7 +784,7 @@ export function Magasins({
           ) : (canManage ? <Button variant="primary" onClick={openNew}>Créer un magasin</Button> : undefined)}
         />
       ) : (
-        /* Apple Human Interface Minimalist Cards (Sobriété absolue, affordance épurée) */
+        /* Apple Human Interface Watermark Cards (Icône agrandie en filigrane d'arrière-plan) */
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((m) => {
             const visuals = getLocationVisuals(m);
@@ -800,64 +800,70 @@ export function Magasins({
               >
                 <div
                   className={cx(
-                    'rounded-2xl border border-line/70 bg-surface p-4 sm:p-4.5 hover:border-line-hover hover:shadow-xs transition-all duration-150 flex flex-col justify-between gap-3',
+                    'relative overflow-hidden rounded-2xl border border-line/70 bg-surface p-4 sm:p-5 hover:border-line-hover hover:shadow-xs transition-all duration-200 flex flex-col justify-between gap-3 min-h-[145px]',
                     visuals.borderHover,
                   )}
                 >
-                  {/* Ligne 1 : Minimalist Squircle + Nom & Code + Chevron */}
-                  <div className="flex items-start justify-between gap-2.5">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={cx(
-                          'relative grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-transform duration-150 group-hover:scale-105',
-                          visuals.iconBg,
-                          visuals.iconText,
-                        )}
-                      >
-                        <IconComponent size={20} strokeWidth={1.75} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-semibold text-ink truncate group-hover:text-ink-soft transition-colors">
-                            {m.name}
-                          </h3>
-                          <span className="font-mono text-[10px] text-ink-faint bg-paper px-1.5 py-0.5 rounded border border-line/50 shrink-0">
-                            {m.code}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-ink-soft flex-wrap">
-                          <span className="inline-flex items-center gap-1.5 font-medium">
-                            <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', visuals.dotColor)} />
-                            {visuals.categoryLabel}
-                          </span>
-                          {m.manager_name && (
-                            <>
-                              <span className="text-ink-faint">•</span>
-                              <span className="text-ink-faint truncate max-w-[140px]">{m.manager_name}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-                      {!m.active && <Chip tone="red">Inactif</Chip>}
-                      <ChevronRight
-                        size={15}
-                        className="text-ink-faint group-hover:text-ink group-hover:translate-x-0.5 transition-all"
-                      />
-                    </div>
+                  {/* Icône de catégorie agrandie en filigrane d'arrière-plan (Apple Watermark) */}
+                  <div
+                    aria-hidden="true"
+                    className="absolute -right-3 -bottom-3 pointer-events-none select-none transition-all duration-300 ease-out group-hover:scale-110 group-hover:-rotate-3"
+                  >
+                    <IconComponent
+                      size={100}
+                      strokeWidth={1.2}
+                      className={cx(
+                        'transition-opacity duration-300 opacity-[0.05] dark:opacity-[0.08] group-hover:opacity-[0.13] dark:group-hover:opacity-[0.16]',
+                        visuals.watermarkColor,
+                      )}
+                    />
                   </div>
 
-                  {/* Description si présente */}
-                  {m.description && (
-                    <p className="text-xs text-ink-faint line-clamp-1 leading-normal">
-                      {m.description}
-                    </p>
-                  )}
+                  {/* Premier plan Z-10 : Lisibilité et aération totale */}
+                  <div className="relative z-10 flex flex-col gap-2">
+                    {/* Ligne 1 : Statut catégorie avec puce + Code abrégé + Chevron */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-soft">
+                          <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', visuals.dotColor)} />
+                          {visuals.categoryLabel}
+                        </span>
+                        <span className="font-mono text-[10px] text-ink-faint bg-paper px-1.5 py-0.5 rounded border border-line/50 shrink-0">
+                          {m.code}
+                        </span>
+                      </div>
 
-                  {/* Ligne basse : Métriques sobres Apple HIG (Pas de badges criards) */}
-                  <div className="pt-2 border-t border-line/50 flex items-center justify-between text-xs text-ink-soft">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {!m.active && <Chip tone="red">Inactif</Chip>}
+                        <ChevronRight
+                          size={15}
+                          className="text-ink-faint group-hover:text-ink group-hover:translate-x-0.5 transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Nom de l'emplacement */}
+                    <h3 className="text-[15px] font-semibold text-ink tracking-tight truncate group-hover:text-ink-soft transition-colors">
+                      {m.name}
+                    </h3>
+
+                    {/* Responsable & Description */}
+                    {m.manager_name && (
+                      <p className="text-xs text-ink-soft flex items-center gap-1.5 font-medium truncate">
+                        <UserCheck size={12} className="text-ink-faint shrink-0" />
+                        <span className="truncate">{m.manager_name}</span>
+                      </p>
+                    )}
+
+                    {m.description && (
+                      <p className="text-xs text-ink-faint line-clamp-1 leading-normal">
+                        {m.description}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Ligne basse : Métriques sobres Apple HIG */}
+                  <div className="relative z-10 pt-2.5 border-t border-line/50 flex items-center justify-between text-xs text-ink-soft">
                     <div className="flex items-center gap-3">
                       <span className="flex items-center gap-1 font-medium">
                         <Wrench size={12} className="text-ink-faint" />
@@ -921,8 +927,23 @@ export function Magasins({
               const drawerVisuals = getLocationVisuals(detail.magasin);
               const DrawerIcon = drawerVisuals.Icon;
               return (
-                <div className="rounded-[22px] border border-line bg-paper p-4 space-y-3 shadow-xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="relative overflow-hidden rounded-[22px] border border-line bg-paper p-4 space-y-3 shadow-xs">
+                  {/* Filigrane d'arrière-plan dans le Drawer */}
+                  <div
+                    aria-hidden="true"
+                    className="absolute -right-4 -bottom-4 pointer-events-none select-none"
+                  >
+                    <DrawerIcon
+                      size={120}
+                      strokeWidth={1.2}
+                      className={cx(
+                        'opacity-[0.05] dark:opacity-[0.08]',
+                        drawerVisuals.watermarkColor,
+                      )}
+                    />
+                  </div>
+
+                  <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
                       <div
                         className={cx(
