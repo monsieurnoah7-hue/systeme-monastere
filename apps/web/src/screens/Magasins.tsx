@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   api,
   ApiError,
@@ -8,6 +8,11 @@ import {
   type StockRef,
   type Employee,
 } from '../lib/api';
+import {
+  getLocationVisuals,
+  LOCATION_CATEGORIES,
+  type LocationCategory,
+} from '../lib/magasin-visuals';
 import {
   Button,
   Chip,
@@ -210,6 +215,7 @@ export function Magasins({
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [q, setQ] = useState('');
+  const [activeCategory, setActiveCategory] = useState<LocationCategory>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<MagasinDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -329,13 +335,31 @@ export function Magasins({
     window.dispatchEvent(new CustomEvent('mf-refresh-data'));
   };
 
-  const filtered = magasins.filter(
-    (m) =>
-      !q ||
-      m.name.toLowerCase().includes(q.toLowerCase()) ||
-      m.code.toLowerCase().includes(q.toLowerCase()) ||
-      (m.manager_name ?? '').toLowerCase().includes(q.toLowerCase())
-  );
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: magasins.length };
+    for (const m of magasins) {
+      const { category } = getLocationVisuals(m);
+      counts[category] = (counts[category] ?? 0) + 1;
+    }
+    return counts;
+  }, [magasins]);
+
+  const filtered = useMemo(() => {
+    return magasins.filter((m) => {
+      if (activeCategory !== 'all') {
+        const visuals = getLocationVisuals(m);
+        if (visuals.category !== activeCategory) return false;
+      }
+      if (!q.trim()) return true;
+      const qLow = q.trim().toLowerCase();
+      return (
+        m.name.toLowerCase().includes(qLow) ||
+        m.code.toLowerCase().includes(qLow) ||
+        (m.manager_name ?? '').toLowerCase().includes(qLow) ||
+        (m.description ?? '').toLowerCase().includes(qLow)
+      );
+    });
+  }, [magasins, activeCategory, q]);
 
   const openNew = () => {
     setEditing(null);
@@ -689,9 +713,52 @@ export function Magasins({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Rechercher un magasin ou responsable…"
-          className="w-full rounded-2xl border border-line bg-surface py-2.5 pl-10 pr-4 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all"
+          placeholder="Rechercher un magasin, bureau, atelier, salle ou responsable…"
+          className="w-full rounded-2xl border border-line bg-surface py-2.5 pl-10 pr-4 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
         />
+        {q && (
+          <button
+            type="button"
+            onClick={() => setQ('')}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs font-semibold px-1.5 py-0.5 rounded-md hover:bg-paper"
+          >
+            Effacer
+          </button>
+        )}
+      </div>
+
+      {/* iOS Segmented Pill Filter Bar (Navigation tactile, affordance & catégorisation) */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar -mx-1 px-1">
+        {LOCATION_CATEGORIES.map((cat) => {
+          const count = categoryCounts[cat.id] ?? 0;
+          if (cat.id !== 'all' && count === 0) return null;
+          const isSelected = activeCategory === cat.id;
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setActiveCategory(cat.id)}
+              className={cx(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-150 active:scale-95 shrink-0',
+                isSelected
+                  ? 'bg-ink text-surface shadow-xs font-bold ring-1 ring-ink/10'
+                  : 'bg-paper text-ink-soft hover:text-ink hover:bg-paper-2 border border-line/60',
+              )}
+            >
+              <span>{cat.shortLabel}</span>
+              <span
+                className={cx(
+                  'rounded-full px-1.5 py-0.2 text-[10px] font-bold tabular-nums',
+                  isSelected
+                    ? 'bg-surface/20 text-surface'
+                    : 'bg-surface text-ink-faint border border-line/50',
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
@@ -710,59 +777,95 @@ export function Magasins({
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={<IconBox size={28} />}
-          title="Aucun magasin enregistré"
-          hint={canManage ? 'Créez votre premier magasin, atelier ou local pour organiser les stocks.' : undefined}
-          action={canManage ? <Button variant="primary" onClick={openNew}>Créer un magasin</Button> : undefined}
+          title="Aucun emplacement correspondant"
+          hint={q || activeCategory !== 'all' ? 'Essayez de modifier votre recherche ou le filtre de catégorie.' : (canManage ? 'Créez votre premier magasin, atelier ou local pour organiser les stocks.' : undefined)}
+          action={q || activeCategory !== 'all' ? (
+            <Button variant="secondary" onClick={() => { setQ(''); setActiveCategory('all'); }}>
+              Réinitialiser les filtres
+            </Button>
+          ) : (canManage ? <Button variant="primary" onClick={openNew}>Créer un magasin</Button> : undefined)}
         />
       ) : (
         /* iOS-Style Grouped Cards Grid (Mobile-First, Pure Vector SVGs, Zero Emojis) */
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => {
-                setSelectedId(m.id);
-                setDrawerTab('tools');
-              }}
-              className="w-full text-left group active:scale-[0.985] transition-transform duration-150"
-            >
-              <div className="rounded-[22px] border border-line bg-surface p-4 sm:p-5 shadow-xs hover:border-amber/40 hover:shadow-md transition-all flex flex-col justify-between gap-3">
-                {/* Ligne 1 : SF Icon Squircle + Titre + Code + Chevron */}
-                <div className="flex items-start justify-between gap-2.5">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-amber-wash text-amber border border-amber/20 shadow-xs">
-                      <Warehouse size={20} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h3 className="text-sm font-bold text-ink truncate group-hover:text-amber transition-colors">
-                          {m.name}
-                        </h3>
-                        <span className="font-mono text-[10px] font-bold text-amber px-2 py-0.5 rounded-full bg-amber-wash border border-amber/30 shrink-0">
-                          {m.code}
-                        </span>
+          {filtered.map((m) => {
+            const visuals = getLocationVisuals(m);
+            const IconComponent = visuals.Icon;
+            return (
+              <button
+                key={m.id}
+                onClick={() => {
+                  setSelectedId(m.id);
+                  setDrawerTab('tools');
+                }}
+                className="w-full text-left group active:scale-[0.985] transition-transform duration-150"
+              >
+                <div className={cx(
+                  'rounded-[22px] border border-line bg-surface p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-3',
+                  visuals.borderHover
+                )}>
+                  {/* Ligne 1 : Apple iOS Squircle Icon + Titre + Code + Chevron */}
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={cx(
+                          'relative grid h-12 w-12 shrink-0 place-items-center rounded-[16px] text-white shadow-md transition-transform duration-200 group-hover:scale-105',
+                          `bg-gradient-to-br ${visuals.gradient} ${visuals.shadow} ring-1 ring-white/20`,
+                        )}
+                      >
+                        <IconComponent size={22} className="drop-shadow-xs" />
                       </div>
-                      {m.manager_name && (
-                        <p className="text-[11px] text-ink-soft flex items-center gap-1 mt-0.5 truncate">
-                          <UserCheck size={12} className="text-amber shrink-0" />
-                          <span>Resp : {m.manager_name}</span>
-                        </p>
-                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="text-sm font-bold text-ink truncate group-hover:text-amber transition-colors">
+                            {m.name}
+                          </h3>
+                          <span
+                            className={cx(
+                              'font-mono text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0',
+                              visuals.softBg,
+                              visuals.text,
+                              visuals.border,
+                            )}
+                          >
+                            {m.code}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <span
+                            className={cx(
+                              'text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border shrink-0',
+                              visuals.softBg,
+                              visuals.text,
+                              visuals.border,
+                            )}
+                          >
+                            {visuals.categoryLabel}
+                          </span>
+                          {m.manager_name && (
+                            <p className="text-[11px] text-ink-soft flex items-center gap-1 truncate">
+                              <UserCheck size={11} className={cx('shrink-0', visuals.text)} />
+                              <span className="truncate">{m.manager_name}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                      {!m.active && <Chip tone="red">Inactif</Chip>}
+                      <div className="h-7 w-7 rounded-full grid place-items-center bg-paper/60 border border-line/60 group-hover:border-amber/40 group-hover:bg-amber-wash/40 transition-colors">
+                        <ChevronRight size={15} className="text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all" />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-                    {!m.active && <Chip tone="red">Inactif</Chip>}
-                    <ChevronRight size={18} className="text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all" />
-                  </div>
-                </div>
-
-                {/* Description */}
-                {m.description && (
-                  <p className="text-xs text-ink-faint line-clamp-2 leading-relaxed">
-                    {m.description}
-                  </p>
-                )}
+                  {/* Description */}
+                  {m.description && (
+                    <p className="text-xs text-ink-faint line-clamp-2 leading-relaxed">
+                      {m.description}
+                    </p>
+                  )}
 
                 {/* iOS Grouped Capsules: Métriques & Capacités */}
                 <div className="pt-2 border-t border-line/60 flex flex-col gap-2.5">
@@ -813,7 +916,8 @@ export function Magasins({
                 </div>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -842,29 +946,60 @@ export function Magasins({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Barre d'en-tête du magasin avec actions globales */}
-            <div className="rounded-[20px] border border-line bg-paper p-3.5 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-charcoal border border-line px-2.5 py-0.5 font-mono text-xs font-bold text-amber">
-                      {detail.magasin.code}
-                    </span>
-                    <h2 className="text-base font-bold text-ink">{detail.magasin.name}</h2>
-                    {!detail.magasin.active && <Chip tone="red">Inactif</Chip>}
-                  </div>
-                  <p className="text-xs text-ink-soft">
-                    {detail.magasin.description || 'Local logistique et parc d’outillage'}
-                  </p>
-                  {detail.magasin.manager_name && (
-                    <p className="text-xs text-ink font-semibold flex items-center gap-1.5">
-                      <UserCheck size={13} className="text-amber" />
-                      Responsable désigné : {detail.magasin.manager_name}
-                    </p>
-                  )}
-                </div>
+            {/* Barre d'en-tête du magasin avec style iOS et actions globales */}
+            {(() => {
+              const drawerVisuals = getLocationVisuals(detail.magasin);
+              const DrawerIcon = drawerVisuals.Icon;
+              return (
+                <div className="rounded-[22px] border border-line bg-paper p-4 space-y-3 shadow-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div
+                        className={cx(
+                          'relative grid h-12 w-12 shrink-0 place-items-center rounded-[16px] text-white shadow-md ring-1 ring-white/20',
+                          `bg-gradient-to-br ${drawerVisuals.gradient} ${drawerVisuals.shadow}`,
+                        )}
+                      >
+                        <DrawerIcon size={22} className="drop-shadow-xs" />
+                      </div>
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={cx(
+                              'rounded-full border px-2.5 py-0.5 font-mono text-xs font-bold',
+                              drawerVisuals.softBg,
+                              drawerVisuals.text,
+                              drawerVisuals.border,
+                            )}
+                          >
+                            {detail.magasin.code}
+                          </span>
+                          <h2 className="text-base font-bold text-ink">{detail.magasin.name}</h2>
+                          <span
+                            className={cx(
+                              'text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border',
+                              drawerVisuals.softBg,
+                              drawerVisuals.text,
+                              drawerVisuals.border,
+                            )}
+                          >
+                            {drawerVisuals.categoryLabel}
+                          </span>
+                          {!detail.magasin.active && <Chip tone="red">Inactif</Chip>}
+                        </div>
+                        <p className="text-xs text-ink-soft">
+                          {detail.magasin.description || 'Local logistique et parc d’outillage'}
+                        </p>
+                        {detail.magasin.manager_name && (
+                          <p className="text-xs text-ink font-semibold flex items-center gap-1.5">
+                            <UserCheck size={13} className={drawerVisuals.text} />
+                            Responsable désigné : {detail.magasin.manager_name}
+                          </p>
+                        )}
+                      </div>
+                    </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <Button
                     size="sm"
                     variant="secondary"
@@ -979,6 +1114,8 @@ export function Magasins({
                 )}
               </div>
             </div>
+          );
+        })()}
 
             {/* Navigation Sub-Tabs dans le magasin (Responsive Grouped Segment) */}
             <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 p-1 rounded-2xl bg-paper-2 border border-line">
