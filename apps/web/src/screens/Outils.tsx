@@ -35,6 +35,7 @@ import {
   cx,
   useToast,
 } from '../components/ui';
+import { useUndo } from '../components/UndoToast';
 import {
   IconChevronRight,
   IconPlus,
@@ -175,6 +176,7 @@ export function Outils({
   permissions?: Record<string, boolean> | null;
 }) {
   const toast = useToast();
+  const { registerUndo } = useUndo();
   const isSuper = user.role === 'direction';
   const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
 
@@ -581,13 +583,25 @@ export function Outils({
   async function handleDeleteSingle(tool: Tool) {
     setBusy(true);
     try {
-      const res = await api<{ ok: boolean; message: string }>(`/api/tools/${tool.id}`, {
+      const res = await api<{ ok: boolean; message: string; deleted?: Tool }>(`/api/tools/${tool.id}`, {
         method: 'DELETE',
       });
-      toast(res.message, 'success');
       setDeleteSingleTool(null);
       if (selectedId === tool.id) setSelectedId(null);
       refresh();
+
+      // Enregistrer l'action d'annulation Ctrl+Z (Adobe / Google UX)
+      registerUndo({
+        title: `Outil "${tool.name}" (${tool.id}) supprimé`,
+        details: 'Appuyez sur Ctrl+Z ou cliquez pour restaurer immédiatement.',
+        onUndo: async () => {
+          await api('/api/tools/restore', {
+            method: 'POST',
+            body: JSON.stringify({ tool: res.deleted ?? tool }),
+          });
+          refresh();
+        },
+      });
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Suppression impossible.', 'error');
     } finally {

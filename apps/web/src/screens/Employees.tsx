@@ -4,6 +4,7 @@ import { QR_PREFIX } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { formatDate, initials } from '../lib/labels';
 import { EtabliKitCard } from '../components/EtabliKitCard';
+import { useUndo } from '../components/UndoToast';
 import {
   Banner,
   Button,
@@ -342,6 +343,7 @@ export function Employees({
   const [employeeKit, setEmployeeKit] = useState<{ kit: EtabliKit | null; items: EtabliKitItem[] } | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<'profil' | 'etabli'>('profil');
   const { print, portal } = usePrintSheet();
+  const { registerUndo } = useUndo();
 
   useEffect(() => {
     if (scan?.kind === 'employee') {
@@ -651,14 +653,28 @@ export function Employees({
 
   async function handleDeleteEmployee() {
     if (!deleteEmployeeFor) return;
+    const empToDelete = deleteEmployeeFor;
     setDeleteBusy(true);
     setDeleteError(null);
     try {
-      await api(`/api/employees/${deleteEmployeeFor.id}`, { method: 'DELETE' });
-      toast(`Fiche de ${deleteEmployeeFor.full_name} supprimée définitivement.`, 'success');
+      const res = await api<{ ok: boolean; deleted?: Employee }>(`/api/employees/${empToDelete.id}`, { method: 'DELETE' });
       setDeleteEmployeeFor(null);
       setReload((value) => value + 1);
       window.dispatchEvent(new CustomEvent('mf-refresh-data'));
+
+      // Enregistrer l'action d'annulation Ctrl+Z (Adobe / Google UX)
+      registerUndo({
+        title: `Travailleur "${empToDelete.full_name}" supprimé`,
+        details: 'Appuyez sur Ctrl+Z ou cliquez pour restaurer immédiatement.',
+        onUndo: async () => {
+          await api('/api/employees/restore', {
+            method: 'POST',
+            body: JSON.stringify({ employee: res.deleted ?? empToDelete }),
+          });
+          setReload((v) => v + 1);
+          window.dispatchEvent(new CustomEvent('mf-refresh-data'));
+        },
+      });
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Suppression impossible.');
     } finally {

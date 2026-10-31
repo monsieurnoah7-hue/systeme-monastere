@@ -3,6 +3,7 @@ import { api, type ScanResult, type User } from './lib/api';
 import { computeAllowedViews, Shell, type ViewId } from './components/Shell';
 import { Scanner } from './components/Scanner';
 import { EmptyState, Spinner, ToastHost, useToast } from './components/ui';
+import { UndoProvider } from './components/UndoToast';
 import { Login } from './screens/Login';
 
 const Pointage = lazy(() => import('./screens/Pointage').then((m) => ({ default: m.Pointage })));
@@ -50,7 +51,9 @@ export default function App() {
 
   return (
     <ToastHost>
-      <Workspace user={user} onLogout={() => void logout()} />
+      <UndoProvider>
+        <Workspace user={user} onLogout={() => void logout()} />
+      </UndoProvider>
     </ToastHost>
   );
 }

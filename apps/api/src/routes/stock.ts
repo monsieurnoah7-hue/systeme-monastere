@@ -576,7 +576,40 @@ stockRoutes.delete('/refs/:id', requirePerm('stock.delete_ref'), async (c) => {
     });
   });
 
-  return c.json({ ok: true, message: `Article #${id} (${ref.name}) supprimé définitivement.` });
+  return c.json({ ok: true, message: `Article #${id} (${ref.name}) supprimé définitivement.`, deleted: ref });
+});
+
+stockRoutes.post('/refs/restore', requirePerm('stock.create_ref'), async (c) => {
+  const body = z.object({
+    ref: z.object({
+      id: z.number().int().optional(),
+      name: z.string().min(1),
+      category: z.string().min(1),
+      unit: z.string().min(1),
+      location: z.string().nullable().optional(),
+      magasin_id: z.string().nullable().optional(),
+      min_qty: z.number().optional(),
+      qty: z.number().optional(),
+      brand: z.string().nullable().optional(),
+      supplier: z.string().nullable().optional(),
+      unit_cost: z.number().nullable().optional(),
+      photo_path: z.string().nullable().optional(),
+    }),
+  }).safeParse(await c.req.json().catch(() => ({})));
+
+  if (!body.success) return c.json({ error: 'Données de restauration invalides.' }, 400);
+  const r = body.data.ref;
+  const db = getDb();
+  await db.query(
+    `INSERT INTO stock_refs (name, category, unit, location, magasin_id, min_qty, qty, brand, supplier, unit_cost, photo_path)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    [
+      r.name, r.category, r.unit, r.location ?? null, r.magasin_id ?? null,
+      r.min_qty ?? 0, r.qty ?? 0, r.brand ?? null, r.supplier ?? null,
+      r.unit_cost ?? null, r.photo_path ?? null,
+    ],
+  );
+  return c.json({ ok: true, message: `Article ${r.name} restauré avec succès.` });
 });
 
 const batchDeleteRefsSchema = z.object({

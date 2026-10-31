@@ -423,5 +423,62 @@ employeesRoutes.delete('/:id', requirePerm('employees.edit'), async (c) => {
     });
   });
 
-  return c.json({ ok: true, message: `Travailleur ${employee.full_name} supprimé avec succès.` });
+  return c.json({ ok: true, message: `Travailleur ${employee.full_name} supprimé avec succès.`, deleted: employee });
+});
+
+const restoreEmployeeSchema = z.object({
+  employee: z.object({
+    id: z.string().min(1),
+    full_name: z.string().min(1),
+    job_title: z.string().min(1),
+    photo_path: z.string().nullable().optional(),
+    badge_token: z.string().nullable().optional(),
+    pin_hash: z.string().nullable().optional(),
+    active: z.boolean().optional(),
+  }),
+});
+
+employeesRoutes.post('/restore', requirePerm('employees.edit'), async (c) => {
+  const body = restoreEmployeeSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) {
+    return c.json({ error: 'Données de restauration invalides.' }, 400);
+  }
+  const emp = body.data.employee;
+  const db = getDb();
+
+  await db.transaction(async (tx) => {
+    await tx.query(
+      `INSERT INTO employees (id, full_name, job_title, photo_path, badge_token, pin_hash, active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (id) DO UPDATE
+       SET full_name = EXCLUDED.full_name,
+           job_title = EXCLUDED.job_title,
+           photo_path = COALESCE(EXCLUDED.photo_path, employees.photo_path),
+           badge_token = EXCLUDED.badge_token,
+           pin_hash = COALESCE(EXCLUDED.pin_hash, employees.pin_hash),
+           active = EXCLUDED.active`,
+      [
+        emp.id,
+        emp.full_name,
+        emp.job_title,
+        emp.photo_path ?? null,
+        emp.badge_token ?? null,
+        emp.pin_hash ?? null,
+        emp.active ?? true,
+      ],
+    );
+
+    await writeAudit(tx, {
+      entity: 'employee',
+      entityId: emp.id,
+      action: 'restore',
+      after: emp,
+      actorId: actorId(c),
+      actorName: actorName(c),
+      reason: 'Restauration suite à annulation Ctrl+Z',
+    });
+  });
+
+  const restored = await db.one<EmployeeRow>('SELECT * FROM employees WHERE id = $1', [emp.id]);
+  return c.json({ ok: true, employee: restored, message: `Travailleur ${emp.full_name} restauré avec succès.` });
 });

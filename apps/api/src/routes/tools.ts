@@ -624,7 +624,50 @@ toolsRoutes.delete('/:id', requirePerm('tools.delete'), async (c) => {
     });
   });
 
-  return c.json({ ok: true, message: `Outil ${id} (${tool.name}) supprimé définitivement.` });
+  return c.json({ ok: true, message: `Outil ${id} (${tool.name}) supprimé définitivement.`, deleted: tool });
+});
+
+toolsRoutes.post('/restore', requirePerm('tools.edit_status'), async (c) => {
+  const body = z.object({
+    tool: z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      brand: z.string().nullable().optional(),
+      category: z.string().min(1),
+      serial_number: z.string().nullable().optional(),
+      status: z.string().default('disponible'),
+      condition: z.string().default('bon'),
+      photo_path: z.string().nullable().optional(),
+      magasin_id: z.string().nullable().optional(),
+      location: z.string().nullable().optional(),
+      accounting: z.any().optional(),
+    }),
+  }).safeParse(await c.req.json().catch(() => ({})));
+
+  if (!body.success) return c.json({ error: 'Données de restauration invalides.' }, 400);
+  const t = body.data.tool;
+  const db = getDb();
+  await db.query(
+    `INSERT INTO tools (id, name, brand, category, serial_number, status, condition, photo_path, magasin_id, location, accounting)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (id) DO UPDATE
+     SET name = EXCLUDED.name,
+         brand = EXCLUDED.brand,
+         category = EXCLUDED.category,
+         serial_number = EXCLUDED.serial_number,
+         status = EXCLUDED.status,
+         condition = EXCLUDED.condition,
+         photo_path = EXCLUDED.photo_path,
+         magasin_id = EXCLUDED.magasin_id,
+         location = EXCLUDED.location,
+         accounting = EXCLUDED.accounting`,
+    [
+      t.id, t.name, t.brand ?? null, t.category, t.serial_number ?? null,
+      t.status, t.condition, t.photo_path ?? null, t.magasin_id ?? null,
+      t.location ?? null, t.accounting ? JSON.stringify(t.accounting) : null,
+    ],
+  );
+  return c.json({ ok: true, message: `Outil ${t.name} (${t.id}) restauré avec succès.` });
 });
 
 const batchDeleteSchema = z.object({

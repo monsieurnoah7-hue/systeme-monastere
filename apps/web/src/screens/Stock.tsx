@@ -17,6 +17,7 @@ import {
   cx,
   useToast,
 } from '../components/ui';
+import { useUndo } from '../components/UndoToast';
 import {
   IconArrowIn,
   IconArrowOut,
@@ -203,6 +204,7 @@ export function Stock({
   permissions?: Record<string, boolean> | null;
 }) {
   const toast = useToast();
+  const { registerUndo } = useUndo();
   const isSuper = user.role === 'direction';
   const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
 
@@ -578,13 +580,25 @@ export function Stock({
   async function handleDeleteSingle(refItem: StockRef) {
     setBusy(true);
     try {
-      const res = await api<{ ok: boolean; message: string }>(`/api/stock/refs/${refItem.id}`, {
+      const res = await api<{ ok: boolean; message: string; deleted?: StockRef }>(`/api/stock/refs/${refItem.id}`, {
         method: 'DELETE',
       });
-      toast(res.message, 'success');
       setDeleteSingleRef(null);
       if (selectedId === refItem.id) setSelectedId(null);
       refresh();
+
+      // Enregistrer l'action d'annulation Ctrl+Z (Adobe / Google UX)
+      registerUndo({
+        title: `Article "${refItem.name}" (#${refItem.id}) supprimé`,
+        details: 'Appuyez sur Ctrl+Z ou cliquez pour restaurer immédiatement.',
+        onUndo: async () => {
+          await api('/api/stock/refs/restore', {
+            method: 'POST',
+            body: JSON.stringify({ ref: res.deleted ?? refItem }),
+          });
+          refresh();
+        },
+      });
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Suppression impossible.', 'error');
     } finally {

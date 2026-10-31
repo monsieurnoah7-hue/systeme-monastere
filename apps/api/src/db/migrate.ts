@@ -36,7 +36,26 @@ export async function migrate(): Promise<void> {
   await runSql(DDL);
   await runSql(MIGRATION_DDL);
   await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [MIGRATION_NAME]);
-  await syncOfficialCftmData(getDb());
+
+  // Amorçage initial unique (One-Time Bootstrap) :
+  // Ne s'exécute qu'une seule fois sur une base vierge. Les démarrages ultérieurs
+  // ne réinjectent JAMAIS les données afin de respecter scrupuleusement les suppressions et modifications de l'admin.
+  const SEED_LOCK = '012_cftm_official_seed_v1';
+  const seeded = await getDb().query<{ name: string }>(
+    'SELECT name FROM _migrations WHERE name = $1',
+    [SEED_LOCK],
+  );
+
+  if (seeded.length === 0) {
+    const empCount = await getDb().one<{ count: string }>('SELECT count(*)::text as count FROM employees').catch(() => null);
+    if (!empCount || Number(empCount.count) === 0) {
+      await syncOfficialCftmData(getDb());
+      console.log('[db] Données initiales CFTM amorcées avec succès (Base vierge initialisée)');
+    } else {
+      console.log('[db] Base existante détectée avec enregistrements en service : amorçage ignoré pour préserver les suppressions admin');
+    }
+    await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [SEED_LOCK]);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {
