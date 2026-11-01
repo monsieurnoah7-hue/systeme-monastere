@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { api, ApiError, type Catalog, type MyOverview, type ScanResult, type User } from '../lib/api';
+import { api, ApiError, type Catalog, type MyOverview, type ScanResult, type User, requestWorkerPermission } from '../lib/api';
 import type { ViewId } from '../components/Shell';
 import {
+  Banner,
   Button,
   Card,
   Chip,
   EmptyState,
   Field,
+  Modal,
   PageHeader,
   SegmentedControl,
   Skeleton,
+  Spinner,
   StatCard,
   cx,
+  useToast,
 } from '../components/ui';
 import {
   IconAlert,
@@ -30,6 +34,7 @@ import {
   Warehouse,
   FileCheck2,
   AlertTriangle,
+  Plus,
 } from 'lucide-react';
 
 const SITUATION_LABEL: Record<string, string> = {
@@ -82,6 +87,40 @@ export function Espace({
 
   const isDirection = user?.role === 'direction';
   const canEditLogin = isDirection || Boolean(permissions?.['profile.login_edit']) || Boolean(permissions?.['users.manage']);
+
+  const toast = useToast();
+  const [permissionModalOpen, setPermissionModalOpen] = useState(false);
+  const [permForm, setPermForm] = useState({ from_date: '', to_date: '', note: '' });
+  const [permBusy, setPermBusy] = useState(false);
+  const [permError, setPermError] = useState<string | null>(null);
+
+  const submitWorkerPermission = async () => {
+    if (!permForm.from_date || !permForm.to_date) {
+      setPermError('Veuillez sélectionner les dates de début et de fin.');
+      return;
+    }
+    if (!permForm.note.trim()) {
+      setPermError('Veuillez préciser le motif de votre permission exceptionnelle.');
+      return;
+    }
+    setPermBusy(true);
+    setPermError(null);
+    try {
+      await requestWorkerPermission({
+        from_date: permForm.from_date,
+        to_date: permForm.to_date,
+        note: permForm.note.trim(),
+      });
+      toast('Demande de permission exceptionnelle transmise à la Direction.', 'success');
+      setPermissionModalOpen(false);
+      setPermForm({ from_date: '', to_date: '', note: '' });
+      void load();
+    } catch (err: unknown) {
+      setPermError(err instanceof Error ? err.message : 'Erreur lors de la transmission.');
+    } finally {
+      setPermBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -599,46 +638,88 @@ export function Espace({
 
       {/* ONGLET 3 : CONGÉS & PERMISSIONS */}
       {tab === 'conges' && (
-        <Card padded={false} className="shadow-card overflow-hidden">
-          {leaves.length === 0 ? (
-            <EmptyState icon={<FileCheck2 size={24} />} title="Aucune demande de congé" />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line bg-surface-2/60 text-left text-xs uppercase tracking-wider text-ink-faint">
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Période</th>
-                    <th className="px-4 py-3">Motif</th>
-                    <th className="px-4 py-3">Statut</th>
-                    <th className="px-4 py-3">Avis Direction</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {leaves.map((l) => (
-                    <tr key={l.id} className="hover:bg-surface-2/50 transition-colors">
-                      <td className="px-4 py-3 font-semibold text-ink capitalize">
-                        {l.kind === 'conge' ? 'Congé' : l.kind === 'permission' ? 'Permission' : 'Absence'}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-ink-soft">
-                        Du {formatDate(l.from_date)} au {formatDate(l.to_date)}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-ink">{l.note || '-'}</td>
-                      <td className="px-4 py-3">
-                        <Chip tone={l.status === 'approved' ? 'green' : l.status === 'pending' ? 'amber' : 'red'}>
-                          {l.status === 'approved' ? 'Approuvé' : l.status === 'pending' ? 'En attente' : 'Refusé'}
-                        </Chip>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-ink-soft">
-                        {l.reviewed_by ? `${l.reviewed_by} · ${l.review_note || 'Validé'}` : 'En cours d\'examen'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 shadow-card">
+            <div className="space-y-0.5">
+              <p className="text-xs font-bold text-ink flex items-center gap-2">
+                <FileCheck2 size={16} className="text-amber" />
+                Régime des Congés &amp; Permissions Exceptionnelles
+              </p>
+              <p className="text-[11px] text-ink-soft">
+                Les congés annuels sont fixés et planifiés par la Direction. En cas d'événement imprévu (familial, médical, administratif), formulez une demande de permission exceptionnelle ci-dessous.
+              </p>
             </div>
-          )}
-        </Card>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus size={14} />}
+              onClick={() => {
+                const t = new Date().toISOString().slice(0, 10);
+                setPermForm({ from_date: t, to_date: t, note: '' });
+                setPermError(null);
+                setPermissionModalOpen(true);
+              }}
+              className="shrink-0"
+            >
+              Demander une permission
+            </Button>
+          </div>
+
+          <Card padded={false} className="shadow-card overflow-hidden">
+            {leaves.length === 0 ? (
+              <EmptyState icon={<FileCheck2 size={24} />} title="Aucun congé ou permission enregistré" />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line bg-surface-2/60 text-left text-xs uppercase tracking-wider text-ink-faint">
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3">Période</th>
+                      <th className="px-4 py-3">Motif &amp; Objet</th>
+                      <th className="px-4 py-3">Statut</th>
+                      <th className="px-4 py-3">Avis Direction</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {leaves.map((l) => (
+                      <tr key={l.id} className="hover:bg-surface-2/50 transition-colors">
+                        <td className="px-4 py-3 font-semibold text-ink">
+                          <span className="flex items-center gap-1.5">
+                            <span
+                              className={cx(
+                                'h-2 w-2 rounded-full',
+                                l.kind === 'conge' ? 'bg-blue' : l.kind === 'permission' ? 'bg-[#8b5cf6]' : 'bg-red'
+                              )}
+                            />
+                            {l.kind === 'conge' ? 'Congé Annuel Payé' : l.kind === 'permission' ? 'Permission Exceptionnelle' : 'Absence Autorisée'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-ink-soft whitespace-nowrap">
+                          Du {formatDate(l.from_date)} au {formatDate(l.to_date)}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-ink">
+                          {l.kind === 'conge' ? (
+                            <span className="text-ink-soft italic">Droit au repos annuel (alloué par la Direction)</span>
+                          ) : (
+                            l.note || '-'
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Chip tone={l.status === 'approved' ? 'green' : l.status === 'pending' ? 'amber' : 'red'}>
+                            {l.status === 'approved' ? 'Accordé' : l.status === 'pending' ? 'En examen' : 'Refusé'}
+                          </Chip>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-ink-soft">
+                          {l.reviewed_by ? `${l.reviewed_by} · ${l.review_note || 'Accordé'}` : 'En attente de visa'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
       )}
 
       {/* ONGLET 4 : OUTILLAGE (PRÊTS & RETOURS HORODATÉS AVEC ÉTATS) */}
@@ -900,6 +981,68 @@ export function Espace({
           </Card>
         </div>
       )}
+
+      {/* Modal Demande de Permission Exceptionnelle par le Travailleur */}
+      <Modal
+        open={permissionModalOpen}
+        title="Formuler une Demande de Permission Exceptionnelle"
+        onClose={() => setPermissionModalOpen(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPermissionModalOpen(false)}>Annuler</Button>
+            <Button
+              variant="primary"
+              disabled={permBusy}
+              onClick={() => void submitWorkerPermission()}
+              className="bg-accent hover:bg-accent-2 text-white font-bold"
+            >
+              {permBusy ? <Spinner /> : 'Transmettre la demande'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3.5 text-xs">
+          {permError && <Banner tone="error">{permError}</Banner>}
+
+          <div className="rounded-xl border border-line bg-surface-2 p-3 text-ink-soft">
+            ℹ️ <span className="font-semibold text-ink">Rappel réglementaire :</span> Les congés annuels sont fixés et alloués par la Direction. Ce formulaire concerne uniquement une dérogation ou permission exceptionnelle (urgence familiale, santé, impératif administratif).
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block font-medium text-ink-soft">Date de début</label>
+              <input
+                type="date"
+                value={permForm.from_date}
+                onChange={(e) => setPermForm((f) => ({ ...f, from_date: e.target.value }))}
+                className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block font-medium text-ink-soft">Date de fin</label>
+              <input
+                type="date"
+                value={permForm.to_date}
+                onChange={(e) => setPermForm((f) => ({ ...f, to_date: e.target.value }))}
+                className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block font-medium text-ink-soft">
+              Motif circonstancié de la permission <span className="text-red">*</span>
+            </label>
+            <textarea
+              value={permForm.note}
+              onChange={(e) => setPermForm((f) => ({ ...f, note: e.target.value }))}
+              placeholder="Ex : Urgence médicale familiale, convocation officielle, événement exceptionnel…"
+              rows={3}
+              className="w-full rounded-lg border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -398,6 +398,19 @@ CREATE TABLE IF NOT EXISTS etabli_kit_audits (
   audited_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS etabli_kit_audits_kit_idx ON etabli_kit_audits(kit_id, audited_at DESC);
+
+-- Table des Fêtes Légales & Décrets Présidentiels Exceptionnels (Cameroun)
+CREATE TABLE IF NOT EXISTS holidays (
+  id text PRIMARY KEY,
+  holiday_date date NOT NULL UNIQUE,
+  name text NOT NULL,
+  kind text NOT NULL DEFAULT 'legal_national' CHECK (kind IN ('legal_national', 'religious', 'presidential_decree')),
+  decree_ref text,
+  is_chome boolean NOT NULL DEFAULT true,
+  created_by text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS holidays_date_idx ON holidays(holiday_date);
 `;
 
-export const MIGRATION_NAME = '011_etabli_kits_system';
+export const MIGRATION_NAME = '013_cameroon_holidays_system';

@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type Employee, type EmployeeDetail, type Leave, type ScanResult, type TodayEmployee, type User, type EtabliKit, type EtabliKitItem } from '../lib/api';
+import {
+  api,
+  type Employee,
+  type EmployeeDetail,
+  type Leave,
+  type ScanResult,
+  type TodayEmployee,
+  type User,
+  type EtabliKit,
+  type EtabliKitItem,
+  type Holiday,
+  deleteLeave,
+  deleteHoliday,
+  declarePresidentialDecree,
+} from '../lib/api';
 import { QR_PREFIX } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { formatDate, initials } from '../lib/labels';
@@ -35,9 +49,33 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  Filter,
+  Flag,
 } from 'lucide-react';
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { exportToExcel, exportToPdf } from '../lib/export';
+
+export function computeWorkingDays(fromDate: string, toDate: string, holidays: Holiday[] = []): number {
+  if (!fromDate || !toDate) return 0;
+  const start = new Date(fromDate);
+  const end = new Date(toDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return 0;
+
+  const holidayDates = new Set(holidays.map((h) => h.holiday_date));
+  let count = 0;
+  const cur = new Date(start);
+
+  while (cur <= end) {
+    const dayOfWeek = cur.getDay(); // 0 = Dimanche
+    const dStr = cur.toISOString().slice(0, 10);
+    // Dimanches et jours fériés chômés exclus
+    if (dayOfWeek !== 0 && !holidayDates.has(dStr)) {
+      count++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'Tous' },
@@ -59,21 +97,37 @@ const STATUS_CHIP: Record<string, { tone: 'green' | 'amber' | 'red' | 'blue' | '
 
 /**
  * Time-off Calendar View Component
+ * Système interactif et cognitif de planification des congés, permissions et jours fériés officiels
  */
 function TimeOffCalendarView({
   leaves,
   employees,
+  holidays = [],
   onOpenLeave,
+  onOpenDecree,
   onReview,
+  onRevokeLeave,
+  onDeleteHoliday,
   canManage,
 }: {
   leaves: Leave[];
   employees: Employee[];
+  holidays?: Holiday[];
   onOpenLeave: () => void;
+  onOpenDecree?: () => void;
   onReview: (leave: Leave, status: 'approved' | 'rejected') => void;
+  onRevokeLeave?: (leave: Leave) => void;
+  onDeleteHoliday?: (holiday: Holiday) => void;
   canManage: boolean;
 }) {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
+  const [selectedLeave, setSelectedLeave] = useState<Leave | null>(null);
+  const [selectedHoliday, setSelectedHoliday] = useState<Holiday | null>(null);
+
+  // Filtres dynamiques multi-critères
+  const [filterKind, setFilterKind] = useState<'all' | 'conge' | 'permission' | 'absence' | 'ferie'>('all');
+  const [filterEmpId, setFilterEmpId] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending'>('all');
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -85,50 +139,97 @@ function TimeOffCalendarView({
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanks = Array.from({ length: firstDayIndex }, (_, i) => i);
 
-  // Filter leaves that touch this month
+  // Demandes en attente
+  const pendingLeaves = useMemo(() => leaves.filter((l) => l.status === 'pending'), [leaves]);
+
+  // Filtrage des congés pour ce mois avec critères
   const monthLeaves = useMemo(() => {
+    const startOfMonth = new Date(year, month, 1);
+    const endOfMonth = new Date(year, month + 1, 0);
+
     return leaves.filter((l) => {
+      // Filtre de période
       const from = new Date(l.from_date);
       const to = new Date(l.to_date);
-      const startOfMonth = new Date(year, month, 1);
-      const endOfMonth = new Date(year, month + 1, 0);
-      return (from <= endOfMonth && to >= startOfMonth);
+      const inMonth = from <= endOfMonth && to >= startOfMonth;
+      if (!inMonth) return false;
+
+      // Filtre de type
+      if (filterKind !== 'all' && filterKind !== 'ferie') {
+        if (l.kind !== filterKind) return false;
+      }
+
+      // Filtre d'employé
+      if (filterEmpId !== 'all' && l.employee_id !== filterEmpId) return false;
+
+      // Filtre de statut
+      if (filterStatus !== 'all' && l.status !== filterStatus) return false;
+
+      return true;
     });
-  }, [leaves, year, month]);
+  }, [leaves, year, month, filterKind, filterEmpId, filterStatus]);
+
+  // Fériés du mois
+  const monthHolidays = useMemo(() => {
+    const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
+    return holidays.filter((h) => h.holiday_date >= startStr && h.holiday_date <= endStr);
+  }, [holidays, year, month, daysInMonth]);
 
   return (
-    <div className="space-y-6">
-      {/* Pending Approvals Bar */}
-      {leaves.filter((l) => l.status === 'pending').length > 0 && (
-        <Card className="border-amber/30 bg-amber-wash/40 p-4 shadow-card">
+    <div className="space-y-5">
+      {/* 1. Bandeau des demandes en attente de validation */}
+      {pendingLeaves.length > 0 && (
+        <Card className="border-amber/40 bg-amber-wash/30 p-4 shadow-card">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-ink flex items-center gap-2">
-              <Clock size={16} className="text-amber" /> Demandes de congés &amp; permissions en attente ({leaves.filter((l) => l.status === 'pending').length})
+              <Clock size={16} className="text-amber" />
+              Demandes de permissions exceptionnelles en attente ({pendingLeaves.length})
             </span>
-            <span className="text-[11px] text-amber font-semibold">Validation requise</span>
+            <span className="text-[11px] text-amber font-semibold bg-amber/10 px-2 py-0.5 rounded-full border border-amber/20">
+              Décision Direction requise
+            </span>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2">
-            {leaves.filter((l) => l.status === 'pending').map((l) => (
-              <div key={l.id} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3 text-xs shadow-xs">
-                <div className="min-w-0">
-                  <p className="font-bold text-ink">{l.full_name}</p>
-                  <p className="text-ink-soft">
-                    <span className="capitalize font-semibold text-amber">{l.kind}</span> : {formatDate(l.from_date)} → {formatDate(l.to_date)}
+            {pendingLeaves.map((l) => (
+              <div
+                key={l.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3 text-xs shadow-xs hover:border-amber/40 transition-colors"
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelectedLeave(l)}
+                  className="min-w-0 text-left hover:underline cursor-pointer group flex-1"
+                >
+                  <p className="font-bold text-ink group-hover:text-amber transition-colors flex items-center gap-1.5">
+                    {l.full_name}
+                    <span className="text-[10px] text-ink-faint font-normal font-mono">({l.employee_id})</span>
                   </p>
-                  {l.note ? <p className="text-[11px] text-ink-faint italic truncate">{l.note}</p> : null}
-                </div>
+                  <p className="text-ink-soft text-[11px] mt-0.5">
+                    <span className="capitalize font-semibold text-amber">
+                      {l.kind === 'permission' ? 'Permission Exceptionnelle' : l.kind}
+                    </span>{' '}
+                    : Du {formatDate(l.from_date)} au {formatDate(l.to_date)}
+                  </p>
+                  {l.note && <p className="text-[11px] text-ink italic truncate mt-0.5 max-w-[280px]">« {l.note} »</p>}
+                </button>
+
                 {canManage && (
                   <div className="flex gap-1.5 shrink-0">
                     <button
+                      type="button"
                       onClick={() => onReview(l, 'approved')}
-                      className="rounded bg-green px-2.5 py-1 text-[11px] font-bold text-white hover:bg-green-2 active:scale-95"
+                      className="rounded-lg bg-green px-2.5 py-1 text-[11px] font-bold text-white hover:bg-green-2 active:scale-95 transition-all shadow-xs"
+                      title="Accorder la permission"
                     >
                       Accepter
                     </button>
                     <button
+                      type="button"
                       onClick={() => onReview(l, 'rejected')}
-                      className="rounded bg-grey-wash border border-line px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-red-wash hover:text-red active:scale-95"
+                      className="rounded-lg bg-surface-2 border border-line px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-red-wash hover:text-red active:scale-95 transition-all"
+                      title="Refuser la demande"
                     >
                       Refuser
                     </button>
@@ -140,129 +241,547 @@ function TimeOffCalendarView({
         </Card>
       )}
 
-      {/* Calendar Header */}
-      <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-bold text-ink capitalize">{monthLabel}</span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setCurrentMonth(new Date(year, month - 1, 1))}
-              className="rounded-lg border border-line p-1 hover:bg-paper-2"
-              aria-label="Mois précédent"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => setCurrentMonth(new Date())}
-              className="rounded-lg border border-line px-2 py-1 text-xs font-semibold hover:bg-paper-2"
-            >
-              Aujourd'hui
-            </button>
-            <button
-              onClick={() => setCurrentMonth(new Date(year, month + 1, 1))}
-              className="rounded-lg border border-line p-1 hover:bg-paper-2"
-              aria-label="Mois suivant"
-            >
-              <ChevronRight size={16} />
-            </button>
+      {/* 2. Barre d'outils de Navigation & Actions Supérieures */}
+      <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4 shadow-card">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {/* Navigation Mensuelle */}
+          <div className="flex items-center gap-3">
+            <span className="text-base font-bold text-ink capitalize tracking-tight">{monthLabel}</span>
+            <div className="flex items-center gap-1 bg-surface-2 p-0.5 rounded-lg border border-line">
+              <button
+                type="button"
+                onClick={() => setCurrentMonth(new Date(year, month - 1, 1))}
+                className="rounded-md p-1.5 hover:bg-paper text-ink-soft hover:text-ink transition-colors"
+                aria-label="Mois précédent"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentMonth(new Date())}
+                className="rounded-md px-2.5 py-1 text-xs font-semibold hover:bg-paper text-ink transition-colors"
+              >
+                Aujourd'hui
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentMonth(new Date(year, month + 1, 1))}
+                className="rounded-md p-1.5 hover:bg-paper text-ink-soft hover:text-ink transition-colors"
+                aria-label="Mois suivant"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Boutons d'Action (Allouer congé + Décret Présidentiel) */}
+          <div className="flex flex-wrap items-center gap-2">
+            {canManage && onOpenDecree && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Flag size={14} className="text-emerald" />}
+                onClick={onOpenDecree}
+                title="Enregistrer un jour férié décrété par le Chef de l'État"
+                className="border-emerald/40 text-emerald hover:bg-emerald-wash/40 font-semibold"
+              >
+                🇨🇲 Décret Présidentiel
+              </Button>
+            )}
+
+            {canManage && (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<Plus size={14} />}
+                onClick={onOpenLeave}
+                title="Allouer un congé annuel ou accorder une permission"
+              >
+                Allouer Congé / Permission
+              </Button>
+            )}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
-          <span className="hidden md:inline text-ink-faint font-medium">
-            ({employees.filter((e) => e.active).length} salarié{employees.filter((e) => e.active).length > 1 ? 's' : ''})
-          </span>
-          <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-blue" />
-            <span className="text-ink-soft">Congé payé</span>
+        {/* 3. Filtres Dynamiques (Type, Employé, Statut) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-line text-xs">
+          {/* Filtres par Nature d'absence */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-ink-faint font-semibold flex items-center gap-1 mr-1">
+              <Filter size={12} /> Filtre :
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setFilterKind('all')}
+              className={cx(
+                'rounded-lg px-2.5 py-1 font-semibold transition-all',
+                filterKind === 'all'
+                  ? 'bg-ink text-paper shadow-xs'
+                  : 'bg-surface-2 text-ink-soft hover:bg-paper-2'
+              )}
+            >
+              Tous les flux
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterKind('conge')}
+              className={cx(
+                'rounded-lg px-2.5 py-1 font-semibold flex items-center gap-1.5 transition-all',
+                filterKind === 'conge'
+                  ? 'bg-blue text-white shadow-xs'
+                  : 'bg-surface-2 text-ink-soft hover:bg-blue-wash hover:text-blue'
+              )}
+            >
+              <span className="h-2 w-2 rounded-full bg-blue" />
+              Congés payés
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterKind('permission')}
+              className={cx(
+                'rounded-lg px-2.5 py-1 font-semibold flex items-center gap-1.5 transition-all',
+                filterKind === 'permission'
+                  ? 'bg-[#8b5cf6] text-white shadow-xs'
+                  : 'bg-surface-2 text-ink-soft hover:bg-purple-wash hover:text-[#8b5cf6]'
+              )}
+            >
+              <span className="h-2 w-2 rounded-full bg-[#8b5cf6]" />
+              Permissions
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterKind('absence')}
+              className={cx(
+                'rounded-lg px-2.5 py-1 font-semibold flex items-center gap-1.5 transition-all',
+                filterKind === 'absence'
+                  ? 'bg-red text-white shadow-xs'
+                  : 'bg-surface-2 text-ink-soft hover:bg-red-wash hover:text-red'
+              )}
+            >
+              <span className="h-2 w-2 rounded-full bg-red" />
+              Absences
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterKind('ferie')}
+              className={cx(
+                'rounded-lg px-2.5 py-1 font-semibold flex items-center gap-1.5 transition-all',
+                filterKind === 'ferie'
+                  ? 'bg-emerald text-white shadow-xs'
+                  : 'bg-surface-2 text-ink-soft hover:bg-emerald-wash hover:text-emerald'
+              )}
+            >
+              <span className="h-2 w-2 rounded-full bg-emerald" />
+              🇨🇲 Jours fériés ({monthHolidays.length})
+            </button>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-[#8b5cf6]" />
-            <span className="text-ink-soft">Permission</span>
+
+          {/* Filtres Travailleur & Statut */}
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={filterEmpId}
+              onChange={(e) => setFilterEmpId(e.target.value)}
+              className="h-8 rounded-lg border border-line bg-surface px-2 text-xs text-ink focus:border-amber focus:outline-none"
+              title="Filtrer par salarié"
+            >
+              <option value="all">Tous les ouvriers ({employees.filter((e) => e.active).length})</option>
+              {employees.filter((e) => e.active).map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.full_name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+              className="h-8 rounded-lg border border-line bg-surface px-2 text-xs text-ink focus:border-amber focus:outline-none"
+              title="Filtrer par statut de validation"
+            >
+              <option value="all">Tous statuts</option>
+              <option value="approved">Validés / Accordés</option>
+              <option value="pending">En attente de visa</option>
+            </select>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-red" />
-            <span className="text-ink-soft">Absence</span>
-          </div>
-          <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={onOpenLeave} className="ml-auto sm:ml-0">
-            Poser congé
-          </Button>
         </div>
       </div>
 
-      {/* Monthly Grid with responsive horizontal scroll */}
+      {/* 4. Grille Calendaire Mensuelle Réactive & Cliquable */}
       <Card className="overflow-x-auto scroll-thin shadow-card p-0">
-        <div className="min-w-[580px]">
+        <div className="min-w-[640px]">
+          {/* En-tête des jours de la semaine (Lun - Dim) */}
           <div className="grid grid-cols-7 border-b border-line bg-paper-2 text-center text-xs font-semibold text-ink-soft">
-            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d) => (
-              <div key={d} className="py-2.5 border-r border-line last:border-r-0">
+            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d, idx) => (
+              <div
+                key={d}
+                className={cx(
+                  'py-2.5 border-r border-line last:border-r-0',
+                  idx === 6 && 'text-ink-faint bg-paper/60' // Dimanche
+                )}
+              >
                 {d}
               </div>
             ))}
           </div>
 
+          {/* Corps de la Grille */}
           <div className="grid grid-cols-7 sheet-grid">
-          {blanks.map((b) => (
-            <div key={`blank-${b}`} className="min-h-24 bg-paper/40 p-2 border-r border-b border-line" />
-          ))}
+            {/* Cases vides début de mois */}
+            {blanks.map((b) => (
+              <div key={`blank-${b}`} className="min-h-28 bg-paper/40 p-2 border-r border-b border-line" />
+            ))}
 
-          {days.map((d) => {
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const activeOnDay = monthLeaves.filter((l) => dateStr >= l.from_date && dateStr <= l.to_date);
-            const isToday = new Date().toDateString() === new Date(year, month, d).toDateString();
+            {/* Cases de chaque jour du mois */}
+            {days.map((d) => {
+              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+              const dayOfWeek = (firstDayIndex + d - 1) % 7; // 6 = Dimanche
+              const isSunday = dayOfWeek === 6;
+              const isToday = new Date().toDateString() === new Date(year, month, d).toDateString();
 
-            return (
-              <div
-                key={`day-${d}`}
-                className={cx(
-                  'min-h-24 p-2 border-r border-b border-line transition-colors hover:bg-paper-2/20',
-                  isToday && 'bg-amber-wash/30',
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <span
-                    className={cx(
-                      'font-mono text-xs font-bold tabular-nums',
-                      isToday ? 'grid h-6 w-6 place-items-center rounded-full bg-amber text-white' : 'text-ink-soft',
-                    )}
-                  >
-                    {d}
-                  </span>
-                  {activeOnDay.length > 0 && (
-                    <span className="text-[10px] text-ink-faint font-semibold">{activeOnDay.length} abs.</span>
+              // Jours fériés sur ce jour
+              const dayHolidays = holidays.filter((h) => h.holiday_date === dateStr);
+
+              // Congés actifs sur ce jour (filtrés)
+              const activeOnDay = filterKind === 'ferie'
+                ? []
+                : monthLeaves.filter((l) => dateStr >= l.from_date && dateStr <= l.to_date);
+
+              return (
+                <div
+                  key={`day-${d}`}
+                  className={cx(
+                    'min-h-28 p-2 border-r border-b border-line transition-colors flex flex-col justify-between group',
+                    isToday && 'bg-amber-wash/30',
+                    isSunday && !isToday && 'bg-paper/40',
+                    dayHolidays.length > 0 && !isToday && 'bg-emerald-wash/20'
                   )}
-                </div>
-
-                <div className="mt-1.5 space-y-1">
-                  {activeOnDay.slice(0, 3).map((leave) => (
-                    <div
-                      key={leave.id}
-                      className="flex items-center gap-1 truncate rounded bg-surface-2 border border-line px-1.5 py-0.5 text-[10px] font-medium text-ink-soft shadow-xs"
-                      title={`${leave.full_name} (${leave.kind}) : ${leave.from_date} au ${leave.to_date}`}
+                >
+                  {/* En-tête du jour (Numéro + Badge total) */}
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={cx(
+                        'font-mono text-xs font-bold tabular-nums',
+                        isToday
+                          ? 'grid h-6 w-6 place-items-center rounded-full bg-amber text-white shadow-xs'
+                          : isSunday
+                          ? 'text-ink-faint'
+                          : 'text-ink-soft'
+                      )}
                     >
-                      <span
-                        className={cx(
-                          'h-1.5 w-1.5 rounded-full shrink-0',
-                          leave.kind === 'conge'
-                            ? 'bg-blue'
-                            : leave.kind === 'permission'
-                            ? 'bg-[#8b5cf6]'
-                            : 'bg-red',
-                        )}
-                      />
-                      <span className="truncate">{(leave.full_name ?? 'Employé').split(' ')[0]}</span>
-                    </div>
-                  ))}
-                  {activeOnDay.length > 3 && (
-                    <span className="text-[10px] text-ink-faint block text-center">+{activeOnDay.length - 3} autres</span>
-                  )}
+                      {d}
+                    </span>
+
+                    {/* Indicateur de volume d'absence */}
+                    {activeOnDay.length > 0 && (
+                      <span className="text-[10px] text-ink-faint font-semibold">
+                        {activeOnDay.length} abs.
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Événements sur la journée (Fériés + Congés Cliquables) */}
+                  <div className="mt-1.5 space-y-1 flex-1">
+                    {/* A. Puce Férié Officiel / Décret Présidentiel */}
+                    {(filterKind === 'all' || filterKind === 'ferie') &&
+                      dayHolidays.map((h) => (
+                        <button
+                          key={h.id}
+                          type="button"
+                          onClick={() => setSelectedHoliday(h)}
+                          className={cx(
+                            'w-full text-left rounded-md px-1.5 py-1 text-[10px] font-bold border transition-all truncate flex items-center gap-1 shadow-xs cursor-pointer',
+                            h.kind === 'presidential_decree'
+                              ? 'bg-amber-wash border-amber/40 text-amber hover:scale-[1.02]'
+                              : 'bg-emerald-wash border-emerald/40 text-emerald hover:scale-[1.02]'
+                          )}
+                          title={`🇨🇲 ${h.name} (${h.decree_ref || 'Férié officiel'}) - Cliquer pour inspecter`}
+                        >
+                          <span className="text-[10px]">🇨🇲</span>
+                          <span className="truncate">{h.name}</span>
+                        </button>
+                      ))}
+
+                    {/* B. Puces des Congés & Permissions (Interactives & Cliquables) */}
+                    {activeOnDay.slice(0, 3).map((leave) => {
+                      const isPending = leave.status === 'pending';
+                      const toneBg =
+                        leave.kind === 'conge'
+                          ? 'bg-blue/10 border-blue/30 text-blue hover:bg-blue/20'
+                          : leave.kind === 'permission'
+                          ? 'bg-[#8b5cf6]/10 border-[#8b5cf6]/30 text-[#8b5cf6] hover:bg-[#8b5cf6]/20'
+                          : 'bg-red/10 border-red/30 text-red hover:bg-red/20';
+
+                      const dotBg =
+                        leave.kind === 'conge'
+                          ? 'bg-blue'
+                          : leave.kind === 'permission'
+                          ? 'bg-[#8b5cf6]'
+                          : 'bg-red';
+
+                      return (
+                        <button
+                          key={leave.id}
+                          type="button"
+                          onClick={() => setSelectedLeave(leave)}
+                          className={cx(
+                            'w-full text-left flex items-center justify-between gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium transition-all shadow-xs cursor-pointer hover:scale-[1.02]',
+                            toneBg,
+                            isPending && 'ring-1 ring-amber/50'
+                          )}
+                          title={`${leave.full_name} (${leave.kind}) : ${formatDate(leave.from_date)} au ${formatDate(leave.to_date)} - Cliquer pour voir les détails`}
+                        >
+                          <span className="flex items-center gap-1 min-w-0 truncate">
+                            <span className={cx('h-1.5 w-1.5 rounded-full shrink-0', dotBg)} />
+                            <span className="truncate text-ink font-semibold">
+                              {(leave.full_name ?? 'Ouvrier').split(' ')[0]}
+                            </span>
+                          </span>
+
+                          {isPending && (
+                            <span title="En attente de validation">
+                              <Clock size={10} className="text-amber shrink-0 animate-pulse" />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+
+                    {activeOnDay.length > 3 && (
+                      <span className="text-[10px] text-ink-faint block text-center font-semibold">
+                        +{activeOnDay.length - 3} autres
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+
+      {/* 5. MODAL D'INSPECTION DÉTAILLÉE D'UN CONGÉ / PERMISSION */}
+      <Modal
+        open={!!selectedLeave}
+        title={
+          selectedLeave
+            ? selectedLeave.kind === 'conge'
+              ? 'Détail du Congé Annuel Payé'
+              : selectedLeave.kind === 'permission'
+              ? 'Détail de la Permission Exceptionnelle'
+              : 'Détail de l’Absence Autorisée'
+            : ''
+        }
+        onClose={() => setSelectedLeave(null)}
+        footer={
+          <div className="flex w-full items-center justify-between gap-2">
+            <div>
+              {canManage && selectedLeave && onRevokeLeave && selectedLeave.status === 'approved' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const l = selectedLeave;
+                    setSelectedLeave(null);
+                    onRevokeLeave(l);
+                  }}
+                  className="rounded-lg border border-red/30 px-3 py-1.5 text-xs font-semibold text-red hover:bg-red-wash transition-colors"
+                >
+                  Révoquer ce congé
+                </button>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              {canManage && selectedLeave && selectedLeave.status === 'pending' && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      onReview(selectedLeave, 'rejected');
+                      setSelectedLeave(null);
+                    }}
+                    className="text-red border-red/30 hover:bg-red-wash"
+                  >
+                    Refuser
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      onReview(selectedLeave, 'approved');
+                      setSelectedLeave(null);
+                    }}
+                    className="bg-green hover:bg-green-2 text-white font-bold"
+                  >
+                    Valider immédiatement
+                  </Button>
+                </>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setSelectedLeave(null)}>
+                Fermer
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        {selectedLeave && (
+          <div className="space-y-4">
+            {/* Profil du travailleur */}
+            <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2/40 p-3.5">
+              <div className="grid h-12 w-12 place-items-center rounded-xl bg-ink text-paper font-bold text-sm shadow-xs shrink-0">
+                {initials(selectedLeave.full_name ?? selectedLeave.employee_id)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-ink text-sm truncate">{selectedLeave.full_name}</p>
+                <p className="text-xs text-ink-soft">
+                  Matricule : <span className="font-mono text-ink font-semibold">{selectedLeave.employee_id}</span>
+                  {selectedLeave.job_title ? ` · ${selectedLeave.job_title}` : ''}
+                </p>
+              </div>
+              <div>
+                <Chip
+                  tone={
+                    selectedLeave.status === 'approved'
+                      ? 'green'
+                      : selectedLeave.status === 'pending'
+                      ? 'amber'
+                      : 'red'
+                  }
+                >
+                  {selectedLeave.status === 'approved'
+                    ? 'Accordé'
+                    : selectedLeave.status === 'pending'
+                    ? 'En attente'
+                    : 'Refusé'}
+                </Chip>
+              </div>
+            </div>
+
+            {/* Période & Calcul des Jours Ouvrés */}
+            <div className="grid grid-cols-2 gap-3 rounded-xl border border-line bg-surface p-3.5 text-xs">
+              <div>
+                <span className="text-ink-faint font-medium">Date de début</span>
+                <p className="font-bold text-ink text-sm mt-0.5">{formatDate(selectedLeave.from_date)}</p>
+              </div>
+              <div>
+                <span className="text-ink-faint font-medium">Date de fin</span>
+                <p className="font-bold text-ink text-sm mt-0.5">{formatDate(selectedLeave.to_date)}</p>
+              </div>
+              <div className="col-span-2 pt-2 border-t border-line flex items-center justify-between">
+                <span className="text-ink-soft">Décompte effectif en jours ouvrés :</span>
+                <span className="font-mono font-bold text-ink text-sm bg-surface-2 px-2 py-0.5 rounded border border-line">
+                  {computeWorkingDays(selectedLeave.from_date, selectedLeave.to_date, holidays)} jour(s) ouvré(s) nets
+                </span>
+              </div>
+            </div>
+
+            {/* Motif et Justification */}
+            <div className="rounded-xl border border-line bg-surface p-3.5 text-xs space-y-1.5">
+              <span className="text-ink-faint font-medium">Motif &amp; Justification :</span>
+              {selectedLeave.kind === 'conge' ? (
+                <p className="text-ink-soft italic">
+                  ℹ️ Congé annuel payé alloué par la Direction. Conformément au règlement du monastère et au Code du Travail, le repos annuel est un droit acquis ne nécessitant aucun justificatif du travailleur.
+                </p>
+              ) : selectedLeave.note ? (
+                <p className="text-ink font-medium bg-surface-2/60 p-2.5 rounded-lg border border-line">
+                  « {selectedLeave.note} »
+                </p>
+              ) : (
+                <p className="text-ink-faint italic">Aucun motif particulier renseigné.</p>
+              )}
+            </div>
+
+            {/* Traçabilité & Décision */}
+            <div className="text-[11px] text-ink-faint space-y-1 border-t border-line pt-2">
+              <p>
+                Saisi par : <span className="text-ink font-semibold">{selectedLeave.actor}</span>
+              </p>
+              {selectedLeave.reviewed_by && (
+                <p>
+                  Visé par : <span className="text-ink font-semibold">{selectedLeave.reviewed_by}</span>
+                  {selectedLeave.reviewed_at ? ` le ${formatDate(selectedLeave.reviewed_at)}` : ''}
+                  {selectedLeave.review_note ? ` (« ${selectedLeave.review_note} »)` : ''}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 6. MODAL D'INSPECTION D'UN JOUR FÉRIÉ OFFICIEL / DÉCRET */}
+      <Modal
+        open={!!selectedHoliday}
+        title="🇨🇲 Jour Férié Officiel au Cameroun"
+        onClose={() => setSelectedHoliday(null)}
+        footer={
+          <div className="flex w-full items-center justify-between">
+            {canManage &&
+              selectedHoliday?.kind === 'presidential_decree' &&
+              onDeleteHoliday && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const h = selectedHoliday;
+                    setSelectedHoliday(null);
+                    onDeleteHoliday(h);
+                  }}
+                  className="rounded-lg border border-red/30 px-3 py-1.5 text-xs font-semibold text-red hover:bg-red-wash transition-colors"
+                >
+                  Supprimer ce décret
+                </button>
+              )}
+            <div className="ml-auto">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedHoliday(null)}>
+                Fermer
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        {selectedHoliday && (
+          <div className="space-y-4 text-xs">
+            <div className="rounded-xl border border-emerald/30 bg-emerald-wash/30 p-4">
+              <span className="text-xs uppercase font-bold text-emerald flex items-center gap-1.5">
+                <Flag size={14} /> Fête Légale en République du Cameroun
+              </span>
+              <p className="text-base font-bold text-ink mt-1">{selectedHoliday.name}</p>
+              <p className="text-xs text-ink-soft mt-0.5">
+                Date officielle : <span className="font-mono font-bold text-ink">{formatDate(selectedHoliday.holiday_date)}</span>
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-line bg-surface p-3.5 space-y-2">
+              <div className="flex justify-between py-1 border-b border-line">
+                <span className="text-ink-soft">Nature :</span>
+                <span className="font-semibold text-ink">
+                  {selectedHoliday.kind === 'presidential_decree'
+                    ? 'Décret Présidentiel Exceptionnel'
+                    : selectedHoliday.kind === 'religious'
+                    ? 'Fête Religieuse Légale'
+                    : 'Fête Nationale Civile'}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-line">
+                <span className="text-ink-soft">Base Juridique :</span>
+                <span className="font-semibold text-ink">{selectedHoliday.decree_ref || 'Loi N° 73/5'}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-ink-soft">Régime de Travail :</span>
+                <span className="font-bold text-emerald">Chômé et Payé</span>
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-surface-2 p-3 text-[11px] text-ink-soft">
+              💡 Conformément au régime des fêtes légales camerounaises, cette journée n'est pas décomptée des congés des travailleurs et la borne de pointage n'enregistre aucune absence irrégulière.
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -304,6 +823,13 @@ export function Employees({
   const [leaveForm, setLeaveForm] = useState({ employee_id: '', kind: 'conge' as 'conge' | 'permission' | 'absence', from_date: '', to_date: '', note: '' });
   const [leaveBusy, setLeaveBusy] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
+
+  // Fêtes légales camerounaises et décrets présidentiels
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [decreeModalOpen, setDecreeModalOpen] = useState(false);
+  const [decreeForm, setDecreeForm] = useState({ holiday_date: '', name: '', decree_ref: '' });
+  const [decreeBusy, setDecreeBusy] = useState(false);
+  const [decreeError, setDecreeError] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
@@ -392,13 +918,15 @@ export function Employees({
       api<{ employees: TodayEmployee[] }>('/api/employees/today-status').catch(() => ({ employees: [] })),
       api<{ leaves: Leave[] }>('/api/leaves?status=all').catch(() => ({ leaves: [] })),
       api<{ roles: { id: string; name: string }[] }>('/api/permissions/roles').catch(() => ({ roles: [] })),
+      api<{ holidays: Holiday[] }>(`/api/leaves/holidays?year=${new Date().getFullYear()}`).catch(() => ({ holidays: [] })),
     ])
-      .then(([empRes, statusRes, leaveRes, rolesRes]) => {
+      .then(([empRes, statusRes, leaveRes, rolesRes, holidayRes]) => {
         if (!cancelled) {
           setEmployees(empRes.employees);
           setTodayStatus(statusRes.employees);
           setLeaves(leaveRes.leaves);
           if (rolesRes?.roles) setAvailableRoles(rolesRes.roles);
+          if (holidayRes?.holidays) setHolidays(holidayRes.holidays);
           setError(null);
         }
       })
@@ -697,14 +1225,71 @@ export function Employees({
     setLeaveBusy(true);
     setLeaveError(null);
     try {
-      await api('/api/leaves', { method: 'POST', body: JSON.stringify(leaveForm) });
-      toast('Demande de congé enregistrée.', 'success');
+      await api('/api/leaves', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...leaveForm,
+          status: 'approved',
+          note: leaveForm.kind === 'conge' ? null : leaveForm.note.trim() || null,
+        }),
+      });
+      toast(
+        leaveForm.kind === 'conge'
+          ? 'Congé annuel alloué et validé avec succès.'
+          : 'Permission accordée et enregistrée.',
+        'success'
+      );
       setLeaveOpen(false);
       setReload((v) => v + 1);
     } catch (e) {
       setLeaveError(e instanceof Error ? e.message : 'Erreur');
     } finally {
       setLeaveBusy(false);
+    }
+  }
+
+  async function revokeLeave(leave: Leave) {
+    if (!confirm(`Confirmer l'annulation du congé / permission de ${leave.full_name ?? 'cet ouvrier'} ?`)) return;
+    try {
+      await deleteLeave(leave.id);
+      toast('Congé / permission révoqué avec succès.', 'success');
+      setReload((v) => v + 1);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Échec de la révocation.', 'error');
+    }
+  }
+
+  async function handleDeleteHoliday(holiday: Holiday) {
+    if (!confirm(`Supprimer le jour férié / décret « ${holiday.name} » ?`)) return;
+    try {
+      await deleteHoliday(holiday.id);
+      toast('Jour férié supprimé.', 'success');
+      setReload((v) => v + 1);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Suppression impossible.', 'error');
+    }
+  }
+
+  async function submitDecree() {
+    if (!decreeForm.holiday_date || !decreeForm.name.trim()) {
+      setDecreeError('Date et intitulé du jour férié obligatoires.');
+      return;
+    }
+    setDecreeBusy(true);
+    setDecreeError(null);
+    try {
+      await declarePresidentialDecree({
+        holiday_date: decreeForm.holiday_date,
+        name: decreeForm.name.trim(),
+        decree_ref: decreeForm.decree_ref.trim() || undefined,
+      });
+      toast('🇨🇲 Jour férié présidentiel publié et appliqué en temps réel !', 'success');
+      setDecreeModalOpen(false);
+      setReload((v) => v + 1);
+    } catch (e) {
+      setDecreeError(e instanceof Error ? e.message : 'Erreur');
+    } finally {
+      setDecreeBusy(false);
     }
   }
 
@@ -1164,8 +1749,17 @@ export function Employees({
           <TimeOffCalendarView
             leaves={leaves}
             employees={employees}
+            holidays={holidays}
             onOpenLeave={openLeave}
+            onOpenDecree={() => {
+              const todayStr = new Date().toISOString().slice(0, 10);
+              setDecreeForm({ holiday_date: todayStr, name: '', decree_ref: '' });
+              setDecreeError(null);
+              setDecreeModalOpen(true);
+            }}
             onReview={reviewLeave}
+            onRevokeLeave={revokeLeave}
+            onDeleteHoliday={handleDeleteHoliday}
             canManage={canManageLeaves}
           />
         </TabsContent>
@@ -1682,24 +2276,31 @@ export function Employees({
         </div>
       </Modal>
 
-      {/* Leave Request Modal */}
+      {/* Modal: Allouer un congé ou accorder une permission (Direction / Ayant-droit) */}
       <Modal
         open={leaveOpen}
-        title="Nouvelle demande de congé ou permission"
+        title={
+          leaveForm.kind === 'conge'
+            ? 'Allouer un Congé Annuel Payé'
+            : leaveForm.kind === 'permission'
+            ? 'Accorder une Permission Exceptionnelle'
+            : 'Enregistrer une Absence Autorisée'
+        }
         onClose={() => setLeaveOpen(false)}
         footer={
           <>
             <Button variant="ghost" onClick={() => setLeaveOpen(false)}>Annuler</Button>
             <Button variant="primary" disabled={leaveBusy} onClick={() => void submitLeave()}>
-              {leaveBusy ? <Spinner /> : 'Enregistrer la demande'}
+              {leaveBusy ? <Spinner /> : 'Valider et Enregistrer'}
             </Button>
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-3.5 text-xs">
           {leaveError ? <Banner tone="error">{leaveError}</Banner> : null}
+
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink-soft">Travailleur</label>
+            <label className="mb-1 block font-medium text-ink-soft">Travailleur bénéficiaire</label>
             <select
               value={leaveForm.employee_id}
               onChange={(e) => setLeaveForm((f) => ({ ...f, employee_id: e.target.value }))}
@@ -1708,28 +2309,28 @@ export function Employees({
               <option value="">— Sélectionner un ouvrier —</option>
               {employees.filter((emp) => emp.active).map((emp) => (
                 <option key={emp.id} value={emp.id}>
-                  {emp.full_name} ({emp.id})
+                  {emp.full_name} ({emp.id}) · {emp.job_title}
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink-soft">Type d'absence</label>
+            <label className="mb-1 block font-medium text-ink-soft">Type de flux</label>
             <select
               value={leaveForm.kind}
               onChange={(e) => setLeaveForm((f) => ({ ...f, kind: e.target.value as typeof f.kind }))}
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
             >
-              <option value="conge">Congé annuel payé</option>
-              <option value="permission">Permission exceptionnelle</option>
-              <option value="absence">Absence autorisée</option>
+              <option value="conge">Congé annuel payé (Planifié par la Direction)</option>
+              <option value="permission">Permission exceptionnelle (Événement familial / impératif)</option>
+              <option value="absence">Absence autorisée (Mission / repos compensateur)</option>
             </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-ink-soft">Date de début</label>
+              <label className="mb-1 block font-medium text-ink-soft">Date de départ</label>
               <input
                 type="date"
                 value={leaveForm.from_date}
@@ -1738,7 +2339,7 @@ export function Employees({
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-ink-soft">Date de fin</label>
+              <label className="mb-1 block font-medium text-ink-soft">Date de retour</label>
               <input
                 type="date"
                 value={leaveForm.to_date}
@@ -1748,14 +2349,103 @@ export function Employees({
             </div>
           </div>
 
+          {/* Décompte dynamique des jours ouvrés nets (excluant dimanches et fériés) */}
+          <div className="rounded-xl border border-line bg-surface-2 p-3 flex items-center justify-between">
+            <span className="text-ink-soft">Décompte en jours ouvrés :</span>
+            <span className="font-mono font-bold text-ink text-sm">
+              {computeWorkingDays(leaveForm.from_date, leaveForm.to_date, holidays)} jour(s) ouvré(s) nets
+            </span>
+          </div>
+
+          {/* Condition cognitive essentielle : pas de motif pour le congé annuel payé ! */}
+          {leaveForm.kind === 'conge' ? (
+            <div className="rounded-xl border border-blue/30 bg-blue-wash/30 p-3 text-xs text-ink-soft flex items-start gap-2.5">
+              <span className="text-base shrink-0">ℹ️</span>
+              <div>
+                <p className="font-semibold text-ink">Congé Annuel Payé (Droit au Repos)</p>
+                <p className="text-[11px] text-ink-soft mt-0.5">
+                  Conformément au Code du Travail et à l'organisation de l'atelier, le repos annuel est alloué par la Direction. Aucun justificatif ni motif n'est exigé du travailleur.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1 block font-medium text-ink-soft">
+                Motif &amp; Justification de la permission
+              </label>
+              <textarea
+                value={leaveForm.note}
+                onChange={(e) => setLeaveForm((f) => ({ ...f, note: e.target.value }))}
+                placeholder="Ex : Mariage, décès familial, convocation administrative, consultation médicale…"
+                rows={2}
+                className="w-full rounded-lg border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+              />
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Modal: Déclaration Décret Présidentiel (Jour Férié Exceptionnel) */}
+      <Modal
+        open={decreeModalOpen}
+        title="🇨🇲 Déclarer un Jour Férié par Décret Présidentiel"
+        onClose={() => setDecreeModalOpen(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDecreeModalOpen(false)}>Annuler</Button>
+            <Button
+              variant="primary"
+              disabled={decreeBusy}
+              onClick={() => void submitDecree()}
+              className="bg-emerald hover:bg-emerald-2 text-white font-bold"
+            >
+              {decreeBusy ? <Spinner /> : 'Publier et appliquer en temps réel'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3.5 text-xs">
+          {decreeError && <Banner tone="error">{decreeError}</Banner>}
+
+          <div className="rounded-xl border border-emerald/30 bg-emerald-wash/30 p-3.5 flex items-start gap-2.5">
+            <span className="text-xl shrink-0">🇨🇲</span>
+            <div>
+              <p className="font-bold text-ink">Journée Chômée par Décret du Chef de l'État</p>
+              <p className="text-[11px] text-ink-soft mt-0.5">
+                Ce décret exceptionnel est diffusé en temps réel sur le planning de l'atelier et neutralise les alertes d'absence au pointage.
+              </p>
+            </div>
+          </div>
+
           <div>
-            <label className="mb-1 block text-xs font-medium text-ink-soft">Motif / Justification</label>
-            <textarea
-              value={leaveForm.note}
-              onChange={(e) => setLeaveForm((f) => ({ ...f, note: e.target.value }))}
-              placeholder="Ex : Événement familial, rendez-vous médical…"
-              rows={2}
-              className="w-full rounded-lg border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+            <label className="mb-1 block font-medium text-ink-soft">Date déclarée fériée</label>
+            <input
+              type="date"
+              value={decreeForm.holiday_date}
+              onChange={(e) => setDecreeForm((f) => ({ ...f, holiday_date: e.target.value }))}
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-emerald focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block font-medium text-ink-soft">Intitulé / Circonstance officielle</label>
+            <input
+              type="text"
+              value={decreeForm.name}
+              onChange={(e) => setDecreeForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Ex : Journée de fête suite à l'exploit des Lions Indomptables…"
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-emerald focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block font-medium text-ink-soft">Référence du Décret (facultatif)</label>
+            <input
+              type="text"
+              value={decreeForm.decree_ref}
+              onChange={(e) => setDecreeForm((f) => ({ ...f, decree_ref: e.target.value }))}
+              placeholder="Ex : Décret N° 2026/048 du Président de la République"
+              className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-emerald focus:outline-none"
             />
           </div>
         </div>

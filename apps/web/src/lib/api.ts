@@ -290,6 +290,7 @@ export type Leave = {
   employee_id: string;
   full_name?: string;
   job_title?: string;
+  photo_path?: string | null;
   kind: LeaveKind;
   from_date: string;
   to_date: string;
@@ -301,6 +302,50 @@ export type Leave = {
   actor: string;
   created_at: string;
 };
+
+export type HolidayKind = 'legal_national' | 'religious' | 'presidential_decree';
+
+export type Holiday = {
+  id: string;
+  holiday_date: string;
+  name: string;
+  kind: HolidayKind;
+  decree_ref?: string | null;
+  is_chome: boolean;
+};
+
+export async function fetchHolidays(year: number): Promise<Holiday[]> {
+  const res = await api<{ holidays: Holiday[] }>(`/api/leaves/holidays?year=${year}`);
+  return res.holidays || [];
+}
+
+export async function declarePresidentialDecree(data: { holiday_date: string; name: string; decree_ref?: string }): Promise<Holiday> {
+  const res = await api<{ holiday: Holiday }>('/api/leaves/holidays/decree', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return res.holiday;
+}
+
+export async function deleteHoliday(id: string): Promise<void> {
+  await api(`/api/leaves/holidays/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function requestWorkerPermission(data: { from_date: string; to_date: string; note: string }): Promise<Leave> {
+  const res = await api<{ leave: Leave }>('/api/leaves/request-permission', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return res.leave;
+}
+
+export async function deleteLeave(id: number): Promise<void> {
+  await api(`/api/leaves/${id}`, {
+    method: 'DELETE',
+  });
+}
 
 export type TodayEmployee = {
   id: string;
