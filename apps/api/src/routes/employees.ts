@@ -50,7 +50,11 @@ function newBadgeToken(): string {
 
 employeesRoutes.get('/', requirePerm('employees.view'), async (c) => {
   const employees = await getDb().query<EmployeeRow & { has_pin: boolean }>(
-    'SELECT id, full_name, job_title, photo_path, badge_token, active, (pin_hash IS NOT NULL) AS has_pin FROM employees ORDER BY full_name',
+    `SELECT e.id, e.full_name, coalesce(r.name, e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin
+       FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       LEFT JOIN roles r ON r.id = u.role
+      ORDER BY e.full_name`,
   );
   return c.json({ employees });
 });
@@ -58,7 +62,7 @@ employeesRoutes.get('/', requirePerm('employees.view'), async (c) => {
 employeesRoutes.get('/today-status', requirePerm('employees.view'), async (c) => {
   const db = getDb();
   const today = await db.query<{ id: string; full_name: string; job_title: string; photo_path: string | null; active: boolean; in_at: string | null; out_at: string | null; break_in: string | null; break_out: string | null; late_minutes: number; status: string; leave_kind: string | null }>(
-    `SELECT e.id, e.full_name, e.job_title, e.photo_path, e.active,
+    `SELECT e.id, e.full_name, coalesce(max(r.name), e.job_title) AS job_title, e.photo_path, e.active,
             min(CASE WHEN a.punch_type = 'in'  THEN to_char(a.server_at, 'HH24:MI') END) AS in_at,
             max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at, 'HH24:MI') END) AS out_at,
             min(CASE WHEN a.punch_type = 'break_in'  THEN to_char(a.server_at, 'HH24:MI') END) AS break_in,
@@ -69,6 +73,8 @@ employeesRoutes.get('/today-status', requirePerm('employees.view'), async (c) =>
               WHERE ab.employee_id = e.id AND CURRENT_DATE BETWEEN ab.from_date AND ab.to_date AND ab.status = 'approved'
               ORDER BY ab.created_at DESC LIMIT 1) AS leave_kind
        FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       LEFT JOIN roles r ON r.id = u.role
        LEFT JOIN attendance a ON a.employee_id = e.id AND a.punch_date = CURRENT_DATE
       WHERE e.active = true
       GROUP BY e.id, e.full_name, e.job_title, e.photo_path, e.active

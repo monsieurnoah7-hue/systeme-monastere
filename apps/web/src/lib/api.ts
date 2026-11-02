@@ -506,6 +506,9 @@ export type KioskSettings = {
   opening_time: string;
   closing_time: string;
   tolerance_minutes: number;
+  break_start_time?: string;
+  break_end_time?: string;
+  max_late_minutes_allowed?: number;
   workdays: number[];
   late_motifs: string[];
   selfie_retention_days: number;
@@ -526,6 +529,10 @@ export type KioskIdentify = {
     canBreakIn: boolean;
     canBreakOut: boolean;
     lateMinutes: number;
+    isLateCriticalBlocked?: boolean;
+    maxLateAllowed?: number;
+    isBreakTimeReached?: boolean;
+    breakStartTime?: string;
     afterClosing: boolean;
     openingTime: string;
     closingTime: string;

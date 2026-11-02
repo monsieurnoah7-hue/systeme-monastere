@@ -123,6 +123,12 @@ function TimeOffCalendarView({
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedLeave, setSelectedLeave] = useState<Leave | null>(null);
   const [selectedHoliday, setSelectedHoliday] = useState<Holiday | null>(null);
+  const [selectedDayOverview, setSelectedDayOverview] = useState<{
+    dateStr: string;
+    dayNum: number;
+    holidays: Holiday[];
+    leaves: Leave[];
+  } | null>(null);
 
   // Filtres dynamiques multi-critères
   const [filterKind, setFilterKind] = useState<'all' | 'conge' | 'permission' | 'absence' | 'ferie'>('all');
@@ -241,8 +247,8 @@ function TimeOffCalendarView({
         </Card>
       )}
 
-      {/* 2. Barre d'outils de Navigation & Actions Supérieures */}
-      <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4 shadow-card">
+      {/* 2. Barre d'outils de Navigation & Actions Supérieures (iOS Sticky Toolbar) */}
+      <div className="sticky top-0 z-20 flex flex-col gap-3 rounded-xl border border-line bg-surface/95 backdrop-blur-md p-4 shadow-card transition-all mb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {/* Navigation Mensuelle */}
           <div className="flex items-center gap-3">
@@ -274,7 +280,7 @@ function TimeOffCalendarView({
             </div>
           </div>
 
-          {/* Boutons d'Action (Allouer congé + Décret Présidentiel) */}
+          {/* Boutons d'Action (Poser un Congé + Férié Exceptionnel) */}
           <div className="flex flex-wrap items-center gap-2">
             {canManage && onOpenDecree && (
               <Button
@@ -282,10 +288,10 @@ function TimeOffCalendarView({
                 variant="secondary"
                 icon={<Flag size={14} className="text-emerald" />}
                 onClick={onOpenDecree}
-                title="Enregistrer un jour férié décrété par le Chef de l'État"
+                title="Enregistrer un jour férié exceptionnel par arrêté présidentiel"
                 className="border-emerald/40 text-emerald hover:bg-emerald-wash/40 font-semibold"
               >
-                🇨🇲 Décret Présidentiel
+                🇨🇲 Férié Exceptionnel
               </Button>
             )}
 
@@ -295,9 +301,9 @@ function TimeOffCalendarView({
                 variant="primary"
                 icon={<Plus size={14} />}
                 onClick={onOpenLeave}
-                title="Allouer un congé annuel ou accorder une permission"
+                title="Poser un congé annuel ou accorder une permission"
               >
-                Allouer Congé / Permission
+                + Poser un Congé / Permission
               </Button>
             )}
           </div>
@@ -478,9 +484,14 @@ function TimeOffCalendarView({
 
                     {/* Indicateur de volume d'absence */}
                     {activeOnDay.length > 0 && (
-                      <span className="text-[10px] text-ink-faint font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDayOverview({ dateStr, dayNum: d, holidays: dayHolidays, leaves: activeOnDay })}
+                        className="text-[10px] text-ink-faint hover:text-amber font-semibold cursor-pointer transition-colors"
+                        title="Cliquer pour voir la liste complète des absents sur cette journée"
+                      >
                         {activeOnDay.length} abs.
-                      </span>
+                      </button>
                     )}
                   </div>
 
@@ -552,9 +563,14 @@ function TimeOffCalendarView({
                     })}
 
                     {activeOnDay.length > 3 && (
-                      <span className="text-[10px] text-ink-faint block text-center font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDayOverview({ dateStr, dayNum: d, holidays: dayHolidays, leaves: activeOnDay })}
+                        className="text-[10px] text-amber hover:underline block text-center font-bold py-0.5 rounded hover:bg-amber-wash/40 transition-colors w-full cursor-pointer"
+                        title="Voir la liste complète des absents sur cette journée"
+                      >
                         +{activeOnDay.length - 3} autres
-                      </span>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -778,6 +794,127 @@ function TimeOffCalendarView({
 
             <div className="rounded-lg bg-surface-2 p-3 text-[11px] text-ink-soft">
               💡 Conformément au régime des fêtes légales camerounaises, cette journée n'est pas décomptée des congés des travailleurs et la borne de pointage n'enregistre aucune absence irrégulière.
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 6. MODAL D'INSPECTION GLOBALE D'UNE JOURNÉE (MULTI-SALARIÉS & FÉRIÉS) */}
+      <Modal
+        open={!!selectedDayOverview}
+        title={
+          selectedDayOverview
+            ? `Planning du ${formatDate(selectedDayOverview.dateStr)}`
+            : ''
+        }
+        onClose={() => setSelectedDayOverview(null)}
+        footer={
+          <div className="flex w-full items-center justify-between">
+            <span className="text-xs text-ink-soft">
+              {selectedDayOverview?.leaves.length ?? 0} salarié(s) absent(s) ce jour
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedDayOverview(null)}>
+              Fermer
+            </Button>
+          </div>
+        }
+      >
+        {selectedDayOverview && (
+          <div className="space-y-4 text-xs">
+            {/* Si jour férié */}
+            {selectedDayOverview.holidays.length > 0 && (
+              <div className="space-y-2">
+                <p className="font-semibold text-ink-soft uppercase text-[10px] tracking-wider">
+                  Jour(s) Férié(s) Officiel(s)
+                </p>
+                {selectedDayOverview.holidays.map((h) => (
+                  <div
+                    key={h.id}
+                    onClick={() => {
+                      setSelectedDayOverview(null);
+                      setSelectedHoliday(h);
+                    }}
+                    className="flex items-center justify-between rounded-xl border border-emerald/30 bg-emerald-wash/30 p-3 cursor-pointer hover:bg-emerald-wash/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🇨🇲</span>
+                      <div>
+                        <p className="font-bold text-ink">{h.name}</p>
+                        <p className="text-[11px] text-ink-soft">{h.decree_ref || 'Fête légale camerounaise'}</p>
+                      </div>
+                    </div>
+                    <span className="text-emerald font-semibold text-xs">Consulter →</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Liste complète des salariés en congé / permission / absence */}
+            <div>
+              <p className="font-semibold text-ink-soft uppercase text-[10px] tracking-wider mb-2">
+                Salariés en absence ({selectedDayOverview.leaves.length})
+              </p>
+
+              {selectedDayOverview.leaves.length === 0 ? (
+                <div className="rounded-xl border border-line bg-surface-2 p-6 text-center text-ink-soft">
+                  Aucun congé ni permission sur cette journée.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[360px] overflow-y-auto scroll-thin pr-1">
+                  {selectedDayOverview.leaves.map((leave) => {
+                    const isPending = leave.status === 'pending';
+                    const toneBorder =
+                      leave.kind === 'conge'
+                        ? 'border-blue/30 bg-blue-wash/20'
+                        : leave.kind === 'permission'
+                        ? 'border-[#8b5cf6]/30 bg-[#8b5cf6]/10'
+                        : 'border-red/30 bg-red-wash/20';
+
+                    return (
+                      <div
+                        key={leave.id}
+                        onClick={() => {
+                          setSelectedDayOverview(null);
+                          setSelectedLeave(leave);
+                        }}
+                        className={cx(
+                          'flex items-center justify-between rounded-xl border p-3 cursor-pointer hover:scale-[1.01] transition-all shadow-xs',
+                          toneBorder
+                        )}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-paper font-bold text-xs shrink-0">
+                            {initials(leave.full_name ?? leave.employee_id)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-ink truncate flex items-center gap-1.5">
+                              {leave.full_name}
+                              <span className="text-[10px] text-ink-faint font-mono font-normal">({leave.employee_id})</span>
+                            </p>
+                            <p className="text-[11px] text-ink-soft truncate">
+                              <span className="font-semibold">
+                                {leave.kind === 'conge' ? 'Congé payé' : leave.kind === 'permission' ? 'Permission' : 'Absence'}
+                              </span>
+                              {' · '}Du {formatDate(leave.from_date)} au {formatDate(leave.to_date)}
+                            </p>
+                            {leave.note && <p className="text-[10px] text-ink-soft italic truncate">« {leave.note} »</p>}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Chip
+                            tone={leave.status === 'approved' ? 'green' : isPending ? 'amber' : 'red'}
+                            className="text-[10px]"
+                          >
+                            {leave.status === 'approved' ? 'Accordé' : isPending ? 'En attente' : 'Refusé'}
+                          </Chip>
+                          <span className="text-ink-faint text-xs">→</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1394,7 +1531,7 @@ export function Employees({
               </>
             )}
             <Button size="sm" onClick={openLeave} icon={<CalendarIcon size={14} />}>
-              Congé / Permission
+              + Poser un Congé / Permission
             </Button>
             {canCreate && (
               <Button size="sm" variant="primary" icon={<UserPlus size={15} />} onClick={openCreate}>
@@ -2276,12 +2413,12 @@ export function Employees({
         </div>
       </Modal>
 
-      {/* Modal: Allouer un congé ou accorder une permission (Direction / Ayant-droit) */}
+      {/* Modal: Poser un congé ou accorder une permission (Direction / Ayant-droit) */}
       <Modal
         open={leaveOpen}
         title={
           leaveForm.kind === 'conge'
-            ? 'Allouer un Congé Annuel Payé'
+            ? 'Poser un Congé Annuel Payé'
             : leaveForm.kind === 'permission'
             ? 'Accorder une Permission Exceptionnelle'
             : 'Enregistrer une Absence Autorisée'
@@ -2388,7 +2525,7 @@ export function Employees({
       {/* Modal: Déclaration Décret Présidentiel (Jour Férié Exceptionnel) */}
       <Modal
         open={decreeModalOpen}
-        title="🇨🇲 Déclarer un Jour Férié par Décret Présidentiel"
+        title="🇨🇲 Enregistrer un Férié Exceptionnel (Arrêté / Décret Présidentiel)"
         onClose={() => setDecreeModalOpen(false)}
         footer={
           <>

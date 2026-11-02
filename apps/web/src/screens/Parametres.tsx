@@ -2068,26 +2068,81 @@ function AdminSettings({ user }: { user: User }) {
                   </div>
                 </div>
 
-                {/* Tolérance */}
-                <div>
+                {/* Plage horaire de pause méridienne */}
+                <div className="rounded-xl border border-line bg-surface-2/40 p-3.5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-ink-soft">Tolérance de retard autorisée</label>
-                    <span className="font-mono text-xs font-semibold text-amber">
-                      {effectiveSettings?.tolerance_minutes ?? 0} min
-                    </span>
+                    <div>
+                      <p className="text-xs font-bold text-ink">Pause Méridienne Réglementaire</p>
+                      <p className="text-[11px] text-ink-soft">
+                        Le bouton « Pause » de la borne reste verrouillé jusqu'à l'heure officielle.
+                      </p>
+                    </div>
                   </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={120}
-                    step={5}
-                    value={effectiveSettings?.tolerance_minutes ?? 0}
-                    onChange={(e) => updateSettingsDraft({ tolerance_minutes: Number(e.target.value) })}
-                    className="mt-2 w-full accent-[#d9480f]"
-                  />
-                  <p className="mt-1 text-[11px] text-ink-faint">
-                    Au-delà de cette tolérance, le kiosque impose la sélection d’un motif explicatif.
-                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-ink-soft">Début officiel de la pause</label>
+                      <input
+                        type="time"
+                        value={effectiveSettings?.break_start_time || '12:00'}
+                        onChange={(e) => updateSettingsDraft({ break_start_time: e.target.value })}
+                        className="h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-ink-soft">Fin officielle de la pause</label>
+                      <input
+                        type="time"
+                        value={effectiveSettings?.break_end_time || '13:00'}
+                        onChange={(e) => updateSettingsDraft({ break_end_time: e.target.value })}
+                        className="h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tolérance & Seuil de retard critique */}
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-ink-soft">Tolérance de retard autorisée (avec motif)</label>
+                      <span className="font-mono text-xs font-semibold text-amber">
+                        {effectiveSettings?.tolerance_minutes ?? 0} min
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={60}
+                      step={5}
+                      value={effectiveSettings?.tolerance_minutes ?? 0}
+                      onChange={(e) => updateSettingsDraft({ tolerance_minutes: Number(e.target.value) })}
+                      className="mt-2 w-full accent-[#d9480f]"
+                    />
+                    <p className="mt-1 text-[11px] text-ink-faint">
+                      Au-delà de cette tolérance, le kiosque impose la sélection d’un motif explicatif.
+                    </p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-ink-soft">Retard maximal autorisé avant blocage direct</label>
+                      <span className="font-mono text-xs font-semibold text-red">
+                        {effectiveSettings?.max_late_minutes_allowed ?? 60} min
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={15}
+                      max={180}
+                      step={15}
+                      value={effectiveSettings?.max_late_minutes_allowed ?? 60}
+                      onChange={(e) => updateSettingsDraft({ max_late_minutes_allowed: Number(e.target.value) })}
+                      className="mt-2 w-full accent-red"
+                    />
+                    <p className="mt-1 text-[11px] text-ink-faint">
+                      Au-delà de cette durée, le pointage kiosque direct est automatiquement bloqué. L'ouvrier doit obligatoirement s'adresser au Frère Surveillant ou à la Direction pour régularisation.
+                    </p>
+                  </div>
                 </div>
 
                 <Separator />

@@ -174,9 +174,16 @@ kioskRoutes.post('/identify', async (c) => {
     [employee.id, today],
   ).catch(() => null);
 
-  const canPunchIn = !hasIn;
+  const breakStartTimeStr = (settings as any).break_start_time || '12:00';
+  const breakStartMin = parseHm(breakStartTimeStr);
+  const isBreakTimeReached = todayMin >= breakStartMin;
+
+  const maxLateAllowed = Number((settings as any).max_late_minutes_allowed) || 60;
+  const isLateCriticalBlocked = !hasIn && isWorkday && lateMinutes > maxLateAllowed;
+
+  const canPunchIn = !hasIn && !isLateCriticalBlocked;
   const canPunchOut = hasIn && !hasOut && !onBreak;
-  const canBreakIn = hasIn && !hasBreakIn && !hasBreakOut && !onBreak;
+  const canBreakIn = hasIn && !hasBreakIn && !hasBreakOut && !onBreak && isBreakTimeReached;
   const canBreakOut = onBreak;
 
   return c.json({
@@ -200,6 +207,10 @@ kioskRoutes.post('/identify', async (c) => {
       canBreakOut,
       lateMinutes,
       isLate: isWorkday && !hasIn && lateMinutes > settings.tolerance_minutes,
+      isLateCriticalBlocked,
+      maxLateAllowed,
+      isBreakTimeReached,
+      breakStartTime: breakStartTimeStr,
       afterClosing: todayMin > closedMin,
       openingTime: settings.opening_time,
       closingTime: settings.closing_time,
@@ -332,18 +343,39 @@ kioskRoutes.post('/punch', async (c) => {
   const onBreak = hasBreakIn && !hasBreakOut;
 
   const pt = body.data.punchType;
-  if (pt === 'in' && hasIn) return c.json({ error: 'Arrivée déjà pointée aujourd’hui.' }, 409);
+  const lateMinutes = pt === 'in' ? (isWorkday ? Math.max(0, todayMin - openedMin) : 0) : 0;
+  const maxLateAllowed = Number((settings as any).max_late_minutes_allowed) || 60;
+
+  if (pt === 'in') {
+    if (hasIn) return c.json({ error: 'Arrivée déjà pointée aujourd’hui.' }, 409);
+    if (isWorkday && lateMinutes > maxLateAllowed) {
+      return c.json(
+        {
+          error: `Pointage bloqué : retard critique de ${lateMinutes} min dépassant la limite de ${maxLateAllowed} min. Veuillez vous présenter auprès du Frère Surveillant ou de la Direction pour régularisation.`,
+          isLateCriticalBlocked: true,
+        },
+        403,
+      );
+    }
+  }
+
   if ((pt === 'out' || pt === 'break_out' || pt === 'break_in') && !hasIn) {
     return c.json({ error: 'Pointage impossible sans arrivée préalable.' }, 409);
   }
   if (pt === 'out' && hasOut) return c.json({ error: 'Déjà pointé en fin de journée.' }, 409);
-  if (pt === 'out' && onBreak) return c.json({ error: 'Vous êtes en pause : reprenez d’abord (reprise de pause).' }, 409);
-  if (pt === 'break_in' && (hasBreakIn || hasBreakOut)) {
-    return c.json({ error: 'Une pause est déjà enregistrée aujourd’hui.' }, 409);
+  if (pt === 'out' && onBreak) {
+    return c.json({ error: 'Vous êtes actuellement en pause : veuillez pointer la reprise avant le départ définitif.' }, 409);
+  }
+  if (pt === 'break_in') {
+    if (hasBreakIn || hasBreakOut) return c.json({ error: 'Une pause a déjà été enregistrée aujourd’hui.' }, 409);
+    const breakStartTimeStr = (settings as any).break_start_time || '12:00';
+    const breakStartMin = parseHm(breakStartTimeStr);
+    if (todayMin < breakStartMin) {
+      return c.json({ error: `Heure de pause non atteinte : la pause est autorisée uniquement à partir de ${breakStartTimeStr}.` }, 403);
+    }
   }
   if (pt === 'break_out' && !onBreak) return c.json({ error: 'Aucune pause en cours.' }, 409);
 
-  const lateMinutes = pt === 'in' ? (isWorkday ? Math.max(0, todayMin - openedMin) : 0) : 0;
   const reasonRequired = pt === 'in' && isWorkday && todayMin > openedMin + settings.tolerance_minutes;
   let reason = body.data.reason?.trim() || null;
   if (!isWorkday) {

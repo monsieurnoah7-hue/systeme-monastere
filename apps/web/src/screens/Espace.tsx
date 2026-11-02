@@ -210,6 +210,8 @@ export function Espace({
         if (res.user.display_name) setDisplayName(res.user.display_name);
         if (res.user.login) setLogin(res.user.login);
         window.dispatchEvent(new CustomEvent('auth:user-updated', { detail: res.user }));
+        window.dispatchEvent(new CustomEvent('mf-refresh-data'));
+        void load();
       }
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : 'Échec de la mise à jour.');

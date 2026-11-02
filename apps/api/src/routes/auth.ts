@@ -173,9 +173,14 @@ authRoutes.patch('/profile', requireAuth, async (c) => {
     [newLogin ?? null, newName ?? null, newHash ?? null, newPhoto !== undefined ? (newPhoto || '') : null, userId],
   );
 
-  // Si l'utilisateur est lié à une fiche travailleur, synchroniser la photo
-  if (newPhoto !== undefined && current.employee_id) {
-    await db.query('UPDATE employees SET photo_path = $1 WHERE id = $2', [newPhoto, current.employee_id]);
+  // Si l'utilisateur est lié à une fiche travailleur, synchroniser la photo et le nom complet
+  if (current.employee_id) {
+    if (newPhoto !== undefined) {
+      await db.query('UPDATE employees SET photo_path = $1 WHERE id = $2', [newPhoto, current.employee_id]);
+    }
+    if (newName !== undefined) {
+      await db.query('UPDATE employees SET full_name = $1 WHERE id = $2', [newName, current.employee_id]);
+    }
   }
 
   const updated = await db.one<UserRow>(

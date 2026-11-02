@@ -487,14 +487,14 @@ export function Pointage({
       const sit = identified?.situation;
       if (sit?.canBreakOut) {
         setPunchType('break_out');
-      } else if (sit?.canPunchIn) {
+      } else if (sit?.canPunchIn && !sit?.isLateCriticalBlocked) {
         setPunchType('in');
-      } else if (sit?.canPunchOut) {
-        setPunchType('out');
-      } else if (sit?.canBreakIn) {
+      } else if (sit?.canBreakIn && sit?.isBreakTimeReached) {
         setPunchType('break_in');
+      } else if (sit?.canPunchOut && !sit?.onBreak) {
+        setPunchType('out');
       } else {
-        setPunchType('in');
+        setPunchType(sit?.onBreak ? 'break_out' : 'in');
       }
       setSelfie(null);
       setMotif('');
@@ -517,6 +517,18 @@ export function Pointage({
     if (!pin || pin.trim().length < 4) {
       setError('Code secret personnel requis pour certifier le pointage.');
       setStage('validate_pin');
+      return;
+    }
+    if (punchType === 'in' && identified.situation?.isLateCriticalBlocked) {
+      setError(`Pointage direct bloqué : retard critique (${identified.situation.lateMinutes} min > max autorisée ${identified.situation.maxLateAllowed || 60} min). Veuillez contacter la Direction.`);
+      return;
+    }
+    if (punchType === 'break_in' && !identified.situation?.isBreakTimeReached) {
+      setError(`Pointage de pause non autorisé avant l'heure réglementaire (${identified.situation?.breakStartTime || '12:00'}).`);
+      return;
+    }
+    if (punchType === 'out' && identified.situation?.onBreak) {
+      setError('Vous êtes actuellement en pause : veuillez pointer la reprise avant votre départ.');
       return;
     }
     setBusy(true);
@@ -1423,6 +1435,36 @@ export function Pointage({
                 </div>
               </Card>
 
+              {/* Bannières d'état dynamique & blocages réglementaires */}
+              {situation?.isLateCriticalBlocked ? (
+                <div className="rounded-xl border border-red/40 bg-red-wash/40 p-3.5 text-xs text-red shadow-xs space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-sm">
+                    <span className="grid h-6 w-6 place-items-center rounded-full bg-red text-white text-xs">⛔</span>
+                    <span>Pointage direct d'arrivée bloqué</span>
+                  </div>
+                  <p className="text-ink">
+                    Votre retard constaté est de <strong>{situation.lateMinutes} minutes</strong> (limite maximale autorisée par l'administration : {situation.maxLateAllowed ?? 60} min).
+                  </p>
+                  <p className="text-ink-soft text-[11px]">
+                    Veuillez vous présenter immédiatement auprès du <strong>Frère Surveillant</strong> ou de la <strong>Direction</strong> pour faire enregistrer et régulariser votre présence.
+                  </p>
+                </div>
+              ) : null}
+
+              {situation?.onBreak ? (
+                <div className="rounded-xl border border-amber/30 bg-amber-wash/30 p-2.5 text-xs text-amber flex items-center gap-2">
+                  <Clock size={15} className="shrink-0" />
+                  <span>Vous êtes actuellement <strong>en pause</strong>. Veuillez enregistrer la <strong>Reprise</strong> avant de pouvoir pointer votre départ.</span>
+                </div>
+              ) : null}
+
+              {!situation?.isBreakTimeReached && situation?.hasIn && !situation?.hasBreakIn ? (
+                <div className="rounded-xl border border-line bg-surface-2/60 p-2.5 text-xs text-ink-soft flex items-center gap-2">
+                  <Clock size={15} className="text-amber shrink-0" />
+                  <span>Heure officielle de début de pause : <strong>{situation?.breakStartTime || '12:00'}</strong>. Le pointage de pause est verrouillé jusqu'à cette heure.</span>
+                </div>
+              ) : null}
+
               {/* Sélecteur d'action de pointage */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-ink-soft">
@@ -1431,58 +1473,75 @@ export function Pointage({
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <button
                     type="button"
+                    disabled={!situation?.canPunchIn || situation?.isLateCriticalBlocked}
                     onClick={() => { setPunchType('in'); setSelfie(null); }}
                     className={cx(
-                      'flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
-                      punchType === 'in'
+                      'flex flex-col sm:flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
+                      (!situation?.canPunchIn || situation?.isLateCriticalBlocked)
+                        ? 'opacity-40 cursor-not-allowed bg-paper-2 border-line text-ink-faint'
+                        : punchType === 'in'
                         ? 'border-amber bg-amber text-white ring-2 ring-amber/20'
                         : 'border-line bg-surface text-ink hover:border-amber/40 hover:bg-paper-2',
                     )}
                   >
                     <Clock size={15} />
-                    Arrivée
+                    <span>Arrivée</span>
+                    {situation?.isLateCriticalBlocked && <span className="text-[9px] text-red font-bold">(Bloqué)</span>}
                   </button>
 
                   <button
                     type="button"
+                    disabled={!situation?.canBreakIn || !situation?.isBreakTimeReached}
                     onClick={() => { setPunchType('break_in'); setSelfie(null); }}
                     className={cx(
-                      'flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
-                      punchType === 'break_in'
+                      'flex flex-col sm:flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
+                      (!situation?.canBreakIn || !situation?.isBreakTimeReached)
+                        ? 'opacity-40 cursor-not-allowed bg-paper-2 border-line text-ink-faint'
+                        : punchType === 'break_in'
                         ? 'border-amber bg-amber text-white ring-2 ring-amber/20'
                         : 'border-line bg-surface text-ink hover:border-amber/40 hover:bg-paper-2',
                     )}
+                    title={!situation?.isBreakTimeReached ? `Pause autorisée dès ${situation?.breakStartTime || '12:00'}` : undefined}
                   >
                     <Clock size={15} />
-                    Pause
+                    <span>Pause</span>
+                    {!situation?.isBreakTimeReached && <span className="text-[9px] text-ink-faint">({situation?.breakStartTime || '12:00'})</span>}
                   </button>
 
                   <button
                     type="button"
+                    disabled={!situation?.canBreakOut}
                     onClick={() => { setPunchType('break_out'); setSelfie(null); }}
                     className={cx(
-                      'flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
-                      punchType === 'break_out'
+                      'flex flex-col sm:flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
+                      !situation?.canBreakOut
+                        ? 'opacity-40 cursor-not-allowed bg-paper-2 border-line text-ink-faint'
+                        : punchType === 'break_out'
                         ? 'border-green bg-green text-white ring-2 ring-green/20'
                         : 'border-line bg-surface text-ink hover:border-green/40 hover:bg-paper-2',
                     )}
                   >
                     <Clock size={15} />
-                    Reprise
+                    <span>Reprise</span>
                   </button>
 
                   <button
                     type="button"
+                    disabled={!situation?.canPunchOut || situation?.onBreak}
                     onClick={() => { setPunchType('out'); setSelfie(null); }}
                     className={cx(
-                      'flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
-                      punchType === 'out'
+                      'flex flex-col sm:flex-row items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition-all border shadow-xs',
+                      (!situation?.canPunchOut || situation?.onBreak)
+                        ? 'opacity-40 cursor-not-allowed bg-paper-2 border-line text-ink-faint'
+                        : punchType === 'out'
                         ? 'border-amber bg-amber text-white ring-2 ring-amber/20'
                         : 'border-line bg-surface text-ink hover:border-amber/40 hover:bg-paper-2',
                     )}
+                    title={situation?.onBreak ? 'Veuillez pointer la reprise de pause avant le départ' : undefined}
                   >
                     <Clock size={15} />
-                    Départ
+                    <span>Départ</span>
+                    {situation?.onBreak && <span className="text-[9px] text-amber font-bold">(En pause)</span>}
                   </button>
                 </div>
               </div>

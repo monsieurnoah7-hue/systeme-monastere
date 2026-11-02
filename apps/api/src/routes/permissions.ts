@@ -307,6 +307,15 @@ permissionsRoutes.put('/roles/:id', requireRole('direction'), async (c) => {
     id,
   ]);
 
+  // Synchronisation en cascade immédiate vers la table des travailleurs
+  await db.query(
+    `UPDATE employees
+        SET job_title = $1
+      WHERE job_title = $2
+         OR id IN (SELECT u.employee_id FROM users u WHERE u.role = $3 AND u.employee_id IS NOT NULL)`,
+    [body.data.name.trim(), before.name, id],
+  );
+
   await writeAudit(db, {
     entity: 'roles',
     entityId: id,

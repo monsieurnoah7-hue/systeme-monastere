@@ -24,6 +24,9 @@ export type Settings = {
   opening_time: string;
   closing_time: string;
   tolerance_minutes: number;
+  break_start_time: string;
+  break_end_time: string;
+  max_late_minutes_allowed: number;
   workdays: number[];
   late_motifs: string[];
   selfie_retention_days: number;
@@ -34,6 +37,9 @@ export const DEFAULT_SETTINGS: Settings = {
   opening_time: '07:30',
   closing_time: '16:30',
   tolerance_minutes: 10,
+  break_start_time: '12:00',
+  break_end_time: '13:00',
+  max_late_minutes_allowed: 60,
   workdays: [1, 2, 3, 4, 5, 6],
   late_motifs: ['Transport', 'Motif familial', 'Mission extérieure', 'Autorisé par la direction', 'Autre'],
   selfie_retention_days: 90,

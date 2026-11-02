@@ -134,6 +134,23 @@ usersRoutes.patch('/:id', requirePerm('users.manage'), async (c) => {
       patch.photo_path !== undefined ? (patch.photo_path ? patch.photo_path.trim() : null) : null,
     ],
   );
+
+  const linkedEmployeeId = patch.employee_id !== undefined ? (patch.employee_id || null) : before.employee_id;
+  if (linkedEmployeeId) {
+    if (patch.role) {
+      const roleRow = await db.one<{ name: string }>('SELECT name FROM roles WHERE id = $1', [patch.role]);
+      if (roleRow) {
+        await db.query('UPDATE employees SET job_title = $1 WHERE id = $2', [roleRow.name, linkedEmployeeId]);
+      }
+    }
+    if (patch.display_name) {
+      await db.query('UPDATE employees SET full_name = $1 WHERE id = $2', [patch.display_name.trim(), linkedEmployeeId]);
+    }
+    if (patch.photo_path !== undefined) {
+      await db.query('UPDATE employees SET photo_path = $1 WHERE id = $2', [patch.photo_path ? patch.photo_path.trim() : null, linkedEmployeeId]);
+    }
+  }
+
   await writeAudit(db, {
     entity: 'user',
     entityId: String(id),
