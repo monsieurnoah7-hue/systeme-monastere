@@ -37,9 +37,13 @@ import { QrCode } from '../components/QrCode';
 import {
   AlertTriangle,
   Calendar as CalendarIcon,
+  CalendarCheck2,
   Camera,
   Clock,
   Download,
+  FileSpreadsheet,
+  Filter,
+  Flag,
   Plus,
   Printer,
   RefreshCw,
@@ -47,10 +51,9 @@ import {
   Trash2,
   UserPlus,
   Users,
+  X,
   ChevronLeft,
   ChevronRight,
-  Filter,
-  Flag,
 } from 'lucide-react';
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { exportToExcel, exportToPdf } from '../lib/export';
@@ -130,6 +133,9 @@ function TimeOffCalendarView({
     leaves: Leave[];
   } | null>(null);
 
+  // Bascule Jibble : Vue Calendrier vs Vue Registre des Demandes
+  const [viewMode, setViewMode] = useState<'calendar' | 'table'>('calendar');
+
   // Filtres dynamiques multi-critères
   const [filterKind, setFilterKind] = useState<'all' | 'conge' | 'permission' | 'absence' | 'ferie'>('all');
   const [filterEmpId, setFilterEmpId] = useState<string>('all');
@@ -148,16 +154,20 @@ function TimeOffCalendarView({
   // Demandes en attente
   const pendingLeaves = useMemo(() => leaves.filter((l) => l.status === 'pending'), [leaves]);
 
-  // Filtrage des congés pour ce mois avec critères
+  // Date du jour au format ISO YYYY-MM-DD
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  // Filtrage des congés pour ce mois avec critères normalisés
   const monthLeaves = useMemo(() => {
-    const startOfMonth = new Date(year, month, 1);
-    const endOfMonth = new Date(year, month + 1, 0);
+    const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
 
     return leaves.filter((l) => {
-      // Filtre de période
-      const from = new Date(l.from_date);
-      const to = new Date(l.to_date);
-      const inMonth = from <= endOfMonth && to >= startOfMonth;
+      // Normalisation sécurisée des dates (support YYYY-MM-DD ou ISO)
+      const lFrom = String(l.from_date || '').slice(0, 10);
+      const lTo = String(l.to_date || '').slice(0, 10);
+      if (!lFrom || !lTo) return false;
+      const inMonth = lFrom <= endStr && lTo >= startStr;
       if (!inMonth) return false;
 
       // Filtre de type
@@ -166,14 +176,14 @@ function TimeOffCalendarView({
       }
 
       // Filtre d'employé
-      if (filterEmpId !== 'all' && l.employee_id !== filterEmpId) return false;
+      if (filterEmpId !== 'all' && String(l.employee_id) !== String(filterEmpId)) return false;
 
       // Filtre de statut
       if (filterStatus !== 'all' && l.status !== filterStatus) return false;
 
       return true;
     });
-  }, [leaves, year, month, filterKind, filterEmpId, filterStatus]);
+  }, [leaves, year, month, daysInMonth, filterKind, filterEmpId, filterStatus]);
 
   // Fériés du mois
   const monthHolidays = useMemo(() => {
@@ -181,6 +191,45 @@ function TimeOffCalendarView({
     const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
     return holidays.filter((h) => h.holiday_date >= startStr && h.holiday_date <= endStr);
   }, [holidays, year, month, daysInMonth]);
+
+  // Jibble KPI: Ouvriers absents ou en congé aujourd'hui
+  const todayOnLeave = useMemo(() => {
+    return leaves.filter((l) => {
+      const lFrom = String(l.from_date || '').slice(0, 10);
+      const lTo = String(l.to_date || '').slice(0, 10);
+      return l.status === 'approved' && todayStr >= lFrom && todayStr <= lTo;
+    });
+  }, [leaves, todayStr]);
+
+  // Jibble KPI: Total jours ouvrés posés ce mois (tous salariés confondus)
+  const monthWorkingDaysCount = useMemo(() => {
+    return monthLeaves
+      .filter((l) => l.status === 'approved')
+      .reduce((sum, l) => sum + computeWorkingDays(l.from_date, l.to_date, holidays), 0);
+  }, [monthLeaves, holidays]);
+
+  // Jibble Balances: Solde de congés pour l'ouvrier sélectionné (Politique standard Cameroun : 18 jours ouvrés légaux / 24 jours ouvrables)
+  const selectedEmpBalance = useMemo(() => {
+    if (filterEmpId === 'all') return null;
+    const currentYear = new Date().getFullYear();
+    const annualQuota = 18; // 18 jours ouvrés légaux
+    const empLeaves = leaves.filter((l) => {
+      if (String(l.employee_id) !== String(filterEmpId)) return false;
+      if (l.kind !== 'conge' || l.status !== 'approved') return false;
+      const lFrom = String(l.from_date || '').slice(0, 10);
+      return lFrom.startsWith(String(currentYear));
+    });
+    const takenDays = empLeaves.reduce((acc, l) => acc + computeWorkingDays(l.from_date, l.to_date, holidays), 0);
+    const remainingDays = Math.max(0, annualQuota - takenDays);
+    const emp = employees.find((e) => String(e.id) === String(filterEmpId));
+    return {
+      empName: emp?.full_name ?? 'Ouvrier',
+      annualQuota,
+      takenDays,
+      remainingDays,
+      percentUsed: Math.min(100, Math.round((takenDays / annualQuota) * 100)),
+    };
+  }, [filterEmpId, leaves, employees, holidays]);
 
   return (
     <div className="space-y-5">
@@ -247,11 +296,92 @@ function TimeOffCalendarView({
         </Card>
       )}
 
-      {/* 2. Barre d'outils de Navigation & Actions Supérieures (iOS Sticky Toolbar) */}
-      <div className="sticky top-0 z-20 flex flex-col gap-3 rounded-xl border border-line bg-surface/95 backdrop-blur-md p-4 shadow-card transition-all mb-4">
+      {/* 2. Jibble KPI & Métriques Time-Off en Temps Réel */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Card 1: Demandes en attente */}
+        <div
+          onClick={() => {
+            setFilterStatus('pending');
+            setFilterKind('all');
+          }}
+          className={cx(
+            'flex flex-col justify-between rounded-xl border p-3.5 shadow-xs cursor-pointer transition-all hover:scale-[1.01]',
+            pendingLeaves.length > 0
+              ? 'border-amber/40 bg-amber-wash/30 text-amber'
+              : 'border-line bg-surface text-ink'
+          )}
+          title="Cliquer pour afficher uniquement les demandes en attente de visa"
+        >
+          <div className="flex items-center justify-between text-xs font-semibold">
+            <span className="text-ink-soft">En attente de visa</span>
+            <Clock size={15} className={pendingLeaves.length > 0 ? 'text-amber animate-pulse' : 'text-ink-faint'} />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-bold tracking-tight">{pendingLeaves.length}</span>
+            <span className="text-[11px] text-ink-soft">demande(s)</span>
+          </div>
+          <span className="text-[10px] text-ink-faint mt-1 block">
+            {pendingLeaves.length > 0 ? '⚠️ Cliquez pour examiner' : 'À jour'}
+          </span>
+        </div>
+
+        {/* Card 2: En congé / absence aujourd'hui */}
+        <div className="flex flex-col justify-between rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between text-xs font-semibold">
+            <span className="text-ink-soft">Absents aujourd'hui</span>
+            <span className="h-2 w-2 rounded-full bg-blue" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-bold tracking-tight text-ink">{todayOnLeave.length}</span>
+            <span className="text-[11px] text-ink-soft">salarié(s)</span>
+          </div>
+          <span className="text-[10px] text-ink-faint mt-1 truncate">
+            {todayOnLeave.length > 0
+              ? todayOnLeave.map((l) => l.full_name?.split(' ')[0]).join(', ')
+              : 'Tous présents à l’atelier'}
+          </span>
+        </div>
+
+        {/* Card 3: Jours ouvrés pris ce mois */}
+        <div className="flex flex-col justify-between rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+          <div className="flex items-center justify-between text-xs font-semibold">
+            <span className="text-ink-soft">Jours posés (ce mois)</span>
+            <CalendarCheck2 size={15} className="text-ink-faint" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-bold tracking-tight text-ink">{monthWorkingDaysCount}</span>
+            <span className="text-[11px] text-ink-soft">j. ouvrés nets</span>
+          </div>
+          <span className="text-[10px] text-ink-faint mt-1 block">
+            {monthLeaves.length} mouvement(s) ce mois
+          </span>
+        </div>
+
+        {/* Card 4: Fériés Cameroun */}
+        <div
+          onClick={() => setFilterKind('ferie')}
+          className="flex flex-col justify-between rounded-xl border border-emerald/30 bg-emerald-wash/20 p-3.5 shadow-xs cursor-pointer hover:bg-emerald-wash/30 transition-all"
+          title="Cliquer pour filtrer les jours fériés"
+        >
+          <div className="flex items-center justify-between text-xs font-semibold text-emerald">
+            <span>🇨🇲 Fêtes & Fériés</span>
+            <Flag size={15} />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-bold tracking-tight text-emerald">{monthHolidays.length}</span>
+            <span className="text-[11px] text-emerald/80">jour(s) férié(s)</span>
+          </div>
+          <span className="text-[10px] text-emerald/70 mt-1 block truncate">
+            {monthHolidays.map((h) => h.name).slice(0, 1).join(', ') || 'Aucun férié ce mois'}
+          </span>
+        </div>
+      </div>
+
+      {/* 3. Barre d'outils de Navigation & Actions Supérieures (iOS Sticky Toolbar décalée) */}
+      <div className="sticky top-14 lg:top-12 z-10 flex flex-col gap-3 rounded-xl border border-line bg-surface/95 backdrop-blur-md p-4 shadow-card transition-all mb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Navigation Mensuelle */}
-          <div className="flex items-center gap-3">
+          {/* Navigation Mensuelle & Bascule de Vue (Calendrier vs Registre) */}
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-base font-bold text-ink capitalize tracking-tight">{monthLabel}</span>
             <div className="flex items-center gap-1 bg-surface-2 p-0.5 rounded-lg border border-line">
               <button
@@ -276,6 +406,32 @@ function TimeOffCalendarView({
                 aria-label="Mois suivant"
               >
                 <ChevronRight size={16} />
+              </button>
+            </div>
+
+            {/* Toggle Mode Jibble : Calendrier vs Registre tabulaire */}
+            <div className="flex items-center rounded-lg border border-line bg-surface-2 p-0.5 ml-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('calendar')}
+                className={cx(
+                  'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
+                  viewMode === 'calendar' ? 'bg-ink text-paper shadow-xs' : 'text-ink-soft hover:text-ink'
+                )}
+              >
+                <CalendarIcon size={13} />
+                <span>Calendrier</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={cx(
+                  'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
+                  viewMode === 'table' ? 'bg-ink text-paper shadow-xs' : 'text-ink-soft hover:text-ink'
+                )}
+              >
+                <FileSpreadsheet size={13} />
+                <span>Registre</span>
               </button>
             </div>
           </div>
@@ -303,13 +459,13 @@ function TimeOffCalendarView({
                 onClick={onOpenLeave}
                 title="Poser un congé annuel ou accorder une permission"
               >
-                + Poser un Congé / Permission
+                Poser un Congé / Permission
               </Button>
             )}
           </div>
         </div>
 
-        {/* 3. Filtres Dynamiques (Type, Employé, Statut) */}
+        {/* 4. Filtres Dynamiques (Type, Employé, Statut) */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-line text-xs">
           {/* Filtres par Nature d'absence */}
           <div className="flex flex-wrap items-center gap-1.5">
@@ -398,7 +554,7 @@ function TimeOffCalendarView({
               <option value="all">Tous les ouvriers ({employees.filter((e) => e.active).length})</option>
               {employees.filter((e) => e.active).map((emp) => (
                 <option key={emp.id} value={emp.id}>
-                  {emp.full_name}
+                  {emp.full_name} ({emp.id})
                 </option>
               ))}
             </select>
@@ -415,170 +571,350 @@ function TimeOffCalendarView({
             </select>
           </div>
         </div>
+
+        {/* Bannière de Solde Jibble pour le salarié sélectionné */}
+        {selectedEmpBalance && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue/30 bg-blue-wash/20 p-3 text-xs mt-1">
+            <div className="flex items-center gap-2.5">
+              <div className="grid h-8 w-8 place-items-center rounded-lg bg-blue text-white font-bold text-xs shrink-0">
+                {initials(selectedEmpBalance.empName)}
+              </div>
+              <div>
+                <p className="font-bold text-ink">Solde Annuel Congés : {selectedEmpBalance.empName}</p>
+                <p className="text-[11px] text-ink-soft">Régime camerounais : 18 jours ouvrés annuels (24 jours ouvrables)</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <span className="text-ink-soft text-[10px] block">Droit annuel</span>
+                <span className="font-mono font-bold text-ink">{selectedEmpBalance.annualQuota} j</span>
+              </div>
+              <div className="text-right">
+                <span className="text-ink-soft text-[10px] block">Consommés</span>
+                <span className="font-mono font-bold text-amber">{selectedEmpBalance.takenDays} j</span>
+              </div>
+              <div className="text-right">
+                <span className="text-ink-soft text-[10px] block">Solde restant</span>
+                <span className="font-mono font-bold text-emerald text-sm">{selectedEmpBalance.remainingDays} j</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFilterEmpId('all')}
+                className="text-ink-faint hover:text-ink p-1 rounded-md hover:bg-surface-2 transition-colors ml-1"
+                title="Réinitialiser le filtre ouvrier"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 4. Grille Calendaire Mensuelle Réactive & Cliquable */}
-      <Card className="overflow-x-auto scroll-thin shadow-card p-0">
-        <div className="min-w-[640px]">
-          {/* En-tête des jours de la semaine (Lun - Dim) */}
-          <div className="grid grid-cols-7 border-b border-line bg-paper-2 text-center text-xs font-semibold text-ink-soft">
-            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d, idx) => (
-              <div
-                key={d}
-                className={cx(
-                  'py-2.5 border-r border-line last:border-r-0',
-                  idx === 6 && 'text-ink-faint bg-paper/60' // Dimanche
-                )}
-              >
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* Corps de la Grille */}
-          <div className="grid grid-cols-7 sheet-grid">
-            {/* Cases vides début de mois */}
-            {blanks.map((b) => (
-              <div key={`blank-${b}`} className="min-h-28 bg-paper/40 p-2 border-r border-b border-line" />
-            ))}
-
-            {/* Cases de chaque jour du mois */}
-            {days.map((d) => {
-              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-              const dayOfWeek = (firstDayIndex + d - 1) % 7; // 6 = Dimanche
-              const isSunday = dayOfWeek === 6;
-              const isToday = new Date().toDateString() === new Date(year, month, d).toDateString();
-
-              // Jours fériés sur ce jour
-              const dayHolidays = holidays.filter((h) => h.holiday_date === dateStr);
-
-              // Congés actifs sur ce jour (filtrés)
-              const activeOnDay = filterKind === 'ferie'
-                ? []
-                : monthLeaves.filter((l) => dateStr >= l.from_date && dateStr <= l.to_date);
-
-              return (
+      {/* 5. Affichage selon le mode choisi : Vue Grille Calendaire OU Registre Tabulaire Jibble */}
+      {viewMode === 'calendar' ? (
+        <Card className="overflow-x-auto scroll-thin shadow-card p-0">
+          <div className="min-w-[640px]">
+            {/* En-tête des jours de la semaine (Lun - Dim) */}
+            <div className="grid grid-cols-7 border-b border-line bg-paper-2 text-center text-xs font-semibold text-ink-soft">
+              {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d, idx) => (
                 <div
-                  key={`day-${d}`}
+                  key={d}
                   className={cx(
-                    'min-h-28 p-2 border-r border-b border-line transition-colors flex flex-col justify-between group',
-                    isToday && 'bg-amber-wash/30',
-                    isSunday && !isToday && 'bg-paper/40',
-                    dayHolidays.length > 0 && !isToday && 'bg-emerald-wash/20'
+                    'py-2.5 border-r border-line last:border-r-0',
+                    idx === 6 && 'text-ink-faint bg-paper/60' // Dimanche
                   )}
                 >
-                  {/* En-tête du jour (Numéro + Badge total) */}
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={cx(
-                        'font-mono text-xs font-bold tabular-nums',
-                        isToday
-                          ? 'grid h-6 w-6 place-items-center rounded-full bg-amber text-white shadow-xs'
-                          : isSunday
-                          ? 'text-ink-faint'
-                          : 'text-ink-soft'
-                      )}
-                    >
-                      {d}
-                    </span>
-
-                    {/* Indicateur de volume d'absence */}
-                    {activeOnDay.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedDayOverview({ dateStr, dayNum: d, holidays: dayHolidays, leaves: activeOnDay })}
-                        className="text-[10px] text-ink-faint hover:text-amber font-semibold cursor-pointer transition-colors"
-                        title="Cliquer pour voir la liste complète des absents sur cette journée"
-                      >
-                        {activeOnDay.length} abs.
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Événements sur la journée (Fériés + Congés Cliquables) */}
-                  <div className="mt-1.5 space-y-1 flex-1">
-                    {/* A. Puce Férié Officiel / Décret Présidentiel */}
-                    {(filterKind === 'all' || filterKind === 'ferie') &&
-                      dayHolidays.map((h) => (
-                        <button
-                          key={h.id}
-                          type="button"
-                          onClick={() => setSelectedHoliday(h)}
-                          className={cx(
-                            'w-full text-left rounded-md px-1.5 py-1 text-[10px] font-bold border transition-all truncate flex items-center gap-1 shadow-xs cursor-pointer',
-                            h.kind === 'presidential_decree'
-                              ? 'bg-amber-wash border-amber/40 text-amber hover:scale-[1.02]'
-                              : 'bg-emerald-wash border-emerald/40 text-emerald hover:scale-[1.02]'
-                          )}
-                          title={`🇨🇲 ${h.name} (${h.decree_ref || 'Férié officiel'}) - Cliquer pour inspecter`}
-                        >
-                          <span className="text-[10px]">🇨🇲</span>
-                          <span className="truncate">{h.name}</span>
-                        </button>
-                      ))}
-
-                    {/* B. Puces des Congés & Permissions (Interactives & Cliquables) */}
-                    {activeOnDay.slice(0, 3).map((leave) => {
-                      const isPending = leave.status === 'pending';
-                      const toneBg =
-                        leave.kind === 'conge'
-                          ? 'bg-blue/10 border-blue/30 text-blue hover:bg-blue/20'
-                          : leave.kind === 'permission'
-                          ? 'bg-[#8b5cf6]/10 border-[#8b5cf6]/30 text-[#8b5cf6] hover:bg-[#8b5cf6]/20'
-                          : 'bg-red/10 border-red/30 text-red hover:bg-red/20';
-
-                      const dotBg =
-                        leave.kind === 'conge'
-                          ? 'bg-blue'
-                          : leave.kind === 'permission'
-                          ? 'bg-[#8b5cf6]'
-                          : 'bg-red';
-
-                      return (
-                        <button
-                          key={leave.id}
-                          type="button"
-                          onClick={() => setSelectedLeave(leave)}
-                          className={cx(
-                            'w-full text-left flex items-center justify-between gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium transition-all shadow-xs cursor-pointer hover:scale-[1.02]',
-                            toneBg,
-                            isPending && 'ring-1 ring-amber/50'
-                          )}
-                          title={`${leave.full_name} (${leave.kind}) : ${formatDate(leave.from_date)} au ${formatDate(leave.to_date)} - Cliquer pour voir les détails`}
-                        >
-                          <span className="flex items-center gap-1 min-w-0 truncate">
-                            <span className={cx('h-1.5 w-1.5 rounded-full shrink-0', dotBg)} />
-                            <span className="truncate text-ink font-semibold">
-                              {(leave.full_name ?? 'Ouvrier').split(' ')[0]}
-                            </span>
-                          </span>
-
-                          {isPending && (
-                            <span title="En attente de validation">
-                              <Clock size={10} className="text-amber shrink-0 animate-pulse" />
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-
-                    {activeOnDay.length > 3 && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedDayOverview({ dateStr, dayNum: d, holidays: dayHolidays, leaves: activeOnDay })}
-                        className="text-[10px] text-amber hover:underline block text-center font-bold py-0.5 rounded hover:bg-amber-wash/40 transition-colors w-full cursor-pointer"
-                        title="Voir la liste complète des absents sur cette journée"
-                      >
-                        +{activeOnDay.length - 3} autres
-                      </button>
-                    )}
-                  </div>
+                  {d}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+
+            {/* Corps de la Grille */}
+            <div className="grid grid-cols-7 sheet-grid">
+              {/* Cases vides début de mois */}
+              {blanks.map((b) => (
+                <div key={`blank-${b}`} className="min-h-28 bg-paper/40 p-2 border-r border-b border-line" />
+              ))}
+
+              {/* Cases de chaque jour du mois */}
+              {days.map((d) => {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const dayOfWeek = (firstDayIndex + d - 1) % 7; // 6 = Dimanche
+                const isSunday = dayOfWeek === 6;
+                const isToday = new Date().toDateString() === new Date(year, month, d).toDateString();
+
+                // Jours fériés sur ce jour
+                const dayHolidays = holidays.filter((h) => h.holiday_date === dateStr);
+
+                // Congés actifs sur ce jour (filtrés avec normalisation robuste des dates)
+                const activeOnDay = filterKind === 'ferie'
+                  ? []
+                  : monthLeaves.filter((l) => {
+                      const lFrom = String(l.from_date || '').slice(0, 10);
+                      const lTo = String(l.to_date || '').slice(0, 10);
+                      return dateStr >= lFrom && dateStr <= lTo;
+                    });
+
+                return (
+                  <div
+                    key={`day-${d}`}
+                    className={cx(
+                      'min-h-28 p-2 border-r border-b border-line transition-colors flex flex-col justify-between group',
+                      isToday && 'bg-amber-wash/30',
+                      isSunday && !isToday && 'bg-paper/40',
+                      dayHolidays.length > 0 && !isToday && 'bg-emerald-wash/20'
+                    )}
+                  >
+                    {/* En-tête du jour (Numéro + Badge total) */}
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={cx(
+                          'font-mono text-xs font-bold tabular-nums',
+                          isToday
+                            ? 'grid h-6 w-6 place-items-center rounded-full bg-amber text-white shadow-xs'
+                            : isSunday
+                            ? 'text-ink-faint'
+                            : 'text-ink-soft'
+                        )}
+                      >
+                        {d}
+                      </span>
+
+                      {/* Indicateur de volume d'absence */}
+                      {activeOnDay.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDayOverview({ dateStr, dayNum: d, holidays: dayHolidays, leaves: activeOnDay })}
+                          className="text-[10px] text-ink-faint hover:text-amber font-semibold cursor-pointer transition-colors"
+                          title="Cliquer pour voir la liste complète des absents sur cette journée"
+                        >
+                          {activeOnDay.length} abs.
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Événements sur la journée (Fériés + Congés Cliquables) */}
+                    <div className="mt-1.5 space-y-1 flex-1">
+                      {/* A. Puce Férié Officiel / Décret Présidentiel */}
+                      {(filterKind === 'all' || filterKind === 'ferie') &&
+                        dayHolidays.map((h) => (
+                          <button
+                            key={h.id}
+                            type="button"
+                            onClick={() => setSelectedHoliday(h)}
+                            className={cx(
+                              'w-full text-left rounded-md px-1.5 py-1 text-[10px] font-bold border transition-all truncate flex items-center gap-1 shadow-xs cursor-pointer',
+                              h.kind === 'presidential_decree'
+                                ? 'bg-amber-wash border-amber/40 text-amber hover:scale-[1.02]'
+                                : 'bg-emerald-wash border-emerald/40 text-emerald hover:scale-[1.02]'
+                            )}
+                            title={`🇨🇲 ${h.name} (${h.decree_ref || 'Férié officiel'}) - Cliquer pour inspecter`}
+                          >
+                            <span className="text-[10px]">🇨🇲</span>
+                            <span className="truncate">{h.name}</span>
+                          </button>
+                        ))}
+
+                      {/* B. Puces des Congés & Permissions (Interactives & Cliquables) */}
+                      {activeOnDay.slice(0, 3).map((leave) => {
+                        const isPending = leave.status === 'pending';
+                        const toneBg =
+                          leave.kind === 'conge'
+                            ? 'bg-blue/10 border-blue/30 text-blue hover:bg-blue/20'
+                            : leave.kind === 'permission'
+                            ? 'bg-[#8b5cf6]/10 border-[#8b5cf6]/30 text-[#8b5cf6] hover:bg-[#8b5cf6]/20'
+                            : 'bg-red/10 border-red/30 text-red hover:bg-red/20';
+
+                        const dotBg =
+                          leave.kind === 'conge'
+                            ? 'bg-blue'
+                            : leave.kind === 'permission'
+                            ? 'bg-[#8b5cf6]'
+                            : 'bg-red';
+
+                        return (
+                          <button
+                            key={leave.id}
+                            type="button"
+                            onClick={() => setSelectedLeave(leave)}
+                            className={cx(
+                              'w-full text-left flex items-center justify-between gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium transition-all shadow-xs cursor-pointer hover:scale-[1.02]',
+                              toneBg,
+                              isPending && 'ring-1 ring-amber/50'
+                            )}
+                            title={`${leave.full_name} (${leave.kind}) : ${formatDate(leave.from_date)} au ${formatDate(leave.to_date)} - Cliquer pour voir les détails`}
+                          >
+                            <span className="flex items-center gap-1 min-w-0 truncate">
+                              <span className={cx('h-1.5 w-1.5 rounded-full shrink-0', dotBg)} />
+                              <span className="truncate text-ink font-semibold">
+                                {(leave.full_name ?? 'Ouvrier').split(' ')[0]}
+                              </span>
+                            </span>
+
+                            {isPending && (
+                              <span title="En attente de validation">
+                                <Clock size={10} className="text-amber shrink-0 animate-pulse" />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+
+                      {activeOnDay.length > 3 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDayOverview({ dateStr, dayNum: d, holidays: dayHolidays, leaves: activeOnDay })}
+                          className="text-[10px] text-amber hover:underline block text-center font-bold py-0.5 rounded hover:bg-amber-wash/40 transition-colors w-full cursor-pointer"
+                          title="Voir la liste complète des absents sur cette journée"
+                        >
+                          +{activeOnDay.length - 3} autres
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      ) : (
+        /* VUE REGISTRE DES DEMANDES STYLE JIBBLE */
+        <Card className="overflow-x-auto scroll-thin shadow-card p-0">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-line bg-paper-2 text-ink-soft font-semibold">
+                <th className="px-4 py-3">Salarié</th>
+                <th className="px-4 py-3">Nature du flux</th>
+                <th className="px-4 py-3">Période d'absence</th>
+                <th className="px-4 py-3 text-center">Durée ouvrée</th>
+                <th className="px-4 py-3">Motif &amp; Justification</th>
+                <th className="px-4 py-3 text-center">Statut</th>
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {monthLeaves.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center text-ink-soft">
+                    Aucun congé ni permission correspondant aux critères de filtre pour ce mois.
+                  </td>
+                </tr>
+              ) : (
+                monthLeaves.map((leave) => {
+                  const isPending = leave.status === 'pending';
+                  const workingDays = computeWorkingDays(leave.from_date, leave.to_date, holidays);
+                  return (
+                    <tr key={leave.id} className="hover:bg-surface-2/40 transition-colors">
+                      <td className="px-4 py-3 font-medium text-ink">
+                        <div className="flex items-center gap-2.5">
+                          <div className="grid h-8 w-8 place-items-center rounded-lg bg-ink text-paper font-bold text-xs shrink-0">
+                            {initials(leave.full_name ?? leave.employee_id)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-ink truncate">{leave.full_name}</p>
+                            <p className="text-[10px] text-ink-faint font-mono font-normal">
+                              {leave.employee_id} {leave.job_title ? `· ${leave.job_title}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span
+                          className={cx(
+                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold border',
+                            leave.kind === 'conge'
+                              ? 'border-blue/30 bg-blue-wash text-blue'
+                              : leave.kind === 'permission'
+                              ? 'border-[#8b5cf6]/30 bg-[#8b5cf6]/10 text-[#8b5cf6]'
+                              : 'border-red/30 bg-red-wash text-red'
+                          )}
+                        >
+                          <span
+                            className={cx(
+                              'h-1.5 w-1.5 rounded-full',
+                              leave.kind === 'conge' ? 'bg-blue' : leave.kind === 'permission' ? 'bg-[#8b5cf6]' : 'bg-red'
+                            )}
+                          />
+                          {leave.kind === 'conge'
+                            ? 'Congé payé'
+                            : leave.kind === 'permission'
+                            ? 'Permission'
+                            : 'Absence autorisée'}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3 text-ink-soft whitespace-nowrap">
+                        <span className="font-mono text-ink font-semibold">
+                          Du {formatDate(leave.from_date)} au {formatDate(leave.to_date)}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3 text-center font-mono font-bold text-ink whitespace-nowrap">
+                        {workingDays} j.
+                      </td>
+
+                      <td className="px-4 py-3 text-ink-soft max-w-[220px]">
+                        {leave.kind === 'conge' ? (
+                          <span className="text-[11px] text-ink-faint italic">Repos annuel alloué par la Direction</span>
+                        ) : leave.note ? (
+                          <span className="text-[11px] text-ink italic truncate block" title={leave.note}>
+                            « {leave.note} »
+                          </span>
+                        ) : (
+                          <span className="text-ink-faint text-[10px]">—</span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-center whitespace-nowrap">
+                        <Chip
+                          tone={leave.status === 'approved' ? 'green' : isPending ? 'amber' : 'red'}
+                          className="text-[10px] font-semibold"
+                        >
+                          {leave.status === 'approved' ? 'Validé' : isPending ? 'En attente' : 'Refusé'}
+                        </Chip>
+                      </td>
+
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {canManage && isPending && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => onReview(leave, 'approved')}
+                                className="rounded-md bg-green px-2 py-1 text-[11px] font-bold text-white hover:bg-green-2 transition-all shadow-xs"
+                                title="Accorder la permission"
+                              >
+                                Valider
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onReview(leave, 'rejected')}
+                                className="rounded-md border border-line bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-soft hover:bg-red-wash hover:text-red transition-all"
+                                title="Refuser"
+                              >
+                                Refuser
+                              </button>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLeave(leave)}
+                            className="rounded-md border border-line bg-surface px-2 py-1 text-[11px] font-medium text-ink hover:bg-paper-2 transition-colors"
+                          >
+                            Inspecter
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </Card>
+      )}
 
       {/* 5. MODAL D'INSPECTION DÉTAILLÉE D'UN CONGÉ / PERMISSION */}
       <Modal
@@ -1094,6 +1430,12 @@ export function Employees({
     };
   }, []);
 
+  useEffect(() => {
+    const handleGlobalRefresh = () => setReload((v) => v + 1);
+    window.addEventListener('mf-refresh-data', handleGlobalRefresh);
+    return () => window.removeEventListener('mf-refresh-data', handleGlobalRefresh);
+  }, []);
+
   const statusMap = useMemo(() => {
     const m = new Map<string, TodayEmployee>();
     for (const s of todayStatus) m.set(s.id, s);
@@ -1530,8 +1872,8 @@ export function Employees({
                 </Button>
               </>
             )}
-            <Button size="sm" onClick={openLeave} icon={<CalendarIcon size={14} />}>
-              + Poser un Congé / Permission
+            <Button size="sm" onClick={openLeave} icon={<Plus size={14} />}>
+              Poser un Congé / Permission
             </Button>
             {canCreate && (
               <Button size="sm" variant="primary" icon={<UserPlus size={15} />} onClick={openCreate}>

@@ -11,8 +11,8 @@ const LEAVE_STATUS = ['pending', 'approved', 'rejected'] as const;
 
 const listQuery = z.object({
   employee_id: z.string().optional(),
-  status: z.enum(LEAVE_STATUS).optional(),
-  kind: z.enum(LEAVE_KINDS).optional(),
+  status: z.string().optional(),
+  kind: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
 });
@@ -73,17 +73,21 @@ leavesRoutes.get('/', requirePerm('leaves.view'), async (c) => {
   const { employee_id, status, kind, from, to } = parsed.data;
   const where: string[] = [];
   const params: unknown[] = [];
-  if (employee_id) { params.push(employee_id); where.push(`ab.employee_id = $${params.length}`); }
-  if (status) { params.push(status); where.push(`ab.status = $${params.length}`); }
-  if (kind) { params.push(kind); where.push(`ab.kind = $${params.length}`); }
+  if (employee_id && employee_id !== 'all') { params.push(employee_id); where.push(`ab.employee_id = $${params.length}`); }
+  if (status && status !== 'all') { params.push(status); where.push(`ab.status = $${params.length}`); }
+  if (kind && kind !== 'all') { params.push(kind); where.push(`ab.kind = $${params.length}`); }
   if (from) { params.push(from); where.push(`ab.to_date >= $${params.length}`); }
   if (to) { params.push(to); where.push(`ab.from_date <= $${params.length}`); }
-  const sql = `SELECT ab.*, e.full_name, e.job_title, e.photo_path
+  const sql = `SELECT ab.id, ab.employee_id, ab.kind, ab.from_date::text AS from_date, ab.to_date::text AS to_date,
+                      ab.note, ab.status, ab.reviewed_by, ab.reviewed_at, ab.review_note, ab.actor, ab.created_at,
+                      e.full_name, coalesce(r.name, e.job_title) as job_title, e.photo_path
                  FROM absences ab
                  JOIN employees e ON e.id = ab.employee_id
-                 ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-                ORDER BY ab.created_at DESC
-                LIMIT 300`;
+                 LEFT JOIN users u ON u.employee_id = e.id
+                 LEFT JOIN roles r ON r.id = u.role
+                ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+               ORDER BY ab.created_at DESC
+               LIMIT 300`;
   const leaves = await getDb().query<LeaveRow>(sql, params);
   return c.json({ leaves });
 });
@@ -94,7 +98,12 @@ leavesRoutes.get('/mine', requireAuth, async (c) => {
   const employeeId = auth?.user?.employee_id;
   if (!employeeId) return c.json({ leaves: [] });
   const leaves = await getDb().query<LeaveRow>(
-    `SELECT * FROM absences WHERE employee_id = $1 ORDER BY created_at DESC LIMIT 50`,
+    `SELECT ab.id, ab.employee_id, ab.kind, ab.from_date::text AS from_date, ab.to_date::text AS to_date,
+            ab.note, ab.status, ab.reviewed_by, ab.reviewed_at, ab.review_note, ab.actor, ab.created_at
+       FROM absences ab
+      WHERE ab.employee_id = $1
+      ORDER BY ab.created_at DESC
+      LIMIT 50`,
     [employeeId],
   );
   return c.json({ leaves });
