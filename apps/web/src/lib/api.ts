@@ -347,6 +347,23 @@ export async function deleteLeave(id: number): Promise<void> {
   });
 }
 
+export async function updateLeave(
+  id: number,
+  data: { kind?: LeaveKind; from_date?: string; to_date?: string; note?: string | null; status?: LeaveStatus },
+): Promise<Leave> {
+  const res = await api<{ leave: Leave }>(`/api/leaves/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  return res.leave;
+}
+
+export async function purgeLeavesTestData(): Promise<void> {
+  await api('/api/leaves/purge-test-data', {
+    method: 'POST',
+  });
+}
+
 export type TodayEmployee = {
   id: string;
   full_name: string;
@@ -629,6 +646,25 @@ export type EtabliKitAudit = {
 
 export type EmployeeDetail = {
   employee: Employee;
+  account?: {
+    id: number;
+    login: string;
+    role: string;
+    role_name: string;
+    created_at: string;
+    updated_at: string | null;
+  } | null;
+  leaves?: {
+    id: number;
+    from_date: string;
+    to_date: string;
+    kind: string;
+    status: string;
+    note: string | null;
+    approved_by: string | null;
+    created_at: string;
+    updated_at: string | null;
+  }[];
   history: {
     date: string;
     inAt: string | null;

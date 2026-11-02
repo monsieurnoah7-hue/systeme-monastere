@@ -22,8 +22,16 @@ const createBody = z.object({
   kind: z.enum(LEAVE_KINDS),
   from_date: z.string().min(1),
   to_date: z.string().min(1),
-  note: z.string().optional(),
+  note: z.string().nullable().optional(),
   status: z.enum(['pending', 'approved']).optional(),
+});
+
+const updateBody = z.object({
+  kind: z.enum(LEAVE_KINDS).optional(),
+  from_date: z.string().min(1).optional(),
+  to_date: z.string().min(1).optional(),
+  note: z.string().nullable().optional(),
+  status: z.enum(LEAVE_STATUS).optional(),
 });
 
 const workerPermissionBody = z.object({
@@ -330,5 +338,64 @@ leavesRoutes.delete('/:id', requirePerm('leaves.manage'), async (c) => {
     reason: 'Révocation par la Direction',
   });
 
+  return c.json({ ok: true });
+});
+
+// 10. Modification d'un Congé / Permission par l'Admin (Droit à l'erreur / Rectification)
+leavesRoutes.put('/:id', requirePerm('leaves.manage'), async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id)) return c.json({ error: 'Demande invalide.' }, 400);
+  const body = updateBody.safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Données de modification invalides.' }, 400);
+
+  const db = getDb();
+  const before = await db.one<LeaveRow>('SELECT * FROM absences WHERE id = $1', [id]);
+  if (!before) return c.json({ error: 'Congé introuvable.' }, 404);
+
+  const updated = await db.one<LeaveRow>(
+    `UPDATE absences
+        SET kind = coalesce($2, kind),
+            from_date = coalesce($3, from_date),
+            to_date = coalesce($4, to_date),
+            note = $5,
+            status = coalesce($6, status)
+      WHERE id = $1 RETURNING *`,
+    [
+      id,
+      body.data.kind || null,
+      body.data.from_date || null,
+      body.data.to_date || null,
+      body.data.note !== undefined ? body.data.note : before.note,
+      body.data.status || null,
+    ],
+  );
+
+  await writeAudit(db, {
+    entity: 'absence',
+    entityId: String(id),
+    action: 'update',
+    before,
+    after: updated,
+    actorId: actorId(c),
+    actorName: actorName(c),
+    reason: 'Modification administrative par la Direction',
+  });
+
+  return c.json({ leave: updated });
+});
+
+// 11. Remise à zéro complète des congés de test et décrets exceptionnels
+leavesRoutes.post('/purge-test-data', requirePerm('leaves.manage'), async (c) => {
+  const db = getDb();
+  await db.query('DELETE FROM absences');
+  await db.query("DELETE FROM holidays WHERE kind = 'presidential_decree'");
+  await writeAudit(db, {
+    entity: 'absence',
+    entityId: 'all',
+    action: 'purge',
+    actorId: actorId(c),
+    actorName: actorName(c),
+    reason: 'Remise à zéro des congés et décrets exceptionnels',
+  });
   return c.json({ ok: true });
 });

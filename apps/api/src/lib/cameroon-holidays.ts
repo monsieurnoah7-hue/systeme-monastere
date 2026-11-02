@@ -49,14 +49,13 @@ const MUSLIM_HOLIDAYS_TABLE: Record<number, { eid_fitr: string; tabaski: string;
 export function generateCameroonLegalHolidays(year: number): CameroonHoliday[] {
   const holidays: CameroonHoliday[] = [];
 
-  // 1. Fêtes légales fixes civiles et religieuses (Loi 73/5)
+  // 1. Fêtes légales fixes civiles et religieuses (Loi 73/5 du 7 décembre 1973)
   const fixed = [
     { m: 1, d: 1, name: "Jour de l'An", kind: 'legal_national' as const },
     { m: 2, d: 11, name: 'Fête de la Jeunesse', kind: 'legal_national' as const },
     { m: 5, d: 1, name: 'Fête du Travail', kind: 'legal_national' as const },
     { m: 5, d: 20, name: "Fête Nationale de l'Unité", kind: 'legal_national' as const },
     { m: 8, d: 15, name: "Fête de l'Assomption", kind: 'religious' as const },
-    { m: 11, d: 1, name: 'Fête de la Toussaint', kind: 'religious' as const },
     { m: 12, d: 25, name: 'Fête de Noël', kind: 'religious' as const },
   ];
 

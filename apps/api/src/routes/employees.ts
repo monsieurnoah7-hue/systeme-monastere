@@ -108,7 +108,11 @@ employeesRoutes.get('/today-status', requirePerm('employees.view'), async (c) =>
 employeesRoutes.get('/:id', requirePerm('employees.view'), async (c) => {
   const id = c.req.param('id') ?? '';
   const employee = await getDb().one<EmployeeRow & { has_pin: boolean }>(
-    'SELECT id, full_name, job_title, photo_path, badge_token, active, (pin_hash IS NOT NULL) AS has_pin FROM employees WHERE id = $1',
+    `SELECT e.id, e.full_name, coalesce(r.name, e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin
+       FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       LEFT JOIN roles r ON r.id = u.role
+      WHERE e.id = $1`,
     [id],
   );
   if (!employee) return c.json({ error: 'Travailleur introuvable.' }, 404);
@@ -119,12 +123,16 @@ employeesRoutes.get('/:id/detail', requirePerm('employees.view'), async (c) => {
   const id = c.req.param('id') ?? '';
   const db = getDb();
   const employee = await db.one<EmployeeRow & { has_pin: boolean }>(
-    'SELECT id, full_name, job_title, photo_path, badge_token, active, (pin_hash IS NOT NULL) AS has_pin FROM employees WHERE id = $1',
+    `SELECT e.id, e.full_name, coalesce(r.name, e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin
+       FROM employees e
+       LEFT JOIN users u ON u.employee_id = e.id
+       LEFT JOIN roles r ON r.id = u.role
+      WHERE e.id = $1`,
     [id],
   );
   if (!employee) return c.json({ error: 'Travailleur introuvable.' }, 404);
 
-  const [history, monthRows, openLoans, loanHistory] = await Promise.all([
+  const [history, monthRows, openLoans, loanHistory, userAccount, leaves] = await Promise.all([
     db.query<{
       punch_date: string;
       in_at: string | null;
@@ -171,10 +179,44 @@ employeesRoutes.get('/:id/detail', requirePerm('employees.view'), async (c) => {
         LIMIT 20`,
       [id],
     ),
+    db.one<{
+      id: number;
+      login: string;
+      role: string;
+      role_name: string;
+      created_at: string;
+      updated_at: string | null;
+    }>(
+      `SELECT u.id, u.login, u.role, coalesce(r.name, u.role) AS role_name, u.created_at::text, u.updated_at::text
+         FROM users u
+         LEFT JOIN roles r ON r.id = u.role
+        WHERE u.employee_id = $1
+        LIMIT 1`,
+      [id],
+    ),
+    db.query<{
+      id: number;
+      from_date: string;
+      to_date: string;
+      kind: string;
+      status: string;
+      note: string | null;
+      approved_by: string | null;
+      created_at: string;
+      updated_at: string | null;
+    }>(
+      `SELECT id, from_date::text AS from_date, to_date::text AS to_date, kind, status, note, approved_by, created_at::text, updated_at::text
+         FROM absences
+        WHERE employee_id = $1
+        ORDER BY from_date DESC, id DESC`,
+      [id],
+    ),
   ]);
 
   return c.json({
     employee,
+    account: userAccount ?? null,
+    leaves,
     history: history.map((row) => ({
       date: row.punch_date,
       inAt: row.in_at,

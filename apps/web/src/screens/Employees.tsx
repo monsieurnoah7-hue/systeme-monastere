@@ -11,6 +11,8 @@ import {
   type EtabliKitItem,
   type Holiday,
   deleteLeave,
+  updateLeave,
+  purgeLeavesTestData,
   deleteHoliday,
   declarePresidentialDecree,
 } from '../lib/api';
@@ -41,14 +43,17 @@ import {
   Camera,
   Clock,
   Download,
+  Edit3,
   FileSpreadsheet,
   Filter,
   Flag,
+  KeyRound,
   Plus,
   Printer,
   RefreshCw,
   Search,
   Trash2,
+  User as UserIcon,
   UserPlus,
   Users,
   X,
@@ -58,21 +63,27 @@ import {
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { exportToExcel, exportToPdf } from '../lib/export';
 
-export function computeWorkingDays(fromDate: string, toDate: string, holidays: Holiday[] = []): number {
+export function computeWorkingDays(
+  fromDate: string,
+  toDate: string,
+  holidays: Holiday[] = [],
+  workdays: number[] = [1, 2, 3, 4, 5, 6]
+): number {
   if (!fromDate || !toDate) return 0;
   const start = new Date(fromDate);
   const end = new Date(toDate);
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return 0;
 
   const holidayDates = new Set(holidays.map((h) => h.holiday_date));
+  const workdaySet = new Set(workdays);
   let count = 0;
   const cur = new Date(start);
 
   while (cur <= end) {
-    const dayOfWeek = cur.getDay(); // 0 = Dimanche
+    const dayOfWeek = cur.getDay(); // 0 = Dimanche, 1 = Lundi, etc.
     const dStr = cur.toISOString().slice(0, 10);
-    // Dimanches et jours fériés chômés exclus
-    if (dayOfWeek !== 0 && !holidayDates.has(dStr)) {
+    // Un jour est compté uniquement s'il fait partie des jours ouvrés du salarié et n'est pas férié chômé
+    if (workdaySet.has(dayOfWeek) && !holidayDates.has(dStr)) {
       count++;
     }
     cur.setDate(cur.getDate() + 1);
@@ -110,6 +121,8 @@ function TimeOffCalendarView({
   onOpenDecree,
   onReview,
   onRevokeLeave,
+  onUpdateLeave,
+  onPurgeLeaves,
   onDeleteHoliday,
   canManage,
 }: {
@@ -120,11 +133,25 @@ function TimeOffCalendarView({
   onOpenDecree?: () => void;
   onReview: (leave: Leave, status: 'approved' | 'rejected') => void;
   onRevokeLeave?: (leave: Leave) => void;
+  onUpdateLeave?: (
+    id: number,
+    data: { from_date?: string; to_date?: string; kind?: 'conge' | 'permission' | 'absence'; note?: string | null }
+  ) => Promise<void>;
+  onPurgeLeaves?: () => Promise<void>;
   onDeleteHoliday?: (holiday: Holiday) => void;
   canManage: boolean;
 }) {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedLeave, setSelectedLeave] = useState<Leave | null>(null);
+  const [editingLeave, setEditingLeave] = useState<Leave | null>(null);
+  const [editForm, setEditForm] = useState<{
+    from_date: string;
+    to_date: string;
+    kind: 'conge' | 'permission' | 'absence';
+    note: string;
+  }>({ from_date: '', to_date: '', kind: 'conge', note: '' });
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [selectedHoliday, setSelectedHoliday] = useState<Holiday | null>(null);
   const [selectedDayOverview, setSelectedDayOverview] = useState<{
     dateStr: string;
@@ -139,7 +166,52 @@ function TimeOffCalendarView({
   // Filtres dynamiques multi-critères
   const [filterKind, setFilterKind] = useState<'all' | 'conge' | 'permission' | 'absence' | 'ferie'>('all');
   const [filterEmpId, setFilterEmpId] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+
+  function startEditingLeave(leave: Leave) {
+    setEditingLeave(leave);
+    setEditForm({
+      from_date: String(leave.from_date || '').slice(0, 10),
+      to_date: String(leave.to_date || '').slice(0, 10),
+      kind: leave.kind,
+      note: leave.note ?? '',
+    });
+    setEditError(null);
+  }
+
+  async function saveEditedLeave() {
+    if (!editingLeave || !onUpdateLeave) return;
+    if (!editForm.from_date || !editForm.to_date) {
+      setEditError('Les dates sont obligatoires.');
+      return;
+    }
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      await onUpdateLeave(editingLeave.id, {
+        from_date: editForm.from_date,
+        to_date: editForm.to_date,
+        kind: editForm.kind,
+        note: editForm.kind === 'conge' ? null : editForm.note.trim() || null,
+      });
+      setSelectedLeave((prev) =>
+        prev && prev.id === editingLeave.id
+          ? {
+              ...prev,
+              from_date: editForm.from_date,
+              to_date: editForm.to_date,
+              kind: editForm.kind,
+              note: editForm.kind === 'conge' ? null : editForm.note.trim() || null,
+            }
+          : prev
+      );
+      setEditingLeave(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Erreur lors de la modification');
+    } finally {
+      setEditBusy(false);
+    }
+  }
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -224,6 +296,7 @@ function TimeOffCalendarView({
     const emp = employees.find((e) => String(e.id) === String(filterEmpId));
     return {
       empName: emp?.full_name ?? 'Ouvrier',
+      photo_path: emp?.photo_path ?? null,
       annualQuota,
       takenDays,
       remainingDays,
@@ -377,8 +450,8 @@ function TimeOffCalendarView({
         </div>
       </div>
 
-      {/* 3. Barre d'outils de Navigation & Actions Supérieures (iOS Sticky Toolbar décalée) */}
-      <div className="sticky top-14 lg:top-12 z-10 flex flex-col gap-3 rounded-xl border border-line bg-surface/95 backdrop-blur-md p-4 shadow-card transition-all mb-4">
+      {/* 3. Barre d'outils de Navigation & Actions Supérieures (iOS Sticky Toolbar décalée - 2 à 3 cm sous la barre système) */}
+      <div className="sticky top-16 lg:top-[72px] z-[5] flex flex-col gap-3 rounded-xl border border-line bg-surface/95 backdrop-blur-md p-4 shadow-card transition-all mb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {/* Navigation Mensuelle & Bascule de Vue (Calendrier vs Registre) */}
           <div className="flex flex-wrap items-center gap-3">
@@ -436,8 +509,21 @@ function TimeOffCalendarView({
             </div>
           </div>
 
-          {/* Boutons d'Action (Poser un Congé + Férié Exceptionnel) */}
+          {/* Boutons d'Action (Poser un Congé + Férié Exceptionnel + Réinitialiser) */}
           <div className="flex flex-wrap items-center gap-2">
+            {canManage && onPurgeLeaves && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onPurgeLeaves}
+                title="Remise à zéro complète : supprime tous les congés de test et décrets pour démarrer le planning à blanc"
+                className="text-ink-soft hover:text-red hover:bg-red-wash/40 font-medium text-xs border border-line"
+              >
+                <RefreshCw size={13} className="text-ink-faint mr-1" />
+                Réinitialiser congés
+              </Button>
+            )}
+
             {canManage && onOpenDecree && (
               <Button
                 size="sm"
@@ -568,6 +654,7 @@ function TimeOffCalendarView({
               <option value="all">Tous statuts</option>
               <option value="approved">Validés / Accordés</option>
               <option value="pending">En attente de visa</option>
+              <option value="rejected">Refusés / Historique</option>
             </select>
           </div>
         </div>
@@ -576,8 +663,12 @@ function TimeOffCalendarView({
         {selectedEmpBalance && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue/30 bg-blue-wash/20 p-3 text-xs mt-1">
             <div className="flex items-center gap-2.5">
-              <div className="grid h-8 w-8 place-items-center rounded-lg bg-blue text-white font-bold text-xs shrink-0">
-                {initials(selectedEmpBalance.empName)}
+              <div className="grid h-8 w-8 place-items-center rounded-lg bg-blue text-white font-bold text-xs shrink-0 overflow-hidden">
+                {selectedEmpBalance.photo_path ? (
+                  <img src={selectedEmpBalance.photo_path} alt={selectedEmpBalance.empName} className="h-full w-full object-cover" />
+                ) : (
+                  initials(selectedEmpBalance.empName)
+                )}
               </div>
               <div>
                 <p className="font-bold text-ink">Solde Annuel Congés : {selectedEmpBalance.empName}</p>
@@ -808,8 +899,12 @@ function TimeOffCalendarView({
                     <tr key={leave.id} className="hover:bg-surface-2/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-ink">
                         <div className="flex items-center gap-2.5">
-                          <div className="grid h-8 w-8 place-items-center rounded-lg bg-ink text-paper font-bold text-xs shrink-0">
-                            {initials(leave.full_name ?? leave.employee_id)}
+                          <div className="grid h-8 w-8 place-items-center rounded-lg bg-ink text-paper font-bold text-xs shrink-0 overflow-hidden border border-line/50">
+                            {leave.photo_path ? (
+                              <img src={leave.photo_path} alt={leave.full_name ?? ''} className="h-full w-full object-cover" />
+                            ) : (
+                              initials(leave.full_name ?? leave.employee_id)
+                            )}
                           </div>
                           <div className="min-w-0">
                             <p className="font-bold text-ink truncate">{leave.full_name}</p>
@@ -916,11 +1011,13 @@ function TimeOffCalendarView({
         </Card>
       )}
 
-      {/* 5. MODAL D'INSPECTION DÉTAILLÉE D'UN CONGÉ / PERMISSION */}
+      {/* 5. MODAL D'INSPECTION ET MODIFICATION D'UN CONGÉ / PERMISSION */}
       <Modal
         open={!!selectedLeave}
         title={
-          selectedLeave
+          editingLeave
+            ? 'Modifier le congé / permission'
+            : selectedLeave
             ? selectedLeave.kind === 'conge'
               ? 'Détail du Congé Annuel Payé'
               : selectedLeave.kind === 'permission'
@@ -928,55 +1025,91 @@ function TimeOffCalendarView({
               : 'Détail de l’Absence Autorisée'
             : ''
         }
-        onClose={() => setSelectedLeave(null)}
+        onClose={() => {
+          setSelectedLeave(null);
+          setEditingLeave(null);
+        }}
         footer={
           <div className="flex w-full items-center justify-between gap-2">
             <div>
-              {canManage && selectedLeave && onRevokeLeave && selectedLeave.status === 'approved' && (
+              {!editingLeave && canManage && selectedLeave && onRevokeLeave && (
                 <button
                   type="button"
                   onClick={() => {
                     const l = selectedLeave;
                     setSelectedLeave(null);
+                    setEditingLeave(null);
                     onRevokeLeave(l);
                   }}
-                  className="rounded-lg border border-red/30 px-3 py-1.5 text-xs font-semibold text-red hover:bg-red-wash transition-colors"
+                  className="rounded-lg border border-red/30 px-3 py-1.5 text-xs font-semibold text-red hover:bg-red-wash transition-colors flex items-center gap-1.5"
+                  title="Supprimer ou annuler ce congé en cas d'erreur"
                 >
-                  Révoquer ce congé
+                  <Trash2 size={13} />
+                  <span>Supprimer / Annuler</span>
                 </button>
               )}
             </div>
 
             <div className="flex gap-2">
-              {canManage && selectedLeave && selectedLeave.status === 'pending' && (
+              {editingLeave ? (
                 <>
+                  <Button variant="ghost" size="sm" onClick={() => setEditingLeave(null)}>
+                    Annuler
+                  </Button>
+                  <Button variant="primary" size="sm" loading={editBusy} onClick={() => void saveEditedLeave()}>
+                    Enregistrer les modifications
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {canManage && onUpdateLeave && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => selectedLeave && startEditingLeave(selectedLeave)}
+                      className="border-amber/40 text-amber hover:bg-amber-wash/30 font-semibold"
+                    >
+                      <Edit3 size={13} className="mr-1" /> Modifier
+                    </Button>
+                  )}
+                  {canManage && selectedLeave && selectedLeave.status === 'pending' && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          onReview(selectedLeave, 'rejected');
+                          setSelectedLeave(null);
+                        }}
+                        className="text-red border-red/30 hover:bg-red-wash"
+                      >
+                        Refuser
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          onReview(selectedLeave, 'approved');
+                          setSelectedLeave(null);
+                        }}
+                        className="bg-green hover:bg-green-2 text-white font-bold"
+                      >
+                        Valider immédiatement
+                      </Button>
+                    </>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
-                      onReview(selectedLeave, 'rejected');
                       setSelectedLeave(null);
+                      setEditingLeave(null);
                     }}
-                    className="text-red border-red/30 hover:bg-red-wash"
                   >
-                    Refuser
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => {
-                      onReview(selectedLeave, 'approved');
-                      setSelectedLeave(null);
-                    }}
-                    className="bg-green hover:bg-green-2 text-white font-bold"
-                  >
-                    Valider immédiatement
+                    Fermer
                   </Button>
                 </>
               )}
-              <Button variant="ghost" size="sm" onClick={() => setSelectedLeave(null)}>
-                Fermer
-              </Button>
             </div>
           </div>
         }
@@ -985,8 +1118,12 @@ function TimeOffCalendarView({
           <div className="space-y-4">
             {/* Profil du travailleur */}
             <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2/40 p-3.5">
-              <div className="grid h-12 w-12 place-items-center rounded-xl bg-ink text-paper font-bold text-sm shadow-xs shrink-0">
-                {initials(selectedLeave.full_name ?? selectedLeave.employee_id)}
+              <div className="grid h-12 w-12 place-items-center rounded-xl bg-ink text-paper font-bold text-sm shadow-xs shrink-0 overflow-hidden border border-line">
+                {selectedLeave.photo_path ? (
+                  <img src={selectedLeave.photo_path} alt={selectedLeave.full_name ?? ''} className="h-full w-full object-cover" />
+                ) : (
+                  initials(selectedLeave.full_name ?? selectedLeave.employee_id)
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-bold text-ink text-sm truncate">{selectedLeave.full_name}</p>
@@ -1014,53 +1151,118 @@ function TimeOffCalendarView({
               </div>
             </div>
 
-            {/* Période & Calcul des Jours Ouvrés */}
-            <div className="grid grid-cols-2 gap-3 rounded-xl border border-line bg-surface p-3.5 text-xs">
-              <div>
-                <span className="text-ink-faint font-medium">Date de début</span>
-                <p className="font-bold text-ink text-sm mt-0.5">{formatDate(selectedLeave.from_date)}</p>
-              </div>
-              <div>
-                <span className="text-ink-faint font-medium">Date de fin</span>
-                <p className="font-bold text-ink text-sm mt-0.5">{formatDate(selectedLeave.to_date)}</p>
-              </div>
-              <div className="col-span-2 pt-2 border-t border-line flex items-center justify-between">
-                <span className="text-ink-soft">Décompte effectif en jours ouvrés :</span>
-                <span className="font-mono font-bold text-ink text-sm bg-surface-2 px-2 py-0.5 rounded border border-line">
-                  {computeWorkingDays(selectedLeave.from_date, selectedLeave.to_date, holidays)} jour(s) ouvré(s) nets
-                </span>
-              </div>
-            </div>
+            {editingLeave ? (
+              <div className="space-y-3.5 pt-1">
+                {editError && <Banner tone="error">{editError}</Banner>}
+                <div>
+                  <label className="block text-xs font-semibold text-ink-soft mb-1">Type de flux</label>
+                  <select
+                    value={editForm.kind}
+                    onChange={(e) => setEditForm((f) => ({ ...f, kind: e.target.value as any }))}
+                    className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink focus:outline-none focus:border-amber"
+                  >
+                    <option value="conge">Congé annuel payé (Planifié par la Direction)</option>
+                    <option value="permission">Permission exceptionnelle</option>
+                    <option value="absence">Absence autorisée / justifiée</option>
+                  </select>
+                </div>
 
-            {/* Motif et Justification */}
-            <div className="rounded-xl border border-line bg-surface p-3.5 text-xs space-y-1.5">
-              <span className="text-ink-faint font-medium">Motif &amp; Justification :</span>
-              {selectedLeave.kind === 'conge' ? (
-                <p className="text-ink-soft italic">
-                  ℹ️ Congé annuel payé alloué par la Direction. Conformément au règlement du monastère et au Code du Travail, le repos annuel est un droit acquis ne nécessitant aucun justificatif du travailleur.
-                </p>
-              ) : selectedLeave.note ? (
-                <p className="text-ink font-medium bg-surface-2/60 p-2.5 rounded-lg border border-line">
-                  « {selectedLeave.note} »
-                </p>
-              ) : (
-                <p className="text-ink-faint italic">Aucun motif particulier renseigné.</p>
-              )}
-            </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-soft mb-1">Date de départ</label>
+                    <input
+                      type="date"
+                      value={editForm.from_date}
+                      onChange={(e) => setEditForm((f) => ({ ...f, from_date: e.target.value }))}
+                      className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink focus:outline-none focus:border-amber"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-soft mb-1">Date de retour</label>
+                    <input
+                      type="date"
+                      value={editForm.to_date}
+                      onChange={(e) => setEditForm((f) => ({ ...f, to_date: e.target.value }))}
+                      className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink focus:outline-none focus:border-amber"
+                    />
+                  </div>
+                </div>
 
-            {/* Traçabilité & Décision */}
-            <div className="text-[11px] text-ink-faint space-y-1 border-t border-line pt-2">
-              <p>
-                Saisi par : <span className="text-ink font-semibold">{selectedLeave.actor}</span>
-              </p>
-              {selectedLeave.reviewed_by && (
-                <p>
-                  Visé par : <span className="text-ink font-semibold">{selectedLeave.reviewed_by}</span>
-                  {selectedLeave.reviewed_at ? ` le ${formatDate(selectedLeave.reviewed_at)}` : ''}
-                  {selectedLeave.review_note ? ` (« ${selectedLeave.review_note} »)` : ''}
-                </p>
-              )}
-            </div>
+                <div className="rounded-xl border border-line bg-surface-2/40 p-3 flex items-center justify-between text-xs">
+                  <span className="text-ink-soft">Décompte recalculé en jours ouvrés :</span>
+                  <span className="font-mono font-bold text-ink">
+                    {computeWorkingDays(editForm.from_date, editForm.to_date, holidays)} jour(s) ouvré(s) nets
+                  </span>
+                </div>
+
+                {editForm.kind !== 'conge' ? (
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-soft mb-1">Motif / Justification</label>
+                    <textarea
+                      value={editForm.note}
+                      onChange={(e) => setEditForm((f) => ({ ...f, note: e.target.value }))}
+                      rows={2}
+                      placeholder="Ex: Événement familial, raison médicale…"
+                      className="w-full rounded-xl border border-line bg-surface p-2.5 text-xs text-ink focus:outline-none focus:border-amber"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-ink-faint italic bg-surface-2/30 p-2.5 rounded-lg border border-line">
+                    ℹ️ Congé annuel payé : aucun motif ni justificatif exigé du travailleur.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Période & Calcul des Jours Ouvrés */}
+                <div className="grid grid-cols-2 gap-3 rounded-xl border border-line bg-surface p-3.5 text-xs">
+                  <div>
+                    <span className="text-ink-faint font-medium">Date de début</span>
+                    <p className="font-bold text-ink text-sm mt-0.5">{formatDate(selectedLeave.from_date)}</p>
+                  </div>
+                  <div>
+                    <span className="text-ink-faint font-medium">Date de fin</span>
+                    <p className="font-bold text-ink text-sm mt-0.5">{formatDate(selectedLeave.to_date)}</p>
+                  </div>
+                  <div className="col-span-2 pt-2 border-t border-line flex items-center justify-between">
+                    <span className="text-ink-soft">Décompte effectif en jours ouvrés :</span>
+                    <span className="font-mono font-bold text-ink text-sm bg-surface-2 px-2 py-0.5 rounded border border-line">
+                      {computeWorkingDays(selectedLeave.from_date, selectedLeave.to_date, holidays)} jour(s) ouvré(s) nets
+                    </span>
+                  </div>
+                </div>
+
+                {/* Motif et Justification */}
+                <div className="rounded-xl border border-line bg-surface p-3.5 text-xs space-y-1.5">
+                  <span className="text-ink-faint font-medium">Motif &amp; Justification :</span>
+                  {selectedLeave.kind === 'conge' ? (
+                    <p className="text-ink-soft italic">
+                      ℹ️ Congé annuel payé alloué par la Direction. Conformément au règlement du monastère et au Code du Travail, le repos annuel est un droit acquis ne nécessitant aucun justificatif du travailleur.
+                    </p>
+                  ) : selectedLeave.note ? (
+                    <p className="text-ink font-medium bg-surface-2/60 p-2.5 rounded-lg border border-line">
+                      « {selectedLeave.note} »
+                    </p>
+                  ) : (
+                    <p className="text-ink-faint italic">Aucun motif particulier renseigné.</p>
+                  )}
+                </div>
+
+                {/* Traçabilité & Décision */}
+                <div className="text-[11px] text-ink-faint space-y-1 border-t border-line pt-2">
+                  <p>
+                    Saisi par : <span className="text-ink font-semibold">{selectedLeave.actor}</span>
+                  </p>
+                  {selectedLeave.reviewed_by && (
+                    <p>
+                      Visé par : <span className="text-ink font-semibold">{selectedLeave.reviewed_by}</span>
+                      {selectedLeave.reviewed_at ? ` le ${formatDate(selectedLeave.reviewed_at)}` : ''}
+                      {selectedLeave.review_note ? ` (« ${selectedLeave.review_note} »)` : ''}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </Modal>
@@ -1219,8 +1421,12 @@ function TimeOffCalendarView({
                         )}
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-paper font-bold text-xs shrink-0">
-                            {initials(leave.full_name ?? leave.employee_id)}
+                          <div className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-paper font-bold text-xs shrink-0 overflow-hidden border border-line">
+                            {leave.photo_path ? (
+                              <img src={leave.photo_path} alt={leave.full_name ?? ''} className="h-full w-full object-cover" />
+                            ) : (
+                              initials(leave.full_name ?? leave.employee_id)
+                            )}
                           </div>
                           <div className="min-w-0">
                             <p className="font-bold text-ink truncate flex items-center gap-1.5">
@@ -1340,7 +1546,7 @@ export function Employees({
   const [detail, setDetail] = useState<EmployeeDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [employeeKit, setEmployeeKit] = useState<{ kit: EtabliKit | null; items: EtabliKitItem[] } | null>(null);
-  const [activeDetailTab, setActiveDetailTab] = useState<'profil' | 'etabli'>('profil');
+  const [activeDetailTab, setActiveDetailTab] = useState<'fiche' | 'pointages' | 'etabli'>('fiche');
   const { print, portal } = usePrintSheet();
   const { registerUndo } = useUndo();
 
@@ -1358,7 +1564,7 @@ export function Employees({
     }
     let cancelled = false;
     setDetailLoading(true);
-    setActiveDetailTab('profil');
+    setActiveDetailTab('fiche');
     Promise.all([
       api<EmployeeDetail>(`/api/employees/${detailFor.id}/detail`),
       api<{ kit: EtabliKit | null; items: EtabliKitItem[] }>(`/api/kits/by-employee/${detailFor.id}`).catch(() => ({ kit: null, items: [] })),
@@ -1735,6 +1941,31 @@ export function Employees({
       setReload((v) => v + 1);
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Échec de la révocation.', 'error');
+    }
+  }
+
+  async function handleUpdateLeave(
+    id: number,
+    data: { from_date?: string; to_date?: string; kind?: 'conge' | 'permission' | 'absence'; note?: string | null }
+  ) {
+    try {
+      await updateLeave(id, data);
+      toast('Congé / permission mis à jour avec succès.', 'success');
+      setReload((v) => v + 1);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Échec de la modification.', 'error');
+      throw e;
+    }
+  }
+
+  async function handlePurgeLeaves() {
+    if (!confirm('Confirmer la réinitialisation complète des congés et décrets exceptionnels (planning à blanc) ?')) return;
+    try {
+      await purgeLeavesTestData();
+      toast('Planning réinitialisé à blanc (0 congé enregistré).', 'success');
+      setReload((v) => v + 1);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Échec de la réinitialisation.', 'error');
     }
   }
 
@@ -2238,6 +2469,8 @@ export function Employees({
             }}
             onReview={reviewLeave}
             onRevokeLeave={revokeLeave}
+            onUpdateLeave={handleUpdateLeave}
+            onPurgeLeaves={handlePurgeLeaves}
             onDeleteHoliday={handleDeleteHoliday}
             canManage={canManageLeaves}
           />
@@ -2348,25 +2581,39 @@ export function Employees({
               </div>
             </div>
 
-            {/* Tab Selector: Profil vs Établi / Kit d'outils */}
-            <div className="flex items-center gap-2 border-b border-line pb-2">
+            {/* Tab Selector: Fiche Employé vs Pointages & Présences vs Établi / Kit d'outils */}
+            <div className="flex items-center gap-1.5 border-b border-line pb-2 overflow-x-auto scroll-none">
               <button
                 type="button"
-                onClick={() => setActiveDetailTab('profil')}
+                onClick={() => setActiveDetailTab('fiche')}
                 className={cx(
-                  'px-3 py-1.5 text-xs font-bold rounded-lg transition-all',
-                  activeDetailTab === 'profil'
+                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all shrink-0',
+                  activeDetailTab === 'fiche'
                     ? 'bg-amber text-slate-950 shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper-2',
                 )}
               >
-                Fiche & Pointages
+                <UserIcon size={13} />
+                <span>Fiche Employé</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveDetailTab('pointages')}
+                className={cx(
+                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all shrink-0',
+                  activeDetailTab === 'pointages'
+                    ? 'bg-amber text-slate-950 shadow-xs'
+                    : 'text-ink-soft hover:text-ink hover:bg-paper-2',
+                )}
+              >
+                <Clock size={13} />
+                <span>Pointages & Présences</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveDetailTab('etabli')}
                 className={cx(
-                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all',
+                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all shrink-0',
                   activeDetailTab === 'etabli'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper-2',
@@ -2383,7 +2630,145 @@ export function Employees({
               </button>
             </div>
 
-            {activeDetailTab === 'etabli' ? (
+            {activeDetailTab === 'fiche' ? (
+              <div className="space-y-4 text-xs">
+                {/* 1. Compte Applicatif & Accès Système */}
+                <div className="rounded-xl border border-line bg-surface p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-line pb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex items-center gap-1.5">
+                      <KeyRound size={12} className="text-amber" /> Compte Applicatif & Accès Système
+                    </span>
+                    {detail.account ? (
+                      <span className="rounded-full border border-green/30 bg-green-wash px-2 py-0.5 text-[10px] font-bold text-green">
+                        Compte Actif
+                      </span>
+                    ) : (
+                      <span className="rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-bold text-ink-faint">
+                        Borne / Badge Seul
+                      </span>
+                    )}
+                  </div>
+
+                  {detail.account ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-ink-soft">Identifiant de connexion :</span>
+                        <span className="font-mono font-bold text-ink bg-surface-2 px-2 py-0.5 rounded border border-line">
+                          @{detail.account.login}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-ink-soft">Rôle applicatif :</span>
+                        <span className="font-semibold text-amber">
+                          {detail.account.role_name || detail.account.role}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-ink-faint">Date d'affectation :</span>
+                        <span className="text-ink-soft">{formatDate(detail.account.created_at)}</span>
+                      </div>
+                      {detail.account.updated_at && (
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-ink-faint">Dernière mise à jour :</span>
+                          <span className="text-ink-soft">{formatDate(detail.account.updated_at)}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-ink-soft text-[11px] italic">
+                      Aucun compte applicatif web associé. Ce travailleur pointe via le terminal d'atelier avec son badge QR ou son code PIN sans accès au panneau de gestion.
+                    </p>
+                  )}
+                </div>
+
+                {/* 2. Identité & Affectation Atelier */}
+                <div className="rounded-xl border border-line bg-surface p-3.5 space-y-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint block border-b border-line pb-1.5">
+                    Identité & Affectation Atelier
+                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-ink-soft">Matricule officiel :</span>
+                    <span className="font-mono font-bold text-ink">{detail.employee.id}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-ink-soft">Métier / Titre :</span>
+                    <span className="font-bold text-ink">{detail.employee.job_title}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-ink-soft">Jeton Badge QR :</span>
+                    <span className="font-mono font-bold text-ink bg-surface-2 px-2 py-0.5 rounded border border-line">
+                      {detail.employee.badge_token || 'Non assigné'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-ink-soft">Code PIN borne :</span>
+                    <span className="font-semibold text-ink">
+                      {detail.employee.has_pin ? '●●●● Configuré' : 'Non configuré'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Historique Personnel des Congés, Permissions & Absences */}
+                <div className="rounded-xl border border-line bg-surface p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-line pb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex items-center gap-1.5">
+                      <CalendarCheck2 size={12} className="text-blue" /> Historique Congés & Permissions ({detail.leaves?.length ?? 0})
+                    </span>
+                  </div>
+
+                  {!detail.leaves || detail.leaves.length === 0 ? (
+                    <p className="text-ink-soft text-[11px] italic py-2">
+                      Aucun congé ni permission enregistré pour ce travailleur.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface-2/30">
+                      {detail.leaves.map((l) => (
+                        <div key={l.id} className="p-2.5 flex items-center justify-between gap-2 hover:bg-surface-2/70 transition-colors">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={cx(
+                                  'inline-block h-2 w-2 rounded-full',
+                                  l.kind === 'conge' ? 'bg-blue' : l.kind === 'permission' ? 'bg-[#8b5cf6]' : 'bg-red',
+                                )}
+                              />
+                              <span className="font-bold text-ink capitalize">
+                                {l.kind === 'conge' ? 'Congé payé' : l.kind === 'permission' ? 'Permission' : 'Absence'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-ink-soft mt-0.5">
+                              Du {formatDate(l.from_date)} au {formatDate(l.to_date)}
+                            </p>
+                            {l.note && (
+                              <p className="text-[10px] text-ink-faint italic truncate max-w-xs mt-0.5">
+                                « {l.note} »
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span
+                              className={cx(
+                                'rounded-full px-2 py-0.5 text-[10px] font-bold border block text-center',
+                                l.status === 'approved'
+                                  ? 'border-green/30 bg-green-wash text-green'
+                                  : l.status === 'pending'
+                                  ? 'border-amber/30 bg-amber-wash text-amber'
+                                  : 'border-red/30 bg-red-wash text-red',
+                              )}
+                            >
+                              {l.status === 'approved' ? 'Accordé' : l.status === 'pending' ? 'En attente' : 'Refusé'}
+                            </span>
+                            <span className="text-[10px] font-mono text-ink-faint block mt-1">
+                              {computeWorkingDays(l.from_date, l.to_date, holidays)} j ouvrés
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : activeDetailTab === 'etabli' ? (
               <div className="space-y-4">
                 {employeeKit?.kit ? (
                   <EtabliKitCard
