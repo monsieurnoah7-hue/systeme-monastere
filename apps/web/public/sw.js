@@ -1,5 +1,5 @@
-const CACHE = 'mf-v1';
-const APP_SHELL = ['/'];
+const CACHE = 'mf-shell-v2';
+const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/pwa-192.png', '/pwa-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)));
@@ -20,12 +20,22 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/files/')) return;
   event.respondWith(
-    fetch(request)
-      .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(request, copy));
-        return response;
-      })
-      .catch(() => caches.match(request)),
+    (request.mode === 'navigate'
+      ? fetch(request)
+          .then((response) => {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put('/index.html', copy));
+            return response;
+          })
+          .catch(() => caches.match('/index.html').then((cached) => cached || caches.match('/')))
+      : fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              caches.open(CACHE).then((cache) => cache.put(request, copy));
+            }
+            return response;
+          })
+          .catch(() => caches.match(request))),
   );
 });

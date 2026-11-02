@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS employees (
   photo_path text,
   badge_token text UNIQUE,
   pin_hash text,
+  workdays jsonb DEFAULT '[1,2,3,4,5,6]'::jsonb,
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -281,6 +282,7 @@ ALTER TABLE absences ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'appr
 ALTER TABLE absences ADD COLUMN IF NOT EXISTS reviewed_by text;
 ALTER TABLE absences ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
 ALTER TABLE absences ADD COLUMN IF NOT EXISTS review_note text;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS workdays jsonb DEFAULT '[1,2,3,4,5,6]'::jsonb;
 UPDATE users SET role = 'direction' WHERE role = 'admin';
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 CREATE TABLE IF NOT EXISTS roles (

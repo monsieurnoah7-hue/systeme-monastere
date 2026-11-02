@@ -34,6 +34,7 @@ export type EmployeeRow = {
   photo_path: string | null;
   badge_token: string | null;
   active: boolean;
+  workdays?: number[];
 };
 
 export type ToolRow = {

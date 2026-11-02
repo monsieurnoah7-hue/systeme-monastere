@@ -63,11 +63,51 @@ import {
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { exportToExcel, exportToPdf } from '../lib/export';
 
+export const WEEKDAY_OPTIONS = [
+  { day: 1, label: 'Lun', full: 'Lundi' },
+  { day: 2, label: 'Mar', full: 'Mardi' },
+  { day: 3, label: 'Mer', full: 'Mercredi' },
+  { day: 4, label: 'Jeu', full: 'Jeudi' },
+  { day: 5, label: 'Ven', full: 'Vendredi' },
+  { day: 6, label: 'Sam', full: 'Samedi' },
+  { day: 0, label: 'Dim', full: 'Dimanche' },
+] as const;
+
+export function formatWorkdaysLabels(workdays?: number[]): string {
+  const days = workdays && workdays.length > 0 ? workdays : [1, 2, 3, 4, 5];
+  const set = new Set(days);
+  return WEEKDAY_OPTIONS.filter((o) => set.has(o.day)).map((o) => o.label).join(', ');
+}
+
+export function formatPillName(name: string | undefined): string {
+  if (!name) return 'Ouvrier';
+  const clean = name.replace(/\s+/g, ' ').trim();
+  const parts = clean.split(' ');
+  if (parts.length <= 1) return clean;
+  const p0 = parts[0] ?? '';
+  const p0Lower = p0.toLowerCase().replace(/[.,]/g, '');
+
+  if (p0Lower === 'm' || p0Lower === 'mme' || p0Lower === 'mlle') {
+    const second = parts[1] ?? '';
+    const thirdInitial = parts[2] ? ` ${parts[2][0]}.` : '';
+    return `${p0} ${second}${thirdInitial}`;
+  }
+  if (p0Lower === 'frere' || p0Lower === 'frère' || p0Lower === 'pere' || p0Lower === 'père') {
+    const second = parts[1] ?? '';
+    const thirdInitial = parts[2] ? ` ${parts[2][0]}.` : '';
+    return `${p0} ${second}${thirdInitial}`;
+  }
+  // Otherwise: "Nom P." (e.g. "AHANGA S.")
+  const first = parts[0];
+  const secondInitial = parts[1] ? ` ${parts[1][0]}.` : '';
+  return `${first}${secondInitial}`;
+}
+
 export function computeWorkingDays(
   fromDate: string,
   toDate: string,
   holidays: Holiday[] = [],
-  workdays: number[] = [1, 2, 3, 4, 5, 6]
+  workdays: number[] = [1, 2, 3, 4, 5]
 ): number {
   if (!fromDate || !toDate) return 0;
   const start = new Date(fromDate);
@@ -75,14 +115,14 @@ export function computeWorkingDays(
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return 0;
 
   const holidayDates = new Set(holidays.map((h) => h.holiday_date));
-  const workdaySet = new Set(workdays);
+  const workdaySet = new Set(workdays && workdays.length > 0 ? workdays : [1, 2, 3, 4, 5]);
   let count = 0;
   const cur = new Date(start);
 
   while (cur <= end) {
     const dayOfWeek = cur.getDay(); // 0 = Dimanche, 1 = Lundi, etc.
     const dStr = cur.toISOString().slice(0, 10);
-    // Un jour est compté uniquement s'il fait partie des jours ouvrés du salarié et n'est pas férié chômé
+    // Un jour est compté uniquement s'il fait partie des jours ouvrés du salarié ET n'est pas un férié chômé
     if (workdaySet.has(dayOfWeek) && !holidayDates.has(dStr)) {
       count++;
     }
@@ -273,12 +313,15 @@ function TimeOffCalendarView({
     });
   }, [leaves, todayStr]);
 
-  // Jibble KPI: Total jours ouvrés posés ce mois (tous salariés confondus)
+  // Jibble KPI: Total jours ouvrés posés ce mois (tous salariés confondus avec jours ouvrés personnalisés)
   const monthWorkingDaysCount = useMemo(() => {
     return monthLeaves
       .filter((l) => l.status === 'approved')
-      .reduce((sum, l) => sum + computeWorkingDays(l.from_date, l.to_date, holidays), 0);
-  }, [monthLeaves, holidays]);
+      .reduce((sum, l) => {
+        const emp = employees.find((e) => String(e.id) === String(l.employee_id));
+        return sum + computeWorkingDays(l.from_date, l.to_date, holidays, emp?.workdays);
+      }, 0);
+  }, [monthLeaves, holidays, employees]);
 
   // Jibble Balances: Solde de congés pour l'ouvrier sélectionné (Politique standard Cameroun : 18 jours ouvrés légaux / 24 jours ouvrables)
   const selectedEmpBalance = useMemo(() => {
@@ -291,15 +334,17 @@ function TimeOffCalendarView({
       const lFrom = String(l.from_date || '').slice(0, 10);
       return lFrom.startsWith(String(currentYear));
     });
-    const takenDays = empLeaves.reduce((acc, l) => acc + computeWorkingDays(l.from_date, l.to_date, holidays), 0);
-    const remainingDays = Math.max(0, annualQuota - takenDays);
     const emp = employees.find((e) => String(e.id) === String(filterEmpId));
+    const empWorkdays = emp?.workdays ?? [1, 2, 3, 4, 5];
+    const takenDays = empLeaves.reduce((acc, l) => acc + computeWorkingDays(l.from_date, l.to_date, holidays, empWorkdays), 0);
+    const remainingDays = Math.max(0, annualQuota - takenDays);
     return {
       empName: emp?.full_name ?? 'Ouvrier',
       photo_path: emp?.photo_path ?? null,
       annualQuota,
       takenDays,
       remainingDays,
+      workdays: empWorkdays,
       percentUsed: Math.min(100, Math.round((takenDays / annualQuota) * 100)),
     };
   }, [filterEmpId, leaves, employees, holidays]);
@@ -450,8 +495,8 @@ function TimeOffCalendarView({
         </div>
       </div>
 
-      {/* 3. Barre d'outils de Navigation & Actions Supérieures (iOS Sticky Toolbar décalée - 2 à 3 cm sous la barre système) */}
-      <div className="sticky top-16 lg:top-[72px] z-[5] flex flex-col gap-3 rounded-xl border border-line bg-surface/95 backdrop-blur-md p-4 shadow-card transition-all mb-4">
+      {/* 3. Barre d'outils de Navigation & Actions Supérieures (iOS Frosted Glass Floating Sticky Toolbar - dégagée sous la topbar) */}
+      <div className="sticky top-20 lg:top-24 z-20 flex flex-col gap-3 rounded-2xl border border-line bg-surface/90 backdrop-blur-xl p-3 sm:p-4 shadow-card transition-all mb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {/* Navigation Mensuelle & Bascule de Vue (Calendrier vs Registre) */}
           <div className="flex flex-wrap items-center gap-3">
@@ -551,10 +596,10 @@ function TimeOffCalendarView({
           </div>
         </div>
 
-        {/* 4. Filtres Dynamiques (Type, Employé, Statut) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-line text-xs">
-          {/* Filtres par Nature d'absence */}
-          <div className="flex flex-wrap items-center gap-1.5">
+        {/* 4. Filtres Dynamiques (Type, Employé, Statut) - 100% Mobile Responsive */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pt-3 border-t border-line text-xs">
+          {/* Filtres par Nature d'absence (Scroll horizontal tactile fluide sur mobile) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scroll-thin pb-1 lg:pb-0">
             <span className="text-ink-faint font-semibold flex items-center gap-1 mr-1">
               <Filter size={12} /> Filtre :
             </span>
@@ -802,8 +847,8 @@ function TimeOffCalendarView({
                             )}
                             title={`🇨🇲 ${h.name} (${h.decree_ref || 'Férié officiel'}) - Cliquer pour inspecter`}
                           >
-                            <span className="text-[10px]">🇨🇲</span>
-                            <span className="truncate">{h.name}</span>
+                            <span className="text-[10px] shrink-0">🇨🇲</span>
+                            <span className="truncate">{h.kind === 'presidential_decree' ? `Décret : ${h.name}` : h.name}</span>
                           </button>
                         ))}
 
@@ -839,7 +884,7 @@ function TimeOffCalendarView({
                             <span className="flex items-center gap-1 min-w-0 truncate">
                               <span className={cx('h-1.5 w-1.5 rounded-full shrink-0', dotBg)} />
                               <span className="truncate text-ink font-semibold">
-                                {(leave.full_name ?? 'Ouvrier').split(' ')[0]}
+                                {formatPillName(leave.full_name)}
                               </span>
                             </span>
 
@@ -894,7 +939,8 @@ function TimeOffCalendarView({
               ) : (
                 monthLeaves.map((leave) => {
                   const isPending = leave.status === 'pending';
-                  const workingDays = computeWorkingDays(leave.from_date, leave.to_date, holidays);
+                  const emp = employees.find((e) => String(e.id) === String(leave.employee_id));
+                  const workingDays = computeWorkingDays(leave.from_date, leave.to_date, holidays, emp?.workdays);
                   return (
                     <tr key={leave.id} className="hover:bg-surface-2/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-ink">
@@ -1188,11 +1234,24 @@ function TimeOffCalendarView({
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-line bg-surface-2/40 p-3 flex items-center justify-between text-xs">
-                  <span className="text-ink-soft">Décompte recalculé en jours ouvrés :</span>
-                  <span className="font-mono font-bold text-ink">
-                    {computeWorkingDays(editForm.from_date, editForm.to_date, holidays)} jour(s) ouvré(s) nets
-                  </span>
+                <div className="rounded-xl border border-line bg-surface-2/40 p-3 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-ink-soft">Jours ouvrés du salarié :</span>
+                    <span className="font-semibold text-amber">
+                      {formatWorkdaysLabels(employees.find((e) => String(e.id) === String(selectedLeave.employee_id))?.workdays)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-line/50 pt-1.5">
+                    <span className="text-ink-soft">Décompte recalculé en jours ouvrés :</span>
+                    <span className="font-mono font-bold text-ink">
+                      {computeWorkingDays(
+                        editForm.from_date,
+                        editForm.to_date,
+                        holidays,
+                        employees.find((e) => String(e.id) === String(selectedLeave.employee_id))?.workdays
+                      )} jour(s) ouvré(s) nets
+                    </span>
+                  </div>
                 </div>
 
                 {editForm.kind !== 'conge' ? (
@@ -1224,11 +1283,24 @@ function TimeOffCalendarView({
                     <span className="text-ink-faint font-medium">Date de fin</span>
                     <p className="font-bold text-ink text-sm mt-0.5">{formatDate(selectedLeave.to_date)}</p>
                   </div>
-                  <div className="col-span-2 pt-2 border-t border-line flex items-center justify-between">
-                    <span className="text-ink-soft">Décompte effectif en jours ouvrés :</span>
-                    <span className="font-mono font-bold text-ink text-sm bg-surface-2 px-2 py-0.5 rounded border border-line">
-                      {computeWorkingDays(selectedLeave.from_date, selectedLeave.to_date, holidays)} jour(s) ouvré(s) nets
-                    </span>
+                  <div className="col-span-2 pt-2 border-t border-line flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-ink-soft">Jours ouvrés configurés :</span>
+                      <span className="font-semibold text-amber">
+                        {formatWorkdaysLabels(employees.find((e) => String(e.id) === String(selectedLeave.employee_id))?.workdays)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-ink-soft">Décompte effectif en jours ouvrés :</span>
+                      <span className="font-mono font-bold text-ink text-sm bg-surface-2 px-2 py-0.5 rounded border border-line">
+                        {computeWorkingDays(
+                          selectedLeave.from_date,
+                          selectedLeave.to_date,
+                          holidays,
+                          employees.find((e) => String(e.id) === String(selectedLeave.employee_id))?.workdays
+                        )} jour(s) ouvré(s) nets
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -1517,6 +1589,7 @@ export function Employees({
     job_title: '',
     pin: '',
     photo_path: null as string | null,
+    workdays: [1, 2, 3, 4, 5] as number[],
     create_account: false,
     account_login: '',
     account_password: '',
@@ -1704,6 +1777,7 @@ export function Employees({
       job_title: defaultRole?.name || 'Travailleur / Menuisier',
       pin: '',
       photo_path: null,
+      workdays: [1, 2, 3, 4, 5],
       create_account: false,
       account_login: '',
       account_password: '',
@@ -1723,6 +1797,7 @@ export function Employees({
       job_title: employee.job_title,
       pin: '',
       photo_path: employee.photo_path,
+      workdays: employee.workdays && employee.workdays.length > 0 ? employee.workdays : [1, 2, 3, 4, 5],
       create_account: false,
       account_login: '',
       account_password: '',
@@ -1767,6 +1842,7 @@ export function Employees({
             job_title: form.job_title,
             pin: form.pin.trim() ? form.pin.trim() : undefined,
             photo_path: form.photo_path,
+            workdays: form.workdays,
           }),
         });
         toast('Fiche travailleur mise à jour.', 'success');
@@ -1778,6 +1854,7 @@ export function Employees({
             job_title: form.job_title,
             pin: form.pin.trim() ? form.pin.trim() : undefined,
             photo_path: form.photo_path || undefined,
+            workdays: form.workdays,
             create_account: form.create_account,
             account_login: form.create_account ? form.account_login : undefined,
             account_password: form.create_account ? form.account_password : undefined,
@@ -2667,12 +2744,6 @@ export function Employees({
                         <span className="text-ink-faint">Date d'affectation :</span>
                         <span className="text-ink-soft">{formatDate(detail.account.created_at)}</span>
                       </div>
-                      {detail.account.updated_at && (
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-ink-faint">Dernière mise à jour :</span>
-                          <span className="text-ink-soft">{formatDate(detail.account.updated_at)}</span>
-                        </div>
-                      )}
                     </div>
                   ) : (
                     <p className="text-ink-soft text-[11px] italic">
@@ -2705,6 +2776,73 @@ export function Employees({
                     <span className="font-semibold text-ink">
                       {detail.employee.has_pin ? '●●●● Configuré' : 'Non configuré'}
                     </span>
+                  </div>
+
+                  {/* Configuration des jours ouvrés personnalisés du salarié */}
+                  <div className="border-t border-line/60 pt-2 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-ink-soft font-medium">Jours ouvrés hebdomadaires :</span>
+                      <span className="font-semibold text-amber">
+                        {formatWorkdaysLabels(detail.employee.workdays)}
+                      </span>
+                    </div>
+                    {canEdit && (
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap gap-1">
+                          {WEEKDAY_OPTIONS.map((opt) => {
+                            const currentWorkdays = detail.employee.workdays && detail.employee.workdays.length > 0
+                              ? detail.employee.workdays
+                              : [1, 2, 3, 4, 5];
+                            const isActive = currentWorkdays.includes(opt.day);
+                            return (
+                              <button
+                                key={opt.day}
+                                type="button"
+                                onClick={async () => {
+                                  const set = new Set(currentWorkdays);
+                                  if (isActive) {
+                                    if (set.size > 1) set.delete(opt.day);
+                                  } else {
+                                    set.add(opt.day);
+                                  }
+                                  const updated = Array.from(set).sort();
+                                  try {
+                                    await api(`/api/employees/${detail.employee.id}`, {
+                                      method: 'PATCH',
+                                      body: JSON.stringify({ workdays: updated }),
+                                    });
+                                    setDetail((prev) =>
+                                      prev
+                                        ? {
+                                            ...prev,
+                                            employee: { ...prev.employee, workdays: updated },
+                                          }
+                                        : prev
+                                    );
+                                    setReload((v) => v + 1);
+                                    toast('Jours ouvrés mis à jour.', 'success');
+                                  } catch (err) {
+                                    toast('Erreur lors de la mise à jour des jours ouvrés', 'error');
+                                  }
+                                }}
+                                className={cx(
+                                  'px-2 py-0.5 rounded text-[11px] font-semibold border transition-all cursor-pointer',
+                                  isActive
+                                    ? 'bg-amber text-paper border-amber shadow-xs'
+                                    : 'bg-surface text-ink-faint border-line hover:border-ink-soft'
+                                )}
+                                title={`Cliquer pour activer/désactiver ${opt.full}`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[10px] text-ink-faint">
+                          Cliquez pour ajuster le planning de service de cet ouvrier (impacte les congés).
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2759,7 +2897,7 @@ export function Employees({
                               {l.status === 'approved' ? 'Accordé' : l.status === 'pending' ? 'En attente' : 'Refusé'}
                             </span>
                             <span className="text-[10px] font-mono text-ink-faint block mt-1">
-                              {computeWorkingDays(l.from_date, l.to_date, holidays)} j ouvrés
+                              {computeWorkingDays(l.from_date, l.to_date, holidays, detail.employee.workdays)} j ouvrés
                             </span>
                           </div>
                         </div>
@@ -3033,6 +3171,50 @@ export function Employees({
             </p>
           </div>
 
+          {/* Jours ouvrés personnalisés du travailleur */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-ink-soft">
+                Jours ouvrés hebdomadaires de service
+              </label>
+              <span className="text-[11px] font-semibold text-amber">
+                {formatWorkdaysLabels(form.workdays)}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {WEEKDAY_OPTIONS.map((opt) => {
+                const currentList = form.workdays && form.workdays.length > 0 ? form.workdays : [1, 2, 3, 4, 5];
+                const active = currentList.includes(opt.day);
+                return (
+                  <button
+                    key={opt.day}
+                    type="button"
+                    onClick={() => {
+                      const currentSet = new Set(currentList);
+                      if (active) {
+                        if (currentSet.size > 1) currentSet.delete(opt.day);
+                      } else {
+                        currentSet.add(opt.day);
+                      }
+                      setForm((f) => ({ ...f, workdays: Array.from(currentSet).sort() }));
+                    }}
+                    className={cx(
+                      'px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer',
+                      active
+                        ? 'bg-amber text-paper border-amber shadow-xs'
+                        : 'bg-surface text-ink-soft border-line hover:border-ink-faint'
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-[11px] text-ink-faint">
+              Définit le planning ouvré pour calculer précisément les congés et permissions sans compter les repos.
+            </p>
+          </div>
+
           {/* Seamless Account Creation */}
           {!editing && canCreate && (
             <div className="rounded-xl border border-line bg-paper/60 p-3.5 space-y-3">
@@ -3213,13 +3395,27 @@ export function Employees({
             </div>
           </div>
 
-          {/* Décompte dynamique des jours ouvrés nets (excluant dimanches et fériés) */}
-          <div className="rounded-xl border border-line bg-surface-2 p-3 flex items-center justify-between">
-            <span className="text-ink-soft">Décompte en jours ouvrés :</span>
-            <span className="font-mono font-bold text-ink text-sm">
-              {computeWorkingDays(leaveForm.from_date, leaveForm.to_date, holidays)} jour(s) ouvré(s) nets
-            </span>
-          </div>
+          {/* Décompte dynamique des jours ouvrés nets selon le planning personnalisé du travailleur */}
+          {(() => {
+            const curEmp = employees.find((e) => String(e.id) === String(leaveForm.employee_id));
+            const netDays = computeWorkingDays(leaveForm.from_date, leaveForm.to_date, holidays, curEmp?.workdays);
+            return (
+              <div className="rounded-xl border border-line bg-surface-2 p-3 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-ink-soft">Jours ouvrés hebdomadaires de {curEmp?.full_name ? formatPillName(curEmp.full_name) : 'l’ouvrier'} :</span>
+                  <span className="font-semibold text-amber">
+                    {formatWorkdaysLabels(curEmp?.workdays)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border-t border-line/60 pt-1.5">
+                  <span className="text-ink-soft">Décompte personnalisé en jours ouvrés :</span>
+                  <span className="font-mono font-bold text-ink text-sm">
+                    {netDays} jour(s) ouvré(s) nets
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Condition cognitive essentielle : pas de motif pour le congé annuel payé ! */}
           {leaveForm.kind === 'conge' ? (

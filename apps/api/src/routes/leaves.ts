@@ -18,12 +18,15 @@ const listQuery = z.object({
 });
 
 const createBody = z.object({
-  employee_id: z.string().min(1),
-  kind: z.enum(LEAVE_KINDS),
-  from_date: z.string().min(1),
-  to_date: z.string().min(1),
-  note: z.string().nullable().optional(),
+  employee_id: z.string().min(1, 'Veuillez sélectionner un travailleur.'),
+  kind: z.enum(LEAVE_KINDS, { message: 'Type de congé/permission invalide.' }),
+  from_date: z.string().min(1, 'Date de début requise.'),
+  to_date: z.string().min(1, 'Date de fin requise.'),
+  note: z.string().nullish(),
   status: z.enum(['pending', 'approved']).optional(),
+}).refine((data) => data.from_date <= data.to_date, {
+  message: 'La date de début doit être antérieure ou égale à la date de fin.',
+  path: ['to_date'],
 });
 
 const updateBody = z.object({
@@ -251,7 +254,7 @@ leavesRoutes.post('/request-permission', async (c) => {
 // 7. Allocation d'un Congé ou Octroi de Permission par la Direction / Superviseur Privilégié
 leavesRoutes.post('/', requirePerm('leaves.manage'), async (c) => {
   const body = createBody.safeParse(await c.req.json().catch(() => ({})));
-  if (!body.success) return c.json({ error: 'Données de congé invalides.' }, 400);
+  if (!body.success) return c.json({ error: body.error.issues[0]?.message || 'Données de congé invalides.' }, 400);
   const db = getDb();
   const emp = await db.one('SELECT id FROM employees WHERE id = $1', [body.data.employee_id]);
   if (!emp) return c.json({ error: 'Travailleur introuvable.' }, 404);

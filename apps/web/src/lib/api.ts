@@ -444,6 +444,7 @@ export type Employee = {
   badge_token: string | null;
   active: boolean;
   has_pin?: boolean;
+  workdays?: number[];
 };
 
 export type StockRef = {
@@ -652,7 +653,6 @@ export type EmployeeDetail = {
     role: string;
     role_name: string;
     created_at: string;
-    updated_at: string | null;
   } | null;
   leaves?: {
     id: number;
@@ -661,9 +661,8 @@ export type EmployeeDetail = {
     kind: string;
     status: string;
     note: string | null;
-    approved_by: string | null;
+    reviewed_by: string | null;
     created_at: string;
-    updated_at: string | null;
   }[];
   history: {
     date: string;

@@ -27,7 +27,17 @@ type Terminal = { id: string; name: string };
 type Stage = 'terminal' | 'identify' | 'validate_pin' | 'actions' | 'capture' | 'confirm';
 
 const TERMINAL_KEY = 'mf.terminal';
-const AUTO_RETURN_SECONDS = 15;
+const PIN_TIMEOUT_SECONDS = 3 * 60;
+const ACTION_TIMEOUT_SECONDS = 3 * 60;
+const SELFIE_TIMEOUT_SECONDS = 5 * 60;
+const CONFIRMATION_TIMEOUT_SECONDS = 20;
+
+function stageTimeoutSeconds(stage: Stage): number {
+  if (stage === 'validate_pin') return PIN_TIMEOUT_SECONDS;
+  if (stage === 'actions') return ACTION_TIMEOUT_SECONDS;
+  if (stage === 'capture') return SELFIE_TIMEOUT_SECONDS;
+  return 0;
+}
 
 const PUNCH_LABEL: Record<PunchType, string> = {
   in: 'Arrivée',
@@ -314,7 +324,7 @@ export function Pointage({
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<PunchResult | null>(null);
   const [idle, setIdle] = useState(0);
-  const [countdown, setCountdown] = useState(4);
+  const [countdown, setCountdown] = useState(CONFIRMATION_TIMEOUT_SECONDS);
   const [now, setNow] = useState(() => new Date());
   const { print, portal } = usePrintSheet();
 
@@ -376,7 +386,7 @@ export function Pointage({
 
   useEffect(() => {
     if (stage !== 'actions' && stage !== 'validate_pin' && stage !== 'capture') return;
-    setIdle(AUTO_RETURN_SECONDS);
+    setIdle(stageTimeoutSeconds(stage));
     const timer = window.setInterval(() => {
       setIdle((value) => {
         if (value <= 1) {
@@ -392,7 +402,7 @@ export function Pointage({
 
   useEffect(() => {
     if (stage !== 'confirm') return;
-    setCountdown(4);
+    setCountdown(CONFIRMATION_TIMEOUT_SECONDS);
     const timer = window.setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -1226,7 +1236,7 @@ export function Pointage({
 
           {/* ÉTAPE 2 : VALIDATION D'IDENTITÉ PAR CODE SECRET PERSONNEL (OBLIGATOIRE - ANTI-USURPATION) */}
           {stage === 'validate_pin' && identified ? (
-            <div className="mx-auto max-w-md space-y-4" onClick={() => setIdle(AUTO_RETURN_SECONDS)}>
+            <div className="mx-auto max-w-md space-y-4" onClick={() => setIdle(stageTimeoutSeconds(stage))}>
               <div className="text-center">
                 <div className="flex items-center justify-between mb-2">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-wash px-3 py-1 text-xs font-bold text-blue border border-blue/20">
@@ -1344,7 +1354,7 @@ export function Pointage({
 
           {/* ÉTAPE 3 : POINTAGE INTUITIF & PREUVE PHOTO OBLIGATOIRE */}
           {(stage === 'actions' || stage === 'capture') && identified ? (
-            <div className="mx-auto max-w-xl space-y-4" onClick={() => setIdle(AUTO_RETURN_SECONDS)}>
+            <div className="mx-auto max-w-xl space-y-4" onClick={() => setIdle(stageTimeoutSeconds(stage))}>
               <div className="flex items-center justify-between">
                 <div>
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-green-wash px-2.5 py-0.5 text-[11px] font-bold text-green border border-green/20">
