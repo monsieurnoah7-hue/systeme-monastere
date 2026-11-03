@@ -784,6 +784,227 @@ function PendingLeavesBanner({
   );
 }
 
+function EtabliCarouselTrack({
+  chunk,
+  seriesIndex,
+  totalSeries,
+  onOpenAudit,
+  onOpenDetails,
+}: {
+  chunk: EtabliKitSummaryItem[];
+  seriesIndex: number;
+  totalSeries: number;
+  onOpenAudit: (kit: EtabliKitSummaryItem) => void;
+  onOpenDetails: (kit: EtabliKitSummaryItem) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScrollState = useCallback(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 10);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  }, []);
+
+  useEffect(() => {
+    checkScrollState();
+    const handleResize = () => checkScrollState();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [checkScrollState, chunk]);
+
+  const scrollByDirection = (direction: 'left' | 'right') => {
+    const el = trackRef.current;
+    if (!el) return;
+    const scrollAmount = el.clientWidth * 0.8;
+    el.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
+    setTimeout(checkScrollState, 350);
+  };
+
+  const startNum = String(chunk[0]?.etabli_number ?? 0).padStart(2, '0');
+  const endNum = String(chunk[chunk.length - 1]?.etabli_number ?? 0).padStart(2, '0');
+
+  return (
+    <div className="space-y-2.5 rounded-2xl border border-line bg-surface/50 p-3.5 sm:p-4 shadow-xs">
+      {/* Header de la série de 4 à 5 cartes */}
+      <div className="flex items-center justify-between border-b border-line/60 pb-2.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="shrink-0 px-2 py-0.5 rounded-md text-[11px] font-bold bg-ink text-paper font-mono shadow-xs">
+            Série {seriesIndex + 1} / {totalSeries}
+          </span>
+          <h3 className="text-xs font-bold text-ink truncate">
+            Établis {startNum} à {endNum}
+          </h3>
+          <span className="text-[11px] text-ink-faint shrink-0">
+            ({chunk.length} établi{chunk.length > 1 ? 's' : ''})
+          </span>
+        </div>
+
+        {/* Contrôles de navigation pour ce carrousel */}
+        <div className="flex items-center gap-1 shrink-0 bg-paper-2 p-0.5 rounded-lg border border-line">
+          <button
+            type="button"
+            onClick={() => scrollByDirection('left')}
+            disabled={!canScrollLeft}
+            className="p-1 rounded text-ink-soft hover:text-ink hover:bg-surface disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+            title="Établis précédents de cette série"
+            aria-label="Précédent"
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollByDirection('right')}
+            disabled={!canScrollRight}
+            className="p-1 rounded text-ink-soft hover:text-ink hover:bg-surface disabled:opacity-20 disabled:pointer-events-none transition-all cursor-pointer"
+            title="Établis suivants de cette série"
+            aria-label="Suivant"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      </div>
+
+      {/* Piste du carrousel contenant max 5 cartes (ordi) / 4 cartes (smartphone) */}
+      <div
+        ref={trackRef}
+        onScroll={checkScrollState}
+        className="flex gap-3.5 overflow-x-auto snap-x snap-proximity scroll-smooth no-scrollbar -mx-2 px-2 sm:-mx-3 sm:px-3 pb-2 pt-1 overscroll-x-contain touch-pan-y touch-pan-x"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        {chunk.map((kit) => {
+          const hasAnomalies = kit.items_missing > 0 || kit.items_to_sharpen > 0;
+          const isOverdue = !kit.last_audited_at || Math.floor((Date.now() - new Date(kit.last_audited_at).getTime()) / 86400000) >= 15;
+          const completionPct = kit.items_total > 0 ? Math.round((kit.items_present / kit.items_total) * 100) : 100;
+
+          return (
+            <div
+              key={kit.id}
+              className={cx(
+                'group flex flex-col justify-between rounded-2xl border bg-surface p-4 shadow-card hover:shadow-card-hover transition-all duration-200 shrink-0 snap-start',
+                'w-[84vw] max-w-[340px] sm:w-[310px] lg:w-[calc((100%-2*0.875rem)/3)] xl:w-[calc((100%-4*0.875rem)/5)]',
+                hasAnomalies ? 'border-amber/40 hover:border-amber' : 'border-line hover:border-line-strong'
+              )}
+            >
+              <div>
+                {/* Top Header: Badge Établi & Code Gravure */}
+                <div className="flex items-center justify-between gap-2 border-b border-line/60 pb-2.5 mb-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="grid h-6 w-6 place-items-center rounded-lg bg-ink text-paper text-xs font-mono font-bold shadow-xs">
+                      {String(kit.etabli_number).padStart(2, '0')}
+                    </span>
+                    <span className="font-bold text-xs text-ink">
+                      Établi {kit.etabli_number}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <span className="font-mono text-[10px] font-bold bg-surface-2 px-1.5 py-0.5 rounded border border-line text-ink-soft">
+                      {kit.code}
+                    </span>
+                    <span className="text-[10px] font-semibold text-ink-faint">
+                      · {kit.source_magasin_code.includes('LEO') ? 'Léo' : 'Vern.'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Worker Profile */}
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-paper-2 text-ink text-xs font-bold shrink-0 overflow-hidden border border-line shadow-xs">
+                    {kit.employee_photo ? (
+                      <img src={kit.employee_photo} alt={kit.employee_name} className="h-full w-full object-cover" />
+                    ) : (
+                      initials(kit.employee_name)
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-xs text-ink truncate group-hover:text-amber transition-colors">
+                      {kit.employee_name}
+                    </p>
+                    <p className="text-[10px] text-ink-faint truncate">
+                      {kit.employee_job || 'Menuisier d’Atelier'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tools Completion Status */}
+                <div className="space-y-1.5 rounded-xl bg-surface-2/40 p-2.5 border border-line text-xs mb-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-ink-soft">Complétude servante :</span>
+                    <span className="font-mono font-bold text-ink text-[11px]">
+                      {kit.items_present}/{kit.items_total}
+                    </span>
+                  </div>
+
+                  <div className="h-1.5 w-full bg-paper rounded-full overflow-hidden">
+                    <div
+                      className={cx(
+                        'h-full rounded-full transition-all',
+                        completionPct === 100
+                          ? 'bg-emerald-500'
+                          : completionPct >= 85
+                          ? 'bg-amber'
+                          : 'bg-red'
+                      )}
+                      style={{ width: `${completionPct}%` }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] pt-0.5">
+                    <span className={completionPct === 100 ? 'text-emerald-600 font-semibold' : 'text-amber font-semibold'}>
+                      {completionPct === 100 ? '✓ 100% Intact' : `${kit.items_total - kit.items_present} écart(s)`}
+                    </span>
+                    {kit.items_to_sharpen > 0 && (
+                      <span className="text-amber">({kit.items_to_sharpen} à affûter)</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Audit Track Badge */}
+                <div className="flex items-center justify-between text-[10px] text-ink-faint pt-1">
+                  <span>Dernier audit :</span>
+                  <span className={cx('font-medium', isOverdue ? 'text-amber font-semibold' : 'text-ink-soft')}>
+                    {kit.last_audited_at ? formatAuditTimeAgo(kit.last_audited_at) : 'Non audité'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card Actions */}
+              <div className="mt-3.5 flex items-center gap-1.5 pt-2.5 border-t border-line/60">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<ShieldCheck size={13} className="text-white" />}
+                  onClick={() => onOpenAudit(kit)}
+                  className="flex-1 bg-green hover:bg-green-2 text-white font-bold text-[11px] h-8 shadow-xs"
+                  title="Lancer le contrôle inopiné flash de cet établi"
+                >
+                  Contrôle Flash
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Eye size={13} />}
+                  onClick={() => onOpenDetails(kit)}
+                  className="border border-line text-ink-soft hover:text-ink text-[11px] h-8 px-2.5"
+                  title="Voir les 22 outils de l'établi"
+                >
+                  Détails
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function EtablisTourDeControle({
   etablis,
   onOpenAudit,
@@ -795,27 +1016,16 @@ function EtablisTourDeControle({
 }) {
   const [filter, setFilter] = useState<'all' | 'overdue' | 'anomalies' | 'leo' | 'vern'>('all');
   const [search, setSearch] = useState('');
-  const carouselTrackRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
+  const [selectedSeries, setSelectedSeries] = useState<'all' | number>('all');
+  const [chunkSize, setChunkSize] = useState(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 4 : 5));
 
-  const checkScrollState = useCallback(() => {
-    const el = carouselTrackRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 10);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  useEffect(() => {
+    const handleResize = () => {
+      setChunkSize(window.innerWidth < 640 ? 4 : 5);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  const scrollByDirection = (direction: 'left' | 'right') => {
-    const el = carouselTrackRef.current;
-    if (!el) return;
-    const scrollAmount = el.clientWidth * 0.85;
-    el.scrollBy({
-      left: direction === 'left' ? -scrollAmount : scrollAmount,
-      behavior: 'smooth',
-    });
-    setTimeout(checkScrollState, 350);
-  };
 
   const filteredKits = useMemo(() => {
     return etablis.kits.filter((kit) => {
@@ -843,6 +1053,14 @@ function EtablisTourDeControle({
       return true;
     });
   }, [etablis.kits, filter, search]);
+
+  const chunks = useMemo(() => {
+    const result: EtabliKitSummaryItem[][] = [];
+    for (let i = 0; i < filteredKits.length; i += chunkSize) {
+      result.push(filteredKits.slice(i, i + chunkSize));
+    }
+    return result;
+  }, [filteredKits, chunkSize]);
 
   return (
     <section className="space-y-4">
@@ -1025,185 +1243,105 @@ function EtablisTourDeControle({
           </button>
         </div>
 
-        {/* Right side: Search Bar & Carousel Controls */}
-        <div className="flex items-center gap-2">
-          {/* Search Bar */}
-          <div className="relative min-w-[200px] sm:min-w-[240px] flex-1">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher artisan, n° établi..."
-              className="w-full h-9 rounded-xl border border-line bg-surface pl-9 pr-3 text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-amber transition-colors"
-            />
-          </div>
-
-          {/* Carousel Navigation Arrows */}
-          <div className="flex items-center gap-1 shrink-0 bg-paper-2 p-0.5 rounded-xl border border-line">
-            <button
-              type="button"
-              onClick={() => scrollByDirection('left')}
-              disabled={!canScrollLeft}
-              className="p-1.5 rounded-lg text-ink-soft hover:text-ink hover:bg-surface disabled:opacity-25 disabled:pointer-events-none transition-all cursor-pointer"
-              title="Établis précédents"
-              aria-label="Établis précédents"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollByDirection('right')}
-              disabled={!canScrollRight}
-              className="p-1.5 rounded-lg text-ink-soft hover:text-ink hover:bg-surface disabled:opacity-25 disabled:pointer-events-none transition-all cursor-pointer"
-              title="Établis suivants"
-              aria-label="Établis suivants"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
+        {/* Right side: Search Bar */}
+        <div className="relative min-w-[200px] sm:min-w-[260px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher artisan, n° établi..."
+            className="w-full h-9 rounded-xl border border-line bg-surface pl-9 pr-3 text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-amber transition-colors"
+          />
         </div>
       </div>
 
-      {/* Carrousel Horizontal des Établis (3 cartes par vue sur desktop/tablette, défilement tactile fluide sur smartphone) */}
+      {/* Sélecteur de séries / carrousels : Découpage ergonomique en carrousels de 5 (ordi/tablette) ou 4 (smartphone) */}
+      {chunks.length > 1 && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-1 border-t border-line/60">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 overscroll-x-contain touch-pan-y touch-pan-x" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <button
+              type="button"
+              onClick={() => setSelectedSeries('all')}
+              className={cx(
+                'shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer',
+                selectedSeries === 'all'
+                  ? 'bg-amber text-white shadow-xs'
+                  : 'bg-surface text-ink-soft hover:text-ink border border-line'
+              )}
+            >
+              Tous les carrousels ({chunks.length})
+            </button>
+            {chunks.map((chunk, idx) => {
+              const isSelected = selectedSeries === idx;
+              const firstKit = chunk[0];
+              const lastKit = chunk[chunk.length - 1];
+              const start = firstKit ? String(firstKit.etabli_number).padStart(2, '0') : '01';
+              const end = lastKit ? String(lastKit.etabli_number).padStart(2, '0') : start;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setSelectedSeries(idx)}
+                  className={cx(
+                    'shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5',
+                    isSelected
+                      ? 'bg-ink text-paper shadow-xs'
+                      : 'bg-surface text-ink-soft hover:text-ink border border-line'
+                  )}
+                >
+                  <span>Série {idx + 1} ({start}–{end})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedSeries !== 'all' && (
+            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setSelectedSeries((prev) => (typeof prev === 'number' && prev > 0 ? prev - 1 : chunks.length - 1))}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium text-ink-soft hover:text-ink border border-line bg-surface cursor-pointer"
+              >
+                &larr; Série préc.
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedSeries((prev) => (typeof prev === 'number' && prev < chunks.length - 1 ? prev + 1 : 0))}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium text-ink-soft hover:text-ink border border-line bg-surface cursor-pointer"
+              >
+                Série suiv. &rarr;
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Rendu des carrousels de 5 cartes (ordi) / 4 cartes (mobile) au fur et à mesure */}
       {filteredKits.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-12 text-center text-xs text-ink-soft">
           Aucun établi ne correspond aux critères sélectionnés.
         </div>
       ) : (
-        <div className="relative">
-          <div
-            ref={carouselTrackRef}
-            onScroll={checkScrollState}
-            className="flex gap-3.5 overflow-x-auto snap-x snap-proximity scroll-smooth no-scrollbar -mx-3 px-3 sm:-mx-6 sm:px-6 pb-3 pt-1 overscroll-x-contain touch-pan-y touch-pan-x"
-            style={{ WebkitOverflowScrolling: 'touch' }}
-          >
-            {filteredKits.map((kit) => {
-              const hasAnomalies = kit.items_missing > 0 || kit.items_to_sharpen > 0;
-              const isOverdue = !kit.last_audited_at || Math.floor((Date.now() - new Date(kit.last_audited_at).getTime()) / 86400000) >= 15;
-              const completionPct = kit.items_total > 0 ? Math.round((kit.items_present / kit.items_total) * 100) : 100;
-
-              return (
-                <div
-                  key={kit.id}
-                  className={cx(
-                    'group flex flex-col justify-between rounded-2xl border bg-surface p-4 shadow-card hover:shadow-card-hover transition-all duration-200 shrink-0 snap-start',
-                    'w-[85vw] max-w-[340px] sm:w-[320px] lg:w-[calc((100%-2*0.875rem)/3)]',
-                    hasAnomalies ? 'border-amber/40 hover:border-amber' : 'border-line hover:border-line-strong'
-                  )}
-                >
-                <div>
-                  {/* Top Header: Badge Établi & Code Gravure */}
-                  <div className="flex items-center justify-between gap-2 border-b border-line/60 pb-2.5 mb-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="grid h-6 w-6 place-items-center rounded-lg bg-ink text-paper text-xs font-mono font-bold shadow-xs">
-                        {String(kit.etabli_number).padStart(2, '0')}
-                      </span>
-                      <span className="font-bold text-xs text-ink">
-                        Établi {kit.etabli_number}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <span className="font-mono text-[10px] font-bold bg-surface-2 px-1.5 py-0.5 rounded border border-line text-ink-soft">
-                        {kit.code}
-                      </span>
-                      <span className="text-[10px] font-semibold text-ink-faint">
-                        · {kit.source_magasin_code.includes('LEO') ? 'Léo' : 'Vern.'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Worker Profile */}
-                  <div className="flex items-center gap-2.5 mb-3">
-                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-paper-2 text-ink text-xs font-bold shrink-0 overflow-hidden border border-line shadow-xs">
-                      {kit.employee_photo ? (
-                        <img src={kit.employee_photo} alt={kit.employee_name} className="h-full w-full object-cover" />
-                      ) : (
-                        initials(kit.employee_name)
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold text-xs text-ink truncate group-hover:text-amber transition-colors">
-                        {kit.employee_name}
-                      </p>
-                      <p className="text-[10px] text-ink-faint truncate">
-                        {kit.employee_job || 'Menuisier d’Atelier'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Tools Completion Status */}
-                  <div className="space-y-1.5 rounded-xl bg-surface-2/40 p-2.5 border border-line text-xs mb-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-ink-soft">Complétude servante :</span>
-                      <span className="font-mono font-bold text-ink text-[11px]">
-                        {kit.items_present}/{kit.items_total}
-                      </span>
-                    </div>
-
-                    <div className="h-1.5 w-full bg-paper rounded-full overflow-hidden">
-                      <div
-                        className={cx(
-                          'h-full rounded-full transition-all',
-                          completionPct === 100
-                            ? 'bg-emerald-500'
-                            : completionPct >= 85
-                            ? 'bg-amber'
-                            : 'bg-red'
-                        )}
-                        style={{ width: `${completionPct}%` }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] pt-0.5">
-                      <span className={completionPct === 100 ? 'text-emerald-600 font-semibold' : 'text-amber font-semibold'}>
-                        {completionPct === 100 ? '✓ 100% Intact' : `${kit.items_total - kit.items_present} écart(s)`}
-                      </span>
-                      {kit.items_to_sharpen > 0 && (
-                        <span className="text-amber">({kit.items_to_sharpen} à affûter)</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Audit Track Badge */}
-                  <div className="flex items-center justify-between text-[10px] text-ink-faint pt-1">
-                    <span>Dernier audit :</span>
-                    <span className={cx('font-medium', isOverdue ? 'text-amber font-semibold' : 'text-ink-soft')}>
-                      {kit.last_audited_at ? formatAuditTimeAgo(kit.last_audited_at) : 'Non audité'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card Actions */}
-                <div className="mt-3.5 flex items-center gap-1.5 pt-2.5 border-t border-line/60">
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    icon={<ShieldCheck size={13} className="text-white" />}
-                    onClick={() => onOpenAudit(kit)}
-                    className="flex-1 bg-green hover:bg-green-2 text-white font-bold text-[11px] h-8 shadow-xs"
-                    title="Lancer le contrôle inopiné flash de cet établi"
-                  >
-                    Contrôle Flash
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Eye size={13} />}
-                    onClick={() => onOpenDetails(kit)}
-                    className="border border-line text-ink-soft hover:text-ink text-[11px] h-8 px-2.5"
-                    title="Voir les 22 outils de l'établi"
-                  >
-                    Détails
-                  </Button>
-                </div>
-              </div>
+        <div className="space-y-4">
+          {(selectedSeries === 'all'
+            ? chunks
+            : (typeof selectedSeries === 'number' && chunks[selectedSeries] ? [chunks[selectedSeries]] : chunks.slice(0, 1))
+          ).map((chunk, idx) => {
+            const actualIndex = selectedSeries === 'all' ? idx : (typeof selectedSeries === 'number' ? selectedSeries : 0);
+            return (
+              <EtabliCarouselTrack
+                key={actualIndex}
+                chunk={chunk}
+                seriesIndex={actualIndex}
+                totalSeries={chunks.length}
+                onOpenAudit={onOpenAudit}
+                onOpenDetails={onOpenDetails}
+              />
             );
           })}
         </div>
-      </div>
-    )}
+      )}
     </section>
   );
 }
