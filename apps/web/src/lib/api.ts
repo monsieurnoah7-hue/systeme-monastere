@@ -518,6 +518,57 @@ export type Dashboard = {
     };
   };
   lastMovements: (StockMovement & { ref_name: string; unit: string })[];
+  etablis?: {
+    totalKits: number;
+    totalItems: number;
+    intactItems: number;
+    missingItems: number;
+    toSharpenItems: number;
+    completenessRate: number;
+    overdueAuditCount: number;
+    anomaliesCount: number;
+    lastAudit: {
+      kitCode: string;
+      etabliNumber: number;
+      employeeName: string;
+      auditedAt: string;
+      auditedBy: string;
+      status: string;
+    } | null;
+    kits: {
+      id: string;
+      code: string;
+      etabli_number: number;
+      location: string;
+      status: string;
+      last_audited_at: string | null;
+      last_audited_by: string | null;
+      last_audit_status: string | null;
+      employee_id: string;
+      employee_name: string;
+      employee_job: string;
+      employee_photo: string | null;
+      source_magasin_id: string;
+      source_magasin_name: string;
+      source_magasin_code: string;
+      items_total: number;
+      items_present: number;
+      items_missing: number;
+      items_to_sharpen: number;
+    }[];
+  };
+  pendingLeaves?: {
+    id: number;
+    employee_id: string;
+    full_name: string;
+    job_title?: string;
+    photo_path?: string | null;
+    kind: string;
+    from_date: string;
+    to_date: string;
+    note: string | null;
+    created_at: string;
+  }[];
 };
 
 export type KioskSettings = {

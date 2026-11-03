@@ -163,6 +163,108 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
   const empDeclMap = new Map<string, string>();
   for (const d of declared) empDeclMap.set(d.id, d.kind);
 
+  // 6. Synthèse Établis & Contrôles Inopinés d'Outillage (Tour de Contrôle Super Admin)
+  type EtabliRow = {
+    id: string;
+    code: string;
+    etabli_number: number;
+    location: string;
+    status: string;
+    last_audited_at: string | null;
+    last_audited_by: string | null;
+    last_audit_status: string | null;
+    employee_id: string;
+    employee_name: string;
+    employee_job: string;
+    employee_photo: string | null;
+    source_magasin_id: string;
+    source_magasin_name: string;
+    source_magasin_code: string;
+    items_total: number;
+    items_present: number;
+    items_missing: number;
+    items_to_sharpen: number;
+  };
+
+  const kitsData = await db.query<EtabliRow>(`
+    SELECT k.id, k.code, k.etabli_number, k.location, k.status,
+           k.last_audited_at::timestamptz::text AS last_audited_at,
+           k.last_audited_by, k.last_audit_status,
+           e.id AS employee_id, e.full_name AS employee_name, e.job_title AS employee_job, e.photo_path AS employee_photo,
+           m.id AS source_magasin_id, m.name AS source_magasin_name, m.code AS source_magasin_code,
+           COUNT(i.id)::int AS items_total,
+           COUNT(CASE WHEN i.is_present = true AND i.condition = 'bon' THEN 1 END)::int AS items_present,
+           COUNT(CASE WHEN i.is_present = false THEN 1 END)::int AS items_missing,
+           COUNT(CASE WHEN i.condition != 'bon' AND i.is_present = true THEN 1 END)::int AS items_to_sharpen
+      FROM etabli_kits k
+      JOIN employees e ON e.id = k.employee_id
+      JOIN magasins m ON m.id = k.source_magasin_id
+      LEFT JOIN etabli_kit_items i ON i.kit_id = k.id
+     GROUP BY k.id, e.id, e.full_name, e.job_title, e.photo_path, m.id, m.name, m.code
+     ORDER BY k.etabli_number ASC
+  `).catch(() => [] as EtabliRow[]);
+
+  const totalKits = kitsData.length;
+  const totalItems = kitsData.reduce((acc, k) => acc + (k.items_total || 0), 0);
+  const intactItems = kitsData.reduce((acc, k) => acc + (k.items_present || 0), 0);
+  const missingItems = kitsData.reduce((acc, k) => acc + (k.items_missing || 0), 0);
+  const toSharpenItems = kitsData.reduce((acc, k) => acc + (k.items_to_sharpen || 0), 0);
+  const completenessRate = totalItems > 0 ? Math.round((intactItems / totalItems) * 1000) / 10 : 100;
+
+  const nowMs = Date.now();
+  const kitsNeedingAudit = kitsData.filter((k) => {
+    if (!k.last_audited_at) return true;
+    const daysSince = Math.floor((nowMs - new Date(k.last_audited_at).getTime()) / 86400000);
+    return daysSince >= 15;
+  });
+  const kitsWithAnomalies = kitsData.filter((k) => (k.items_missing || 0) > 0 || (k.items_to_sharpen || 0) > 0);
+
+  const lastAuditedKit = kitsData
+    .filter((k) => k.last_audited_at)
+    .sort((a, b) => new Date(b.last_audited_at!).getTime() - new Date(a.last_audited_at!).getTime())[0] || null;
+
+  const etablis = {
+    totalKits,
+    totalItems,
+    intactItems,
+    missingItems,
+    toSharpenItems,
+    completenessRate,
+    overdueAuditCount: kitsNeedingAudit.length,
+    anomaliesCount: kitsWithAnomalies.length,
+    lastAudit: lastAuditedKit ? {
+      kitCode: lastAuditedKit.code,
+      etabliNumber: lastAuditedKit.etabli_number,
+      employeeName: lastAuditedKit.employee_name,
+      auditedAt: lastAuditedKit.last_audited_at,
+      auditedBy: lastAuditedKit.last_audited_by,
+      status: lastAuditedKit.last_audit_status,
+    } : null,
+    kits: kitsData,
+  };
+
+  // 7. Demandes de congés & permissions en attente de visa (Direction)
+  const pendingLeaves = await db.query<{
+    id: number;
+    employee_id: string;
+    full_name: string;
+    job_title?: string;
+    photo_path?: string | null;
+    kind: string;
+    from_date: string;
+    to_date: string;
+    note: string | null;
+    created_at: string;
+  }>(`
+    SELECT ab.id, ab.employee_id, e.full_name, e.job_title, e.photo_path, ab.kind,
+           ab.from_date::text AS from_date, ab.to_date::text AS to_date, ab.note,
+           ab.created_at::timestamptz::text AS created_at
+      FROM absences ab
+      JOIN employees e ON e.id = ab.employee_id
+     WHERE ab.status = 'pending'
+     ORDER BY ab.created_at ASC
+  `).catch(() => []);
+
   return c.json({
     role,
     generatedAt: new Date().toISOString(),
@@ -214,5 +316,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
       },
     },
     lastMovements,
+    etablis,
+    pendingLeaves,
   });
 });

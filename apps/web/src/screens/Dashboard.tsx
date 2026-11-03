@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api, type Dashboard as DashboardType, type StockRef, type Tool } from '../lib/api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { api, type Dashboard as DashboardType, type StockRef, type Tool, type EtabliKit, type EtabliKitItem } from '../lib/api';
 import {
   MOVE_LABEL,
   STATUS_LABEL,
@@ -16,16 +16,19 @@ import {
   Chip,
   Drawer,
   EmptyState,
+  Modal,
   PageHeader,
   Row,
   Spinner,
   cx,
+  useToast,
 } from '../components/ui';
 import {
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
   Clock,
+  Clock3,
   Fingerprint,
   Package,
   RefreshCw,
@@ -33,6 +36,12 @@ import {
   Users,
   Wrench,
   ChevronRight,
+  ShieldCheck,
+  Check,
+  X,
+  Search,
+  History,
+  Eye,
 } from 'lucide-react';
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
@@ -427,7 +436,876 @@ function WhosInWidget({
   );
 }
 
+type EtabliKitSummaryItem = NonNullable<DashboardType['etablis']>['kits'][number];
+
+function formatAuditTimeAgo(isoString?: string | null): string {
+  if (!isoString) return 'Jamais audité';
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) return `Il y a ${Math.max(1, diffMins)} min`;
+  if (diffHours < 24) return `Il y a ${diffHours} h`;
+  if (diffDays === 1) return 'Hier';
+  if (diffDays < 30) return `Il y a ${diffDays} j`;
+  return formatDate(isoString);
+}
+
+function PendingLeavesBanner({
+  leaves,
+  onReview,
+  reviewingId,
+}: {
+  leaves: NonNullable<DashboardType['pendingLeaves']>;
+  onReview: (leaveId: number, status: 'approved' | 'rejected') => void;
+  reviewingId: number | null;
+}) {
+  if (!leaves || leaves.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-amber/30 bg-amber-wash/40 p-4 shadow-card">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-8 w-8 place-items-center rounded-xl bg-amber text-white shrink-0 shadow-xs">
+            <Clock3 size={16} />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-ink flex items-center gap-2">
+              <span>Demandes de permissions exceptionnelles en attente</span>
+              <span className="rounded-full bg-amber/20 text-amber px-2 py-0.5 text-[10px] font-bold">
+                {leaves.length} à valider
+              </span>
+            </h3>
+            <p className="text-[11px] text-ink-soft">
+              Visa requis par la Direction Générale ou le superviseur d’atelier habilité.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+        {leaves.map((leave) => (
+          <div
+            key={leave.id}
+            className="flex flex-col justify-between rounded-xl border border-line bg-surface p-3 shadow-xs hover:border-amber/40 transition-colors"
+          >
+            <div>
+              <div className="flex items-center gap-2.5">
+                <div className="grid h-8 w-8 place-items-center rounded-lg bg-ink text-paper text-xs font-bold shrink-0 overflow-hidden border border-line/60">
+                  {leave.photo_path ? (
+                    <img src={leave.photo_path} alt={leave.full_name} className="h-full w-full object-cover" />
+                  ) : (
+                    initials(leave.full_name)
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-xs text-ink truncate">{leave.full_name}</p>
+                  <p className="text-[10px] text-ink-faint font-mono">
+                    Du {formatDate(leave.from_date)} au {formatDate(leave.to_date)}
+                  </p>
+                </div>
+              </div>
+              {leave.note && (
+                <p className="mt-2 text-[11px] text-ink-soft italic bg-surface-2/60 p-2 rounded-lg border border-line truncate">
+                  « {leave.note} »
+                </p>
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-end gap-1.5 pt-2 border-t border-line/60">
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={reviewingId === leave.id}
+                onClick={() => onReview(leave.id, 'rejected')}
+                className="text-red hover:bg-red-wash/40 text-[11px] h-7 px-2.5"
+              >
+                Refuser
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                loading={reviewingId === leave.id}
+                onClick={() => onReview(leave.id, 'approved')}
+                className="bg-green hover:bg-green-2 text-white text-[11px] h-7 px-3 font-bold"
+              >
+                Accorder
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EtablisTourDeControle({
+  etablis,
+  onOpenAudit,
+  onOpenDetails,
+}: {
+  etablis: NonNullable<DashboardType['etablis']>;
+  onOpenAudit: (kit: EtabliKitSummaryItem) => void;
+  onOpenDetails: (kit: EtabliKitSummaryItem) => void;
+}) {
+  const [filter, setFilter] = useState<'all' | 'overdue' | 'anomalies' | 'leo' | 'vern'>('all');
+  const [search, setSearch] = useState('');
+
+  const filteredKits = useMemo(() => {
+    return etablis.kits.filter((kit) => {
+      if (filter === 'overdue') {
+        if (!kit.last_audited_at) return true;
+        const days = Math.floor((Date.now() - new Date(kit.last_audited_at).getTime()) / 86400000);
+        if (days < 15) return false;
+      } else if (filter === 'anomalies') {
+        if (kit.items_missing <= 0 && kit.items_to_sharpen <= 0) return false;
+      } else if (filter === 'leo') {
+        if (!kit.source_magasin_code.includes('LEO') && !kit.source_magasin_name.toLowerCase().includes('léo')) return false;
+      } else if (filter === 'vern') {
+        if (!kit.source_magasin_code.includes('VERN') && !kit.source_magasin_name.toLowerCase().includes('verniss')) return false;
+      }
+
+      if (search.trim()) {
+        const q = search.toLowerCase().trim();
+        const matchName = kit.employee_name.toLowerCase().includes(q);
+        const matchCode = kit.code.toLowerCase().includes(q);
+        const matchNum = String(kit.etabli_number).includes(q);
+        const matchLoc = kit.location.toLowerCase().includes(q);
+        if (!matchName && !matchCode && !matchNum && !matchLoc) return false;
+      }
+
+      return true;
+    });
+  }, [etablis.kits, filter, search]);
+
+  return (
+    <section className="space-y-4">
+      {/* Header section with Google-like typography & live pulse */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-line pb-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="grid h-7 w-7 place-items-center rounded-lg bg-ink text-paper shadow-xs">
+              <ShieldCheck size={16} className="text-amber" />
+            </div>
+            <h2 className="text-base font-bold text-ink tracking-tight">
+              Tour de Contrôle des Établis &amp; Dotations d’Atelier
+            </h2>
+          </div>
+          <p className="text-xs text-ink-soft mt-0.5">
+            Supervision 360° des boîtes à outils nominatives, complétude du parc et vigie des contrôles inopinés.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 shadow-xs">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>{etablis.totalKits} Établis Déployés</span>
+          </span>
+        </div>
+      </div>
+
+      {/* 4 KPIs Bento Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* KPI 1: Établis Actifs */}
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-card transition-all">
+          <div className="flex items-center justify-between text-xs text-ink-faint font-semibold uppercase tracking-wider">
+            <span>Établis Déployés</span>
+            <div className="p-1 rounded-md bg-surface-2 text-ink-soft">
+              <Wrench size={14} />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-extrabold text-ink tabular-nums">
+              {etablis.totalKits}
+            </span>
+            <span className="text-xs text-emerald-600 font-semibold">100% dotés</span>
+          </div>
+          <p className="mt-1 text-[11px] text-ink-faint truncate">
+            Magasin Léo &amp; Cabine Vernissage
+          </p>
+        </div>
+
+        {/* KPI 2: Complétude globale */}
+        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-card transition-all">
+          <div className="flex items-center justify-between text-xs text-ink-faint font-semibold uppercase tracking-wider">
+            <span>Complétude Globale</span>
+            <div className="p-1 rounded-md bg-surface-2 text-ink-soft">
+              <ShieldCheck size={14} />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-extrabold text-ink tabular-nums">
+              {etablis.completenessRate}%
+            </span>
+            <span className="text-xs text-ink-soft font-mono">
+              {etablis.intactItems}/{etablis.totalItems}
+            </span>
+          </div>
+          <div className="mt-1.5 h-1.5 w-full bg-paper-2 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(100, etablis.completenessRate)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* KPI 3: Anomalies & Dégradations */}
+        <div
+          onClick={() => setFilter('anomalies')}
+          className={cx(
+            'rounded-xl border p-3.5 shadow-card transition-all cursor-pointer',
+            etablis.anomaliesCount > 0
+              ? 'border-amber/40 bg-amber-wash/30 hover:bg-amber-wash/50'
+              : 'border-line bg-surface hover:bg-surface-2'
+          )}
+        >
+          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
+            <span className={etablis.anomaliesCount > 0 ? 'text-amber' : 'text-ink-faint'}>
+              Alertes Outillage
+            </span>
+            <div className={cx('p-1 rounded-md', etablis.anomaliesCount > 0 ? 'bg-amber/20 text-amber' : 'bg-surface-2 text-ink-soft')}>
+              <AlertTriangle size={14} />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className={cx('font-mono text-2xl font-extrabold tabular-nums', etablis.anomaliesCount > 0 ? 'text-amber' : 'text-ink')}>
+              {etablis.anomaliesCount}
+            </span>
+            <span className="text-xs text-ink-soft">établi(s) avec écarts</span>
+          </div>
+          <p className="mt-1 text-[11px] text-ink-faint truncate">
+            {etablis.missingItems > 0 ? `${etablis.missingItems} manquant(s) · ` : ''}
+            {etablis.toSharpenItems > 0 ? `${etablis.toSharpenItems} à affûter` : 'Aucun outil manquant'}
+          </p>
+        </div>
+
+        {/* KPI 4: Vigie Contrôles Flash */}
+        <div
+          onClick={() => setFilter('overdue')}
+          className={cx(
+            'rounded-xl border p-3.5 shadow-card transition-all cursor-pointer',
+            etablis.overdueAuditCount > 0
+              ? 'border-amber/40 bg-amber-wash/30 hover:bg-amber-wash/50'
+              : 'border-line bg-surface hover:bg-surface-2'
+          )}
+        >
+          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
+            <span className={etablis.overdueAuditCount > 0 ? 'text-amber' : 'text-ink-faint'}>
+              Vigie Contrôles
+            </span>
+            <div className={cx('p-1 rounded-md', etablis.overdueAuditCount > 0 ? 'bg-amber/20 text-amber' : 'bg-surface-2 text-ink-soft')}>
+              <History size={14} />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="font-mono text-xs font-bold text-ink truncate">
+              {etablis.lastAudit ? formatAuditTimeAgo(etablis.lastAudit.auditedAt) : 'Aucun audit'}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] text-ink-faint truncate">
+            {etablis.overdueAuditCount > 0 ? (
+              <span className="text-amber font-semibold">⚠️ {etablis.overdueAuditCount} à inspecter (&gt;15j)</span>
+            ) : (
+              `Par ${etablis.lastAudit?.auditedBy ?? 'Superviseur'}`
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/* Toolbar: Search & Segmented Filter Tabs */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-1">
+        {/* Filter Pills */}
+        <div className="flex items-center gap-1 overflow-x-auto scroll-thin pb-1 md:pb-0 bg-paper-2 p-1 rounded-xl border border-line">
+          <button
+            type="button"
+            onClick={() => setFilter('all')}
+            className={cx(
+              'rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer',
+              filter === 'all' ? 'bg-surface text-ink shadow-xs' : 'text-ink-soft hover:text-ink'
+            )}
+          >
+            Tous les établis ({etablis.kits.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter('overdue')}
+            className={cx(
+              'rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5',
+              filter === 'overdue' ? 'bg-surface text-amber shadow-xs' : 'text-ink-soft hover:text-ink'
+            )}
+          >
+            {etablis.overdueAuditCount > 0 && <span className="h-1.5 w-1.5 rounded-full bg-amber animate-pulse" />}
+            <span>À inspecter ({etablis.overdueAuditCount})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter('anomalies')}
+            className={cx(
+              'rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5',
+              filter === 'anomalies' ? 'bg-surface text-amber shadow-xs' : 'text-ink-soft hover:text-ink'
+            )}
+          >
+            {etablis.anomaliesCount > 0 && <span className="h-1.5 w-1.5 rounded-full bg-red animate-pulse" />}
+            <span>Anomalies ({etablis.anomaliesCount})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter('leo')}
+            className={cx(
+              'rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer',
+              filter === 'leo' ? 'bg-surface text-ink shadow-xs' : 'text-ink-soft hover:text-ink'
+            )}
+          >
+            Magasin Léo ({etablis.kits.filter(k => k.source_magasin_code.includes('LEO') || k.source_magasin_name.toLowerCase().includes('léo')).length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter('vern')}
+            className={cx(
+              'rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all cursor-pointer',
+              filter === 'vern' ? 'bg-surface text-ink shadow-xs' : 'text-ink-soft hover:text-ink'
+            )}
+          >
+            Vernissage ({etablis.kits.filter(k => k.source_magasin_code.includes('VERN') || k.source_magasin_name.toLowerCase().includes('verniss')).length})
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="relative min-w-[240px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher artisan, n° établi..."
+            className="w-full h-9 rounded-xl border border-line bg-surface pl-9 pr-3 text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-amber transition-colors"
+          />
+        </div>
+      </div>
+
+      {/* Grid of Workbenches Cards */}
+      {filteredKits.length === 0 ? (
+        <div className="rounded-2xl border border-line bg-surface p-12 text-center text-xs text-ink-soft">
+          Aucun établi ne correspond aux critères sélectionnés.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+          {filteredKits.map((kit) => {
+            const hasAnomalies = kit.items_missing > 0 || kit.items_to_sharpen > 0;
+            const isOverdue = !kit.last_audited_at || Math.floor((Date.now() - new Date(kit.last_audited_at).getTime()) / 86400000) >= 15;
+            const completionPct = kit.items_total > 0 ? Math.round((kit.items_present / kit.items_total) * 100) : 100;
+
+            return (
+              <div
+                key={kit.id}
+                className={cx(
+                  'group flex flex-col justify-between rounded-2xl border bg-surface p-4 shadow-card hover:shadow-card-hover transition-all duration-200',
+                  hasAnomalies ? 'border-amber/40 hover:border-amber' : 'border-line hover:border-line-strong'
+                )}
+              >
+                <div>
+                  {/* Top Header: Badge Établi & Code Gravure */}
+                  <div className="flex items-center justify-between gap-2 border-b border-line/60 pb-2.5 mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="grid h-6 w-6 place-items-center rounded-lg bg-ink text-paper text-xs font-mono font-bold shadow-xs">
+                        {String(kit.etabli_number).padStart(2, '0')}
+                      </span>
+                      <span className="font-bold text-xs text-ink">
+                        Établi {kit.etabli_number}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className="font-mono text-[10px] font-bold bg-surface-2 px-1.5 py-0.5 rounded border border-line text-ink-soft">
+                        {kit.code}
+                      </span>
+                      <span className="text-[10px] font-semibold text-ink-faint">
+                        · {kit.source_magasin_code.includes('LEO') ? 'Léo' : 'Vern.'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Worker Profile */}
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-paper-2 text-ink text-xs font-bold shrink-0 overflow-hidden border border-line shadow-xs">
+                      {kit.employee_photo ? (
+                        <img src={kit.employee_photo} alt={kit.employee_name} className="h-full w-full object-cover" />
+                      ) : (
+                        initials(kit.employee_name)
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-xs text-ink truncate group-hover:text-amber transition-colors">
+                        {kit.employee_name}
+                      </p>
+                      <p className="text-[10px] text-ink-faint truncate">
+                        {kit.employee_job || 'Menuisier d’Atelier'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tools Completion Status */}
+                  <div className="space-y-1.5 rounded-xl bg-surface-2/40 p-2.5 border border-line text-xs mb-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-ink-soft">Complétude servante :</span>
+                      <span className="font-mono font-bold text-ink text-[11px]">
+                        {kit.items_present}/{kit.items_total}
+                      </span>
+                    </div>
+
+                    <div className="h-1.5 w-full bg-paper rounded-full overflow-hidden">
+                      <div
+                        className={cx(
+                          'h-full rounded-full transition-all',
+                          completionPct === 100
+                            ? 'bg-emerald-500'
+                            : completionPct >= 85
+                            ? 'bg-amber'
+                            : 'bg-red'
+                        )}
+                        style={{ width: `${completionPct}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] pt-0.5">
+                      <span className={completionPct === 100 ? 'text-emerald-600 font-semibold' : 'text-amber font-semibold'}>
+                        {completionPct === 100 ? '✓ 100% Intact' : `${kit.items_total - kit.items_present} écart(s)`}
+                      </span>
+                      {kit.items_to_sharpen > 0 && (
+                        <span className="text-amber">({kit.items_to_sharpen} à affûter)</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Audit Track Badge */}
+                  <div className="flex items-center justify-between text-[10px] text-ink-faint pt-1">
+                    <span>Dernier audit :</span>
+                    <span className={cx('font-medium', isOverdue ? 'text-amber font-semibold' : 'text-ink-soft')}>
+                      {kit.last_audited_at ? formatAuditTimeAgo(kit.last_audited_at) : 'Non audité'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card Actions */}
+                <div className="mt-3.5 flex items-center gap-1.5 pt-2.5 border-t border-line/60">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={<ShieldCheck size={13} className="text-white" />}
+                    onClick={() => onOpenAudit(kit)}
+                    className="flex-1 bg-green hover:bg-green-2 text-white font-bold text-[11px] h-8 shadow-xs"
+                    title="Lancer le contrôle inopiné flash de cet établi"
+                  >
+                    Contrôle Flash
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<Eye size={13} />}
+                    onClick={() => onOpenDetails(kit)}
+                    className="border border-line text-ink-soft hover:text-ink text-[11px] h-8 px-2.5"
+                    title="Voir les 22 outils de l'établi"
+                  >
+                    Détails
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FlashAuditModal({
+  kit,
+  open,
+  onClose,
+  onSuccess,
+}: {
+  kit: EtabliKitSummaryItem | null;
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const toast = useToast();
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [items, setItems] = useState<EtabliKitItem[]>([]);
+  const [itemStates, setItemStates] = useState<Record<number, { is_present: boolean; condition: EtabliKitItem['condition'] }>>({});
+  const [auditStatus, setAuditStatus] = useState<'conforme' | 'anomalie' | 'incomplet'>('conforme');
+  const [auditNotes, setAuditNotes] = useState('');
+
+  useEffect(() => {
+    if (!open || !kit) return;
+    setLoadingItems(true);
+    api<{ kit: EtabliKit; items: EtabliKitItem[] }>(`/api/kits/${kit.id}`)
+      .then((res) => {
+        setItems(res.items);
+        const map: Record<number, { is_present: boolean; condition: EtabliKitItem['condition'] }> = {};
+        res.items.forEach((it) => {
+          map[it.id] = { is_present: it.is_present, condition: it.condition };
+        });
+        setItemStates(map);
+        setAuditStatus('conforme');
+        setAuditNotes('');
+      })
+      .catch((err) => {
+        toast(err instanceof Error ? err.message : 'Erreur chargement établi', 'error');
+      })
+      .finally(() => setLoadingItems(false));
+  }, [open, kit]);
+
+  const togglePresent = (id: number) => {
+    setItemStates((prev) => {
+      const cur = prev[id];
+      if (!cur) return prev;
+      const nextPresent = !cur.is_present;
+      const nextCondition = nextPresent ? cur.condition : 'manquant';
+      const updated = { ...prev, [id]: { is_present: nextPresent, condition: nextCondition } };
+
+      const hasMissing = Object.values(updated).some((v) => !v.is_present);
+      const hasDamage = Object.values(updated).some((v) => v.is_present && v.condition !== 'bon');
+      if (hasMissing) setAuditStatus('incomplet');
+      else if (hasDamage) setAuditStatus('anomalie');
+      else setAuditStatus('conforme');
+
+      return updated;
+    });
+  };
+
+  const setCondition = (id: number, cond: EtabliKitItem['condition']) => {
+    setItemStates((prev) => {
+      const cur = prev[id];
+      if (!cur) return prev;
+      const updated = { ...prev, [id]: { ...cur, condition: cond } };
+
+      const hasMissing = Object.values(updated).some((v) => !v.is_present);
+      const hasDamage = Object.values(updated).some((v) => v.is_present && v.condition !== 'bon');
+      if (hasMissing) setAuditStatus('incomplet');
+      else if (hasDamage) setAuditStatus('anomalie');
+      else setAuditStatus('conforme');
+
+      return updated;
+    });
+  };
+
+  const handleSaveAudit = async () => {
+    if (!kit) return;
+    setSubmitting(true);
+    try {
+      const itemsList = Object.entries(itemStates).map(([idStr, state]) => ({
+        id: Number(idStr),
+        is_present: state.is_present,
+        condition: state.condition,
+      }));
+
+      await api(`/api/kits/${kit.id}/audit`, {
+        method: 'POST',
+        body: JSON.stringify({
+          status: auditStatus,
+          anomalies_note: auditNotes.trim() || undefined,
+          items_status: itemsList,
+        }),
+      });
+
+      toast(`Contrôle inopiné enregistré pour l'Établi N°${kit.etabli_number} (${kit.employee_name})`, 'success');
+      onSuccess();
+      onClose();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Erreur enregistrement audit', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!kit) return null;
+
+  return (
+    <Modal
+      open={open}
+      title={`🔍 Contrôle Inopiné Flash — Établi N°${kit.etabli_number}`}
+      onClose={onClose}
+      footer={
+        <div className="flex w-full items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={submitting}>
+            Annuler
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            loading={submitting}
+            onClick={() => void handleSaveAudit()}
+            className="bg-green hover:bg-green-2 text-white font-bold"
+          >
+            Valider le Contrôle &amp; Enregistrer
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4 text-xs max-h-[70vh] overflow-y-auto scroll-thin pr-1">
+        {/* Worker Header Card */}
+        <div className="flex items-center justify-between rounded-xl border border-line bg-surface-2/40 p-3">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-paper font-bold text-xs shrink-0 overflow-hidden border border-line">
+              {kit.employee_photo ? (
+                <img src={kit.employee_photo} alt={kit.employee_name} className="h-full w-full object-cover" />
+              ) : (
+                initials(kit.employee_name)
+              )}
+            </div>
+            <div>
+              <p className="font-bold text-ink text-sm">{kit.employee_name}</p>
+              <p className="text-ink-soft text-[11px]">
+                {kit.employee_job} · Établi {kit.code} ({kit.source_magasin_name})
+              </p>
+            </div>
+          </div>
+          <span className="font-mono text-xs font-bold bg-surface px-2.5 py-1 rounded-lg border border-line text-ink">
+            Établi N° {kit.etabli_number}
+          </span>
+        </div>
+
+        {/* Verdict global */}
+        <div className="rounded-xl border border-line bg-surface p-3 space-y-2">
+          <span className="text-[11px] font-bold text-ink-soft uppercase tracking-wider block">
+            Verdict Global de l'Audit :
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setAuditStatus('conforme')}
+              className={cx(
+                'rounded-lg p-2 text-center border font-bold text-xs transition-all cursor-pointer',
+                auditStatus === 'conforme'
+                  ? 'border-emerald-500 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                  : 'border-line text-ink-soft hover:bg-surface-2'
+              )}
+            >
+              ✓ Conforme (100%)
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuditStatus('anomalie')}
+              className={cx(
+                'rounded-lg p-2 text-center border font-bold text-xs transition-all cursor-pointer',
+                auditStatus === 'anomalie'
+                  ? 'border-amber bg-amber/15 text-amber shadow-xs'
+                  : 'border-line text-ink-soft hover:bg-surface-2'
+              )}
+            >
+              ⚠️ Anomalie / Affûtage
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuditStatus('incomplet')}
+              className={cx(
+                'rounded-lg p-2 text-center border font-bold text-xs transition-all cursor-pointer',
+                auditStatus === 'incomplet'
+                  ? 'border-red bg-red/15 text-red shadow-xs'
+                  : 'border-line text-ink-soft hover:bg-surface-2'
+              )}
+            >
+              ✕ Outil Manquant
+            </button>
+          </div>
+        </div>
+
+        {/* Note / Observation */}
+        <div>
+          <label className="block text-[11px] font-bold text-ink-soft mb-1">
+            Observations / Remarques de l'auditeur (optionnel) :
+          </label>
+          <input
+            type="text"
+            value={auditNotes}
+            onChange={(e) => setAuditNotes(e.target.value)}
+            placeholder="Ex : Ciseau 16mm légèrement ébréché remis pour affûtage au Magasin Léo..."
+            className="w-full h-8 rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:outline-none focus:border-amber"
+          />
+        </div>
+
+        {/* Checklist */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-[11px] font-bold text-ink-soft uppercase tracking-wider border-b border-line pb-1">
+            <span>Inventaire des {items.length} outils de l'établi :</span>
+            <span>Présence &amp; État</span>
+          </div>
+
+          {loadingItems ? (
+            <div className="py-8 text-center text-xs text-ink-faint">
+              <Spinner className="inline-block mr-2" /> Chargement de la boîte à outils…
+            </div>
+          ) : (
+            <div className="divide-y divide-line rounded-xl border border-line bg-surface overflow-hidden">
+              {items.map((it) => {
+                const state = itemStates[it.id] || { is_present: it.is_present, condition: it.condition };
+                return (
+                  <div
+                    key={it.id}
+                    className={cx(
+                      'p-2.5 flex items-center justify-between gap-2 transition-colors',
+                      !state.is_present
+                        ? 'bg-red-500/5'
+                        : state.condition !== 'bon'
+                        ? 'bg-amber-500/5'
+                        : 'hover:bg-surface-2/40'
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => togglePresent(it.id)}
+                        className={cx(
+                          'h-5 w-5 rounded border flex items-center justify-center shrink-0 transition-colors cursor-pointer',
+                          state.is_present
+                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : 'bg-red-500 border-red-500 text-white'
+                        )}
+                        title={state.is_present ? 'Outil présent (cliquer pour marquer absent)' : 'Outil absent (cliquer pour marquer présent)'}
+                      >
+                        {state.is_present ? <Check size={12} /> : <X size={12} />}
+                      </button>
+
+                      <div className="min-w-0">
+                        <p className={cx('font-semibold text-xs truncate', !state.is_present && 'line-through text-ink-faint')}>
+                          {it.item_num}. {it.name}
+                        </p>
+                        <p className="font-mono text-[10px] text-ink-faint truncate">
+                          {it.tool_code}
+                        </p>
+                      </div>
+                    </div>
+
+                    {state.is_present && (
+                      <select
+                        value={state.condition}
+                        onChange={(e) => setCondition(it.id, e.target.value as any)}
+                        className={cx(
+                          'rounded-md border px-2 py-1 text-[11px] font-semibold focus:outline-none cursor-pointer',
+                          state.condition === 'bon'
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : state.condition === 'a_affuter'
+                            ? 'border-amber/40 bg-amber/15 text-amber'
+                            : 'border-red/40 bg-red/15 text-red'
+                        )}
+                      >
+                        <option value="bon">Bon état</option>
+                        <option value="a_affuter">À affûter</option>
+                        <option value="a_reparer">À réparer</option>
+                        <option value="reforme">Hors d'usage</option>
+                      </select>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function KitInspectionModal({
+  kit,
+  open,
+  onClose,
+}: {
+  kit: EtabliKitSummaryItem | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const toast = useToast();
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<EtabliKitItem[]>([]);
+
+  useEffect(() => {
+    if (!open || !kit) return;
+    setLoading(true);
+    api<{ kit: EtabliKit; items: EtabliKitItem[] }>(`/api/kits/${kit.id}`)
+      .then((res) => setItems(res.items))
+      .catch((err) => toast(err instanceof Error ? err.message : 'Erreur', 'error'))
+      .finally(() => setLoading(false));
+  }, [open, kit]);
+
+  if (!kit) return null;
+
+  return (
+    <Modal
+      open={open}
+      title={`Dotation Officielle — Établi N°${kit.etabli_number}`}
+      onClose={onClose}
+      footer={
+        <div className="flex w-full justify-end">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Fermer
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-3.5 text-xs max-h-[70vh] overflow-y-auto scroll-thin">
+        <div className="rounded-xl border border-line bg-surface-2/40 p-3 flex items-center justify-between">
+          <div>
+            <p className="font-bold text-ink text-sm">{kit.employee_name}</p>
+            <p className="text-ink-soft text-xs">{kit.employee_job} · Code {kit.code}</p>
+          </div>
+          <span className="font-mono text-xs font-bold text-amber bg-surface px-2.5 py-1 rounded-lg border border-line">
+            {kit.source_magasin_name}
+          </span>
+        </div>
+
+        <div className="border border-line rounded-xl overflow-hidden divide-y divide-line bg-surface">
+          {loading ? (
+            <div className="py-8 text-center text-xs text-ink-faint">
+              <Spinner className="inline-block mr-2" /> Chargement de la dotation…
+            </div>
+          ) : (
+            items.map((it) => (
+              <div key={it.id} className="p-2.5 flex items-center justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-xs text-ink">
+                    {it.item_num}. {it.name}
+                  </p>
+                  <p className="font-mono text-[10px] text-ink-faint">{it.tool_code}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cx(
+                      'rounded-full px-2 py-0.5 text-[10px] font-semibold border',
+                      it.condition === 'bon'
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : it.condition === 'a_affuter'
+                        ? 'border-amber/40 bg-amber/15 text-amber'
+                        : 'border-red/40 bg-red/15 text-red'
+                    )}
+                  >
+                    {it.condition === 'bon' ? 'Bon état' : it.condition === 'a_affuter' ? 'À affûter' : it.condition}
+                  </span>
+                  <span
+                    className={cx(
+                      'rounded-full px-2 py-0.5 text-[10px] font-semibold border',
+                      it.is_present
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        : 'border-red/40 bg-red/15 text-red'
+                    )}
+                  >
+                    {it.is_present ? 'Présent' : 'Manquant'}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function Dashboard() {
+  const toast = useToast();
   const [data, setData] = useState<DashboardType | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -439,6 +1317,27 @@ export function Dashboard() {
     { id: number; tool_id: string; tool_name: string; employee_name: string; out_at: string }[]
   >([]);
   const [loansLoading, setLoansLoading] = useState(false);
+
+  // Établis & Contrôles Modals State
+  const [auditKit, setAuditKit] = useState<EtabliKitSummaryItem | null>(null);
+  const [inspectKit, setInspectKit] = useState<EtabliKitSummaryItem | null>(null);
+  const [reviewingLeaveId, setReviewingLeaveId] = useState<number | null>(null);
+
+  const handleReviewLeave = async (leaveId: number, status: 'approved' | 'rejected') => {
+    setReviewingLeaveId(leaveId);
+    try {
+      await api(`/api/leaves/${leaveId}/review`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+      toast(status === 'approved' ? 'Permission accordée avec succès.' : 'Demande refusée.', 'success');
+      setReload((v) => v + 1);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Action impossible.', 'error');
+    } finally {
+      setReviewingLeaveId(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -558,6 +1457,24 @@ export function Dashboard() {
         totalTeam={totalTeam}
         onOpenPointage={() => setDrawer({ kind: 'attendance' })}
       />
+
+      {/* 1. Demandes de Permissions Exceptionnelles en Attente (Visa Direction) */}
+      {data.pendingLeaves && data.pendingLeaves.length > 0 && (
+        <PendingLeavesBanner
+          leaves={data.pendingLeaves}
+          onReview={handleReviewLeave}
+          reviewingId={reviewingLeaveId}
+        />
+      )}
+
+      {/* 2. Tour de Contrôle 360° des Établis & Dotations d'Atelier */}
+      {data.etablis && (
+        <EtablisTourDeControle
+          etablis={data.etablis}
+          onOpenAudit={(kit) => setAuditKit(kit)}
+          onOpenDetails={(kit) => setInspectKit(kit)}
+        />
+      )}
 
       {/* KPIs Cards Grid - Horizontal scroll on mobile & tablet, grid on xl */}
       <section className="relative">
@@ -815,6 +1732,21 @@ export function Dashboard() {
           loansLoading={loansLoading}
         />
       </Drawer>
+
+      {/* Modal Contrôle Inopiné Flash */}
+      <FlashAuditModal
+        kit={auditKit}
+        open={Boolean(auditKit)}
+        onClose={() => setAuditKit(null)}
+        onSuccess={() => setReload((v) => v + 1)}
+      />
+
+      {/* Modal Inspection Dotation Établi */}
+      <KitInspectionModal
+        kit={inspectKit}
+        open={Boolean(inspectKit)}
+        onClose={() => setInspectKit(null)}
+      />
     </div>
   );
 }
