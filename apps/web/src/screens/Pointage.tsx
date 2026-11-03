@@ -852,7 +852,7 @@ export function Pointage({
 
           {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
           <div className={cx('overflow-hidden rounded-xl border border-line bg-surface shadow-card', viewMode === 'cards' && 'hidden sm:block')}>
-            <div className="overflow-x-auto scroll-thin touch-pan-x overscroll-x-contain">
+            <div className="overflow-x-auto scroll-thin touch-pan-y touch-pan-x overscroll-x-contain">
               <table className="w-full text-left sheet-grid min-w-[760px] table-rhythm">
                 <thead>
                   <tr>

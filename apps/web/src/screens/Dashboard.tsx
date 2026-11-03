@@ -197,8 +197,8 @@ function ToolsDonut({
     value: das01[status],
   }));
   return (
-    <div className="flex flex-col items-center gap-5 sm:flex-row">
-      <div className="relative h-[170px] w-[170px] shrink-0">
+    <div className="flex flex-col items-center gap-5 sm:flex-row touch-pan-y">
+      <div className="relative h-[170px] w-[170px] shrink-0 touch-pan-y">
         <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <PieChart>
             <Pie
@@ -305,10 +305,12 @@ function WhosInWidget({
   details,
   className,
   isCarousel = false,
+  onOpenPointage,
 }: {
   details: NonNullable<DashboardType['das04']>['detail'];
   className?: string;
   isCarousel?: boolean;
+  onOpenPointage?: () => void;
 }) {
   const [filter, setFilter] = useState<'all' | 'present' | 'late' | 'leaves' | 'absent'>('all');
   const [search, setSearch] = useState('');
@@ -437,9 +439,9 @@ function WhosInWidget({
         </button>
       </div>
 
-      {/* Workers list */}
-      <div className={cx(isCarousel ? "max-h-[260px]" : "max-h-[380px]", "overflow-y-auto scroll-thin divide-y divide-line")}>
-        {filtered.map((person) => {
+      {/* Workers list : Pas de piège de défilement (nested scroll) dans le carrousel mobile */}
+      <div className={cx(isCarousel ? "divide-y divide-line" : "max-h-[380px] overflow-y-auto scroll-thin divide-y divide-line")}>
+        {(isCarousel ? filtered.slice(0, 4) : filtered).map((person) => {
           const isPresent = person.status === 'present';
           const isLate = person.status === 'late';
           const isConge = person.status === 'conge';
@@ -539,6 +541,23 @@ function WhosInWidget({
           </div>
         ) : null}
       </div>
+
+      {isCarousel && (
+        <div className="p-2.5 border-t border-line/60 bg-surface-2/30 flex items-center justify-between text-xs">
+          <span className="text-[11px] text-ink-faint">
+            {stats.presentCount} présents sur {stats.total}
+          </span>
+          {onOpenPointage && (
+            <button
+              type="button"
+              onClick={onOpenPointage}
+              className="text-xs font-semibold text-amber hover:underline inline-flex items-center gap-1 cursor-pointer"
+            >
+              Voir toute l'équipe ({stats.total}) &rarr;
+            </button>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
@@ -938,7 +957,7 @@ function EtablisTourDeControle({
           <div
             ref={carouselTrackRef}
             onScroll={checkScrollState}
-            className="flex gap-3.5 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar -mx-3 px-3 sm:-mx-6 sm:px-6 pb-3 pt-1 touch-pan-x"
+            className="flex gap-3.5 overflow-x-auto snap-x snap-proximity scroll-smooth no-scrollbar -mx-3 px-3 sm:-mx-6 sm:px-6 pb-3 pt-1 overscroll-x-contain touch-pan-y touch-pan-x"
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
             {filteredKits.map((kit) => {
@@ -1800,7 +1819,7 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="h-44 w-full">
+        <div className="h-44 w-full touch-pan-y">
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={dailyMoves} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
               <XAxis
@@ -1853,6 +1872,7 @@ export function Dashboard() {
             details={das04.detail}
             isCarousel
             className="h-full flex flex-col justify-between"
+            onOpenPointage={() => setDrawer({ kind: 'attendance' })}
           />
         ),
       });
@@ -1931,7 +1951,7 @@ export function Dashboard() {
 
       {/* KPIs Cards Grid - Horizontal scroll on mobile & tablet, grid on xl */}
       <section className="relative">
-        <div className="flex xl:grid xl:grid-cols-4 gap-3 overflow-x-auto pb-2 -mx-3 px-3 sm:-mx-6 sm:px-6 xl:mx-0 xl:px-0 xl:pb-0 scroll-smooth snap-x snap-mandatory scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] touch-pan-x">
+        <div className="flex xl:grid xl:grid-cols-4 gap-3 overflow-x-auto pb-2 -mx-3 px-3 sm:-mx-6 sm:px-6 xl:mx-0 xl:px-0 xl:pb-0 scroll-smooth snap-x snap-proximity overscroll-x-contain scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] touch-pan-y touch-pan-x">
           <KpiCard
             className="min-w-[260px] sm:min-w-[280px] w-[75vw] sm:w-[320px] shrink-0 xl:w-auto xl:min-w-0 xl:shrink snap-start"
             label="Présences du jour"
@@ -1985,7 +2005,7 @@ export function Dashboard() {
       {/* 1. Mode Mobile & Smartphone (< 1024px) : Carrousel Horizontal Apple HIG */}
       <section className="block lg:hidden flex flex-col gap-3">
         {/* Navigation Tabs Segmentée Apple HIG avec feedback haptique visuel */}
-        <div className="flex items-center gap-1.5 p-1 bg-surface-2/80 backdrop-blur-md border border-line rounded-xl overflow-x-auto no-scrollbar shadow-xs">
+        <div className="flex items-center gap-1.5 p-1 bg-surface-2/80 backdrop-blur-md border border-line rounded-xl overflow-x-auto no-scrollbar shadow-xs overscroll-x-contain touch-pan-y touch-pan-x">
           {carouselSlides.map((slide, idx) => {
             const isActive = activeSlide === idx;
             return (
@@ -2018,14 +2038,14 @@ export function Dashboard() {
         <div
           ref={carouselRef}
           onScroll={handleCarouselScroll}
-          className="flex gap-3.5 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar -mx-4 px-4 pb-2 pt-1 touch-pan-x"
+          className="flex gap-3.5 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar -mx-4 px-4 pb-2 pt-1 overscroll-x-contain touch-pan-y touch-pan-x"
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
           {carouselSlides.map((slide, idx) => (
             <div
               key={slide.id}
               ref={(el) => { slideRefs.current[idx] = el; }}
-              className="w-[88vw] max-w-[420px] shrink-0 snap-center flex flex-col transition-opacity duration-200"
+              className="w-[88vw] max-w-[420px] shrink-0 snap-center flex flex-col transition-opacity duration-200 touch-pan-y"
             >
               {slide.content}
             </div>
