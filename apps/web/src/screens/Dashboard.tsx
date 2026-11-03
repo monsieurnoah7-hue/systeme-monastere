@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Dashboard as DashboardType, type StockRef, type Tool, type EtabliKit, type EtabliKitItem } from '../lib/api';
 import {
   MOVE_LABEL,
@@ -35,6 +35,7 @@ import {
   RotateCcw,
   Users,
   Wrench,
+  ChevronLeft,
   ChevronRight,
   ShieldCheck,
   Check,
@@ -302,8 +303,12 @@ function KpiCard({
  */
 function WhosInWidget({
   details,
+  className,
+  isCarousel = false,
 }: {
   details: NonNullable<DashboardType['das04']>['detail'];
+  className?: string;
+  isCarousel?: boolean;
 }) {
   const [filter, setFilter] = useState<'all' | 'present' | 'late' | 'leaves' | 'absent'>('all');
   const [search, setSearch] = useState('');
@@ -346,7 +351,7 @@ function WhosInWidget({
   }, [details, filter, search]);
 
   return (
-    <Card className="shadow-card overflow-hidden">
+    <Card className={cx("shadow-card overflow-hidden", className)}>
       {/* Header */}
       <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -433,7 +438,7 @@ function WhosInWidget({
       </div>
 
       {/* Workers list */}
-      <div className="max-h-[380px] overflow-y-auto scroll-thin divide-y divide-line">
+      <div className={cx(isCarousel ? "max-h-[260px]" : "max-h-[380px]", "overflow-y-auto scroll-thin divide-y divide-line")}>
         {filtered.map((person) => {
           const isPresent = person.status === 'present';
           const isLate = person.status === 'late';
@@ -653,6 +658,27 @@ function EtablisTourDeControle({
 }) {
   const [filter, setFilter] = useState<'all' | 'overdue' | 'anomalies' | 'leo' | 'vern'>('all');
   const [search, setSearch] = useState('');
+  const carouselTrackRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkScrollState = useCallback(() => {
+    const el = carouselTrackRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 10);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  }, []);
+
+  const scrollByDirection = (direction: 'left' | 'right') => {
+    const el = carouselTrackRef.current;
+    if (!el) return;
+    const scrollAmount = el.clientWidth * 0.85;
+    el.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
+    setTimeout(checkScrollState, 350);
+  };
 
   const filteredKits = useMemo(() => {
     return etablis.kits.filter((kit) => {
@@ -862,39 +888,73 @@ function EtablisTourDeControle({
           </button>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative min-w-[240px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher artisan, n° établi..."
-            className="w-full h-9 rounded-xl border border-line bg-surface pl-9 pr-3 text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-amber transition-colors"
-          />
+        {/* Right side: Search Bar & Carousel Controls */}
+        <div className="flex items-center gap-2">
+          {/* Search Bar */}
+          <div className="relative min-w-[200px] sm:min-w-[240px] flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher artisan, n° établi..."
+              className="w-full h-9 rounded-xl border border-line bg-surface pl-9 pr-3 text-xs text-ink placeholder:text-ink-faint focus:outline-none focus:border-amber transition-colors"
+            />
+          </div>
+
+          {/* Carousel Navigation Arrows */}
+          <div className="flex items-center gap-1 shrink-0 bg-paper-2 p-0.5 rounded-xl border border-line">
+            <button
+              type="button"
+              onClick={() => scrollByDirection('left')}
+              disabled={!canScrollLeft}
+              className="p-1.5 rounded-lg text-ink-soft hover:text-ink hover:bg-surface disabled:opacity-25 disabled:pointer-events-none transition-all cursor-pointer"
+              title="Établis précédents"
+              aria-label="Établis précédents"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollByDirection('right')}
+              disabled={!canScrollRight}
+              className="p-1.5 rounded-lg text-ink-soft hover:text-ink hover:bg-surface disabled:opacity-25 disabled:pointer-events-none transition-all cursor-pointer"
+              title="Établis suivants"
+              aria-label="Établis suivants"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Grid of Workbenches Cards */}
+      {/* Carrousel Horizontal des Établis (3 cartes par vue sur desktop/tablette, défilement tactile fluide sur smartphone) */}
       {filteredKits.length === 0 ? (
         <div className="rounded-2xl border border-line bg-surface p-12 text-center text-xs text-ink-soft">
           Aucun établi ne correspond aux critères sélectionnés.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
-          {filteredKits.map((kit) => {
-            const hasAnomalies = kit.items_missing > 0 || kit.items_to_sharpen > 0;
-            const isOverdue = !kit.last_audited_at || Math.floor((Date.now() - new Date(kit.last_audited_at).getTime()) / 86400000) >= 15;
-            const completionPct = kit.items_total > 0 ? Math.round((kit.items_present / kit.items_total) * 100) : 100;
+        <div className="relative">
+          <div
+            ref={carouselTrackRef}
+            onScroll={checkScrollState}
+            className="flex gap-3.5 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar -mx-3 px-3 sm:-mx-6 sm:px-6 pb-3 pt-1 touch-pan-x"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            {filteredKits.map((kit) => {
+              const hasAnomalies = kit.items_missing > 0 || kit.items_to_sharpen > 0;
+              const isOverdue = !kit.last_audited_at || Math.floor((Date.now() - new Date(kit.last_audited_at).getTime()) / 86400000) >= 15;
+              const completionPct = kit.items_total > 0 ? Math.round((kit.items_present / kit.items_total) * 100) : 100;
 
-            return (
-              <div
-                key={kit.id}
-                className={cx(
-                  'group flex flex-col justify-between rounded-2xl border bg-surface p-4 shadow-card hover:shadow-card-hover transition-all duration-200',
-                  hasAnomalies ? 'border-amber/40 hover:border-amber' : 'border-line hover:border-line-strong'
-                )}
-              >
+              return (
+                <div
+                  key={kit.id}
+                  className={cx(
+                    'group flex flex-col justify-between rounded-2xl border bg-surface p-4 shadow-card hover:shadow-card-hover transition-all duration-200 shrink-0 snap-start',
+                    'w-[85vw] max-w-[340px] sm:w-[320px] lg:w-[calc((100%-2*0.875rem)/3)]',
+                    hasAnomalies ? 'border-amber/40 hover:border-amber' : 'border-line hover:border-line-strong'
+                  )}
+                >
                 <div>
                   {/* Top Header: Badge Établi & Code Gravure */}
                   <div className="flex items-center justify-between gap-2 border-b border-line/60 pb-2.5 mb-3">
@@ -1005,7 +1065,8 @@ function EtablisTourDeControle({
             );
           })}
         </div>
-      )}
+      </div>
+    )}
     </section>
   );
 }
@@ -1518,6 +1579,315 @@ export function Dashboard() {
     { name: 'Retours', value: das03.returns, color: '#3b82f6' },
   ];
 
+  // =========================================================================
+  // Ergonomie Mobile Apple HIG : Navigation & Carrousel Horizontal Tactile
+  // =========================================================================
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  const alertTotal = das05.overdueLoans + das05.lowStock + das05.missingTools + das05.missingOut;
+
+  const attendanceStats = useMemo(() => {
+    if (!das04?.detail) return null;
+    let present = 0;
+    for (const d of das04.detail) {
+      if (d.status === 'present' || d.status === 'late') present++;
+    }
+    return { present, total: das04.detail.length };
+  }, [das04?.detail]);
+
+  const scrollToSlide = (index: number) => {
+    const el = slideRefs.current[index];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      setActiveSlide(index);
+    }
+  };
+
+  const handleCarouselScroll = () => {
+    const container = carouselRef.current;
+    if (!container) return;
+    const containerCenter = container.scrollLeft + container.clientWidth / 2;
+    let closestIndex = 0;
+    let minDistance = Infinity;
+
+    slideRefs.current.forEach((slide, idx) => {
+      if (!slide) return;
+      const slideCenter = slide.offsetLeft + slide.offsetWidth / 2;
+      const distance = Math.abs(containerCenter - slideCenter);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = idx;
+      }
+    });
+
+    if (closestIndex !== activeSlide) {
+      setActiveSlide(closestIndex);
+    }
+  };
+
+  const renderAlertsCard = (isCarousel = false) => (
+    <Card className={cx("shadow-card p-5", isCarousel ? "h-full flex flex-col justify-between" : "h-fit")}>
+      <div>
+        <div className="mb-3.5 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-ink flex items-center gap-2">
+            <AlertTriangle
+              size={16}
+              className={cx(
+                alertTotal > 0 ? 'text-amber animate-pulse' : 'text-emerald-500',
+              )}
+            />
+            <span>Alertes opérationnelles</span>
+          </h2>
+          <span className="text-xs text-ink-faint flex items-center gap-1.5 font-medium">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            Temps réel
+          </span>
+        </div>
+
+        <ul className="divide-y divide-line rounded-xl border border-line overflow-hidden shadow-xs">
+          {[
+            {
+              label: 'Prêts d’outils en retard de retour',
+              count: das05.overdueLoans,
+              open: () => setDrawer({ kind: 'overdue' }),
+              desc: 'Outils non restitués dans les délais',
+            },
+            {
+              label: 'Matières & consommables sous le seuil',
+              count: das05.lowStock,
+              open: () => setDrawer({ kind: 'stock' }),
+              desc: 'Quincaillerie & consommables à recommander',
+            },
+            {
+              label: 'Outils déclarés manquants',
+              count: das05.missingTools,
+              open: () => setDrawer({ kind: 'missingTools' }),
+              desc: 'Matériels introuvables ou signalés perdus',
+            },
+            {
+              label: 'Départs non pointés au kiosque',
+              count: das05.missingOut,
+              open: () => setDrawer({ kind: 'missingOut' }),
+              desc: 'Pointages d’entrée non clôturés en sortie',
+            },
+          ].map((alert) => (
+            <li key={alert.label}>
+              <button
+                onClick={alert.open}
+                className="flex w-full items-center justify-between gap-3 bg-surface px-3.5 py-3 text-left transition-colors hover:bg-paper-2 group"
+              >
+                <span className="flex items-center gap-2.5 text-xs font-medium text-ink min-w-0">
+                  <span
+                    className={cx(
+                      'shrink-0 p-1.5 rounded-lg transition-colors',
+                      alert.count > 0 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-paper text-ink-faint',
+                    )}
+                  >
+                    <AlertTriangle size={14} />
+                  </span>
+                  <span className="truncate">{alert.label}</span>
+                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span
+                    className={cx(
+                      'font-mono text-xs font-bold tabular-nums rounded-md px-2 py-0.5 border',
+                      alert.count > 0
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                        : 'text-ink-faint bg-paper border-line',
+                    )}
+                  >
+                    {alert.count}
+                  </span>
+                  <ChevronRight size={13} className="text-ink-faint group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {isCarousel && (
+        <div className="pt-3 mt-4 border-t border-line/60 flex items-center justify-between text-[11px] text-ink-faint">
+          <span>Surveillance continue atelier</span>
+          <span className="font-mono font-semibold text-ink-soft">
+            {alertTotal === 0 ? '✓ Aucune anomalie' : `⚠️ ${alertTotal} alerte(s)`}
+          </span>
+        </div>
+      )}
+    </Card>
+  );
+
+  const renderToolsCard = (isCarousel = false) => (
+    <Card className={cx("shadow-card p-5", isCarousel ? "h-full flex flex-col justify-between" : "h-fit")}>
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-ink flex items-center gap-2">
+            <Wrench size={16} className="text-amber" />
+            <span>Répartition de l’outillage</span>
+          </h2>
+          <p className="text-[11px] text-ink-faint">Filtrer par statut</p>
+        </div>
+        <ToolsDonut das01={das01} onPick={(status) => openTools(status, `Outils — ${STATUS_LABEL[status]}`)} />
+      </div>
+
+      {isCarousel && (
+        <div className="pt-3 mt-4 border-t border-line/60 flex items-center justify-between text-[11px] text-ink-faint">
+          <span>Inventaire du parc</span>
+          <span className="font-mono font-semibold text-ink-soft">{das01.total} machines & outils</span>
+        </div>
+      )}
+    </Card>
+  );
+
+  const renderActivityCard = (isCarousel = false) => (
+    <Card className={cx("shadow-card p-5", isCarousel ? "h-full flex flex-col justify-between" : "")}>
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-ink flex items-center gap-2">
+              <ArrowUpRight size={16} className="text-amber" />
+              <span>Activité du jour</span>
+            </h2>
+            <p className="text-xs text-ink-faint">Flux magasin &amp; atelier en temps réel</p>
+          </div>
+          <button
+            onClick={() => setDrawer({ kind: 'movements' })}
+            className="text-xs text-amber hover:underline font-semibold inline-flex items-center gap-1 transition-colors"
+          >
+            Journal du jour &rarr;
+          </button>
+        </div>
+
+        {/* Flux KPI Pills */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div
+            onClick={() => setDrawer({ kind: 'movements' })}
+            className="flex flex-col items-center justify-center p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/15 transition-all shadow-xs"
+            title="Entrées au stock"
+          >
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              <ArrowDownRight size={14} />
+              <span>Entrées</span>
+            </div>
+            <span className="font-mono text-xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">{das03.entries}</span>
+          </div>
+
+          <div
+            onClick={() => setDrawer({ kind: 'movements' })}
+            className="flex flex-col items-center justify-center p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-all shadow-xs"
+            title="Sorties (consommables & prêts)"
+          >
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+              <ArrowUpRight size={14} />
+              <span>Sorties</span>
+            </div>
+            <span className="font-mono text-xl font-bold text-amber-700 dark:text-amber-300 mt-1">{das03.exits}</span>
+          </div>
+
+          <div
+            onClick={() => setDrawer({ kind: 'movements' })}
+            className="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 cursor-pointer hover:bg-blue-500/15 transition-all shadow-xs"
+            title="Retours d'outillage"
+          >
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+              <RotateCcw size={14} />
+              <span>Retours</span>
+            </div>
+            <span className="font-mono text-xl font-bold text-blue-700 dark:text-blue-300 mt-1">{das03.returns}</span>
+          </div>
+        </div>
+
+        <div className="h-44 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dailyMoves} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+              <XAxis
+                dataKey="name"
+                axisLine={false}
+                tickLine={false}
+                interval={0}
+                tick={{ fontSize: 11, fill: '#6b7280' }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                allowDecimals={false}
+                tick={{ fontSize: 11, fill: '#6b7280' }}
+              />
+              <Tooltip
+                cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                content={<ChartTooltip />}
+              />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                {dailyMoves.map((bar) => (
+                  <Cell
+                    key={bar.name}
+                    fill={bar.color}
+                    onClick={() => setDrawer({ kind: 'movements' })}
+                    className="cursor-pointer"
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </Card>
+  );
+
+  const carouselSlides = useMemo(() => {
+    const slides = [];
+
+    if (das04?.detail) {
+      slides.push({
+        id: 'attendance',
+        label: 'Présences en atelier',
+        shortLabel: 'Présences',
+        icon: <Users size={14} />,
+        badge: attendanceStats ? `${attendanceStats.present}/${attendanceStats.total}` : undefined,
+        badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20',
+        content: (
+          <WhosInWidget
+            details={das04.detail}
+            isCarousel
+            className="h-full flex flex-col justify-between"
+          />
+        ),
+      });
+    }
+
+    slides.push({
+      id: 'alerts',
+      label: 'Alertes opérationnelles',
+      shortLabel: 'Alertes',
+      icon: <AlertTriangle size={14} />,
+      badge: alertTotal > 0 ? alertTotal : undefined,
+      badgeClass: alertTotal > 0 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30' : 'bg-paper text-ink-faint',
+      content: renderAlertsCard(true),
+    });
+
+    slides.push({
+      id: 'tools',
+      label: 'Répartition de l’outillage',
+      shortLabel: 'Outillage',
+      icon: <Wrench size={14} />,
+      badge: das01.total,
+      badgeClass: 'bg-paper text-ink-faint border border-line',
+      content: renderToolsCard(true),
+    });
+
+    slides.push({
+      id: 'activity',
+      label: 'Activité du jour',
+      shortLabel: 'Activité',
+      icon: <ArrowUpRight size={14} />,
+      content: renderActivityCard(true),
+    });
+
+    return slides;
+  }, [das04?.detail, attendanceStats, alertTotal, das05, das01, das03, dailyMoves]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -1607,200 +1977,91 @@ export function Dashboard() {
         </div>
       </section>
 
-      {/* Grille Principale Dashboard Bento Grid (12 colonnes, ergonomique et responsive) */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* =========================================================================
+          SECTIONS DE SUPERVISION : Carrousel Mobile Apple HIG vs Bento Grid Desktop
+          ========================================================================= */}
+
+      {/* 1. Mode Mobile & Smartphone (< 1024px) : Carrousel Horizontal Apple HIG */}
+      <section className="block lg:hidden flex flex-col gap-3">
+        {/* Navigation Tabs Segmentée Apple HIG avec feedback haptique visuel */}
+        <div className="flex items-center gap-1.5 p-1 bg-surface-2/80 backdrop-blur-md border border-line rounded-xl overflow-x-auto no-scrollbar shadow-xs">
+          {carouselSlides.map((slide, idx) => {
+            const isActive = activeSlide === idx;
+            return (
+              <button
+                key={slide.id}
+                type="button"
+                onClick={() => scrollToSlide(idx)}
+                className={cx(
+                  "flex-1 min-w-[72px] py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 select-none",
+                  isActive
+                    ? "bg-surface text-ink shadow-xs border border-line-strong/40 scale-[1.01]"
+                    : "text-ink-soft hover:text-ink hover:bg-surface/40"
+                )}
+              >
+                <span className={cx(isActive ? "text-amber" : "text-ink-faint")}>
+                  {slide.icon}
+                </span>
+                <span className="truncate">{slide.shortLabel}</span>
+                {slide.badge !== undefined && (
+                  <span className={cx("px-1.5 py-0.2 text-[10px] rounded-full font-bold", slide.badgeClass)}>
+                    {slide.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Piste de Carrousel Scrollable avec Effet Peek Apple (88vw pour entrevoir la carte suivante) */}
+        <div
+          ref={carouselRef}
+          onScroll={handleCarouselScroll}
+          className="flex gap-3.5 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar -mx-4 px-4 pb-2 pt-1 touch-pan-x"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {carouselSlides.map((slide, idx) => (
+            <div
+              key={slide.id}
+              ref={(el) => { slideRefs.current[idx] = el; }}
+              className="w-[88vw] max-w-[420px] shrink-0 snap-center flex flex-col transition-opacity duration-200"
+            >
+              {slide.content}
+            </div>
+          ))}
+        </div>
+
+        {/* Indicateur de Pagination Apple (Liquid Dots) */}
+        <div className="flex items-center justify-center gap-2 pt-0.5 pb-2">
+          {carouselSlides.map((slide, idx) => (
+            <button
+              key={slide.id}
+              type="button"
+              aria-label={`Aller à ${slide.label}`}
+              onClick={() => scrollToSlide(idx)}
+              className={cx(
+                "h-1.5 rounded-full transition-all duration-300",
+                activeSlide === idx
+                  ? "w-6 bg-amber"
+                  : "w-1.5 bg-line-strong/60 hover:bg-ink-soft"
+              )}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* 2. Mode Desktop (>= 1024px) : Grille Bento 12 colonnes native */}
+      <section className="hidden lg:grid lg:grid-cols-12 gap-6 items-start">
         {/* Colonne Gauche (7 cols) : Présences Collaborateurs & Flux du Jour */}
         <div className="lg:col-span-7 flex flex-col gap-6">
           {das04?.detail ? <WhosInWidget details={das04.detail} /> : null}
-
-          {/* Activité du jour */}
-          <Card className="shadow-card p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-ink flex items-center gap-2">
-                  <ArrowUpRight size={16} className="text-amber" />
-                  <span>Activité du jour</span>
-                </h2>
-                <p className="text-xs text-ink-faint">Flux magasin &amp; atelier en temps réel</p>
-              </div>
-              <button
-                onClick={() => setDrawer({ kind: 'movements' })}
-                className="text-xs text-amber hover:underline font-semibold inline-flex items-center gap-1 transition-colors"
-              >
-                Journal du jour &rarr;
-              </button>
-            </div>
-
-            {/* Flux KPI Pills */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div
-                onClick={() => setDrawer({ kind: 'movements' })}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/15 transition-all shadow-xs"
-                title="Entrées au stock"
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                  <ArrowDownRight size={14} />
-                  <span>Entrées</span>
-                </div>
-                <span className="font-mono text-xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">{das03.entries}</span>
-              </div>
-
-              <div
-                onClick={() => setDrawer({ kind: 'movements' })}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-all shadow-xs"
-                title="Sorties (consommables & prêts)"
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
-                  <ArrowUpRight size={14} />
-                  <span>Sorties</span>
-                </div>
-                <span className="font-mono text-xl font-bold text-amber-700 dark:text-amber-300 mt-1">{das03.exits}</span>
-              </div>
-
-              <div
-                onClick={() => setDrawer({ kind: 'movements' })}
-                className="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 cursor-pointer hover:bg-blue-500/15 transition-all shadow-xs"
-                title="Retours d'outillage"
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
-                  <RotateCcw size={14} />
-                  <span>Retours</span>
-                </div>
-                <span className="font-mono text-xl font-bold text-blue-700 dark:text-blue-300 mt-1">{das03.returns}</span>
-              </div>
-            </div>
-
-            <div className="h-44 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyMoves} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
-                  <XAxis
-                    dataKey="name"
-                    axisLine={false}
-                    tickLine={false}
-                    interval={0}
-                    tick={{ fontSize: 11, fill: '#6b7280' }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    allowDecimals={false}
-                    tick={{ fontSize: 11, fill: '#6b7280' }}
-                  />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(0,0,0,0.04)' }}
-                    content={<ChartTooltip />}
-                  />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                    {dailyMoves.map((bar) => (
-                      <Cell
-                        key={bar.name}
-                        fill={bar.color}
-                        onClick={() => setDrawer({ kind: 'movements' })}
-                        className="cursor-pointer"
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
+          {renderActivityCard(false)}
         </div>
 
         {/* Colonne Droite (5 cols) : Alertes Opérationnelles & Répartition Outillage */}
         <div className="lg:col-span-5 flex flex-col gap-6">
-          {/* Alertes opérationnelles */}
-          <Card className="shadow-card p-5 h-fit">
-            <div className="mb-3.5 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-ink flex items-center gap-2">
-                <AlertTriangle
-                  size={16}
-                  className={cx(
-                    das05.overdueLoans + das05.lowStock + das05.missingTools + das05.missingOut > 0
-                      ? 'text-amber animate-pulse'
-                      : 'text-emerald-500',
-                  )}
-                />
-                <span>Alertes opérationnelles</span>
-              </h2>
-              <span className="text-xs text-ink-faint flex items-center gap-1.5 font-medium">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                Temps réel
-              </span>
-            </div>
-
-            <ul className="divide-y divide-line rounded-xl border border-line overflow-hidden shadow-xs">
-              {[
-                {
-                  label: 'Prêts d’outils en retard de retour',
-                  count: das05.overdueLoans,
-                  open: () => setDrawer({ kind: 'overdue' }),
-                  desc: 'Outils non restitués dans les délais',
-                },
-                {
-                  label: 'Matières & consommables sous le seuil',
-                  count: das05.lowStock,
-                  open: () => setDrawer({ kind: 'stock' }),
-                  desc: 'Quincaillerie & consommables à recommander',
-                },
-                {
-                  label: 'Outils déclarés manquants',
-                  count: das05.missingTools,
-                  open: () => setDrawer({ kind: 'missingTools' }),
-                  desc: 'Matériels introuvables ou signalés perdus',
-                },
-                {
-                  label: 'Départs non pointés au kiosque',
-                  count: das05.missingOut,
-                  open: () => setDrawer({ kind: 'missingOut' }),
-                  desc: 'Pointages d’entrée non clôturés en sortie',
-                },
-              ].map((alert) => (
-                <li key={alert.label}>
-                  <button
-                    onClick={alert.open}
-                    className="flex w-full items-center justify-between gap-3 bg-surface px-3.5 py-3 text-left transition-colors hover:bg-paper-2 group"
-                  >
-                    <span className="flex items-center gap-2.5 text-xs font-medium text-ink min-w-0">
-                      <span
-                        className={cx(
-                          'shrink-0 p-1.5 rounded-lg transition-colors',
-                          alert.count > 0 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-paper text-ink-faint',
-                        )}
-                      >
-                        <AlertTriangle size={14} />
-                      </span>
-                      <span className="truncate">{alert.label}</span>
-                    </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span
-                        className={cx(
-                          'font-mono text-xs font-bold tabular-nums rounded-md px-2 py-0.5 border',
-                          alert.count > 0
-                            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                            : 'text-ink-faint bg-paper border-line',
-                        )}
-                      >
-                        {alert.count}
-                      </span>
-                      <ChevronRight size={13} className="text-ink-faint group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </Card>
-
-          {/* Répartition de l'outillage */}
-          <Card className="shadow-card p-5 h-fit">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-ink flex items-center gap-2">
-                <Wrench size={16} className="text-amber" />
-                <span>Répartition de l’outillage</span>
-              </h2>
-              <p className="text-[11px] text-ink-faint">Filtrer par statut</p>
-            </div>
-            <ToolsDonut das01={das01} onPick={(status) => openTools(status, `Outils — ${STATUS_LABEL[status]}`)} />
-          </Card>
+          {renderAlertsCard(false)}
+          {renderToolsCard(false)}
         </div>
       </section>
 
