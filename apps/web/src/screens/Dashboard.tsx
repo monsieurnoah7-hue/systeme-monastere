@@ -391,12 +391,12 @@ function WhosInWidget({
       </div>
 
       {/* Segmented Filter Pills */}
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-line bg-surface-2/40 px-3 py-2 text-xs scrollbar-none">
+      <div className="flex items-center gap-1.5 overflow-x-auto border-b border-line bg-surface-2/40 px-3 py-2 text-xs no-scrollbar overscroll-x-contain touch-pan-y touch-pan-x" style={{ WebkitOverflowScrolling: 'touch' }}>
         <button
           onClick={() => setFilter('all')}
           className={cx(
-            'shrink-0 rounded-md px-2.5 py-1 font-medium transition-colors',
-            filter === 'all' ? 'bg-surface text-ink font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
+            'shrink-0 rounded-lg px-3 py-1 font-semibold whitespace-nowrap transition-colors cursor-pointer',
+            filter === 'all' ? 'bg-surface text-ink shadow-xs border border-line-strong/30' : 'text-ink-soft hover:text-ink',
           )}
         >
           Tous ({stats.total})
@@ -404,8 +404,8 @@ function WhosInWidget({
         <button
           onClick={() => setFilter('present')}
           className={cx(
-            'shrink-0 rounded-md px-2.5 py-1 font-medium transition-colors',
-            filter === 'present' ? 'bg-surface text-emerald-600 dark:text-emerald-400 font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
+            'shrink-0 rounded-lg px-3 py-1 font-semibold whitespace-nowrap transition-colors cursor-pointer',
+            filter === 'present' ? 'bg-surface text-emerald-600 dark:text-emerald-400 shadow-xs border border-line-strong/30' : 'text-ink-soft hover:text-ink',
           )}
         >
           À l'heure ({stats.presentCount - stats.lateCount})
@@ -413,8 +413,8 @@ function WhosInWidget({
         <button
           onClick={() => setFilter('late')}
           className={cx(
-            'shrink-0 rounded-md px-2.5 py-1 font-medium transition-colors',
-            filter === 'late' ? 'bg-surface text-amber font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
+            'shrink-0 rounded-lg px-3 py-1 font-semibold whitespace-nowrap transition-colors cursor-pointer',
+            filter === 'late' ? 'bg-surface text-amber shadow-xs border border-line-strong/30' : 'text-ink-soft hover:text-ink',
           )}
         >
           Retards ({stats.lateCount})
@@ -422,8 +422,8 @@ function WhosInWidget({
         <button
           onClick={() => setFilter('leaves')}
           className={cx(
-            'shrink-0 rounded-md px-2.5 py-1 font-medium transition-colors',
-            filter === 'leaves' ? 'bg-surface text-blue-600 dark:text-blue-400 font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
+            'shrink-0 rounded-lg px-3 py-1 font-semibold whitespace-nowrap transition-colors cursor-pointer',
+            filter === 'leaves' ? 'bg-surface text-blue-600 dark:text-blue-400 shadow-xs border border-line-strong/30' : 'text-ink-soft hover:text-ink',
           )}
         >
           Congés / Perm. ({stats.leavesCount})
@@ -431,116 +431,234 @@ function WhosInWidget({
         <button
           onClick={() => setFilter('absent')}
           className={cx(
-            'shrink-0 rounded-md px-2.5 py-1 font-medium transition-colors',
-            filter === 'absent' ? 'bg-surface text-ink-faint font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
+            'shrink-0 rounded-lg px-3 py-1 font-semibold whitespace-nowrap transition-colors cursor-pointer',
+            filter === 'absent' ? 'bg-surface text-ink-faint shadow-xs border border-line-strong/30' : 'text-ink-soft hover:text-ink',
           )}
         >
           Non pointés ({stats.absentCount})
         </button>
       </div>
 
-      {/* Workers list : Pas de piège de défilement (nested scroll) dans le carrousel mobile */}
-      <div className={cx(isCarousel ? "divide-y divide-line" : "max-h-[380px] overflow-y-auto scroll-thin divide-y divide-line")}>
-        {(isCarousel ? filtered.slice(0, 4) : filtered).map((person) => {
-          const isPresent = person.status === 'present';
-          const isLate = person.status === 'late';
-          const isConge = person.status === 'conge';
-          const isPermission = person.status === 'permission';
+      {/* Workers list / Carousel */}
+      {isCarousel ? (
+        /* Vue smartphone : Carrousel horizontal de cartes ouvriers avec défilement tactile moderne */
+        <div className="p-3.5 space-y-3">
+          <div className="flex items-center justify-between text-xs text-ink-faint">
+            <span className="font-semibold text-ink">
+              Équipe ({filtered.length})
+            </span>
+            <span className="text-[11px] text-amber font-semibold flex items-center gap-1">
+              Glisser horizontalement &rarr;
+            </span>
+          </div>
 
-          return (
-            <div
-              key={person.id}
-              className="flex items-center justify-between gap-3 p-3 hover:bg-paper-2/50 transition-colors"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="relative shrink-0">
-                  {person.photoPath ? (
-                    <img
-                      src={person.photoPath}
-                      alt={person.fullName}
-                      className="h-10 w-10 rounded-full object-cover border border-line shadow-xs"
-                      onError={(e) => {
-                        // Fallback gracefully to initials if photo fails to load
-                        (e.target as HTMLElement).style.display = 'none';
-                        const parent = (e.target as HTMLElement).parentElement;
-                        if (parent) {
-                          const fallback = document.createElement('div');
-                          fallback.className = 'grid h-10 w-10 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink-soft border border-line';
-                          fallback.innerText = initials(person.fullName);
-                          parent.prepend(fallback);
-                        }
-                      }}
+          <div
+            className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar -mx-3.5 px-3.5 pb-2 pt-0.5 overscroll-x-contain touch-pan-y touch-pan-x"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            {filtered.map((person) => {
+              const isPresent = person.status === 'present';
+              const isLate = person.status === 'late';
+              const isConge = person.status === 'conge';
+              const isPermission = person.status === 'permission';
+
+              return (
+                <div
+                  key={person.id}
+                  className="w-[230px] sm:w-[250px] shrink-0 snap-start rounded-2xl border border-line bg-surface-2/60 hover:bg-surface-2 p-3.5 flex flex-col justify-between gap-3 shadow-xs transition-all select-none"
+                >
+                  {/* Identity */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative shrink-0">
+                      {person.photoPath ? (
+                        <img
+                          src={person.photoPath}
+                          alt={person.fullName}
+                          className="h-11 w-11 rounded-full object-cover border border-line shadow-xs"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                            const parent = (e.target as HTMLElement).parentElement;
+                            if (parent) {
+                              const fallback = document.createElement('div');
+                              fallback.className = 'grid h-11 w-11 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink-soft border border-line';
+                              fallback.innerText = initials(person.fullName);
+                              parent.prepend(fallback);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink-soft border border-line shadow-xs">
+                          {initials(person.fullName)}
+                        </span>
+                      )}
+                      <span
+                        className={cx(
+                          'absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-surface',
+                          isPresent
+                            ? 'bg-emerald-500'
+                            : isLate
+                            ? 'bg-amber-500'
+                            : isConge || isPermission
+                            ? 'bg-blue-500'
+                            : 'bg-zinc-400 dark:bg-zinc-600',
+                        )}
+                      />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-ink">{person.fullName}</p>
+                      <p className="truncate text-xs text-ink-faint">{person.jobTitle}</p>
+                    </div>
+                  </div>
+
+                  {/* Status & Pointage Time */}
+                  <div className="pt-2 border-t border-line/60 flex items-center justify-between">
+                    {isPresent ? (
+                      <>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          <Check size={11} strokeWidth={2.5} /> Présent
+                        </span>
+                        <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                          {person.inAt}
+                        </span>
+                      </>
+                    ) : isLate ? (
+                      <>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          <Clock3 size={11} /> +{person.lateMinutes}m
+                        </span>
+                        <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400 tabular-nums">
+                          {person.inAt}
+                        </span>
+                      </>
+                    ) : isConge ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                        🏖️ En congé
+                      </span>
+                    ) : isPermission ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                        📋 Permission
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-paper px-2 py-0.5 text-[11px] font-medium text-ink-faint border border-line">
+                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-600" /> Non pointé
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {filtered.length === 0 && (
+              <div className="w-full py-8 text-center text-xs text-ink-faint">
+                {search ? 'Aucun collaborateur ne correspond à cette recherche.' : 'Aucun collaborateur dans cette catégorie.'}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Vue Ordinateur : Liste verticale classique */
+        <div className="max-h-[380px] overflow-y-auto scroll-thin divide-y divide-line">
+          {filtered.map((person) => {
+            const isPresent = person.status === 'present';
+            const isLate = person.status === 'late';
+            const isConge = person.status === 'conge';
+            const isPermission = person.status === 'permission';
+
+            return (
+              <div
+                key={person.id}
+                className="flex items-center justify-between gap-3 p-3 hover:bg-paper-2/50 transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="relative shrink-0">
+                    {person.photoPath ? (
+                      <img
+                        src={person.photoPath}
+                        alt={person.fullName}
+                        className="h-10 w-10 rounded-full object-cover border border-line shadow-xs"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                          const parent = (e.target as HTMLElement).parentElement;
+                          if (parent) {
+                            const fallback = document.createElement('div');
+                            fallback.className = 'grid h-10 w-10 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink-soft border border-line';
+                            fallback.innerText = initials(person.fullName);
+                            parent.prepend(fallback);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink-soft border border-line shadow-xs">
+                        {initials(person.fullName)}
+                      </span>
+                    )}
+                    <span
+                      className={cx(
+                        'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface',
+                        isPresent
+                          ? 'bg-emerald-500'
+                          : isLate
+                          ? 'bg-amber-500'
+                          : isConge || isPermission
+                          ? 'bg-blue-500'
+                          : 'bg-zinc-400 dark:bg-zinc-600',
+                      )}
                     />
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-ink">{person.fullName}</p>
+                    <p className="truncate text-xs text-ink-faint">{person.jobTitle}</p>
+                  </div>
+                </div>
+
+                {/* Status & Time */}
+                <div className="shrink-0 text-right">
+                  {isPresent ? (
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                        {person.inAt}
+                        {person.outAt ? <span className="text-ink-faint font-normal"> → {person.outAt}</span> : null}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <Check size={11} strokeWidth={2.5} /> Présent
+                      </span>
+                    </div>
+                  ) : isLate ? (
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
+                        {person.inAt}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        <Clock3 size={11} /> +{person.lateMinutes}m
+                      </span>
+                    </div>
+                  ) : isConge ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                      🏖️ En congé
+                    </span>
+                  ) : isPermission ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-medium text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                      📋 Permission
+                    </span>
                   ) : (
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink-soft border border-line shadow-xs">
-                      {initials(person.fullName)}
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-paper px-2.5 py-0.5 text-[11px] font-medium text-ink-faint border border-line">
+                      <span className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-600" /> Non pointé
                     </span>
                   )}
-                  <span
-                    className={cx(
-                      'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface',
-                      isPresent
-                        ? 'bg-emerald-500'
-                        : isLate
-                        ? 'bg-amber-500'
-                        : isConge || isPermission
-                        ? 'bg-blue-500'
-                        : 'bg-zinc-400 dark:bg-zinc-600',
-                    )}
-                  />
-                </div>
-
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-ink">{person.fullName}</p>
-                  <p className="truncate text-xs text-ink-faint">{person.jobTitle}</p>
                 </div>
               </div>
+            );
+          })}
 
-              {/* Status & Time */}
-              <div className="shrink-0 text-right">
-                {isPresent ? (
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                      {person.inAt}
-                      {person.outAt ? <span className="text-ink-faint font-normal"> → {person.outAt}</span> : null}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      <Check size={11} strokeWidth={2.5} /> Présent
-                    </span>
-                  </div>
-                ) : isLate ? (
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
-                      {person.inAt}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                      <Clock3 size={11} /> +{person.lateMinutes}m
-                    </span>
-                  </div>
-                ) : isConge ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                    🏖️ En congé
-                  </span>
-                ) : isPermission ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-medium text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
-                    📋 Permission
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-paper px-2.5 py-0.5 text-[11px] font-medium text-ink-faint border border-line">
-                    <span className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-600" /> Non pointé
-                  </span>
-                )}
-              </div>
+          {filtered.length === 0 ? (
+            <div className="p-8 text-center text-xs text-ink-faint">
+              {search ? 'Aucun collaborateur ne correspond à cette recherche.' : 'Aucun collaborateur dans cette catégorie.'}
             </div>
-          );
-        })}
-
-        {filtered.length === 0 ? (
-          <div className="p-8 text-center text-xs text-ink-faint">
-            {search ? 'Aucun collaborateur ne correspond à cette recherche.' : 'Aucun collaborateur dans cette catégorie.'}
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      )}
 
       {isCarousel && (
         <div className="p-2.5 border-t border-line/60 bg-surface-2/30 flex items-center justify-between text-xs">
@@ -1497,6 +1615,7 @@ export function Dashboard() {
   // Carrousel Mobile State & Refs (déclarés au sommet pour respecter les Règles des Hooks de React)
   const carouselRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [activeSlide, setActiveSlide] = useState(0);
 
   const scrollToSlide = (index: number) => {
@@ -1504,6 +1623,10 @@ export function Dashboard() {
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       setActiveSlide(index);
+    }
+    const tabEl = tabRefs.current[index];
+    if (tabEl) {
+      tabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
   };
 
@@ -1526,6 +1649,10 @@ export function Dashboard() {
 
     if (closestIndex !== activeSlide) {
       setActiveSlide(closestIndex);
+      const tabEl = tabRefs.current[closestIndex];
+      if (tabEl) {
+        tabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
     }
   };
 
@@ -1638,27 +1765,18 @@ export function Dashboard() {
   // =========================================================================
   const alertTotal = das05.overdueLoans + das05.lowStock + das05.missingTools + das05.missingOut;
 
-  const attendanceStats = (() => {
-    if (!das04?.detail) return null;
-    let present = 0;
-    for (const d of das04.detail) {
-      if (d.status === 'present' || d.status === 'late') present++;
-    }
-    return { present, total: das04.detail.length };
-  })();
-
   const renderAlertsCard = (isCarousel = false) => (
     <Card className={cx("shadow-card p-5", isCarousel ? "h-full flex flex-col justify-between" : "h-fit")}>
       <div>
         <div className="mb-3.5 flex items-center justify-between">
           <h2 className="text-sm font-bold text-ink flex items-center gap-2">
+            <span>Alertes opérationnelles</span>
             <AlertTriangle
               size={16}
               className={cx(
                 alertTotal > 0 ? 'text-amber animate-pulse' : 'text-emerald-500',
               )}
             />
-            <span>Alertes opérationnelles</span>
           </h2>
           <span className="text-xs text-ink-faint flex items-center gap-1.5 font-medium">
             <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -1863,10 +1981,8 @@ export function Dashboard() {
       slides.push({
         id: 'attendance',
         label: 'Présences en atelier',
-        shortLabel: 'Présences',
-        icon: <Users size={14} />,
-        badge: attendanceStats ? `${attendanceStats.present}/${attendanceStats.total}` : undefined,
-        badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20',
+        tabTitle: 'Présence',
+        icon: <Users size={15} />,
         content: (
           <WhosInWidget
             details={das04.detail}
@@ -1881,28 +1997,24 @@ export function Dashboard() {
     slides.push({
       id: 'alerts',
       label: 'Alertes opérationnelles',
-      shortLabel: 'Alertes',
-      icon: <AlertTriangle size={14} />,
-      badge: alertTotal > 0 ? alertTotal : undefined,
-      badgeClass: alertTotal > 0 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30' : 'bg-paper text-ink-faint',
+      tabTitle: 'Alerte',
+      icon: <AlertTriangle size={15} />,
       content: renderAlertsCard(true),
     });
 
     slides.push({
       id: 'tools',
       label: 'Répartition de l’outillage',
-      shortLabel: 'Outillage',
-      icon: <Wrench size={14} />,
-      badge: das01.total,
-      badgeClass: 'bg-paper text-ink-faint border border-line',
+      tabTitle: 'Répartition des outils',
+      icon: <Wrench size={15} />,
       content: renderToolsCard(true),
     });
 
     slides.push({
       id: 'activity',
       label: 'Activité du jour',
-      shortLabel: 'Activité',
-      icon: <ArrowUpRight size={14} />,
+      tabTitle: 'Activité du jour',
+      icon: <ArrowUpRight size={15} />,
       content: renderActivityCard(true),
     });
 
@@ -2004,17 +2116,18 @@ export function Dashboard() {
 
       {/* 1. Mode Mobile & Smartphone (< 1024px) : Carrousel Horizontal Apple HIG */}
       <section className="block lg:hidden flex flex-col gap-3">
-        {/* Navigation Tabs Segmentée Apple HIG avec feedback haptique visuel */}
-        <div className="flex items-center gap-1.5 p-1 bg-surface-2/80 backdrop-blur-md border border-line rounded-xl overflow-x-auto no-scrollbar shadow-xs overscroll-x-contain touch-pan-y touch-pan-x">
+        {/* Navigation Tabs Segmentée Apple HIG sans chiffre, avec juste l'icône et le titre */}
+        <div className="flex items-center gap-1.5 p-1 bg-surface-2/80 backdrop-blur-md border border-line rounded-xl overflow-x-auto no-scrollbar shadow-xs overscroll-x-contain touch-pan-y touch-pan-x" style={{ WebkitOverflowScrolling: 'touch' }}>
           {carouselSlides.map((slide, idx) => {
             const isActive = activeSlide === idx;
             return (
               <button
                 key={slide.id}
+                ref={(el) => { tabRefs.current[idx] = el; }}
                 type="button"
                 onClick={() => scrollToSlide(idx)}
                 className={cx(
-                  "flex-1 min-w-[72px] py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 select-none",
+                  "shrink-0 py-2 px-3.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all duration-200 select-none whitespace-nowrap cursor-pointer",
                   isActive
                     ? "bg-surface text-ink shadow-xs border border-line-strong/40 scale-[1.01]"
                     : "text-ink-soft hover:text-ink hover:bg-surface/40"
@@ -2023,12 +2136,7 @@ export function Dashboard() {
                 <span className={cx(isActive ? "text-amber" : "text-ink-faint")}>
                   {slide.icon}
                 </span>
-                <span className="truncate">{slide.shortLabel}</span>
-                {slide.badge !== undefined && (
-                  <span className={cx("px-1.5 py-0.2 text-[10px] rounded-full font-bold", slide.badgeClass)}>
-                    {slide.badge}
-                  </span>
-                )}
+                <span>{slide.tabTitle}</span>
               </button>
             );
           })}
