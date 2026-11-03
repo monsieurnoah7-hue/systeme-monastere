@@ -581,27 +581,16 @@ function EtablisTourDeControle({
 
   return (
     <section className="space-y-4">
-      {/* Header section with Google-like typography & live pulse */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-line pb-3">
+      <div className="flex flex-col gap-3 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <div className="grid h-7 w-7 place-items-center rounded-lg bg-ink text-paper shadow-xs">
-              <ShieldCheck size={16} className="text-amber" />
-            </div>
-            <h2 className="text-base font-bold text-ink tracking-tight">
-              Tour de Contrôle des Établis &amp; Dotations d’Atelier
-            </h2>
-          </div>
-          <p className="text-xs text-ink-soft mt-0.5">
-            Supervision 360° des boîtes à outils nominatives, complétude du parc et vigie des contrôles inopinés.
+          <h2 className="text-lg font-bold tracking-tight text-ink">Tour de contrôle des établis</h2>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-soft">
+            Dotations nominatives, état du parc et contrôles à traiter, réunis au même endroit.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 shadow-xs">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>{etablis.totalKits} Établis Déployés</span>
-          </span>
+        <div className="shrink-0 sm:text-right">
+          <div className="font-mono text-lg font-bold tabular-nums text-ink">{etablis.totalKits}</div>
+          <div className="text-[11px] text-ink-faint">établis suivis</div>
         </div>
       </div>
 
@@ -609,7 +598,7 @@ function EtablisTourDeControle({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* KPI 1: Établis Actifs */}
         <div className="rounded-xl border border-line bg-surface p-3.5 shadow-card transition-all">
-          <div className="flex items-center justify-between text-xs text-ink-faint font-semibold uppercase tracking-wider">
+          <div className="flex items-center justify-between text-xs font-semibold text-ink-faint">
             <span>Établis Déployés</span>
             <div className="p-1 rounded-md bg-surface-2 text-ink-soft">
               <Wrench size={14} />
@@ -628,7 +617,7 @@ function EtablisTourDeControle({
 
         {/* KPI 2: Complétude globale */}
         <div className="rounded-xl border border-line bg-surface p-3.5 shadow-card transition-all">
-          <div className="flex items-center justify-between text-xs text-ink-faint font-semibold uppercase tracking-wider">
+          <div className="flex items-center justify-between text-xs font-semibold text-ink-faint">
             <span>Complétude Globale</span>
             <div className="p-1 rounded-md bg-surface-2 text-ink-soft">
               <ShieldCheck size={14} />
@@ -660,7 +649,7 @@ function EtablisTourDeControle({
               : 'border-line bg-surface hover:bg-surface-2'
           )}
         >
-          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
+          <div className="flex items-center justify-between text-xs font-semibold">
             <span className={etablis.anomaliesCount > 0 ? 'text-amber' : 'text-ink-faint'}>
               Alertes Outillage
             </span>
@@ -690,7 +679,7 @@ function EtablisTourDeControle({
               : 'border-line bg-surface hover:bg-surface-2'
           )}
         >
-          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider">
+          <div className="flex items-center justify-between text-xs font-semibold">
             <span className={etablis.overdueAuditCount > 0 ? 'text-amber' : 'text-ink-faint'}>
               Vigie Contrôles
             </span>
@@ -705,7 +694,7 @@ function EtablisTourDeControle({
           </div>
           <p className="mt-1 text-[11px] text-ink-faint truncate">
             {etablis.overdueAuditCount > 0 ? (
-              <span className="text-amber font-semibold">⚠️ {etablis.overdueAuditCount} à inspecter (&gt;15j)</span>
+               <span className="text-amber font-semibold">{etablis.overdueAuditCount} à inspecter (&gt;15 j)</span>
             ) : (
               `Par ${etablis.lastAudit?.auditedBy ?? 'Superviseur'}`
             )}
@@ -1467,15 +1456,6 @@ export function Dashboard() {
         />
       )}
 
-      {/* 2. Tour de Contrôle 360° des Établis & Dotations d'Atelier */}
-      {data.etablis && (
-        <EtablisTourDeControle
-          etablis={data.etablis}
-          onOpenAudit={(kit) => setAuditKit(kit)}
-          onOpenDetails={(kit) => setInspectKit(kit)}
-        />
-      )}
-
       {/* KPIs Cards Grid - Horizontal scroll on mobile & tablet, grid on xl */}
       <section className="relative">
         <div className="flex xl:grid xl:grid-cols-4 gap-3 overflow-x-auto pb-2 -mx-3 px-3 sm:-mx-6 sm:px-6 xl:mx-0 xl:px-0 xl:pb-0 scroll-smooth snap-x snap-mandatory scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] touch-pan-x">
@@ -1525,15 +1505,13 @@ export function Dashboard() {
         </div>
       </section>
 
-      {/* Main Grid: Présences & Analytics */}
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)]">
-        {/* Left Column: Who's in Live Feed */}
-        <div className="flex flex-col gap-6 min-w-0">
-          {das04?.detail ? (
-            <WhosInWidget details={das04.detail} />
-          ) : null}
+      {/* Mobile insight rail; desktop keeps a calm two-column dashboard grid. */}
+      <section className="flex gap-4 overflow-x-auto overscroll-x-contain pb-2 -mx-3 px-3 snap-x snap-mandatory scrollbar-none touch-pan-x sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-2 lg:gap-6 lg:overflow-visible lg:px-0 lg:pb-0">
+        <div className="min-w-[calc(100vw-3rem)] snap-start sm:min-w-[calc(100vw-4.5rem)] lg:min-w-0">
+          {das04?.detail ? <WhosInWidget details={das04.detail} /> : null}
+        </div>
 
-          {/* Alert List */}
+        <div className="min-w-[calc(100vw-3rem)] snap-start sm:min-w-[calc(100vw-4.5rem)] lg:min-w-0">
           <Card className="shadow-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-bold text-ink flex items-center gap-2">
@@ -1616,8 +1594,7 @@ export function Dashboard() {
           </Card>
         </div>
 
-        {/* Right Column: Donut & Stock Movements */}
-        <div className="flex flex-col gap-6 min-w-0">
+        <div className="min-w-[calc(100vw-3rem)] snap-start sm:min-w-[calc(100vw-4.5rem)] lg:min-w-0">
           <Card className="shadow-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-bold text-ink">Répartition de l’outillage</h2>
@@ -1625,7 +1602,9 @@ export function Dashboard() {
             </div>
             <ToolsDonut das01={das01} onPick={(status) => openTools(status, `Outils — ${STATUS_LABEL[status]}`)} />
           </Card>
+        </div>
 
+        <div className="min-w-[calc(100vw-3rem)] snap-start sm:min-w-[calc(100vw-4.5rem)] lg:min-w-0">
           <Card className="shadow-card p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
@@ -1715,6 +1694,17 @@ export function Dashboard() {
           </Card>
         </div>
       </section>
+
+      {/* Tour de contrôle volontairement placé en dernier : supervision détaillée après les signaux prioritaires. */}
+      {data.etablis && (
+        <section className="border-t border-line pt-6">
+          <EtablisTourDeControle
+            etablis={data.etablis}
+            onOpenAudit={(kit) => setAuditKit(kit)}
+            onOpenDetails={(kit) => setInspectKit(kit)}
+          />
+        </section>
+      )}
 
       {/* Drawer Details Component */}
       <Drawer
