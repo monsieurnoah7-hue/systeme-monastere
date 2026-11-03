@@ -199,7 +199,7 @@ function ToolsDonut({
   return (
     <div className="flex flex-col items-center gap-5 sm:flex-row">
       <div className="relative h-[170px] w-[170px] shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <PieChart>
             <Pie
               data={data}
@@ -1475,6 +1475,41 @@ export function Dashboard() {
   const [inspectKit, setInspectKit] = useState<EtabliKitSummaryItem | null>(null);
   const [reviewingLeaveId, setReviewingLeaveId] = useState<number | null>(null);
 
+  // Carrousel Mobile State & Refs (déclarés au sommet pour respecter les Règles des Hooks de React)
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  const scrollToSlide = (index: number) => {
+    const el = slideRefs.current[index];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      setActiveSlide(index);
+    }
+  };
+
+  const handleCarouselScroll = () => {
+    const container = carouselRef.current;
+    if (!container) return;
+    const containerCenter = container.scrollLeft + container.clientWidth / 2;
+    let closestIndex = 0;
+    let minDistance = Infinity;
+
+    slideRefs.current.forEach((slide, idx) => {
+      if (!slide) return;
+      const slideCenter = slide.offsetLeft + slide.offsetWidth / 2;
+      const distance = Math.abs(containerCenter - slideCenter);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = idx;
+      }
+    });
+
+    if (closestIndex !== activeSlide) {
+      setActiveSlide(closestIndex);
+    }
+  };
+
   const handleReviewLeave = async (leaveId: number, status: 'approved' | 'rejected') => {
     setReviewingLeaveId(leaveId);
     try {
@@ -1582,50 +1617,16 @@ export function Dashboard() {
   // =========================================================================
   // Ergonomie Mobile Apple HIG : Navigation & Carrousel Horizontal Tactile
   // =========================================================================
-  const carouselRef = useRef<HTMLDivElement>(null);
-  const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const [activeSlide, setActiveSlide] = useState(0);
-
   const alertTotal = das05.overdueLoans + das05.lowStock + das05.missingTools + das05.missingOut;
 
-  const attendanceStats = useMemo(() => {
+  const attendanceStats = (() => {
     if (!das04?.detail) return null;
     let present = 0;
     for (const d of das04.detail) {
       if (d.status === 'present' || d.status === 'late') present++;
     }
     return { present, total: das04.detail.length };
-  }, [das04?.detail]);
-
-  const scrollToSlide = (index: number) => {
-    const el = slideRefs.current[index];
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      setActiveSlide(index);
-    }
-  };
-
-  const handleCarouselScroll = () => {
-    const container = carouselRef.current;
-    if (!container) return;
-    const containerCenter = container.scrollLeft + container.clientWidth / 2;
-    let closestIndex = 0;
-    let minDistance = Infinity;
-
-    slideRefs.current.forEach((slide, idx) => {
-      if (!slide) return;
-      const slideCenter = slide.offsetLeft + slide.offsetWidth / 2;
-      const distance = Math.abs(containerCenter - slideCenter);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestIndex = idx;
-      }
-    });
-
-    if (closestIndex !== activeSlide) {
-      setActiveSlide(closestIndex);
-    }
-  };
+  })();
 
   const renderAlertsCard = (isCarousel = false) => (
     <Card className={cx("shadow-card p-5", isCarousel ? "h-full flex flex-col justify-between" : "h-fit")}>
@@ -1800,7 +1801,7 @@ export function Dashboard() {
         </div>
 
         <div className="h-44 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <BarChart data={dailyMoves} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
               <XAxis
                 dataKey="name"
@@ -1836,7 +1837,7 @@ export function Dashboard() {
     </Card>
   );
 
-  const carouselSlides = useMemo(() => {
+  const carouselSlides = (() => {
     const slides = [];
 
     if (das04?.detail) {
@@ -1886,7 +1887,7 @@ export function Dashboard() {
     });
 
     return slides;
-  }, [das04?.detail, attendanceStats, alertTotal, das05, das01, das03, dailyMoves]);
+  })();
 
   return (
     <div className="space-y-6">
