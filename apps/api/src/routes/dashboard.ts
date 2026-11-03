@@ -54,12 +54,13 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
     id: string;
     full_name: string;
     job_title: string;
+    photo_path: string | null;
     in_at: string | null;
     out_at: string | null;
     late_minutes: number;
     status: string;
   }>(
-    `SELECT e.id, e.full_name, e.job_title,
+    `SELECT e.id, e.full_name, e.job_title, e.photo_path,
             min(CASE WHEN a.punch_type = 'in'  THEN to_char(a.server_at, 'HH24:MI') END) AS in_at,
             max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at, 'HH24:MI') END) AS out_at,
             coalesce(max(a.late_minutes), 0) AS late_minutes,
@@ -67,7 +68,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
        FROM employees e
        LEFT JOIN attendance a ON a.employee_id = e.id AND a.punch_date = $1
       WHERE e.active = true
-      GROUP BY e.id, e.full_name, e.job_title
+      GROUP BY e.id, e.full_name, e.job_title, e.photo_path
       ORDER BY e.full_name`,
     [today],
   );
@@ -284,6 +285,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
               id: r.id,
               fullName: r.full_name,
               jobTitle: r.job_title,
+              photoPath: r.photo_path,
               inAt: r.in_at,
               outAt: r.out_at,
               lateMinutes: Number(r.late_minutes),

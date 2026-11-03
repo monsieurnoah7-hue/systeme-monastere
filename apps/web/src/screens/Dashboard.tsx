@@ -297,138 +297,240 @@ function KpiCard({
 /**
  * Widget Présences Équipe
  */
+/**
+ * Widget Présences Équipe - Version Google Grade
+ */
 function WhosInWidget({
   details,
 }: {
   details: NonNullable<DashboardType['das04']>['detail'];
 }) {
-  const [filter, setFilter] = useState<'all' | 'present' | 'late' | 'absent'>('all');
+  const [filter, setFilter] = useState<'all' | 'present' | 'late' | 'leaves' | 'absent'>('all');
+  const [search, setSearch] = useState('');
 
-  const filtered = details.filter((d) => {
-    if (filter === 'all') return true;
-    if (filter === 'present') return d.status === 'present';
-    if (filter === 'late') return d.status === 'late';
-    if (filter === 'absent') return d.status === 'absent';
-    return true;
-  });
+  const stats = useMemo(() => {
+    let presentCount = 0;
+    let lateCount = 0;
+    let leavesCount = 0;
+    let absentCount = 0;
+
+    for (const d of details) {
+      if (d.status === 'present') {
+        presentCount++;
+      } else if (d.status === 'late') {
+        presentCount++;
+        lateCount++;
+      } else if (d.status === 'conge' || d.status === 'permission') {
+        leavesCount++;
+      } else {
+        absentCount++;
+      }
+    }
+    return { presentCount, lateCount, leavesCount, absentCount, total: details.length };
+  }, [details]);
+
+  const filtered = useMemo(() => {
+    return details.filter((d) => {
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const match = d.fullName.toLowerCase().includes(q) || d.jobTitle.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      if (filter === 'all') return true;
+      if (filter === 'present') return d.status === 'present';
+      if (filter === 'late') return d.status === 'late';
+      if (filter === 'leaves') return d.status === 'conge' || d.status === 'permission';
+      if (filter === 'absent') return d.status === 'absent' || (!d.inAt && d.status !== 'conge' && d.status !== 'permission');
+      return true;
+    });
+  }, [details, filter, search]);
 
   return (
     <Card className="shadow-card overflow-hidden">
+      {/* Header */}
       <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-sm font-bold text-ink">
-            <Users size={16} className="text-amber" /> Présences en atelier
-          </h2>
-          <p className="text-xs text-ink-faint">Suivi en direct des entrées et départs de l’équipe.</p>
+          <div className="flex items-center gap-2.5">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-ink">
+              <Users size={16} className="text-amber" /> Présences en atelier
+            </h2>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {stats.presentCount} / {stats.total} présents
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-ink-faint">Suivi en direct des entrées, retards et départs de l’équipe.</p>
         </div>
 
-        {/* Segmented Filter Pills */}
-        <div className="flex items-center rounded-lg bg-paper-2 p-1 text-xs">
-          <button
-            onClick={() => setFilter('all')}
-            className={cx(
-              'rounded-md px-2.5 py-1 font-medium transition-colors',
-              filter === 'all' ? 'bg-surface text-ink font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
-            )}
-          >
-            Tous ({details.length})
-          </button>
-          <button
-            onClick={() => setFilter('present')}
-            className={cx(
-              'rounded-md px-2.5 py-1 font-medium transition-colors',
-              filter === 'present' ? 'bg-surface text-green font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
-            )}
-          >
-            À l'heure ({details.filter((d) => d.status === 'present').length})
-          </button>
-          <button
-            onClick={() => setFilter('late')}
-            className={cx(
-              'rounded-md px-2.5 py-1 font-medium transition-colors',
-              filter === 'late' ? 'bg-surface text-amber font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
-            )}
-          >
-            Retards ({details.filter((d) => d.status === 'late').length})
-          </button>
-          <button
-            onClick={() => setFilter('absent')}
-            className={cx(
-              'rounded-md px-2.5 py-1 font-medium transition-colors',
-              filter === 'absent' ? 'bg-surface text-ink-faint font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
-            )}
-          >
-            Absents ({details.filter((d) => d.status === 'absent').length})
-          </button>
+        {/* Search input */}
+        <div className="relative w-full sm:w-48">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher..."
+            className="w-full rounded-lg border border-line bg-paper-2 pl-8 pr-3 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-colors"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink"
+            >
+              <X size={12} />
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Segmented Filter Pills */}
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-line bg-surface-2/40 px-3 py-2 text-xs scrollbar-none">
+        <button
+          onClick={() => setFilter('all')}
+          className={cx(
+            'shrink-0 rounded-md px-2.5 py-1 font-medium transition-colors',
+            filter === 'all' ? 'bg-surface text-ink font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
+          )}
+        >
+          Tous ({stats.total})
+        </button>
+        <button
+          onClick={() => setFilter('present')}
+          className={cx(
+            'shrink-0 rounded-md px-2.5 py-1 font-medium transition-colors',
+            filter === 'present' ? 'bg-surface text-emerald-600 dark:text-emerald-400 font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
+          )}
+        >
+          À l'heure ({stats.presentCount - stats.lateCount})
+        </button>
+        <button
+          onClick={() => setFilter('late')}
+          className={cx(
+            'shrink-0 rounded-md px-2.5 py-1 font-medium transition-colors',
+            filter === 'late' ? 'bg-surface text-amber font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
+          )}
+        >
+          Retards ({stats.lateCount})
+        </button>
+        <button
+          onClick={() => setFilter('leaves')}
+          className={cx(
+            'shrink-0 rounded-md px-2.5 py-1 font-medium transition-colors',
+            filter === 'leaves' ? 'bg-surface text-blue-600 dark:text-blue-400 font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
+          )}
+        >
+          Congés / Perm. ({stats.leavesCount})
+        </button>
+        <button
+          onClick={() => setFilter('absent')}
+          className={cx(
+            'shrink-0 rounded-md px-2.5 py-1 font-medium transition-colors',
+            filter === 'absent' ? 'bg-surface text-ink-faint font-semibold shadow-xs' : 'text-ink-soft hover:text-ink',
+          )}
+        >
+          Non pointés ({stats.absentCount})
+        </button>
+      </div>
+
+      {/* Workers list */}
       <div className="max-h-[380px] overflow-y-auto scroll-thin divide-y divide-line">
-        {filtered.map((person) => (
-          <div
-            key={person.id}
-            className="flex items-center justify-between gap-3 p-3.5 hover:bg-paper-2/40 transition-colors"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="relative">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink-soft border border-line">
-                  {initials(person.fullName)}
-                </span>
-                <span
-                  className={cx(
-                    'absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-surface',
-                    person.status === 'present'
-                      ? 'bg-green'
-                      : person.status === 'late'
-                      ? 'bg-amber'
-                      : 'bg-ink-faint',
+        {filtered.map((person) => {
+          const isPresent = person.status === 'present';
+          const isLate = person.status === 'late';
+          const isConge = person.status === 'conge';
+          const isPermission = person.status === 'permission';
+
+          return (
+            <div
+              key={person.id}
+              className="flex items-center justify-between gap-3 p-3 hover:bg-paper-2/50 transition-colors"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative shrink-0">
+                  {person.photoPath ? (
+                    <img
+                      src={person.photoPath}
+                      alt={person.fullName}
+                      className="h-10 w-10 rounded-full object-cover border border-line shadow-xs"
+                      onError={(e) => {
+                        // Fallback gracefully to initials if photo fails to load
+                        (e.target as HTMLElement).style.display = 'none';
+                        const parent = (e.target as HTMLElement).parentElement;
+                        if (parent) {
+                          const fallback = document.createElement('div');
+                          fallback.className = 'grid h-10 w-10 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink-soft border border-line';
+                          fallback.innerText = initials(person.fullName);
+                          parent.prepend(fallback);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink-soft border border-line shadow-xs">
+                      {initials(person.fullName)}
+                    </span>
                   )}
-                />
-              </div>
-
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-ink">{person.fullName}</p>
-                <p className="truncate text-xs text-ink-faint">{person.jobTitle}</p>
-              </div>
-            </div>
-
-            <div className="text-right shrink-0">
-              {person.inAt ? (
-                <div className="font-mono text-xs font-semibold text-ink tabular-nums">
-                  {person.inAt}
-                  {person.outAt ? <span className="text-ink-faint font-normal"> → {person.outAt}</span> : null}
-                </div>
-              ) : (
-                <span className="text-xs text-ink-faint italic">Non pointé</span>
-              )}
-              <div className="mt-0.5">
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[10px] font-medium text-ink-soft"
-                >
                   <span
                     className={cx(
-                      'h-1.5 w-1.5 rounded-full shrink-0',
-                      person.status === 'present'
-                        ? 'bg-green'
-                        : person.status === 'late'
-                        ? 'bg-amber'
-                        : 'bg-ink-faint',
+                      'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface',
+                      isPresent
+                        ? 'bg-emerald-500'
+                        : isLate
+                        ? 'bg-amber-500'
+                        : isConge || isPermission
+                        ? 'bg-blue-500'
+                        : 'bg-zinc-400 dark:bg-zinc-600',
                     )}
                   />
-                  {person.status === 'present'
-                    ? 'Présent'
-                    : person.status === 'late'
-                    ? `Retard (+${person.lateMinutes}m)`
-                    : 'Absent'}
-                </span>
+                </div>
+
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-ink">{person.fullName}</p>
+                  <p className="truncate text-xs text-ink-faint">{person.jobTitle}</p>
+                </div>
+              </div>
+
+              {/* Status & Time */}
+              <div className="shrink-0 text-right">
+                {isPresent ? (
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                      {person.inAt}
+                      {person.outAt ? <span className="text-ink-faint font-normal"> → {person.outAt}</span> : null}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <Check size={11} strokeWidth={2.5} /> Présent
+                    </span>
+                  </div>
+                ) : isLate ? (
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
+                      {person.inAt}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      <Clock3 size={11} /> +{person.lateMinutes}m
+                    </span>
+                  </div>
+                ) : isConge ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                    🏖️ En congé
+                  </span>
+                ) : isPermission ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-medium text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                    📋 Permission
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-paper px-2.5 py-0.5 text-[11px] font-medium text-ink-faint border border-line">
+                    <span className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-600" /> Non pointé
+                  </span>
+                )}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {filtered.length === 0 ? (
           <div className="p-8 text-center text-xs text-ink-faint">
-            Aucun collaborateur ne correspond à ce filtre.
+            {search ? 'Aucun collaborateur ne correspond à cette recherche.' : 'Aucun collaborateur dans cette catégorie.'}
           </div>
         ) : null}
       </div>
@@ -1505,17 +1607,111 @@ export function Dashboard() {
         </div>
       </section>
 
-      {/* Mobile insight rail; desktop keeps a calm two-column dashboard grid. */}
-      <section className="flex gap-4 overflow-x-auto overscroll-x-contain pb-2 -mx-3 px-3 snap-x snap-mandatory scrollbar-none touch-pan-x sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-2 lg:gap-6 lg:overflow-visible lg:px-0 lg:pb-0">
-        <div className="min-w-[calc(100vw-3rem)] snap-start sm:min-w-[calc(100vw-4.5rem)] lg:min-w-0">
+      {/* Grille Principale Dashboard Bento Grid (12 colonnes, ergonomique et responsive) */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Colonne Gauche (7 cols) : Présences Collaborateurs & Flux du Jour */}
+        <div className="lg:col-span-7 flex flex-col gap-6">
           {das04?.detail ? <WhosInWidget details={das04.detail} /> : null}
+
+          {/* Activité du jour */}
+          <Card className="shadow-card p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-ink flex items-center gap-2">
+                  <ArrowUpRight size={16} className="text-amber" />
+                  <span>Activité du jour</span>
+                </h2>
+                <p className="text-xs text-ink-faint">Flux magasin &amp; atelier en temps réel</p>
+              </div>
+              <button
+                onClick={() => setDrawer({ kind: 'movements' })}
+                className="text-xs text-amber hover:underline font-semibold inline-flex items-center gap-1 transition-colors"
+              >
+                Journal du jour &rarr;
+              </button>
+            </div>
+
+            {/* Flux KPI Pills */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div
+                onClick={() => setDrawer({ kind: 'movements' })}
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/15 transition-all shadow-xs"
+                title="Entrées au stock"
+              >
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  <ArrowDownRight size={14} />
+                  <span>Entrées</span>
+                </div>
+                <span className="font-mono text-xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">{das03.entries}</span>
+              </div>
+
+              <div
+                onClick={() => setDrawer({ kind: 'movements' })}
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-all shadow-xs"
+                title="Sorties (consommables & prêts)"
+              >
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                  <ArrowUpRight size={14} />
+                  <span>Sorties</span>
+                </div>
+                <span className="font-mono text-xl font-bold text-amber-700 dark:text-amber-300 mt-1">{das03.exits}</span>
+              </div>
+
+              <div
+                onClick={() => setDrawer({ kind: 'movements' })}
+                className="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 cursor-pointer hover:bg-blue-500/15 transition-all shadow-xs"
+                title="Retours d'outillage"
+              >
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                  <RotateCcw size={14} />
+                  <span>Retours</span>
+                </div>
+                <span className="font-mono text-xl font-bold text-blue-700 dark:text-blue-300 mt-1">{das03.returns}</span>
+              </div>
+            </div>
+
+            <div className="h-44 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyMoves} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                    tick={{ fontSize: 11, fill: '#6b7280' }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                    tick={{ fontSize: 11, fill: '#6b7280' }}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                    content={<ChartTooltip />}
+                  />
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48} isAnimationActive={false}>
+                    {dailyMoves.map((bar) => (
+                      <Cell
+                        key={bar.name}
+                        fill={bar.color}
+                        onClick={() => setDrawer({ kind: 'movements' })}
+                        className="cursor-pointer"
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
         </div>
 
-        <div className="min-w-[calc(100vw-3rem)] snap-start sm:min-w-[calc(100vw-4.5rem)] lg:min-w-0">
-          <Card className="shadow-card p-4">
-            <div className="mb-3 flex items-center justify-between">
+        {/* Colonne Droite (5 cols) : Alertes Opérationnelles & Répartition Outillage */}
+        <div className="lg:col-span-5 flex flex-col gap-6">
+          {/* Alertes opérationnelles */}
+          <Card className="shadow-card p-5 h-fit">
+            <div className="mb-3.5 flex items-center justify-between">
               <h2 className="text-sm font-bold text-ink flex items-center gap-2">
-                <span>Alertes opérationnelles</span>
                 <AlertTriangle
                   size={16}
                   className={cx(
@@ -1524,14 +1720,15 @@ export function Dashboard() {
                       : 'text-emerald-500',
                   )}
                 />
+                <span>Alertes opérationnelles</span>
               </h2>
-              <span className="text-xs text-ink-faint flex items-center gap-1.5">
+              <span className="text-xs text-ink-faint flex items-center gap-1.5 font-medium">
                 <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 Temps réel
               </span>
             </div>
 
-            <ul className="divide-y divide-line rounded-lg border border-line overflow-hidden">
+            <ul className="divide-y divide-line rounded-xl border border-line overflow-hidden shadow-xs">
               {[
                 {
                   label: 'Prêts d’outils en retard de retour',
@@ -1561,12 +1758,12 @@ export function Dashboard() {
                 <li key={alert.label}>
                   <button
                     onClick={alert.open}
-                    className="flex w-full items-center justify-between gap-3 bg-surface px-3 py-2.5 text-left transition-colors hover:bg-paper-2 group"
+                    className="flex w-full items-center justify-between gap-3 bg-surface px-3.5 py-3 text-left transition-colors hover:bg-paper-2 group"
                   >
                     <span className="flex items-center gap-2.5 text-xs font-medium text-ink min-w-0">
                       <span
                         className={cx(
-                          'shrink-0 p-1 rounded-md transition-colors',
+                          'shrink-0 p-1.5 rounded-lg transition-colors',
                           alert.count > 0 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : 'bg-paper text-ink-faint',
                         )}
                       >
@@ -1577,7 +1774,7 @@ export function Dashboard() {
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span
                         className={cx(
-                          'font-mono text-xs font-bold tabular-nums rounded px-2 py-0.5 border',
+                          'font-mono text-xs font-bold tabular-nums rounded-md px-2 py-0.5 border',
                           alert.count > 0
                             ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
                             : 'text-ink-faint bg-paper border-line',
@@ -1592,105 +1789,17 @@ export function Dashboard() {
               ))}
             </ul>
           </Card>
-        </div>
 
-        <div className="min-w-[calc(100vw-3rem)] snap-start sm:min-w-[calc(100vw-4.5rem)] lg:min-w-0">
-          <Card className="shadow-card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-ink">Répartition de l’outillage</h2>
+          {/* Répartition de l'outillage */}
+          <Card className="shadow-card p-5 h-fit">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-ink flex items-center gap-2">
+                <Wrench size={16} className="text-amber" />
+                <span>Répartition de l’outillage</span>
+              </h2>
               <p className="text-[11px] text-ink-faint">Filtrer par statut</p>
             </div>
             <ToolsDonut das01={das01} onPick={(status) => openTools(status, `Outils — ${STATUS_LABEL[status]}`)} />
-          </Card>
-        </div>
-
-        <div className="min-w-[calc(100vw-3rem)] snap-start sm:min-w-[calc(100vw-4.5rem)] lg:min-w-0">
-          <Card className="shadow-card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-ink">Activité du jour</h2>
-                <p className="text-[11px] text-ink-faint">Flux magasin &amp; atelier en temps réel</p>
-              </div>
-              <button
-                onClick={() => setDrawer({ kind: 'movements' })}
-                className="text-xs text-amber hover:underline font-medium inline-flex items-center gap-1"
-              >
-                Journal du jour &rarr;
-              </button>
-            </div>
-
-            {/* Flux KPI Pills */}
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              <div
-                onClick={() => setDrawer({ kind: 'movements' })}
-                className="flex flex-col items-center justify-center p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/15 transition-colors"
-                title="Entrées au stock"
-              >
-                <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                  <ArrowDownRight size={13} />
-                  <span>Entrées</span>
-                </div>
-                <span className="font-mono text-base font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">{das03.entries}</span>
-              </div>
-
-              <div
-                onClick={() => setDrawer({ kind: 'movements' })}
-                className="flex flex-col items-center justify-center p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-colors"
-                title="Sorties (consommables & prêts)"
-              >
-                <div className="flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                  <ArrowUpRight size={13} />
-                  <span>Sorties</span>
-                </div>
-                <span className="font-mono text-base font-bold text-amber-700 dark:text-amber-300 mt-0.5">{das03.exits}</span>
-              </div>
-
-              <div
-                onClick={() => setDrawer({ kind: 'movements' })}
-                className="flex flex-col items-center justify-center p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 cursor-pointer hover:bg-blue-500/15 transition-colors"
-                title="Retours d'outillage"
-              >
-                <div className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
-                  <RotateCcw size={13} />
-                  <span>Retours</span>
-                </div>
-                <span className="font-mono text-base font-bold text-blue-700 dark:text-blue-300 mt-0.5">{das03.returns}</span>
-              </div>
-            </div>
-
-            <div className="h-36">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyMoves} margin={{ top: 8, right: 4, bottom: 0, left: -20 }}>
-                  <XAxis
-                    dataKey="name"
-                    axisLine={false}
-                    tickLine={false}
-                    interval={0}
-                    tick={{ fontSize: 11, fill: '#6b7280' }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    allowDecimals={false}
-                    tick={{ fontSize: 11, fill: '#6b7280' }}
-                  />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(0,0,0,0.04)' }}
-                    content={<ChartTooltip />}
-                  />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={44} isAnimationActive={false}>
-                    {dailyMoves.map((bar) => (
-                      <Cell
-                        key={bar.name}
-                        fill={bar.color}
-                        onClick={() => setDrawer({ kind: 'movements' })}
-                        className="cursor-pointer"
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
           </Card>
         </div>
       </section>

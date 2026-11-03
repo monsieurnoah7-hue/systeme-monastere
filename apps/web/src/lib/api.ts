@@ -497,6 +497,7 @@ export type Dashboard = {
       id: string;
       fullName: string;
       jobTitle: string;
+      photoPath?: string | null;
       inAt: string | null;
       outAt: string | null;
       lateMinutes: number;
