@@ -308,7 +308,7 @@ fleetRoutes.get('/vehicles', requireAuth, async (c) => {
   return c.json({ vehicles: rows.map(computeVehicleAlerts) });
 });
 
-fleetRoutes.post('/vehicles', requirePerm('tools.create'), async (c) => {
+fleetRoutes.post('/vehicles', requireAuth, requirePerm('tools.create'), async (c) => {
   const body = vehicleBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) {
     return c.json({ error: body.error.issues[0]?.message || 'Données de véhicule invalides.' }, 400);
@@ -361,7 +361,7 @@ fleetRoutes.post('/vehicles', requirePerm('tools.create'), async (c) => {
   return c.json({ vehicle: computeVehicleAlerts(row!) }, 201);
 });
 
-fleetRoutes.patch('/vehicles/:id', requirePerm('tools.edit'), async (c) => {
+fleetRoutes.patch('/vehicles/:id', requireAuth, requirePerm('tools.edit'), async (c) => {
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'Identifiant requis.' }, 400);
   const body = vehicleBody.partial().safeParse(await c.req.json().catch(() => ({})));
@@ -439,7 +439,7 @@ fleetRoutes.patch('/vehicles/:id', requirePerm('tools.edit'), async (c) => {
   return c.json({ vehicle: computeVehicleAlerts(row!) });
 });
 
-fleetRoutes.delete('/vehicles/:id', requirePerm('tools.delete'), async (c) => {
+fleetRoutes.delete('/vehicles/:id', requireAuth, requirePerm('tools.delete'), async (c) => {
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'Identifiant requis.' }, 400);
   const db = getDb();
@@ -500,7 +500,7 @@ fleetRoutes.get('/generators', requireAuth, async (c) => {
   return c.json({ generators: rows.map(computeGeneratorAlerts) });
 });
 
-fleetRoutes.post('/generators', requirePerm('tools.create'), async (c) => {
+fleetRoutes.post('/generators', requireAuth, requirePerm('tools.create'), async (c) => {
   const body = generatorBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) {
     return c.json({ error: body.error.issues[0]?.message || 'Données invalides.' }, 400);
@@ -554,7 +554,7 @@ fleetRoutes.post('/generators', requirePerm('tools.create'), async (c) => {
   return c.json({ generator: computeGeneratorAlerts(row!) }, 201);
 });
 
-fleetRoutes.patch('/generators/:id', requirePerm('tools.edit'), async (c) => {
+fleetRoutes.patch('/generators/:id', requireAuth, requirePerm('tools.edit'), async (c) => {
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'Identifiant requis.' }, 400);
   const body = generatorBody.partial().safeParse(await c.req.json().catch(() => ({})));
@@ -630,7 +630,7 @@ fleetRoutes.patch('/generators/:id', requirePerm('tools.edit'), async (c) => {
   return c.json({ generator: computeGeneratorAlerts(row!) });
 });
 
-fleetRoutes.delete('/generators/:id', requirePerm('tools.delete'), async (c) => {
+fleetRoutes.delete('/generators/:id', requireAuth, requirePerm('tools.delete'), async (c) => {
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'Identifiant requis.' }, 400);
   const db = getDb();
