@@ -141,6 +141,13 @@ function computeGeneratorAlerts(g: GeneratorRow): GeneratorRow {
 // -------------------------------------------------------------------------
 async function ensureFleetBootstrap() {
   const db = getDb();
+  const bootstrapName = '018_fleet_bootstrap_once';
+  const bootstrap = await db.one<{ name: string }>(
+    'SELECT name FROM _migrations WHERE name = $1',
+    [bootstrapName],
+  );
+  if (bootstrap) return;
+
   const existingVehicles = await db.query<{ count: string }>('SELECT count(*)::text as count FROM vehicles');
   if (Number(existingVehicles[0]?.count ?? 0) === 0) {
     // Insérer les véhicules initiaux de la flotte CFTM
@@ -207,6 +214,10 @@ async function ensureFleetBootstrap() {
       ON CONFLICT (name_code) DO NOTHING;
     `);
   }
+
+  // Le bootstrap ne doit s'exécuter qu'une fois : vider volontairement la
+  // flotte ne doit jamais réinsérer ces exemples au prochain chargement.
+  await db.query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [bootstrapName]);
 }
 
 // -------------------------------------------------------------------------
@@ -446,15 +457,17 @@ fleetRoutes.delete('/vehicles/:id', requireAuth, requirePerm('tools.delete'), as
   const existing = await db.one<VehicleRow>('SELECT * FROM vehicles WHERE id = $1', [id]);
   if (!existing) return c.json({ error: 'Véhicule introuvable.' }, 404);
 
-  await db.query('DELETE FROM vehicles WHERE id = $1', [id]);
-  await writeAudit(db, {
-    entity: 'vehicle',
-    entityId: id,
-    action: 'delete',
-    before: existing,
-    actorId: actorId(c),
-    actorName: actorName(c) || 'Utilisateur',
-    reason: `Suppression véhicule ${existing.brand_model} (${existing.registration_number})`,
+  await db.transaction(async (tx) => {
+    await tx.query('DELETE FROM vehicles WHERE id = $1', [id]);
+    await writeAudit(tx, {
+      entity: 'vehicle',
+      entityId: id,
+      action: 'delete',
+      before: existing,
+      actorId: actorId(c),
+      actorName: actorName(c) || 'Utilisateur',
+      reason: `Suppression véhicule ${existing.brand_model} (${existing.registration_number})`,
+    });
   });
 
   return c.json({ ok: true });
@@ -637,15 +650,17 @@ fleetRoutes.delete('/generators/:id', requireAuth, requirePerm('tools.delete'), 
   const existing = await db.one<GeneratorRow>('SELECT * FROM generators WHERE id = $1', [id]);
   if (!existing) return c.json({ error: 'Groupe électrogène introuvable.' }, 404);
 
-  await db.query('DELETE FROM generators WHERE id = $1', [id]);
-  await writeAudit(db, {
-    entity: 'generator',
-    entityId: id,
-    action: 'delete',
-    before: existing,
-    actorId: actorId(c),
-    actorName: actorName(c) || 'Utilisateur',
-    reason: `Suppression groupe électrogène ${existing.name_code}`,
+  await db.transaction(async (tx) => {
+    await tx.query('DELETE FROM generators WHERE id = $1', [id]);
+    await writeAudit(tx, {
+      entity: 'generator',
+      entityId: id,
+      action: 'delete',
+      before: existing,
+      actorId: actorId(c),
+      actorName: actorName(c) || 'Utilisateur',
+      reason: `Suppression groupe électrogène ${existing.name_code}`,
+    });
   });
 
   return c.json({ ok: true });

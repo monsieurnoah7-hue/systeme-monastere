@@ -104,7 +104,10 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     }
 
     // Invalidation intelligente des caches cibles
-    if (path.includes('/tools')) {
+    if (path.includes('/fleet')) {
+      clearApiCache('/api/fleet');
+      clearApiCache('/api/dashboard');
+    } else if (path.includes('/tools')) {
       clearApiCache('/api/tools');
       clearApiCache('/api/magasins');
       clearApiCache('/api/dashboard');
