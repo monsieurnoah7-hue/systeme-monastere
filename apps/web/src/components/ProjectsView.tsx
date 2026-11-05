@@ -78,9 +78,16 @@ export function ProjectsView({
   }, [projects, search, filterCat, filterDelayedOnly]);
 
   function openCreate() {
+    const year = new Date().getFullYear();
+    const prefix = `CMD-${year}-`;
+    const nextNumber = projects.reduce((max, project) => {
+      if (!project.code.startsWith(prefix)) return max;
+      const suffix = Number(project.code.slice(prefix.length));
+      return Number.isInteger(suffix) ? Math.max(max, suffix) : max;
+    }, 0) + 1;
     setEditingProject(null);
     setForm({
-      code: `CMD-2026-${String(projects.length + 1).padStart(3, '0')}`,
+      code: `${prefix}${String(nextNumber).padStart(3, '0')}`,
       title: '',
       client_name: '',
       site_location: '',

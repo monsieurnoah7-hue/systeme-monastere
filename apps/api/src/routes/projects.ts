@@ -139,7 +139,7 @@ projectsRoutes.get('/', requireAuth, requirePerm('projects.view'), async (c) => 
   });
 });
 
-projectsRoutes.post('/', requirePerm('projects.create'), async (c) => {
+projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) => {
   const body = projectBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) {
     return c.json({ error: body.error.issues[0]?.message || 'Données invalides.' }, 400);
@@ -148,47 +148,60 @@ projectsRoutes.post('/', requirePerm('projects.create'), async (c) => {
   const d = body.data;
   const id = `prj-${Date.now()}`;
 
-  const row = await db.one<ProjectRow>(`
-    INSERT INTO projects (
-      id, code, title, client_name, site_location, category,
-      assigned_worker_ids, assigned_worker_names, budget_hours, spent_hours,
-      hourly_rate_fcfa, penalty_rate_daily_fcfa, ratio_value, ratio_unit, ratio_basis, delivery_deadline,
-      installation_start_date, installation_days, status, notes
-    ) VALUES (
-      $1, $2, $3, $4, $5, $6,
-      $7, $8, $9, $10,
-      $11, $12, $13, $14, $15, $16,
-      $17, $18, $19, $20
-    )
-    RETURNING id, code, title, client_name, site_location, category,
-              assigned_worker_ids, assigned_worker_names,
-              budget_hours, spent_hours, hourly_rate_fcfa, penalty_rate_daily_fcfa,
-              ratio_value, ratio_unit, ratio_basis,
-              delivery_deadline::text AS delivery_deadline,
-              installation_start_date::text AS installation_start_date,
-              installation_days, status, notes,
-              created_at::text AS created_at, updated_at::text AS updated_at
-  `, [
-    id, d.code.trim().toUpperCase(), d.title.trim(), d.client_name.trim(), d.site_location.trim(), d.category,
-    d.assigned_worker_ids, d.assigned_worker_names, d.budget_hours, d.spent_hours,
-    d.hourly_rate_fcfa, d.penalty_rate_daily_fcfa, d.ratio_value ?? null, d.ratio_unit || null, d.ratio_basis || null,
-    d.delivery_deadline, d.installation_start_date || null, d.installation_days, d.status, d.notes || null,
-  ]);
+  const normalizedCode = d.code.trim().toUpperCase();
+  const duplicate = await db.one<{ id: string }>(
+    'SELECT id FROM projects WHERE upper(code) = $1 LIMIT 1',
+    [normalizedCode],
+  );
+  if (duplicate) {
+    return c.json({ error: `Le code ${normalizedCode} est déjà utilisé. Choisissez un autre code.` }, 409);
+  }
 
-  await writeAudit(db, {
-    entity: 'project',
-    entityId: id,
-    action: 'create',
-    after: row,
-    actorId: actorId(c),
-    actorName: actorName(c) || 'Utilisateur',
-    reason: `Création commande projet ${d.code} (${d.title})`,
+  const row = await db.transaction(async (tx) => {
+    const created = await tx.one<ProjectRow>(`
+      INSERT INTO projects (
+        id, code, title, client_name, site_location, category,
+        assigned_worker_ids, assigned_worker_names, budget_hours, spent_hours,
+        hourly_rate_fcfa, penalty_rate_daily_fcfa, ratio_value, ratio_unit, ratio_basis, delivery_deadline,
+        installation_start_date, installation_days, status, notes
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16,
+        $17, $18, $19, $20
+      )
+      RETURNING id, code, title, client_name, site_location, category,
+                assigned_worker_ids, assigned_worker_names,
+                budget_hours, spent_hours, hourly_rate_fcfa, penalty_rate_daily_fcfa,
+                ratio_value, ratio_unit, ratio_basis,
+                delivery_deadline::text AS delivery_deadline,
+                installation_start_date::text AS installation_start_date,
+                installation_days, status, notes,
+                created_at::text AS created_at, updated_at::text AS updated_at
+    `, [
+      id, normalizedCode, d.title.trim(), d.client_name.trim(), d.site_location.trim(), d.category ?? null,
+      d.assigned_worker_ids, d.assigned_worker_names, d.budget_hours, d.spent_hours,
+      d.hourly_rate_fcfa, d.penalty_rate_daily_fcfa, d.ratio_value ?? null, d.ratio_unit || null, d.ratio_basis || null,
+      d.delivery_deadline, d.installation_start_date || null, d.installation_days, d.status, d.notes || null,
+    ]);
+    if (!created) throw new Error('La commande n’a pas pu être enregistrée.');
+
+    await writeAudit(tx, {
+      entity: 'project',
+      entityId: id,
+      action: 'create',
+      after: created,
+      actorId: actorId(c),
+      actorName: actorName(c) || 'Utilisateur',
+      reason: `Création commande projet ${normalizedCode} (${d.title.trim()})`,
+    });
+    return created;
   });
 
-  return c.json({ project: computeProjectMetrics(row!) }, 201);
+  return c.json({ project: computeProjectMetrics(row) }, 201);
 });
 
-projectsRoutes.patch('/:id', requirePerm('projects.edit'), async (c) => {
+projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c) => {
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'Id requis.' }, 400);
 
@@ -276,7 +289,7 @@ projectsRoutes.patch('/:id', requirePerm('projects.edit'), async (c) => {
   return c.json({ project: computeProjectMetrics(row!) });
 });
 
-projectsRoutes.delete('/:id', requirePerm('projects.delete'), async (c) => {
+projectsRoutes.delete('/:id', requireAuth, requirePerm('projects.delete'), async (c) => {
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'Id requis.' }, 400);
 
