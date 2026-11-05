@@ -23,6 +23,7 @@ export type ProjectRow = {
   ratio_value: number | null;
   ratio_unit: string | null;
   ratio_basis: string | null;
+  ratio_quantity: number | null;
   delivery_deadline: string;
   installation_start_date?: string | null;
   installation_days: number;
@@ -98,6 +99,7 @@ const projectBody = z.object({
   ratio_value: z.number().min(0).nullable().optional(),
   ratio_unit: z.string().trim().max(80).nullable().optional(),
   ratio_basis: z.string().trim().max(160).nullable().optional(),
+  ratio_quantity: z.number().positive().nullable().optional(),
   delivery_deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format date requis: AAAA-MM-JJ'),
   installation_start_date: z.string().nullable().optional(),
   installation_days: z.number().min(0).default(0),
@@ -111,7 +113,7 @@ projectsRoutes.get('/', requireAuth, requirePerm('projects.view'), async (c) => 
     SELECT id, code, title, client_name, site_location, category,
            assigned_worker_ids, assigned_worker_names,
            budget_hours, spent_hours, hourly_rate_fcfa, penalty_rate_daily_fcfa,
-           ratio_value, ratio_unit, ratio_basis,
+           ratio_value, ratio_unit, ratio_basis, ratio_quantity,
            delivery_deadline::text AS delivery_deadline,
            installation_start_date::text AS installation_start_date,
            installation_days, status, notes,
@@ -149,6 +151,11 @@ projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) 
   const id = `prj-${Date.now()}`;
 
   const normalizedCode = d.code.trim().toUpperCase();
+  const ratioStarted = d.ratio_value != null || Boolean(d.ratio_unit?.trim()) || d.ratio_quantity != null;
+  if (ratioStarted && (d.ratio_value == null || !d.ratio_unit?.trim() || !d.ratio_quantity || d.ratio_quantity <= 0)) {
+    return c.json({ error: 'Pour calculer le budget, indiquez le temps par unité, le nom de l’unité et la quantité.' }, 400);
+  }
+  const budgetHours = ratioStarted ? d.ratio_value! * d.ratio_quantity! : d.budget_hours;
   const duplicate = await db.one<{ id: string }>(
     'SELECT id FROM projects WHERE upper(code) = $1 LIMIT 1',
     [normalizedCode],
@@ -162,27 +169,27 @@ projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) 
       INSERT INTO projects (
         id, code, title, client_name, site_location, category,
         assigned_worker_ids, assigned_worker_names, budget_hours, spent_hours,
-        hourly_rate_fcfa, penalty_rate_daily_fcfa, ratio_value, ratio_unit, ratio_basis, delivery_deadline,
+        hourly_rate_fcfa, penalty_rate_daily_fcfa, ratio_value, ratio_unit, ratio_basis, ratio_quantity, delivery_deadline,
         installation_start_date, installation_days, status, notes
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20
+        $17, $18, $19, $20, $21
       )
       RETURNING id, code, title, client_name, site_location, category,
                 assigned_worker_ids, assigned_worker_names,
                 budget_hours, spent_hours, hourly_rate_fcfa, penalty_rate_daily_fcfa,
-                ratio_value, ratio_unit, ratio_basis,
+                ratio_value, ratio_unit, ratio_basis, ratio_quantity,
                 delivery_deadline::text AS delivery_deadline,
                 installation_start_date::text AS installation_start_date,
                 installation_days, status, notes,
                 created_at::text AS created_at, updated_at::text AS updated_at
     `, [
       id, normalizedCode, d.title.trim(), d.client_name.trim(), d.site_location.trim(), d.category ?? null,
-      d.assigned_worker_ids, d.assigned_worker_names, d.budget_hours, d.spent_hours,
+      d.assigned_worker_ids, d.assigned_worker_names, budgetHours, d.spent_hours,
       d.hourly_rate_fcfa, d.penalty_rate_daily_fcfa, d.ratio_value ?? null, d.ratio_unit || null, d.ratio_basis || null,
-      d.delivery_deadline, d.installation_start_date || null, d.installation_days, d.status, d.notes || null,
+      d.ratio_quantity ?? null, d.delivery_deadline, d.installation_start_date || null, d.installation_days, d.status, d.notes || null,
     ]);
     if (!created) throw new Error('La commande n’a pas pu être enregistrée.');
 
@@ -215,6 +222,17 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
 
   const d = body.data;
   const hasField = (field: string) => Object.prototype.hasOwnProperty.call(d, field);
+  const ratioTouched = hasField('ratio_value') || hasField('ratio_unit') || hasField('ratio_quantity');
+  const nextRatioValue = hasField('ratio_value') ? d.ratio_value : existing.ratio_value;
+  const nextRatioUnit = hasField('ratio_unit') ? d.ratio_unit : existing.ratio_unit;
+  const nextRatioQuantity = hasField('ratio_quantity') ? d.ratio_quantity : existing.ratio_quantity;
+  const ratioStarted = nextRatioValue != null || Boolean(nextRatioUnit?.trim()) || nextRatioQuantity != null;
+  if (ratioTouched && ratioStarted && (nextRatioValue == null || !nextRatioUnit?.trim() || !nextRatioQuantity || nextRatioQuantity <= 0)) {
+    return c.json({ error: 'Pour calculer le budget, indiquez le temps par unité, le nom de l’unité et la quantité.' }, 400);
+  }
+  const calculatedBudget = ratioStarted && nextRatioValue != null && nextRatioUnit?.trim() && nextRatioQuantity
+    ? nextRatioValue * nextRatioQuantity
+    : null;
   const row = await db.one<ProjectRow>(`
     UPDATE projects SET
       code = COALESCE($2, code),
@@ -224,13 +242,14 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
       category = CASE WHEN $21::boolean THEN $6::text ELSE category END,
       assigned_worker_ids = COALESCE($7, assigned_worker_ids),
       assigned_worker_names = COALESCE($8, assigned_worker_names),
-      budget_hours = COALESCE($9, budget_hours),
+      budget_hours = CASE WHEN $29::boolean THEN $30::numeric ELSE COALESCE($9, budget_hours) END,
       spent_hours = COALESCE($10, spent_hours),
       hourly_rate_fcfa = COALESCE($11, hourly_rate_fcfa),
       penalty_rate_daily_fcfa = COALESCE($12, penalty_rate_daily_fcfa),
       ratio_value = CASE WHEN $22::boolean THEN $13::numeric ELSE ratio_value END,
       ratio_unit = CASE WHEN $23::boolean THEN $14::text ELSE ratio_unit END,
       ratio_basis = CASE WHEN $24::boolean THEN $15::text ELSE ratio_basis END,
+      ratio_quantity = CASE WHEN $27::boolean THEN $28::numeric ELSE ratio_quantity END,
       delivery_deadline = CASE WHEN $16::date IS NOT NULL THEN $16::date ELSE delivery_deadline END,
       installation_start_date = CASE WHEN $25::boolean THEN $17::date ELSE installation_start_date END,
       installation_days = COALESCE($18, installation_days),
@@ -241,7 +260,7 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
     RETURNING id, code, title, client_name, site_location, category,
               assigned_worker_ids, assigned_worker_names,
               budget_hours, spent_hours, hourly_rate_fcfa, penalty_rate_daily_fcfa,
-              ratio_value, ratio_unit, ratio_basis,
+              ratio_value, ratio_unit, ratio_basis, ratio_quantity,
               delivery_deadline::text AS delivery_deadline,
               installation_start_date::text AS installation_start_date,
               installation_days, status, notes,
@@ -273,6 +292,10 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
     hasField('ratio_basis'),
     hasField('installation_start_date'),
     hasField('notes'),
+    hasField('ratio_quantity'),
+    d.ratio_quantity,
+    calculatedBudget !== null,
+    calculatedBudget,
   ]);
 
   await writeAudit(db, {

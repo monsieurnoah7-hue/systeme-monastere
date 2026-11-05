@@ -60,6 +60,9 @@ export function ProjectsView({
     () => projects.filter((project) => project.ratio_value !== null && project.ratio_value !== undefined && project.ratio_unit),
     [projects],
   );
+  const calculatedBudget = form.ratio_value != null && Boolean(form.ratio_unit?.trim()) && form.ratio_quantity != null && form.ratio_quantity > 0
+    ? form.ratio_value * form.ratio_quantity
+    : null;
 
   const filteredProjects = useMemo(() => {
     return projects.filter((p) => {
@@ -94,6 +97,8 @@ export function ProjectsView({
       category: null,
       assigned_worker_ids: [],
       assigned_worker_names: [],
+      ratio_basis: null,
+      ratio_quantity: null,
       penalty_rate_daily_fcfa: 0,
       delivery_deadline: '',
       installation_start_date: '',
@@ -111,22 +116,34 @@ export function ProjectsView({
   }
 
   async function handleSave() {
-    const ratioStarted = form.ratio_value !== null && form.ratio_value !== undefined || Boolean(form.ratio_unit?.trim());
+    const ratioStarted = form.ratio_value != null || Boolean(form.ratio_unit?.trim()) || form.ratio_quantity != null;
+    const legacyRatioUnchanged = Boolean(
+      editingProject &&
+      editingProject.ratio_quantity == null &&
+      form.ratio_value === editingProject.ratio_value &&
+      form.ratio_unit === editingProject.ratio_unit &&
+      form.ratio_quantity == null
+    );
     if (!form.code?.trim() || !form.title?.trim() || !form.client_name?.trim() || !form.site_location?.trim() || !form.delivery_deadline) {
       setError('Code, intitulé, client, lieu et date limite de livraison sont obligatoires.');
       return;
     }
-    if (ratioStarted && (form.ratio_value === null || form.ratio_value === undefined || !form.ratio_unit?.trim())) {
-      setError('Un ratio configuré doit préciser une valeur et son unité.');
+    if (ratioStarted && !legacyRatioUnchanged && (form.ratio_value == null || !form.ratio_unit?.trim() || form.ratio_quantity == null || form.ratio_quantity <= 0)) {
+      setError('Pour calculer le budget, indiquez le temps pour une unité, le nom de l’unité et la quantité.');
       return;
     }
     setBusy(true);
     setError(null);
     try {
+      const projectForm = {
+        ...form,
+        ...(calculatedBudget !== null ? { budget_hours: calculatedBudget } : {}),
+        ...(legacyRatioUnchanged ? { ratio_value: undefined, ratio_unit: undefined, ratio_quantity: undefined } : {}),
+      };
       if (editingProject) {
-        await updateProject(editingProject.id, form);
+        await updateProject(editingProject.id, projectForm);
       } else {
-        await createProject(form);
+        await createProject(projectForm);
       }
       setModalOpen(false);
       onRefresh();
@@ -223,8 +240,8 @@ export function ProjectsView({
           <div className="mt-2 flex gap-2 overflow-x-auto pb-1 text-[11px] text-ink-soft">
             {configuredRatios.map((project) => (
               <span key={project.id} className="shrink-0 rounded-lg border border-line bg-surface px-2.5 py-1.5">
-                <strong className="text-ink">{project.category || project.title}</strong> · {project.ratio_value} {project.ratio_unit}
-                {project.ratio_basis ? ` / ${project.ratio_basis}` : ''}
+                <strong className="text-ink">{project.category || project.title}</strong> · {project.ratio_value} h / {project.ratio_unit}
+                {project.ratio_quantity != null ? ` × ${project.ratio_quantity} = ${project.budget_hours} h` : ''}
               </span>
             ))}
           </div>
@@ -426,8 +443,8 @@ export function ProjectsView({
 
                         {p.ratio_value !== null && p.ratio_value !== undefined && p.ratio_unit ? (
                           <div className="rounded-lg border border-line bg-paper-2/40 px-3 py-2.5 text-xs text-ink-soft">
-                            <span className="font-semibold text-ink">Ratio du projet :</span> {p.ratio_value} {p.ratio_unit}
-                            {p.ratio_basis ? ` / ${p.ratio_basis}` : ''}
+                            <span className="font-semibold text-ink">Temps par unité :</span> {p.ratio_value} h / {p.ratio_unit}
+                            {p.ratio_quantity != null ? ` · ${p.ratio_quantity} ${p.ratio_unit} = ${p.budget_hours} h prévues` : ''}
                           </div>
                         ) : null}
 
@@ -752,13 +769,19 @@ export function ProjectsView({
             </p>
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Budget Alloué (heures)</label>
+                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Budget prévu (heures)</label>
                 <input
                   type="number"
-                  value={form.budget_hours ?? ''}
+                  value={calculatedBudget ?? form.budget_hours ?? ''}
+                  readOnly={calculatedBudget !== null}
                   onChange={(e) => setForm((f) => ({ ...f, budget_hours: e.target.value === '' ? undefined : Number(e.target.value) }))}
                   className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
                 />
+                <p className="mt-1 text-[10px] text-ink-faint">
+                  {calculatedBudget !== null
+                    ? `${form.ratio_value} h × ${form.ratio_quantity} ${form.ratio_unit} = ${calculatedBudget} h`
+                    : 'Le total se calcule automatiquement si vous renseignez les unités ci-dessous.'}
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-[11px] font-medium text-ink-soft">Heures Consommées</label>
@@ -779,10 +802,11 @@ export function ProjectsView({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Ratio configuré</label>
+                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Temps pour 1 unité (heures)</label>
                 <input
                   type="number"
                   min="0"
+                  step="any"
                   value={form.ratio_value ?? ''}
                   onChange={(e) => setForm((f) => ({ ...f, ratio_value: e.target.value === '' ? null : Number(e.target.value) }))}
                   placeholder="Ex. 2,5"
@@ -790,26 +814,29 @@ export function ProjectsView({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Unité du ratio</label>
+                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Unité à produire</label>
                 <input
                   type="text"
                   value={form.ratio_unit || ''}
                   onChange={(e) => setForm((f) => ({ ...f, ratio_unit: e.target.value || null }))}
-                  placeholder="h / bloc, h / m²…"
+                  placeholder="Carreau, porte, m²…"
                   className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
                 />
               </div>
               <div className="sm:col-span-2 lg:col-span-1">
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Base de calcul</label>
+                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Quantité</label>
                 <input
-                  type="text"
-                  value={form.ratio_basis || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, ratio_basis: e.target.value || null }))}
-                  placeholder="bloc-porte, m², module…"
-                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={form.ratio_quantity ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, ratio_quantity: e.target.value === '' ? null : Number(e.target.value) }))}
+                  placeholder="Ex. 4"
+                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
                 />
               </div>
             </div>
+            <p className="text-[10px] text-ink-faint">Exemple : 2,5 heures par carreau × 4 carreaux = 10 heures de budget.</p>
           </div>
 
           {/* Planification et délais propres à ce projet */}

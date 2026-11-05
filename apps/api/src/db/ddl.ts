@@ -500,6 +500,7 @@ CREATE TABLE IF NOT EXISTS projects (
   ratio_value numeric,
   ratio_unit text,
   ratio_basis text,
+  ratio_quantity numeric,
 
   -- Planification Livraisons & Pose sur Chantier (PDF Pt 2)
   delivery_deadline date NOT NULL,
@@ -514,7 +515,7 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE INDEX IF NOT EXISTS projects_code_idx ON projects(code);
 CREATE INDEX IF NOT EXISTS projects_deadline_idx ON projects(delivery_deadline);
 
--- Migration 016: projets et ratios entièrement configurables par la Direction.
+-- Migrations 016/017: projets configurables et quantité pour calculer le budget par ratio.
 ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_category_check;
 ALTER TABLE projects ALTER COLUMN category DROP DEFAULT;
 ALTER TABLE projects ALTER COLUMN category DROP NOT NULL;
@@ -527,6 +528,7 @@ ALTER TABLE projects ALTER COLUMN status SET DEFAULT 'planifie';
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_value numeric;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_unit text;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_basis text;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_quantity numeric;
 `;
 
-export const MIGRATION_NAME = '016_configurable_projects_and_ratios';
+export const MIGRATION_NAME = '017_project_ratio_quantity';

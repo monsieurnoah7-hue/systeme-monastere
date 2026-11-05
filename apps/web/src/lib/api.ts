@@ -962,6 +962,7 @@ export type Project = {
   ratio_value: number | null;
   ratio_unit: string | null;
   ratio_basis: string | null;
+  ratio_quantity: number | null;
   delivery_deadline: string;
   installation_start_date?: string | null;
   installation_days: number;
