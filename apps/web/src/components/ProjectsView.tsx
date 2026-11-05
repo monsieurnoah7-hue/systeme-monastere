@@ -94,13 +94,9 @@ export function ProjectsView({
       category: null,
       assigned_worker_ids: [],
       assigned_worker_names: [],
-      budget_hours: 0,
-      spent_hours: 0,
-      hourly_rate_fcfa: 0,
       penalty_rate_daily_fcfa: 0,
       delivery_deadline: '',
       installation_start_date: '',
-      installation_days: 0,
       status: 'planifie',
     });
     setError(null);
@@ -759,8 +755,8 @@ export function ProjectsView({
                 <label className="mb-1 block text-[11px] font-medium text-ink-soft">Budget Alloué (heures)</label>
                 <input
                   type="number"
-                  value={form.budget_hours || 0}
-                  onChange={(e) => setForm((f) => ({ ...f, budget_hours: Number(e.target.value) }))}
+                  value={form.budget_hours ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, budget_hours: e.target.value === '' ? undefined : Number(e.target.value) }))}
                   className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
                 />
               </div>
@@ -768,8 +764,8 @@ export function ProjectsView({
                 <label className="mb-1 block text-[11px] font-medium text-ink-soft">Heures Consommées</label>
                 <input
                   type="number"
-                  value={form.spent_hours || 0}
-                  onChange={(e) => setForm((f) => ({ ...f, spent_hours: Number(e.target.value) }))}
+                  value={form.spent_hours ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, spent_hours: e.target.value === '' ? undefined : Number(e.target.value) }))}
                   className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
                 />
               </div>
@@ -777,8 +773,8 @@ export function ProjectsView({
                 <label className="mb-1 block text-[11px] font-medium text-ink-soft">Taux Horaire (FCFA)</label>
                 <input
                   type="number"
-                  value={form.hourly_rate_fcfa ?? 0}
-                  onChange={(e) => setForm((f) => ({ ...f, hourly_rate_fcfa: Number(e.target.value) }))}
+                  value={form.hourly_rate_fcfa ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, hourly_rate_fcfa: e.target.value === '' ? undefined : Number(e.target.value) }))}
                   className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
                 />
               </div>
@@ -845,8 +841,8 @@ export function ProjectsView({
                 <label className="mb-1 block text-[11px] font-medium text-ink-soft">Durée Pose (jours)</label>
                 <input
                   type="number"
-                  value={form.installation_days ?? 0}
-                  onChange={(e) => setForm((f) => ({ ...f, installation_days: Number(e.target.value) }))}
+                  value={form.installation_days ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, installation_days: e.target.value === '' ? undefined : Number(e.target.value) }))}
                   className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
                 />
               </div>
