@@ -27,7 +27,9 @@ import {
   updateGenerator,
   deleteGenerator,
 } from '../lib/api';
-import { Button, Card, Modal, Banner, Spinner, cx } from './ui';
+import { Button, Card, Drawer, Modal, Banner, Spinner, cx } from './ui';
+
+type FleetAlertKind = 'insurance' | 'technical_visit' | 'vehicle_oil' | 'generator_oil' | 'vehicles' | 'generators';
 
 export function FleetView({
   summary,
@@ -42,6 +44,7 @@ export function FleetView({
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterAlertOnly, setFilterAlertOnly] = useState(false);
+  const [alertDrawer, setAlertDrawer] = useState<FleetAlertKind | null>(null);
 
   // Modals state
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
@@ -66,6 +69,14 @@ export function FleetView({
   const vehicles = summary?.vehicles ?? [];
   const generators = summary?.generators ?? [];
   const alerts = summary?.alerts;
+
+  function openAlertList(kind: FleetAlertKind) {
+    const isGeneratorAlert = kind === 'generator_oil' || kind === 'generators';
+    setActiveTab(isGeneratorAlert ? 'generators' : 'vehicles');
+    setFilterType('all');
+    setFilterAlertOnly(true);
+    setAlertDrawer(kind);
+  }
 
   // Filtrage des véhicules
   const filteredVehicles = useMemo(() => {
@@ -107,6 +118,30 @@ export function FleetView({
       return matchesSearch && matchesAlert;
     });
   }, [generators, search, filterAlertOnly]);
+
+  const drawerVehicles = alertDrawer === 'insurance'
+    ? vehicles.filter((v) => v.insurance_status === 'urgent_15j' || v.insurance_status === 'expire')
+    : alertDrawer === 'technical_visit'
+      ? vehicles.filter((v) => v.tech_visit_status === 'urgent_15j' || v.tech_visit_status === 'expire')
+      : alertDrawer === 'vehicle_oil'
+        ? vehicles.filter((v) => v.oil_change_status === 'depasse' || v.oil_change_status === 'proche')
+        : alertDrawer === 'vehicles'
+          ? vehicles.filter((v) => v.insurance_status === 'urgent_15j' || v.insurance_status === 'expire' || v.tech_visit_status === 'urgent_15j' || v.tech_visit_status === 'expire' || v.oil_change_status === 'depasse' || v.oil_change_status === 'proche')
+          : [];
+  const drawerGenerators = alertDrawer === 'generator_oil' || alertDrawer === 'generators'
+    ? generators.filter((g) => g.oil_change_status === 'depasse' || g.oil_change_status === 'proche')
+    : [];
+  const drawerTitle = alertDrawer === 'insurance'
+    ? 'Assurances à vérifier'
+    : alertDrawer === 'technical_visit'
+      ? 'Visites techniques à effectuer'
+      : alertDrawer === 'vehicle_oil'
+        ? 'Vidanges véhicules à effectuer'
+        : alertDrawer === 'generator_oil'
+          ? 'Vidanges groupes à effectuer'
+          : alertDrawer === 'vehicles'
+            ? 'Alertes du parc automobile'
+            : 'Alertes groupes électrogènes';
 
   // Handlers Véhicules
   function openCreateVehicle() {
@@ -260,6 +295,22 @@ export function FleetView({
     }
   }
 
+  function vehicleAlertReasons(v: Vehicle) {
+    const reasons: string[] = [];
+    if ((alertDrawer === 'insurance' || alertDrawer === 'vehicles') && (v.insurance_status === 'urgent_15j' || v.insurance_status === 'expire')) {
+      reasons.push(v.insurance_status === 'expire' ? 'Assurance expirée' : `Assurance à renouveler dans ${v.insurance_days_left} j`);
+    }
+    if ((alertDrawer === 'technical_visit' || alertDrawer === 'vehicles') && (v.tech_visit_status === 'urgent_15j' || v.tech_visit_status === 'expire')) {
+      reasons.push(v.tech_visit_status === 'expire' ? 'Visite technique dépassée' : `Visite technique dans ${v.tech_visit_days_left} j`);
+    }
+    if ((alertDrawer === 'vehicle_oil' || alertDrawer === 'vehicles') && (v.oil_change_status === 'depasse' || v.oil_change_status === 'proche')) {
+      reasons.push(v.oil_change_status === 'depasse'
+        ? `Vidange dépassée de ${Math.abs(v.mileage_to_oil_change ?? 0).toLocaleString()} km`
+        : `Vidange à prévoir dans ${v.mileage_to_oil_change?.toLocaleString()} km`);
+    }
+    return reasons;
+  }
+
   return (
     <div className="space-y-6">
       {/* Bannière de Vigie Alertes Opérationnelles Flotte */}
@@ -275,24 +326,24 @@ export function FleetView({
               </p>
               <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-ink-soft">
                 {alerts.insurance_urgent > 0 && (
-                  <span className="rounded-md bg-red-500/10 text-red-600 dark:text-red-400 font-semibold px-2 py-0.5 border border-red-500/20">
+                  <button type="button" onClick={() => openAlertList('insurance')} className="rounded-md bg-red-500/10 text-red-600 dark:text-red-400 font-semibold px-2 py-0.5 border border-red-500/20 hover:bg-red-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
                     {alerts.insurance_urgent} assurance(s) expirée(s) ou &lt; 15j
-                  </span>
+                  </button>
                 )}
                 {alerts.tech_visit_urgent > 0 && (
-                  <span className="rounded-md bg-amber-500/10 text-amber font-semibold px-2 py-0.5 border border-amber-500/20">
+                  <button type="button" onClick={() => openAlertList('technical_visit')} className="rounded-md bg-amber-500/10 text-amber font-semibold px-2 py-0.5 border border-amber-500/20 hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber">
                     {alerts.tech_visit_urgent} visite(s) technique(s) due(s)
-                  </span>
+                  </button>
                 )}
                 {alerts.oil_change_urgent > 0 && (
-                  <span className="rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold px-2 py-0.5 border border-blue-500/20">
+                  <button type="button" onClick={() => openAlertList('vehicle_oil')} className="rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold px-2 py-0.5 border border-blue-500/20 hover:bg-blue-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     {alerts.oil_change_urgent} vidange(s) véhicule à effectuer
-                  </span>
+                  </button>
                 )}
                 {alerts.generator_oil_urgent > 0 && (
-                  <span className="rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold px-2 py-0.5 border border-purple-500/20">
+                  <button type="button" onClick={() => openAlertList('generator_oil')} className="rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold px-2 py-0.5 border border-purple-500/20 hover:bg-purple-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
                     {alerts.generator_oil_urgent} vidange(s) groupe électrogène
-                  </span>
+                  </button>
                 )}
               </div>
             </div>
@@ -315,49 +366,53 @@ export function FleetView({
       {/* Navigation Onglets Flotte : Véhicules vs Groupes Électrogènes */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-3">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('vehicles');
-              setFilterType('all');
-            }}
-            className={cx(
-              'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border',
-              activeTab === 'vehicles'
-                ? 'bg-amber text-white border-amber shadow-xs'
-                : 'bg-surface text-ink-soft hover:bg-surface-2 border-line'
-            )}
-          >
-            <Truck size={15} />
-            <span>Parc Automobile ({vehicles.length})</span>
-            {alerts && (alerts.insurance_urgent > 0 || alerts.tech_visit_urgent > 0 || alerts.oil_change_urgent > 0) && (
-              <span className="ml-1 rounded-full bg-red-500 text-white text-[10px] px-1.5 py-0.2 font-extrabold">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('vehicles');
+                setFilterType('all');
+              }}
+              className={cx(
+                'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border',
+                activeTab === 'vehicles'
+                  ? 'bg-amber text-white border-amber shadow-xs'
+                  : 'bg-surface text-ink-soft hover:bg-surface-2 border-line'
+              )}
+            >
+              <Truck size={15} />
+              <span>Parc Automobile ({vehicles.length})</span>
+            </button>
+            {alerts && (alerts.insurance_urgent + alerts.tech_visit_urgent + alerts.oil_change_urgent) > 0 && (
+              <button type="button" aria-label="Afficher les alertes du parc automobile" onClick={() => openAlertList('vehicles')} className="rounded-full bg-red-500 text-white text-[10px] px-1.5 py-0.5 font-extrabold hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
                 {alerts.insurance_urgent + alerts.tech_visit_urgent + alerts.oil_change_urgent}
-              </span>
+              </button>
             )}
-          </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('generators');
-              setFilterType('all');
-            }}
-            className={cx(
-              'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border',
-              activeTab === 'generators'
-                ? 'bg-amber text-white border-amber shadow-xs'
-                : 'bg-surface text-ink-soft hover:bg-surface-2 border-line'
-            )}
-          >
-            <Zap size={15} />
-            <span>Groupes Électrogènes ({generators.length})</span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('generators');
+                setFilterType('all');
+              }}
+              className={cx(
+                'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border',
+                activeTab === 'generators'
+                  ? 'bg-amber text-white border-amber shadow-xs'
+                  : 'bg-surface text-ink-soft hover:bg-surface-2 border-line'
+              )}
+            >
+              <Zap size={15} />
+              <span>Groupes Électrogènes ({generators.length})</span>
+            </button>
             {alerts && alerts.generator_oil_urgent > 0 && (
-              <span className="ml-1 rounded-full bg-red-500 text-white text-[10px] px-1.5 py-0.2 font-extrabold">
+              <button type="button" aria-label="Afficher les alertes des groupes électrogènes" onClick={() => openAlertList('generators')} className="rounded-full bg-red-500 text-white text-[10px] px-1.5 py-0.5 font-extrabold hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
                 {alerts.generator_oil_urgent}
-              </span>
+              </button>
             )}
-          </button>
+          </div>
         </div>
 
         {/* Boutons d'Action Création */}
@@ -820,6 +875,52 @@ export function FleetView({
       {/* =========================================================================
           MODAL VÉHICULE (Création / Modification)
       ========================================================================= */}
+      <Drawer
+        open={alertDrawer !== null}
+        title={drawerTitle}
+        subtitle={`${drawerVehicles.length + drawerGenerators.length} élément(s) à vérifier`}
+        onClose={() => setAlertDrawer(null)}
+      >
+        <div className="space-y-2.5">
+          {drawerVehicles.map((v) => (
+            <article key={v.id} className="rounded-xl border border-line bg-surface p-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-xs font-bold text-ink">{v.registration_number}</p>
+                  <p className="mt-0.5 truncate text-sm font-semibold text-ink">{v.brand_model}</p>
+                </div>
+                <span className="shrink-0 rounded-md bg-red-500/10 px-2 py-1 text-[10px] font-bold text-red-600 dark:text-red-400">Véhicule</span>
+              </div>
+              <ul className="mt-2 space-y-1 border-t border-line pt-2 text-xs text-ink-soft">
+                {vehicleAlertReasons(v).map((reason) => <li key={reason}>{reason}</li>)}
+              </ul>
+              {alertDrawer === 'insurance' && v.insurance_end_date && <p className="mt-2 text-[11px] text-ink-faint">Échéance : {v.insurance_end_date}</p>}
+              {alertDrawer === 'technical_visit' && v.technical_visit_due_date && <p className="mt-2 text-[11px] text-ink-faint">Échéance : {v.technical_visit_due_date}</p>}
+            </article>
+          ))}
+          {drawerGenerators.map((g) => (
+            <article key={g.id} className="rounded-xl border border-line bg-surface p-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-xs font-bold text-ink">{g.name_code}</p>
+                  <p className="mt-0.5 truncate text-sm font-semibold text-ink">{g.brand_model}</p>
+                </div>
+                <span className="shrink-0 rounded-md bg-amber-wash px-2 py-1 text-[10px] font-bold text-amber">Groupe</span>
+              </div>
+              <p className="mt-2 border-t border-line pt-2 text-xs text-ink-soft">
+                {g.oil_change_status === 'depasse'
+                  ? `Vidange dépassée de ${Math.abs(g.hours_to_oil_change ?? 0).toLocaleString()} h`
+                  : `Vidange à prévoir dans ${g.hours_to_oil_change?.toLocaleString()} h`}
+              </p>
+              <p className="mt-1 text-[11px] text-ink-faint">Compteur : {Number(g.running_hours).toLocaleString()} h · Seuil : {Number(g.next_oil_change_hours).toLocaleString()} h</p>
+            </article>
+          ))}
+          {drawerVehicles.length + drawerGenerators.length === 0 && (
+            <p className="rounded-xl border border-line bg-surface p-4 text-sm text-ink-soft">Aucune alerte dans cette catégorie.</p>
+          )}
+        </div>
+      </Drawer>
+
       <Modal
         open={vehicleModalOpen}
         title={editingVehicle ? `Modifier Véhicule : ${editingVehicle.brand_model}` : 'Ajouter un Véhicule au Parc'}

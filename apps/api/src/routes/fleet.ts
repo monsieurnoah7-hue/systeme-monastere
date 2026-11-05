@@ -124,6 +124,15 @@ function computeVehicleAlerts(v: VehicleRow): VehicleRow {
 }
 
 function computeGeneratorAlerts(g: GeneratorRow): GeneratorRow {
+  // PostgreSQL renvoie les colonnes NUMERIC sous forme de chaînes. Le client
+  // réutilise ces valeurs dans le formulaire PATCH : normaliser ici garantit
+  // un contrat JSON numérique stable pour la création et les modifications.
+  g.power_kva = Number(g.power_kva) || 0;
+  g.running_hours = Number(g.running_hours) || 0;
+  g.last_oil_change_hours = Number(g.last_oil_change_hours) || 0;
+  g.oil_change_interval_hours = Number(g.oil_change_interval_hours) || 0;
+  g.next_oil_change_hours = Number(g.next_oil_change_hours) || 0;
+  g.fuel_level_pct = Number(g.fuel_level_pct) || 0;
   const remainingHours = Number(g.next_oil_change_hours) - Number(g.running_hours);
   g.hours_to_oil_change = remainingHours;
   if (remainingHours <= 0) {
@@ -476,24 +485,38 @@ fleetRoutes.delete('/vehicles/:id', requireAuth, requirePerm('tools.delete'), as
 // -------------------------------------------------------------------------
 // 3. Groupes Électrogènes CRUD
 // -------------------------------------------------------------------------
+function numberInput(min: number, max?: number) {
+  const schema = max === undefined ? z.number().min(min) : z.number().min(min).max(max);
+  return z.preprocess(
+    (value) => typeof value === 'string' && value.trim() !== '' ? Number(value) : value,
+    schema,
+  );
+}
+
 const generatorBody = z.object({
   name_code: z.string().min(2, 'Nom ou code du groupe requis'),
   brand_model: z.string().min(2, 'Marque et modèle requis'),
-  power_kva: z.number().min(0).default(0),
+  power_kva: numberInput(0).default(0),
   location: z.string().default('Monastère Central'),
   assigned_manager_id: z.string().nullable().optional(),
   assigned_manager_name: z.string().nullable().optional(),
-  running_hours: z.number().min(0).default(0),
+  running_hours: numberInput(0).default(0),
   last_oil_change_date: z.string().nullable().optional(),
-  last_oil_change_hours: z.number().min(0).default(0),
-  oil_change_interval_hours: z.number().min(10).default(250),
-  next_oil_change_hours: z.number().min(0).default(250),
+  last_oil_change_hours: numberInput(0).default(0),
+  oil_change_interval_hours: numberInput(10).default(250),
+  next_oil_change_hours: numberInput(0).default(250),
   last_maintenance_date: z.string().nullable().optional(),
   next_maintenance_date: z.string().nullable().optional(),
   status: z.enum(['en_fonction', 'en_veille', 'en_maintenance', 'hors_service']).default('en_fonction'),
-  fuel_level_pct: z.number().min(0).max(100).default(100),
+  fuel_level_pct: numberInput(0, 100).default(100),
   photo_path: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+});
+
+const generatorPatchBody = generatorBody.partial().extend({
+  // Permet de préserver une ancienne valeur hors plage (ex. 1000 %) si elle
+  // n'est pas modifiée, sans accepter d'enregistrer une nouvelle valeur invalide.
+  fuel_level_pct: numberInput(0).optional(),
 });
 
 fleetRoutes.get('/generators', requireAuth, async (c) => {
@@ -570,7 +593,7 @@ fleetRoutes.post('/generators', requireAuth, requirePerm('tools.create'), async 
 fleetRoutes.patch('/generators/:id', requireAuth, requirePerm('tools.edit'), async (c) => {
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'Identifiant requis.' }, 400);
-  const body = generatorBody.partial().safeParse(await c.req.json().catch(() => ({})));
+  const body = generatorPatchBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) {
     return c.json({ error: body.error.issues[0]?.message || 'Données invalides.' }, 400);
   }
@@ -579,6 +602,13 @@ fleetRoutes.patch('/generators/:id', requireAuth, requirePerm('tools.edit'), asy
   if (!existing) return c.json({ error: 'Groupe électrogène introuvable.' }, 404);
 
   const d = body.data;
+  if (d.fuel_level_pct !== undefined && d.fuel_level_pct > 100) {
+    if (d.fuel_level_pct === Number(existing.fuel_level_pct)) {
+      d.fuel_level_pct = undefined;
+    } else {
+      return c.json({ error: 'Le niveau de carburant doit être compris entre 0 et 100 %.' }, 400);
+    }
+  }
   const row = await db.one<GeneratorRow>(`
     UPDATE generators SET
       name_code = COALESCE($2, name_code),

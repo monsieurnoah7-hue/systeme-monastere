@@ -291,6 +291,29 @@ async function downloadFile(url: string, filename: string, init?: RequestInit): 
 }
 
 export function Parametres({ user }: { user: User }) {
+  const [terminalPermission, setTerminalPermission] = useState<boolean | null>(user.role === 'direction' ? true : null);
+
+  useEffect(() => {
+    if (user.role === 'direction') return;
+    let cancelled = false;
+    api<{ permissions: Record<string, boolean> }>('/api/permissions/me', { bypassCache: true })
+      .then((result) => {
+        if (!cancelled) setTerminalPermission(Boolean(result.permissions?.['terminals.manage']));
+      })
+      .catch(() => {
+        if (!cancelled) setTerminalPermission(false);
+      });
+    return () => { cancelled = true; };
+  }, [user.role]);
+
+  if (user.role !== 'direction' && terminalPermission === null) {
+    return <div className="grid min-h-48 place-items-center"><Spinner /></div>;
+  }
+
+  if (user.role !== 'direction' && terminalPermission) {
+    return <TerminalManager />;
+  }
+
   if (user.role !== 'direction') {
     return (
       <div className="space-y-6">
@@ -310,6 +333,110 @@ export function Parametres({ user }: { user: User }) {
   }
 
   return <AdminSettings user={user} />;
+}
+
+function TerminalManager() {
+  const toast = useToast();
+  const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [id, setId] = useState('');
+
+  async function loadTerminals() {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api<{ terminals: TerminalInfo[] }>('/api/terminals', { bypassCache: true });
+      setTerminals(result.terminals);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Chargement des bornes impossible.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void loadTerminals(); }, []);
+
+  async function createTerminal() {
+    setBusy(true);
+    setFormError(null);
+    try {
+      await api('/api/terminals', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), id: id.trim() || undefined }),
+      });
+      setOpen(false);
+      setName('');
+      setId('');
+      toast('Terminal enregistré.', 'success');
+      await loadTerminals();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Enregistrement impossible.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleTerminal(terminal: TerminalInfo) {
+    try {
+      await api(`/api/terminals/${terminal.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active: !terminal.active }),
+      });
+      toast(terminal.active ? 'Terminal désactivé.' : 'Terminal activé.', 'success');
+      await loadTerminals();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Modification refusée.', 'error');
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Terminaux de pointage" hint="Créer et gérer les bornes Kiosque de l’atelier." />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-ink-soft">{terminals.filter((terminal) => terminal.active).length} borne(s) active(s) sur {terminals.length}</p>
+        <Button variant="primary" icon={<Plus size={15} />} onClick={() => { setFormError(null); setOpen(true); }}>Nouvelle borne</Button>
+      </div>
+      {error ? <Banner tone="error">{error}</Banner> : null}
+      {loading ? <div className="grid min-h-40 place-items-center"><Spinner /></div> : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {terminals.map((terminal) => (
+            <Card key={terminal.id} className="border-line bg-surface">
+              <CardContent className="flex items-start justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <p className="font-semibold text-ink">{terminal.name}</p>
+                  <p className="mt-1 font-mono text-xs text-ink-soft">{terminal.id}</p>
+                  <p className="mt-2 text-xs text-ink-faint">{terminal.punches_today} pointage(s) aujourd’hui</p>
+                  {terminal.last_used ? <p className="mt-1 text-xs text-ink-faint">Dernière activité : {formatDateTime(terminal.last_used)}</p> : null}
+                </div>
+                <Button size="sm" variant={terminal.active ? 'outline-danger' : 'secondary'} onClick={() => void toggleTerminal(terminal)}>
+                  {terminal.active ? 'Désactiver' : 'Activer'}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+          {terminals.length === 0 ? <EmptyState title="Aucune borne enregistrée" hint="Créez une borne pour commencer." /> : null}
+        </div>
+      )}
+      <Modal open={open} title="Enregistrer un terminal" onClose={() => setOpen(false)} footer={
+        <><Button variant="ghost" onClick={() => setOpen(false)}>Annuler</Button><Button variant="primary" disabled={busy || name.trim().length < 3} onClick={() => void createTerminal()}>{busy ? <Spinner /> : 'Enregistrer'}</Button></>
+      }>
+        <div className="space-y-4">
+          {formError ? <Banner tone="error">{formError}</Banner> : null}
+          <label className="block text-xs font-medium text-ink-soft">Nom de la borne
+            <input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex. Tablette de l’atelier" className="mt-1.5 h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none" />
+          </label>
+          <label className="block text-xs font-medium text-ink-soft">Identifiant (facultatif)
+            <input value={id} onChange={(event) => setId(event.target.value.toUpperCase())} placeholder="Généré automatiquement" className="mt-1.5 h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
+          </label>
+        </div>
+      </Modal>
+    </div>
+  );
 }
 
 function AdminSettings({ user }: { user: User }) {
