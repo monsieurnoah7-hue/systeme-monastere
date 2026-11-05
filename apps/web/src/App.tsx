@@ -7,6 +7,7 @@ import { UndoProvider } from './components/UndoToast';
 import { Login } from './screens/Login';
 
 const Pointage = lazy(() => import('./screens/Pointage').then((m) => ({ default: m.Pointage })));
+const Projets = lazy(() => import('./screens/Projets'));
 const Outils = lazy(() => import('./screens/Outils').then((m) => ({ default: m.Outils })));
 const Dashboard = lazy(() => import('./screens/Dashboard').then((m) => ({ default: m.Dashboard })));
 const Stock = lazy(() => import('./screens/Stock').then((m) => ({ default: m.Stock })));
@@ -106,6 +107,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   // Track visited views to keep them alive in DOM for instant 0ms tab switching
   useEffect(() => {
     if (view) {
+      window.dispatchEvent(new CustomEvent('view-changed', { detail: view }));
       setVisitedViews((prev) => {
         if (prev.has(view)) return prev;
         const next = new Set(prev);
@@ -175,9 +177,13 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       }
     };
     const handleHash = () => {
-      const raw = window.location.hash.replace(/^#/, '') as ViewId;
-      if (raw && allowed.includes(raw)) {
-        setView(raw);
+      const raw = window.location.hash.replace(/^#/, '').split('/')[0];
+      if (raw === 'kiosk') {
+        if (allowed.includes('pointage')) setView('pointage');
+        return;
+      }
+      if (raw && (allowed as string[]).includes(raw)) {
+        setView(raw as ViewId);
       }
     };
     window.addEventListener('nav-view', handleNav as EventListener);
@@ -220,6 +226,11 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
             {visitedViews.has('dashboard') && (
               <div className={activeView === 'dashboard' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'dashboard'}>
                 <Dashboard />
+              </div>
+            )}
+            {visitedViews.has('projets') && (
+              <div className={activeView === 'projets' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'projets'}>
+                <Projets user={user} permissions={permissions} />
               </div>
             )}
             {visitedViews.has('outils') && (

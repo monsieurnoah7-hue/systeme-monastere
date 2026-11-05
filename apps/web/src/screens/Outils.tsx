@@ -29,12 +29,21 @@ import {
   EmptyState,
   Field,
   Modal,
+  PageHeader,
   SelectField,
   Spinner,
   TextArea,
   cx,
   useToast,
 } from '../components/ui';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
 import { useUndo } from '../components/UndoToast';
 import {
   IconChevronRight,
@@ -61,11 +70,18 @@ import {
   Zap,
   Edit3,
   ArrowDownToLine,
+  Truck,
+  Menu,
+  RefreshCw,
+  Search,
+  X,
 } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { ExcelImportModal } from '../components/ExcelImportModal';
+import { FleetView } from '../components/FleetView';
 import { computePortfolioAudit, computeToolAccounting, formatCurrency } from '../lib/accounting';
+import { fetchFleetSummary, type FleetSummary } from '../lib/api';
 
 type ToolDetail = { tool: Tool; events: ToolEvent[]; loan: ToolLoan | null };
 type Facets = { categories: string[]; locations: string[] };
@@ -209,9 +225,18 @@ export function Outils({
 
   const [newOpen, setNewOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'tools' | 'loans'>('tools');
+  const [activeTab, setActiveTab] = useState<'tools' | 'loans' | 'fleet'>('tools');
+  const [fleetSummary, setFleetSummary] = useState<FleetSummary | null>(null);
   const [activeLoans, setActiveLoans] = useState<ToolLoan[]>([]);
   const [loansSearch, setLoansSearch] = useState('');
+
+  const loadFleet = useCallback(() => {
+    fetchFleetSummary().then(setFleetSummary).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadFleet();
+  }, [loadFleet, reload]);
 
   // Reference Quick Movement Hub modal
   const [movementTool, setMovementTool] = useState<Tool | null>(null);
@@ -844,141 +869,384 @@ export function Outils({
 
   return (
     <div className="space-y-4 pb-12">
-      {/* Header Banner */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
-            Parc Matériel &amp; Machines
-          </h1>
-          <p className="text-xs text-ink-faint mt-0.5">
-            Équipements durables, outillage d’atelier &amp; prêts réversibles
-          </p>
-        </div>
+      <PageHeader
+        title="Parc Matériel & Machines"
+      />
 
-        <div className="flex flex-wrap items-center gap-2">
-          {canExportReports && (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<Download size={14} />}
-                onClick={handleExportExcel}
-              >
-                Excel
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<Printer size={14} />}
-                onClick={handleExportPdf}
-              >
-                Imprimer
-              </Button>
-            </>
-          )}
-          <Button
-            size="sm"
-            icon={<IconPrinter size={16} />}
-            onClick={() => {
-              setPrintPick(Object.fromEntries(tools.map((tool) => [tool.id, false])));
-              setPrintOpen(true);
-            }}
-          >
-            Planche A4 QR
-          </Button>
-          {canManage ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<FileSpreadsheet size={15} />}
-                onClick={() => setImportOpen(true)}
-                title="Importer un fichier Excel (.xlsx, .xls) ou Google Sheets (.csv) sans doublon"
-              >
-                Importer Tableur
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<IconPlus size={16} />}
-                onClick={() => setNewOpen(true)}
-              >
-                Nouvel Outil
-              </Button>
-              {tools.length > 0 && (
+      {error ? (
+        <div className="mb-4">
+          <Banner tone="error">{error}</Banner>
+        </div>
+      ) : null}
+
+      <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-4">
+        {/* Sticky Navigation Bar with Tabs, Real-Time Search, Filters & Options Dropdown */}
+        <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
+          <div className="flex flex-col gap-2">
+            {/* Row 1: Tabs, Search & Priority Actions */}
+            <div className="flex items-center justify-between gap-2 sm:gap-3 min-w-0">
+              {/* Left: Radix Navigation Tabs with Live Badges */}
+              <div className="overflow-x-auto overflow-y-hidden no-scrollbar shrink-0">
+                <TabsList variant="line" className="flex gap-1 sm:gap-2.5 bg-transparent p-0 w-max">
+                  <TabsTrigger
+                    value="tools"
+                    className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
+                  >
+                    <IconWrench size={15} />
+                    <span>Matériel &amp; Outils</span>
+                    <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
+                      {tools.length}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="loans"
+                    className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
+                  >
+                    <Clock size={15} />
+                    <span>Prêts en cours</span>
+                    {activeLoans.length > 0 && (
+                      <span className="ml-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-bold text-amber">
+                        {activeLoans.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="fleet"
+                    className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
+                  >
+                    <Truck size={15} />
+                    <span>Flotte &amp; Groupes</span>
+                    {fleetSummary && fleetSummary.alerts.total_urgent > 0 ? (
+                      <span className="ml-1 rounded-full bg-red-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold animate-pulse">
+                        {fleetSummary.alerts.total_urgent}
+                      </span>
+                    ) : fleetSummary ? (
+                      <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
+                        {fleetSummary.vehicles_count + fleetSummary.generators_count}
+                      </span>
+                    ) : null}
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              {/* Center: Real-time search on Desktop */}
+              {activeTab === 'tools' && (
+                <div className="hidden md:flex items-center flex-1 max-w-xs relative min-w-[180px]">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                  <input
+                    value={filters.q}
+                    onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+                    placeholder="Rechercher désignation, QR, marque…"
+                    className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:bg-surface focus:outline-none transition-all shadow-2xs"
+                  />
+                  {filters.q && (
+                    <button
+                      onClick={() => setFilters((f) => ({ ...f, q: '' }))}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                      title="Effacer la recherche"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'loans' && (
+                <div className="hidden md:flex items-center flex-1 max-w-xs relative min-w-[180px]">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                  <input
+                    value={loansSearch}
+                    onChange={(e) => setLoansSearch(e.target.value)}
+                    placeholder="Rechercher emprunteur, outil, chantier…"
+                    className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:bg-surface focus:outline-none transition-all shadow-2xs"
+                  />
+                  {loansSearch && (
+                    <button
+                      onClick={() => setLoansSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                      title="Effacer la recherche"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Right: Actions */}
+              <div className="shrink-0 flex items-center gap-1.5 sm:gap-2">
                 <Button
+                  variant="ghost"
                   size="sm"
-                  variant="outline-danger"
-                  icon={<Trash2 size={13} />}
-                  onClick={() => {
-                    setDeleteAllConfirmText('');
-                    setDeleteAllOpen(true);
-                  }}
-                  title="Purger ou supprimer l'ensemble du parc d'outils"
+                  disabled={loading}
+                  icon={<RefreshCw size={13} className={cx(loading && 'animate-spin text-amber')} />}
+                  onClick={refresh}
+                  className="h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
+                  title="Actualiser les données"
                 >
-                  Tout supprimer
+                  <span className="hidden xl:inline">{loading ? 'Actualisation…' : 'Actualiser'}</span>
                 </Button>
-              )}
-            </>
-          ) : null}
-        </div>
-      </div>
 
-      {/* Navigation Principale Outillage : Références vs Prêts en cours */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('tools')}
-            className={cx(
-              'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all',
-              activeTab === 'tools'
-                ? 'bg-amber text-white shadow-xs'
-                : 'bg-paper text-ink-soft hover:text-ink hover:bg-paper-2 border border-line',
+                {activeTab === 'tools' && canManage && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={<IconPlus size={14} />}
+                    onClick={() => setNewOpen(true)}
+                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs"
+                  >
+                    <span className="hidden sm:inline">Nouvel Outil</span>
+                    <span className="sm:hidden">Ajouter</span>
+                  </Button>
+                )}
+
+                {/* Options Dropdown Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-8 px-2 sm:px-2.5 text-xs font-semibold border border-line/80 hover:border-amber/40 shadow-2xs gap-1.5"
+                      title="Menu d'opérations et exports"
+                    >
+                      <Menu size={14} />
+                      <span className="hidden lg:inline text-[11px]">Options</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-xl border border-line bg-surface shadow-pop text-xs z-50">
+                    {canExportReports && (
+                      <>
+                        <DropdownMenuItem
+                          onClick={handleExportExcel}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                        >
+                          <Download size={14} className="text-emerald-500" />
+                          <span>Exporter en Excel (.xlsx)</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={handleExportPdf}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                        >
+                          <Printer size={14} className="text-blue-500" />
+                          <span>Imprimer Registre Officiel (PDF)</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="my-1 border-line" />
+                      </>
+                    )}
+
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setPrintPick(Object.fromEntries(tools.map((tool) => [tool.id, false])));
+                        setPrintOpen(true);
+                      }}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                    >
+                      <IconPrinter size={14} className="text-amber" />
+                      <span>Planche A4 QR Codes</span>
+                    </DropdownMenuItem>
+
+                    {canManage && (
+                      <DropdownMenuItem
+                        onClick={() => setImportOpen(true)}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <FileSpreadsheet size={14} className="text-emerald-500" />
+                        <span>Importer Tableur (Excel/CSV)</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    {activeTab === 'tools' && (
+                      <>
+                        <DropdownMenuSeparator className="my-1 border-line" />
+                        <DropdownMenuItem
+                          onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')}
+                          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Layers size={14} className="text-ink-soft" />
+                            <span>Affichage {viewMode === 'table' ? 'Cartes' : 'Tableur Pro'}</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-surface-2 text-ink-faint border-line">
+                            {viewMode === 'table' ? 'Tableau' : 'Cartes'}
+                          </span>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+
+                    {canManage && tools.length > 0 && (
+                      <>
+                        <DropdownMenuSeparator className="my-1 border-line" />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setDeleteAllConfirmText('');
+                            setDeleteAllOpen(true);
+                          }}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-red-wash hover:text-red text-red-500"
+                        >
+                          <Trash2 size={14} />
+                          <span>Tout supprimer</span>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            {/* Sub Row: Filter Chips & Controls */}
+            {activeTab === 'tools' && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+                {/* Horizontal Status Chips */}
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 min-w-0 flex-1">
+                  <span className="text-[10px] uppercase font-bold text-ink-faint mr-1 shrink-0 hidden sm:inline">
+                    Filtre :
+                  </span>
+                  {[
+                    { key: '', label: 'Tous', count: stats.total },
+                    { key: 'disponible', label: 'Disponibles', count: stats.disponible },
+                    { key: 'en_pret', label: 'En prêt', count: stats.en_pret },
+                    { key: 'maintenance', label: 'Maintenance', count: stats.maintenance },
+                    { key: 'manquant', label: 'Manquants', count: stats.manquant },
+                    { key: 'reforme', label: 'Réformés', count: stats.reforme },
+                  ].map(({ key, label, count }) => (
+                    <button
+                      key={key}
+                      onClick={() => setFilters((f) => ({ ...f, status: key }))}
+                      className={cx(
+                        'rounded-lg px-2.5 py-0.5 text-[11px] font-semibold transition-all shrink-0 border flex items-center gap-1',
+                        filters.status === key
+                          ? 'bg-amber text-white border-amber shadow-2xs font-bold'
+                          : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                      )}
+                    >
+                      <span>{label}</span>
+                      <span className="opacity-75 text-[10px] tabular-nums font-mono">{count}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Dropdowns Catégorie & Magasin + View Mode Toggle + Mobile Search */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <select
+                    value={filters.category}
+                    onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}
+                    className="h-7 rounded-lg border border-line bg-surface px-2 text-[11px] text-ink focus:border-amber focus:outline-none shadow-2xs max-w-[130px] sm:max-w-[160px] truncate"
+                    title="Filtrer par catégorie"
+                  >
+                    <option value="">Toutes catégories ({facets.categories.length})</option>
+                    {facets.categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={filters.magasin_id}
+                    onChange={(e) => setFilters((f) => ({ ...f, magasin_id: e.target.value }))}
+                    className="h-7 rounded-lg border border-line bg-surface px-2 text-[11px] text-ink focus:border-amber focus:outline-none shadow-2xs max-w-[130px] sm:max-w-[160px] truncate"
+                    title="Filtrer par magasin"
+                  >
+                    <option value="">Tous magasins ({magasins.length})</option>
+                    {magasins.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* View mode toggle button */}
+                  <div className="hidden sm:flex items-center rounded-lg border border-line bg-surface p-0.5 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('table')}
+                      className={cx(
+                        'px-2 py-0.5 text-[10px] font-semibold rounded transition-colors',
+                        viewMode === 'table' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
+                      )}
+                      title="Afficher en mode Tableau"
+                    >
+                      Tableau
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('cards')}
+                      className={cx(
+                        'px-2 py-0.5 text-[10px] font-semibold rounded transition-colors',
+                        viewMode === 'cards' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
+                      )}
+                      title="Afficher en mode Cartes"
+                    >
+                      Cartes
+                    </button>
+                  </div>
+
+                  {/* Mobile search input */}
+                  <div className="md:hidden flex items-center relative w-32 shrink-0">
+                    <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                    <input
+                      value={filters.q}
+                      onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+                      placeholder="Chercher…"
+                      className="h-7 w-full rounded-md border border-line bg-surface/90 pl-5 pr-2 text-[11px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
+                    />
+                    {filters.q && (
+                      <button
+                        onClick={() => setFilters((f) => ({ ...f, q: '' }))}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                      >
+                        <X size={10} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
-          >
-            <IconWrench size={16} />
-            <span>Outils &amp; Références</span>
-            <span
-              className={cx(
-                'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
-                activeTab === 'tools' ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
-              )}
-            >
-              {tools.length}
-            </span>
-          </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('loans')}
-            className={cx(
-              'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all',
-              activeTab === 'loans'
-                ? 'bg-amber text-white shadow-xs'
-                : 'bg-paper text-ink-soft hover:text-ink hover:bg-paper-2 border border-line',
+            {activeTab === 'loans' && (
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+                <span className="text-[11px] font-semibold text-ink-soft">
+                  {filteredActiveLoans.length} prêt{filteredActiveLoans.length > 1 ? 's' : ''} actif{filteredActiveLoans.length > 1 ? 's' : ''} en cours
+                </span>
+
+                {/* Mobile search input */}
+                <div className="md:hidden flex items-center relative w-40 shrink-0">
+                  <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                  <input
+                    value={loansSearch}
+                    onChange={(e) => setLoansSearch(e.target.value)}
+                    placeholder="Chercher prêt…"
+                    className="h-7 w-full rounded-md border border-line bg-surface/90 pl-5 pr-2 text-[11px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
+                  />
+                  {loansSearch && (
+                    <button
+                      onClick={() => setLoansSearch('')}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                    >
+                      <X size={10} />
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
-          >
-            <Clock size={16} />
-            <span>Prêts &amp; Sorties en cours</span>
-            <span
-              className={cx(
-                'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
-                activeLoans.length > 0
-                  ? activeTab === 'loans'
-                    ? 'bg-white/25 text-white'
-                    : 'bg-amber text-white shadow-xs'
-                  : 'bg-surface text-ink-faint',
-              )}
-            >
-              {activeLoans.length}
-            </span>
-          </button>
+          </div>
         </div>
-      </div>
 
-      {activeTab === 'loans' ? (
-        <div className="space-y-3">
+        {/* Tab 3: Flotte & Groupes */}
+        <TabsContent value="fleet" className="space-y-4">
+          <FleetView
+            summary={fleetSummary}
+            canManage={canManage}
+            onRefresh={() => {
+              loadFleet();
+              setReload((v) => v + 1);
+            }}
+          />
+        </TabsContent>
+
+        {/* Tab 2: Prêts & Sorties en cours */}
+        <TabsContent value="loans" className="space-y-3">
           {/* Active Loans Search & Overview */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-xl border border-line bg-surface shadow-xs">
             <div className="relative w-full sm:max-w-md">
@@ -1108,9 +1376,10 @@ export function Outils({
               </div>
             </div>
           )}
-        </div>
-      ) : (
-        <>
+        </TabsContent>
+
+        {/* Tab 1: Matériel & Machines */}
+        <TabsContent value="tools" className="space-y-4">
           {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2.5">
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
@@ -1327,104 +1596,6 @@ export function Outils({
           </div>
         </div>
       )}
-
-      {/* Filters & Search Bar */}
-      <div className="rounded-xl border border-line bg-surface p-3 shadow-xs space-y-3">
-        <div className="grid gap-2.5 sm:grid-cols-[1fr_auto_auto_auto_auto]">
-          <div className="relative min-w-44">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
-              <IconSearch size={16} />
-            </span>
-            <input
-              value={filters.q}
-              onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
-              placeholder="Rechercher désignation, code QR, marque..."
-              className="h-10 w-full rounded-lg border border-line bg-paper pl-9 pr-3 text-xs sm:text-sm focus:border-amber focus:bg-surface focus:outline-none transition-all"
-            />
-          </div>
-
-          <select
-            value={filters.category}
-            onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}
-            className="h-10 rounded-lg border border-line bg-paper px-3 text-xs font-medium text-ink focus:border-amber focus:bg-surface focus:outline-none"
-          >
-            <option value="">Toutes catégories ({facets.categories.length})</option>
-            {facets.categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={filters.magasin_id}
-            onChange={(e) => setFilters((f) => ({ ...f, magasin_id: e.target.value }))}
-            className="h-10 rounded-lg border border-line bg-paper px-3 text-xs font-medium text-ink focus:border-amber focus:bg-surface focus:outline-none"
-          >
-            <option value="">Tous magasins ({magasins.length})</option>
-            {magasins.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-
-          {/* View mode toggle */}
-          <div className="hidden sm:flex items-center rounded-lg border border-line bg-paper p-0.5">
-            <button
-              onClick={() => setViewMode('table')}
-              className={cx(
-                'rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all',
-                viewMode === 'table' ? 'bg-surface text-ink shadow-xs' : 'text-ink-soft hover:text-ink',
-              )}
-            >
-              Tableur Pro
-            </button>
-            <button
-              onClick={() => setViewMode('cards')}
-              className={cx(
-                'rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all',
-                viewMode === 'cards' ? 'bg-surface text-ink shadow-xs' : 'text-ink-soft hover:text-ink',
-              )}
-            >
-              Cartes
-            </button>
-          </div>
-        </div>
-
-        {/* Status Pills */}
-        <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-line/60">
-          {[
-            { key: '', label: 'Tous', count: stats.total },
-            { key: 'disponible', label: 'Disponibles', count: stats.disponible },
-            { key: 'en_pret', label: 'En prêt', count: stats.en_pret },
-            { key: 'maintenance', label: 'Maintenance', count: stats.maintenance },
-            { key: 'manquant', label: 'Manquants', count: stats.manquant },
-            { key: 'reforme', label: 'Réformés', count: stats.reforme },
-          ].map(({ key, label, count }) => (
-            <button
-              key={key}
-              onClick={() => setFilters((f) => ({ ...f, status: key }))}
-              className={cx(
-                'rounded-full px-3 py-1 text-xs font-medium transition-all flex items-center gap-1.5',
-                filters.status === key
-                  ? 'bg-amber text-white shadow-xs'
-                  : 'bg-paper text-ink-soft hover:bg-paper-2 hover:text-ink border border-line',
-              )}
-            >
-              <span>{label}</span>
-              <span
-                className={cx(
-                  'rounded-full px-1.5 py-0.2 text-[10px] tabular-nums font-semibold',
-                  filters.status === key ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
-                )}
-              >
-                {count}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
 
       {error ? (
         <div>
@@ -1986,8 +2157,8 @@ export function Outils({
           </div>
         </>
       )}
-        </>
-      )}
+        </TabsContent>
+      </Tabs>
 
       {/* Detail Drawer */}
       <Drawer

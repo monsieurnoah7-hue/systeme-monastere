@@ -22,6 +22,8 @@ import { terminalsRoutes } from './routes/terminals.js';
 import { toolsRoutes } from './routes/tools.js';
 import { usersRoutes } from './routes/users.js';
 import { kitsRoutes } from './routes/kits.js';
+import { fleetRoutes } from './routes/fleet.js';
+import { projectsRoutes } from './routes/projects.js';
 
 export const app = new Hono();
 
@@ -60,5 +62,7 @@ app.route('/api/scan', scanRoutes);
 app.route('/api/cron', cronRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/kits', kitsRoutes);
+app.route('/api/fleet', fleetRoutes);
+app.route('/api/projects', projectsRoutes);
 
 app.notFound((c) => c.json({ error: 'Route introuvable.' }, 404));

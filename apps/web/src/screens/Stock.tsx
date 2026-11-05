@@ -14,6 +14,7 @@ import {
   SelectField,
   Spinner,
   TextArea,
+  PageHeader,
   cx,
   useToast,
 } from '../components/ui';
@@ -25,8 +26,6 @@ import {
   IconHistory,
   IconPlus,
   IconPrinter,
-  IconRefresh,
-  IconSearch,
 } from '../components/Icons';
 import {
   Camera,
@@ -47,7 +46,20 @@ import {
   Scale,
   Plus,
   Minus,
+  Menu,
+  RefreshCw,
+  Search,
+  X,
 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { usePrintSheet } from '../lib/print';
 import { ImagePickerModal } from '../components/ImagePickerModal';
@@ -227,6 +239,7 @@ export function Stock({
   const [reload, setReload] = useState(0);
   const [q, setQ] = useState('');
   const [lowOnly, setLowOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'' | 'normal' | 'warning' | 'empty'>('');
   const [magasinFilter, setMagasinFilter] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -341,6 +354,9 @@ export function Stock({
     const baseList = scopeFilter === 'active' ? activeRefs : scopeFilter === 'drafts' ? draftRefs : refs;
     const needle = q.trim().toLowerCase();
     return baseList.filter((ref) => {
+      if (statusFilter === 'normal' && (ref.qty <= ref.min_qty || ref.qty <= 0)) return false;
+      if (statusFilter === 'warning' && (ref.qty <= 0 || ref.qty > ref.min_qty)) return false;
+      if (statusFilter === 'empty' && ref.qty > 0) return false;
       if (lowOnly && ref.qty > ref.min_qty) return false;
       if (magasinFilter && ref.magasin_id !== magasinFilter) return false;
       if (!needle) return true;
@@ -351,7 +367,7 @@ export function Stock({
         (ref.supplier ?? '').toLowerCase().includes(needle)
       );
     });
-  }, [refs, activeRefs, draftRefs, scopeFilter, q, lowOnly, magasinFilter]);
+  }, [refs, activeRefs, draftRefs, scopeFilter, q, lowOnly, statusFilter, magasinFilter]);
 
   const selected = refs.find((ref) => ref.id === selectedId) ?? null;
   const selectedMoves = movements.filter((move) => move.ref_id === selectedId);
@@ -705,159 +721,359 @@ export function Stock({
 
   return (
     <div className="space-y-4 pb-12">
-      {/* Header Banner */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
-            Matières &amp; Quincaillerie
-          </h1>
-          <p className="text-xs text-ink-faint mt-0.5">
-            Bois massif, visserie, colles &amp; fournitures consommées
-          </p>
-        </div>
+      {/* Top Page Header */}
+      <PageHeader
+        title="Matières & Quincaillerie"
+        hint="Bois massif, visserie, colles & fournitures consommées de menuiserie"
+      />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" icon={<IconRefresh size={16} />} onClick={refresh}>
-            Actualiser
-          </Button>
-          {canExportReports && (
-            <>
-              <Button size="sm" variant="secondary" icon={<Download size={14} />} onClick={handleExportExcel}>
-                Excel
-              </Button>
-              <Button size="sm" variant="secondary" icon={<Printer size={14} />} onClick={handleExportPdf}>
-                Imprimer
-              </Button>
-            </>
-          )}
-          {canMove ? (
-            <>
-              <Button
-                size="sm"
-                variant="primary"
-                icon={<Zap size={15} />}
-                onClick={() => openMove('out')}
-                title="Ouvrir le Hub de Mouvement (Entrée, Sortie, Transfert, Ajustement)"
-              >
-                ⚡ Mouvement
-              </Button>
-              <Button
-                size="sm"
-                icon={<IconArrowIn size={16} />}
-                onClick={() => openMove('in')}
-                title="Enregistrer un arrivage ou entrée de stock"
-              >
-                + Entrée
-              </Button>
-              <Button
-                size="sm"
-                icon={<IconArrowOut size={16} />}
-                onClick={() => openMove('out')}
-                title="Enregistrer une sortie chantier ou atelier"
-              >
-                - Sortie
-              </Button>
-            </>
-          ) : null}
-          {canManageRefs ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<FileSpreadsheet size={15} />}
-                onClick={() => setImportOpen(true)}
-                title="Importer un fichier Excel (.xlsx, .xls) ou Google Sheets (.csv) sans doublon"
-              >
-                Importer Tableur
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<IconPlus size={16} />}
-                onClick={openCreate}
-              >
-                Nouvelle Réf
-              </Button>
-              {refs.length > 0 && (
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'inventory' | 'journal')} className="w-full">
+        {/* Sticky Unified Navigation Bar */}
+        <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
+          <div className="flex flex-col gap-2">
+            {/* Row 1: Tabs + Search + Primary CTAs + Overflow Menu */}
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              {/* Left: Navigation Tabs */}
+              <TabsList className="h-9 w-full shrink-0 border border-line bg-paper-2 p-0.5 md:w-auto">
+                <TabsTrigger
+                  value="inventory"
+                  className="gap-1.5 px-2.5 sm:px-3 text-xs font-semibold data-[state=active]:bg-amber data-[state=active]:text-white"
+                >
+                  <IconBox size={14} className="text-amber data-[state=active]:text-white" />
+                  <span>Matières &amp; Quincaillerie</span>
+                  <span className="ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-bold tabular-nums bg-surface text-ink-faint data-[state=active]:bg-white/20 data-[state=active]:text-white">
+                    {refs.length}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="journal"
+                  className="gap-1.5 px-2.5 sm:px-3 text-xs font-semibold data-[state=active]:bg-amber data-[state=active]:text-white"
+                >
+                  <Clock size={14} className="text-amber data-[state=active]:text-white" />
+                  <span className="hidden sm:inline">Journal des Entrées / Sorties</span>
+                  <span className="sm:hidden">Journal</span>
+                  <span className="ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-bold tabular-nums bg-surface text-ink-faint data-[state=active]:bg-white/20 data-[state=active]:text-white">
+                    {movements.length}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Center: Search Bar (Desktop / Tablet) */}
+              <div className="hidden md:flex flex-1 max-w-sm mx-2 items-center relative">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                {activeTab === 'inventory' ? (
+                  <>
+                    <input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Rechercher article, visserie, colle, fournisseur..."
+                      className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                    />
+                    {q && (
+                      <button
+                        onClick={() => setQ('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <input
+                      value={journalQ}
+                      onChange={(e) => setJournalQ(e.target.value)}
+                      placeholder="Filtrer article, bénéficiaire, agent..."
+                      className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                    />
+                    {journalQ && (
+                      <button
+                        onClick={() => setJournalQ('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Right: Actions & Options */}
+              <div className="flex w-full flex-wrap items-center gap-1.5 md:w-auto md:justify-end">
                 <Button
                   size="sm"
-                  variant="outline-danger"
-                  icon={<Trash2 size={13} />}
-                  onClick={() => {
-                    setDeleteAllConfirmText('');
-                    setDeleteAllOpen(true);
-                  }}
-                  title="Purger ou supprimer l'ensemble des articles de stock"
+                  variant="secondary"
+                  icon={<RefreshCw size={13} className={busy ? 'animate-spin' : ''} />}
+                  onClick={refresh}
+                  className="h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
+                  title="Actualiser les données"
                 >
-                  Tout supprimer
+                  <span className="hidden sm:inline">Actualiser</span>
                 </Button>
-              )}
-            </>
-          ) : null}
-        </div>
-      </div>
 
-      {/* Navigation Principale Stock : Matières vs Journal des Entrées / Sorties */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('inventory')}
-            className={cx(
-              'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all',
-              activeTab === 'inventory'
-                ? 'bg-amber text-white shadow-xs'
-                : 'bg-paper text-ink-soft hover:text-ink hover:bg-paper-2 border border-line',
+                {canMove && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon={<Zap size={13} />}
+                      onClick={() => openMove('out')}
+                      className="h-8 px-2 sm:px-3 text-xs shadow-2xs font-bold"
+                      title="Ouvrir le Hub de Mouvement"
+                    >
+                      <span>Mouvement</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<IconArrowIn size={14} />}
+                      onClick={() => openMove('in')}
+                      className="hidden sm:inline-flex h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
+                      title="Enregistrer un arrivage ou entrée de stock"
+                    >
+                      <span>Entrée</span>
+                    </Button>
+                  </>
+                )}
+
+                {canManageRefs && (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={<IconPlus size={14} />}
+                    onClick={openCreate}
+                    className="h-8 px-2 sm:px-3 text-xs shadow-2xs"
+                    title="Créer une nouvelle référence"
+                  >
+                    <span className="hidden sm:inline">Nouvelle référence</span>
+                    <span className="sm:hidden">Référence</span>
+                  </Button>
+                )}
+
+                {/* Hamburger Options Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<Menu size={14} />}
+                      className="h-8 px-2 text-xs shadow-2xs"
+                      title="Options & Exports"
+                    >
+                      <span className="hidden sm:inline">Options</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
+                    <DropdownMenuLabel className="px-2.5 py-1.5 text-[11px] font-semibold text-ink-faint uppercase tracking-wider">
+                      Actions &amp; Outils
+                    </DropdownMenuLabel>
+
+                    {canMove && (
+                      <DropdownMenuItem
+                        onClick={() => openMove('out')}
+                        className="sm:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <IconArrowOut size={14} className="text-amber" />
+                        <span>- Enregistrer une Sortie</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    {canExportReports && (
+                      <>
+                        <DropdownMenuItem
+                          onClick={handleExportExcel}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                        >
+                          <Download size={14} className="text-emerald-500" />
+                          <span>Exporter vers Excel (.xlsx)</span>
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem
+                          onClick={handleExportPdf}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                        >
+                          <Printer size={14} className="text-sky-500" />
+                          <span>Imprimer le Registre (PDF)</span>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+
+                    {canManageRefs && (
+                      <DropdownMenuItem
+                        onClick={() => setImportOpen(true)}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <FileSpreadsheet size={14} className="text-amber" />
+                        <span>Importer Tableur (Excel/CSV)</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    {canManageRefs && refs.length > 0 && (
+                      <>
+                        <DropdownMenuSeparator className="my-1 border-line" />
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setDeleteAllConfirmText('');
+                            setDeleteAllOpen(true);
+                          }}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-red-500/10 text-red"
+                        >
+                          <Trash2 size={14} />
+                          <span>Tout supprimer (Purger)</span>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            {/* Sub-row: Filters & Selectors */}
+            {activeTab === 'inventory' ? (
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+                {/* Status Chips */}
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+                  {[
+                    { key: '', label: 'Tous', count: stats.total },
+                    { key: 'normal', label: 'Disponibles', count: stats.normal },
+                    { key: 'warning', label: 'Stock bas', count: stats.warning },
+                    { key: 'empty', label: 'Rupture', count: stats.empty },
+                  ].map(({ key, label, count }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setStatusFilter(key as any)}
+                      className={cx(
+                        'px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                        statusFilter === key
+                          ? 'bg-amber text-white border-amber shadow-xs'
+                          : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                      )}
+                    >
+                      <span>{label}</span>
+                      <span className="opacity-75 text-[10px] tabular-nums font-mono">{count}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Magasin select + Mobile Search */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {magasins.length > 0 && (
+                    <select
+                      value={magasinFilter}
+                      onChange={(e) => setMagasinFilter(e.target.value)}
+                      className="h-7 rounded-lg border border-line bg-surface px-2 text-[11px] text-ink focus:border-amber focus:outline-none shadow-2xs max-w-[140px] sm:max-w-[170px] truncate"
+                      title="Filtrer par magasin"
+                    >
+                      <option value="">Tous magasins ({magasins.length})</option>
+                      {magasins.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {/* Mobile Search input */}
+                  <div className="md:hidden flex items-center relative w-32 shrink-0">
+                    <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                    <input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Chercher…"
+                      className="h-7 w-full rounded-md border border-line bg-surface/90 pl-5 pr-2 text-[11px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
+                    />
+                    {q && (
+                      <button
+                        onClick={() => setQ('')}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                      >
+                        <X size={10} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+                {/* Type chips */}
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+                  {[
+                    { value: '', label: 'Tous' },
+                    { value: 'in', label: 'Entrées' },
+                    { value: 'out', label: 'Sorties' },
+                    { value: 'transfer', label: 'Transferts' },
+                    { value: 'correction', label: 'Corrections' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setJournalType(opt.value as any)}
+                      className={cx(
+                        'px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 transition-all border shadow-2xs',
+                        journalType === opt.value
+                          ? 'bg-amber text-white border-amber shadow-xs'
+                          : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Date pickers + Mobile Search */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="hidden sm:flex items-center gap-1 text-[11px] text-ink-soft">
+                    <input
+                      type="date"
+                      value={journalFrom}
+                      onChange={(e) => setJournalFrom(e.target.value)}
+                      className="h-7 rounded-lg border border-line bg-surface px-1.5 text-[11px] text-ink focus:border-amber focus:outline-none shadow-2xs"
+                    />
+                    <span>→</span>
+                    <input
+                      type="date"
+                      value={journalTo}
+                      onChange={(e) => setJournalTo(e.target.value)}
+                      className="h-7 rounded-lg border border-line bg-surface px-1.5 text-[11px] text-ink focus:border-amber focus:outline-none shadow-2xs"
+                    />
+                  </div>
+
+                  {/* Mobile Search input */}
+                  <div className="md:hidden flex items-center relative w-32 shrink-0">
+                    <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                    <input
+                      value={journalQ}
+                      onChange={(e) => setJournalQ(e.target.value)}
+                      placeholder="Filtrer…"
+                      className="h-7 w-full rounded-md border border-line bg-surface/90 pl-5 pr-2 text-[11px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
+                    />
+                    {journalQ && (
+                      <button
+                        onClick={() => setJournalQ('')}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                      >
+                        <X size={10} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
-          >
-            <IconBox size={16} />
-            <span>Matières &amp; Quincaillerie</span>
-            <span
-              className={cx(
-                'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
-                activeTab === 'inventory' ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
-              )}
-            >
-              {refs.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('journal')}
-            className={cx(
-              'flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all',
-              activeTab === 'journal'
-                ? 'bg-amber text-white shadow-xs'
-                : 'bg-paper text-ink-soft hover:text-ink hover:bg-paper-2 border border-line',
-            )}
-          >
-            <Clock size={16} />
-            <span>Journal des Entrées / Sorties</span>
-            <span
-              className={cx(
-                'rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums',
-                activeTab === 'journal' ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
-              )}
-            >
-              {movements.length}
-            </span>
-          </button>
+          </div>
         </div>
-      </div>
 
-      {error ? (
-        <div>
-          <Banner tone="error">{error}</Banner>
-        </div>
-      ) : null}
+        {error ? (
+          <div className="mt-4">
+            <Banner tone="error">{error}</Banner>
+          </div>
+        ) : null}
 
-      {/* Tab 1: Inventaire & Tableur Pro */}
-      {activeTab === 'inventory' ? (
-        <div className="space-y-4">
+        {/* Tab 1: Inventaire & Tableur Pro */}
+        <TabsContent value="inventory" className="space-y-4">
           {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2.5">
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
+        <div className="grid w-full grid-cols-3 gap-1 rounded-xl border border-line bg-paper-2 p-1">
           <button
             type="button"
             onClick={() => {
@@ -865,10 +1081,10 @@ export function Stock({
               setSelectedRefIds(new Set());
             }}
             className={cx(
-              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              'flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-center text-xs font-semibold leading-tight transition-all',
               scopeFilter === 'all'
                 ? 'bg-amber text-white shadow-xs'
-                : 'text-ink-soft hover:text-ink hover:bg-paper',
+                : 'text-ink hover:bg-paper',
             )}
           >
             <Layers size={14} />
@@ -890,10 +1106,10 @@ export function Stock({
               setSelectedRefIds(new Set());
             }}
             className={cx(
-              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              'flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-center text-xs font-semibold leading-tight transition-all',
               scopeFilter === 'active'
                 ? 'bg-amber text-white shadow-xs'
-                : 'text-ink-soft hover:text-ink hover:bg-paper',
+                : 'text-ink hover:bg-paper',
             )}
           >
             <IconBox size={14} />
@@ -915,10 +1131,10 @@ export function Stock({
               setSelectedRefIds(new Set());
             }}
             className={cx(
-              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              'flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-center text-xs font-semibold leading-tight transition-all',
               scopeFilter === 'drafts'
                 ? 'bg-amber text-white shadow-xs'
-                : 'text-ink-soft hover:text-ink hover:bg-paper',
+                : 'text-ink hover:bg-paper',
             )}
           >
             <FolderArchive size={14} />
@@ -1011,50 +1227,7 @@ export function Stock({
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="rounded-xl border border-line bg-surface p-3 shadow-xs flex flex-wrap items-center gap-2.5">
-            <div className="relative min-w-52 flex-1">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
-                <IconSearch size={16} />
-              </span>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Rechercher article, visserie, colle, fournisseur..."
-                className="h-10 w-full rounded-lg border border-line bg-paper pl-9 pr-3 text-xs sm:text-sm focus:border-amber focus:bg-surface focus:outline-none transition-all"
-              />
-            </div>
-
-            <button
-              onClick={() => setLowOnly((v) => !v)}
-              className={cx(
-                'h-10 rounded-lg border px-3 text-xs font-semibold transition-all flex items-center gap-1.5',
-                lowOnly
-                  ? 'border-amber bg-amber-wash text-amber'
-                  : 'border-line bg-paper text-ink-soft hover:bg-paper-2',
-              )}
-            >
-              <span className={cx('h-2 w-2 rounded-full', lowOnly ? 'bg-amber' : 'bg-ink-faint')} />
-              <span>Sous le seuil uniquement</span>
-            </button>
-
-            {magasins.length > 0 && (
-              <select
-                value={magasinFilter}
-                onChange={(e) => setMagasinFilter(e.target.value)}
-                className="h-10 rounded-lg border border-line bg-paper px-3 text-xs font-medium text-ink focus:border-amber focus:bg-surface focus:outline-none"
-              >
-                <option value="">Tous magasins ({magasins.length})</option>
-                {magasins.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Drafts Informative Banner */}
+      {/* Drafts Informative Banner */}
           {scopeFilter === 'drafts' && (
             <div className="flex items-start gap-3 p-3.5 rounded-xl border border-amber/30 bg-amber-wash/50 text-xs text-ink leading-relaxed">
               <FolderArchive size={18} className="text-amber shrink-0 mt-0.5" />
@@ -1517,65 +1690,10 @@ export function Stock({
               </div>
             </>
           )}
-        </div>
-      ) : null}
+        </TabsContent>
 
-      {/* Tab 2: Journal des Mouvements (Audit Trail) */}
-      {activeTab === 'journal' ? (
-        <div className="space-y-3">
-          {/* Filters Bar */}
-          <div className="rounded-xl border border-line bg-surface p-3 shadow-xs flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-lg border border-line bg-paper p-0.5 text-xs">
-              {[
-                { value: '', label: 'Tous' },
-                { value: 'in', label: 'Entrées' },
-                { value: 'out', label: 'Sorties' },
-                { value: 'transfer', label: 'Transferts' },
-                { value: 'correction', label: 'Corrections' },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setJournalType(opt.value as typeof journalType)}
-                  className={cx(
-                    'rounded-md px-2.5 py-1.5 font-semibold transition-all',
-                    journalType === opt.value
-                      ? 'bg-surface text-ink shadow-xs'
-                      : 'text-ink-soft hover:text-ink',
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-1.5 text-xs text-ink-soft">
-              <input
-                type="date"
-                value={journalFrom}
-                onChange={(e) => setJournalFrom(e.target.value)}
-                className="h-9 rounded-lg border border-line bg-paper px-2 text-xs text-ink focus:border-amber focus:outline-none"
-              />
-              <span>→</span>
-              <input
-                type="date"
-                value={journalTo}
-                onChange={(e) => setJournalTo(e.target.value)}
-                className="h-9 rounded-lg border border-line bg-paper px-2 text-xs text-ink focus:border-amber focus:outline-none"
-              />
-            </div>
-
-            <div className="relative min-w-40 flex-1">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">
-                <IconSearch size={15} />
-              </span>
-              <input
-                value={journalQ}
-                onChange={(e) => setJournalQ(e.target.value)}
-                placeholder="Filtrer article, bénéficiaire, agent..."
-                className="h-9 w-full rounded-lg border border-line bg-paper pl-8 pr-3 text-xs text-ink focus:border-amber focus:outline-none"
-              />
-            </div>
-          </div>
+        {/* Tab 2: Journal des Mouvements (Audit Trail) */}
+        <TabsContent value="journal" className="space-y-3">
 
           {movements.length === 0 ? (
             <EmptyState
@@ -1639,8 +1757,8 @@ export function Stock({
               </div>
             </div>
           )}
-        </div>
-      ) : null}
+        </TabsContent>
+      </Tabs>
 
       {/* Drawer Fiche Référence */}
       <Drawer

@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import {
+  Briefcase,
   Clock,
   Fingerprint,
   Gauge,
@@ -21,7 +22,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } f
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { cx } from './ui';
 
-export type ViewId = 'dashboard' | 'outils' | 'pointage' | 'stock' | 'employes' | 'magasins' | 'espace' | 'parametres';
+export type ViewId = 'dashboard' | 'projets' | 'outils' | 'pointage' | 'stock' | 'employes' | 'magasins' | 'espace' | 'parametres';
 
 type NavItem = {
   id: ViewId;
@@ -35,6 +36,7 @@ const ALL_STAFF: Role[] = ['direction', 'magasinier', 'chef_atelier'];
 
 export const NAV: NavItem[] = [
   { id: 'dashboard', label: 'Tableau de bord', short: 'Bord', icon: Gauge, roles: ALL_STAFF },
+  { id: 'projets', label: 'Commandes & Chantiers', short: 'Chantiers', icon: Briefcase, roles: ALL_STAFF },
   { id: 'pointage', label: 'Pointage', short: 'Pointage', icon: Clock, roles: ALL_STAFF },
   { id: 'employes', label: 'Travailleurs', short: 'Équipe', icon: Users, roles: ['direction', 'magasinier', 'chef_atelier'] },
   { id: 'outils', label: 'Matériel & Machines', short: 'Machines', icon: Wrench, roles: ALL_STAFF },
@@ -50,7 +52,7 @@ export function computeAllowedViews(
 ): ViewId[] {
   // Super-Administrateur / Direction a accès à l'ensemble des modules
   if (role === 'direction') {
-    return ['dashboard', 'pointage', 'employes', 'outils', 'stock', 'magasins', 'espace', 'parametres'];
+    return ['dashboard', 'projets', 'pointage', 'employes', 'outils', 'stock', 'magasins', 'espace', 'parametres'];
   }
 
   // Si la matrice des droits personnalisés est disponible
@@ -60,9 +62,12 @@ export function computeAllowedViews(
     // 1. Mon Espace est universellement accessible à tout compte utilisateur connecté
     views.push('espace');
 
-    // 2. Tableau de bord pilotage
+    // 2. Tableau de bord et commandes / chantiers : deux droits indépendants.
     if (permissions['dashboard.view']) {
       views.push('dashboard');
+    }
+    if (permissions['projects.view']) {
+      views.push('projets');
     }
 
     // 3. Module Outils & Matériels
@@ -129,6 +134,7 @@ export function computeAllowedViews(
 
     const ORDER: ViewId[] = [
       'dashboard',
+      'projets',
       'pointage',
       'employes',
       'outils',
@@ -153,7 +159,7 @@ export function allowedViews(role: Role, permissions?: Record<string, boolean> |
 }
 
 const NAV_CATEGORIES: { title: string; views: ViewId[] }[] = [
-  { title: 'Pilotage & Vision', views: ['dashboard'] },
+  { title: 'Pilotage & Vision', views: ['dashboard', 'projets'] },
   { title: 'Atelier & Magasins', views: ['outils', 'stock', 'magasins'] },
   { title: 'Équipe & Présences', views: ['pointage', 'employes', 'espace'] },
   { title: 'Administration', views: ['parametres'] },
@@ -256,7 +262,7 @@ export function Shell({
               <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-6 w-6 object-contain" />
             </div>
             <div className="leading-tight min-w-0 flex-1">
-              <span className="block text-xs font-bold tracking-tight text-ink truncate">C.F.T. Menuiserie</span>
+              <span className="block text-xs font-bold tracking-tight text-ink truncate">CFTM</span>
               <p className="text-[10px] text-ink-faint truncate font-medium mt-0.5">Bénédictins Mont Fébé</p>
             </div>
           </div>
@@ -321,7 +327,7 @@ export function Shell({
                 <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-5 w-5 object-contain" />
               </div>
               <div className="leading-tight">
-                <span className="text-xs font-bold text-ink">C.F.T. Bénédictins Mont Fébé</span>
+                <span className="text-xs font-bold text-ink">CFTM Bénédictins Mont Fébé</span>
                 <span className="block text-[10px] text-ink-soft">{ROLE_LABEL[user.role]}</span>
               </div>
             </div>
@@ -414,16 +420,14 @@ export function Shell({
           </Drawer>
 
           {/* Main Scrollable Content with Antigravity Top Bar */}
-          <main className="min-h-0 flex-1 overflow-y-auto scroll-thin flex flex-col">
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-thin flex flex-col">
             {/* Desktop Topbar Header - macOS / Apple Design */}
-            <div className="no-print hidden lg:flex items-center justify-between px-6 py-2.5 border-b border-line/60 bg-surface/75 backdrop-blur-md sticky top-0 z-10 text-xs">
+            <div className="no-print hidden lg:flex shrink-0 h-11 items-center justify-between px-6 border-b border-line/60 bg-surface sticky top-0 z-20 text-xs">
               {/* Breadcrumb section */}
               <div className="flex items-center gap-2">
-                <span className="font-semibold text-ink tracking-tight">C.F.T.</span>
-                <span className="text-ink-faint/50 text-[10px]">/</span>
-                <span className="text-ink-faint text-[11px]">Système Monastère</span>
-                <span className="text-ink-faint/50 text-[10px]">/</span>
-                <span className="font-semibold text-amber text-[11px] tracking-wide">
+                <span className="font-bold text-ink tracking-tight">CFTM</span>
+                <span className="text-ink-faint/40 text-[10px]">/</span>
+                <span className="font-medium text-ink-soft text-[11px]">
                   {NAV.find((n) => n.id === view)?.label ?? view}
                 </span>
               </div>
@@ -451,7 +455,12 @@ export function Shell({
               </div>
             </div>
 
-            <div className="mx-auto w-full max-w-7xl px-3 py-4 pb-28 sm:px-6 lg:px-8 lg:py-6 lg:pb-12 flex-1">
+            <div
+              className={cx(
+                'w-full px-3 py-3 sm:px-6 lg:px-8 lg:py-6 lg:pb-12 flex-1',
+                view === 'pointage' ? 'pb-18' : 'pb-24',
+              )}
+            >
               {children}
             </div>
           </main>

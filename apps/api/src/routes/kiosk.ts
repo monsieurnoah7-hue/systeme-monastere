@@ -54,7 +54,7 @@ const punchBody = z.object({
   employeeId: z.string().min(1),
   punchType: z.enum(['in', 'out', 'break_in', 'break_out']),
   idMode: z.enum(['manual', 'badge']),
-  selfie: z.string().min(20),
+  selfie: z.string().optional(),
   pin: z.string().optional(),
   reason: z.string().optional(),
   reasonNote: z.string().optional(),
@@ -148,8 +148,22 @@ kioskRoutes.post('/identify', async (c) => {
   );
 
   const now = new Date();
-  const openedMin = parseHm(settings.opening_time);
-  const closedMin = parseHm(settings.closing_time);
+  const openedMin = parseHm(settings.opening_time || '07:30');
+  const earlyCheckinMin = parseHm((settings as any).early_checkin_time || '07:25');
+  const lateThresholdMin = parseHm((settings as any).late_threshold_time || '08:00');
+  const morningLockoutMin = parseHm((settings as any).morning_lockout_time || '10:00');
+
+  const isMealDelayed = (settings as any).meal_schedule_mode === 'delayed_13h';
+  const breakStartMin = parseHm(isMealDelayed ? ((settings as any).break_delayed_start || '13:00') : ((settings as any).break_normal_start || '12:00'));
+  const breakEndMin = parseHm(isMealDelayed ? ((settings as any).break_delayed_end || '13:25') : ((settings as any).break_normal_end || '12:25'));
+  const resumeStartMin = parseHm(isMealDelayed ? ((settings as any).resume_delayed_start || '14:00') : ((settings as any).resume_normal_start || '13:00'));
+  const resumeEndMin = parseHm(isMealDelayed ? ((settings as any).resume_delayed_end || '14:10') : ((settings as any).resume_normal_end || '13:10'));
+  const resumeLockoutMin = parseHm(isMealDelayed ? ((settings as any).resume_delayed_lockout_time || '14:30') : ((settings as any).resume_lockout_time || '14:00'));
+
+  const closedMin = parseHm(settings.closing_time || '16:30');
+  const closingEndMin = parseHm((settings as any).closing_end_time || '16:40');
+  const dayCutoffMin = parseHm((settings as any).day_cutoff_time || '17:00');
+
   const todayMin = minutesOfDay(now);
   const isWorkday = settings.workdays.includes(now.getDay());
   const hasIn = todayRows.some((r) => r.punch_type === 'in');
@@ -157,10 +171,11 @@ kioskRoutes.post('/identify', async (c) => {
   const hasBreakIn = todayRows.some((r) => r.punch_type === 'break_in');
   const hasBreakOut = todayRows.some((r) => r.punch_type === 'break_out');
   const onBreak = hasBreakIn && !hasBreakOut;
+
   const lateMinutes = hasIn
     ? Number(todayRows.find((r) => r.punch_type === 'in')?.late_minutes ?? 0)
     : isWorkday
-    ? Math.max(0, todayMin - openedMin)
+    ? (todayMin < openedMin ? 0 : todayMin - openedMin)
     : 0;
 
   // Recherche d'un congé ou d'une permission validée pour aujourd'hui
@@ -174,17 +189,16 @@ kioskRoutes.post('/identify', async (c) => {
     [employee.id, today],
   ).catch(() => null);
 
-  const breakStartTimeStr = (settings as any).break_start_time || '12:00';
-  const breakStartMin = parseHm(breakStartTimeStr);
   const isBreakTimeReached = todayMin >= breakStartMin;
+  const isTooEarlyForCheckin = !hasIn && isWorkday && todayMin < earlyCheckinMin;
+  const isMorningLocked = !hasIn && isWorkday && todayMin >= morningLockoutMin;
+  const isResumeLocked = onBreak && isWorkday && todayMin >= resumeLockoutMin;
+  const isDayClosed = todayMin >= dayCutoffMin;
 
-  const maxLateAllowed = Number((settings as any).max_late_minutes_allowed) || 60;
-  const isLateCriticalBlocked = !hasIn && isWorkday && lateMinutes > maxLateAllowed;
-
-  const canPunchIn = !hasIn && !isLateCriticalBlocked;
+  const canPunchIn = !hasIn && !isMorningLocked && !isTooEarlyForCheckin && !isDayClosed;
   const canPunchOut = hasIn && !hasOut && !onBreak;
   const canBreakIn = hasIn && !hasBreakIn && !hasBreakOut && !onBreak && isBreakTimeReached;
-  const canBreakOut = onBreak;
+  const canBreakOut = onBreak && !isResumeLocked;
 
   return c.json({
     employee: {
@@ -206,14 +220,29 @@ kioskRoutes.post('/identify', async (c) => {
       canBreakIn,
       canBreakOut,
       lateMinutes,
-      isLate: isWorkday && !hasIn && lateMinutes > settings.tolerance_minutes,
-      isLateCriticalBlocked,
-      maxLateAllowed,
+      isLate: isWorkday && !hasIn && (todayMin >= lateThresholdMin || lateMinutes > settings.tolerance_minutes),
+      isTooEarlyForCheckin,
+      isMorningLocked,
+      isResumeLocked,
+      isDayClosed,
+      isLateCriticalBlocked: isMorningLocked,
+      maxLateAllowed: morningLockoutMin - openedMin,
       isBreakTimeReached,
-      breakStartTime: breakStartTimeStr,
-      afterClosing: todayMin > closedMin,
-      openingTime: settings.opening_time,
-      closingTime: settings.closing_time,
+      breakStartTime: formatHm(breakStartMin),
+      breakEndTime: formatHm(breakEndMin),
+      resumeStartTime: formatHm(resumeStartMin),
+      resumeEndTime: formatHm(resumeEndMin),
+      resumeLockoutTime: formatHm(resumeLockoutMin),
+      mealScheduleMode: (settings as any).meal_schedule_mode || 'normal_12h',
+      isMealDelayed,
+      afterClosing: todayMin >= closedMin,
+      earlyCheckinTime: (settings as any).early_checkin_time || '07:25',
+      openingTime: settings.opening_time || '07:30',
+      lateThresholdTime: (settings as any).late_threshold_time || '08:00',
+      morningLockoutTime: (settings as any).morning_lockout_time || '10:00',
+      closingTime: settings.closing_time || '16:30',
+      closingEndTime: (settings as any).closing_end_time || '16:40',
+      dayCutoffTime: (settings as any).day_cutoff_time || '17:00',
       toleranceMinutes: settings.tolerance_minutes,
       lateMotifs: settings.late_motifs,
       cardDisplaySeconds: settings.card_display_seconds,
@@ -321,15 +350,32 @@ kioskRoutes.post('/punch', async (c) => {
     return c.json({ error: 'Code secret personnel incorrect. Veuillez vérifier et réessayer.' }, 401);
   }
 
-  const photo = checkSelfie(body.data.selfie);
-  if (!photo.ok) return c.json({ error: photo.reason }, 400);
+  const pt = body.data.punchType;
+  const isSelfieRequired = pt === 'in' || pt === 'out';
+
+  if (isSelfieRequired) {
+    if (!body.data.selfie) {
+      return c.json({ error: 'Preuve photo obligatoire pour l’arrivée et le départ.' }, 400);
+    }
+    const photo = checkSelfie(body.data.selfie);
+    if (!photo.ok) return c.json({ error: photo.reason }, 400);
+  }
 
   const settings = await loadSettings();
   const now = new Date();
   const today = localDate(now);
   const todayMin = minutesOfDay(now);
-  const openedMin = parseHm(settings.opening_time);
-  const closedMin = parseHm(settings.closing_time);
+  const openedMin = parseHm(settings.opening_time || '07:30');
+  const earlyCheckinMin = parseHm((settings as any).early_checkin_time || '07:25');
+  const lateThresholdMin = parseHm((settings as any).late_threshold_time || '08:00');
+  const morningLockoutMin = parseHm((settings as any).morning_lockout_time || '10:00');
+
+  const isMealDelayed = (settings as any).meal_schedule_mode === 'delayed_13h';
+  const breakStartMin = parseHm(isMealDelayed ? ((settings as any).break_delayed_start || '13:00') : ((settings as any).break_normal_start || '12:00'));
+  const resumeLockoutMin = parseHm(isMealDelayed ? ((settings as any).resume_delayed_lockout_time || '14:30') : ((settings as any).resume_lockout_time || '14:00'));
+
+  const closedMin = parseHm(settings.closing_time || '16:30');
+  const dayCutoffMin = parseHm((settings as any).day_cutoff_time || '17:00');
   const isWorkday = settings.workdays.includes(now.getDay());
 
   const existing = await db.query<{ punch_type: string }>(
@@ -342,20 +388,29 @@ kioskRoutes.post('/punch', async (c) => {
   const hasBreakOut = existing.some((r) => r.punch_type === 'break_out');
   const onBreak = hasBreakIn && !hasBreakOut;
 
-  const pt = body.data.punchType;
-  const lateMinutes = pt === 'in' ? (isWorkday ? Math.max(0, todayMin - openedMin) : 0) : 0;
-  const maxLateAllowed = Number((settings as any).max_late_minutes_allowed) || 60;
+  // Calcul du retard d'arrivée :
+  // Si arrivée entre 7h25 et 7h30 : lateMinutes = 0 (effet officiel à 7h30)
+  // Si arrivée après 7h30 : minutes de retard
+  const lateMinutes = pt === 'in'
+    ? (isWorkday ? (todayMin < openedMin ? 0 : todayMin - openedMin) : 0)
+    : 0;
 
   if (pt === 'in') {
     if (hasIn) return c.json({ error: 'Arrivée déjà pointée aujourd’hui.' }, 409);
-    if (isWorkday && lateMinutes > maxLateAllowed) {
+    if (isWorkday && todayMin < earlyCheckinMin) {
+      return c.json({ error: `Pointage non ouvert : les enregistrements débutent à ${(settings as any).early_checkin_time || '07:25'}.` }, 403);
+    }
+    if (isWorkday && todayMin >= morningLockoutMin) {
       return c.json(
         {
-          error: `Pointage bloqué : retard critique de ${lateMinutes} min dépassant la limite de ${maxLateAllowed} min. Veuillez vous présenter auprès du Frère Surveillant ou de la Direction pour régularisation.`,
-          isLateCriticalBlocked: true,
+          error: `Pointage bloqué : accès au système verrouillé après ${formatHm(morningLockoutMin)}. Veuillez vous présenter auprès du Frère Surveillant ou de la Direction pour régularisation.`,
+          isMorningLocked: true,
         },
         403,
       );
+    }
+    if (todayMin >= dayCutoffMin) {
+      return c.json({ error: `Pointage impossible : la journée de travail a été clôturée par le système à ${formatHm(dayCutoffMin)}.` }, 403);
     }
   }
 
@@ -366,30 +421,44 @@ kioskRoutes.post('/punch', async (c) => {
   if (pt === 'out' && onBreak) {
     return c.json({ error: 'Vous êtes actuellement en pause : veuillez pointer la reprise avant le départ définitif.' }, 409);
   }
+
   if (pt === 'break_in') {
     if (hasBreakIn || hasBreakOut) return c.json({ error: 'Une pause a déjà été enregistrée aujourd’hui.' }, 409);
-    const breakStartTimeStr = (settings as any).break_start_time || '12:00';
-    const breakStartMin = parseHm(breakStartTimeStr);
     if (todayMin < breakStartMin) {
-      return c.json({ error: `Heure de pause non atteinte : la pause est autorisée uniquement à partir de ${breakStartTimeStr}.` }, 403);
+      return c.json({ error: `Heure de pause non atteinte : la pause est autorisée uniquement à partir de ${formatHm(breakStartMin)}.` }, 403);
     }
   }
-  if (pt === 'break_out' && !onBreak) return c.json({ error: 'Aucune pause en cours.' }, 409);
 
-  const reasonRequired = pt === 'in' && isWorkday && todayMin > openedMin + settings.tolerance_minutes;
+  if (pt === 'break_out') {
+    if (!onBreak) return c.json({ error: 'Aucune pause en cours.' }, 409);
+    if (isWorkday && todayMin >= resumeLockoutMin) {
+      return c.json(
+        {
+          error: `Accès au système verrouillé pour la reprise (dépassement limite après ${formatHm(resumeLockoutMin)}). Veuillez vous adresser au Frère Surveillant.`,
+          isResumeLocked: true,
+        },
+        403,
+      );
+    }
+  }
+
+  const reasonRequired = pt === 'in' && isWorkday && (todayMin >= lateThresholdMin || todayMin > openedMin + settings.tolerance_minutes);
   let reason = body.data.reason?.trim() || null;
   if (!isWorkday) {
     reason = reason ? `${reason} (Astreinte / Jour non ouvré)` : 'Pointage exceptionnel (Jour non ouvré / Astreinte)';
   }
   if (reasonRequired && !reason) {
     return c.json(
-      { error: `Retard de ${lateMinutes} min : le motif est obligatoire (tolérance ${settings.tolerance_minutes} min).`, lateMinutes, reasonRequired: true },
+      { error: `Retard de ${lateMinutes} min : le motif est obligatoire (tolérance jusqu'à ${formatHm(lateThresholdMin)}).`, lateMinutes, reasonRequired: true },
       409,
     );
   }
 
   const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\..+$/, '');
-  const fileName = await saveSelfie(employee.id, body.data.punchType, stamp, body.data.selfie);
+  let fileName = 'break_no_photo.svg';
+  if (isSelfieRequired && body.data.selfie) {
+    fileName = await saveSelfie(employee.id, body.data.punchType, stamp, body.data.selfie);
+  }
 
   const status = lateMinutes > 0 ? 'late' : 'normal';
   try {

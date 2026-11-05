@@ -23,9 +23,10 @@ import {
   Skeleton,
   TextArea,
   useToast,
+  PageHeader,
   cx,
 } from '../components/ui';
-import { IconAlert, IconBox, IconPlus, IconSearch, IconPrinter } from '../components/Icons';
+import { IconAlert, IconBox, IconPlus, IconPrinter, IconSearch } from '../components/Icons';
 import { STATUS_LABEL, STATUS_TONE, formatDateTime } from '../lib/labels';
 import {
   ArrowRightLeft,
@@ -44,7 +45,17 @@ import {
   ChevronRight,
   LayoutGrid,
   List,
+  Menu,
+  RefreshCw,
+  Search,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { formatCurrency } from '../lib/accounting';
 import { usePrintSheet } from '../lib/print';
@@ -682,118 +693,234 @@ export function Magasins({
 
   const availableToolsForLoan = detail?.tools.filter((t) => t.status === 'disponible') ?? [];
 
+  function handleExportMagasinsExcel() {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const headers = ['Code', 'Nom du Lieu', 'Catégorie', 'Responsable', 'Machines & Outils', 'Matières & Quincaillerie', 'Statut', 'Description'];
+    const rows = filtered.map((m) => {
+      const visuals = getLocationVisuals(m);
+      return [
+        m.code,
+        m.name,
+        visuals.categoryLabel,
+        m.manager_name || 'Non assigné',
+        m.tools_count ?? 0,
+        m.stock_count ?? 0,
+        m.active ? 'Actif' : 'Inactif',
+        m.description || '—',
+      ];
+    });
+    exportToExcel(`Registre_Magasins_Depots_${dateStr}`, 'Magasins', headers, rows);
+  }
+
+  function handleExportMagasinsPdf() {
+    const headers = ['Code', 'Nom du Lieu', 'Catégorie', 'Responsable', 'Outils', 'Stock', 'Statut'];
+    const rows = filtered.map((m) => {
+      const visuals = getLocationVisuals(m);
+      return [
+        m.code,
+        m.name,
+        visuals.categoryLabel,
+        m.manager_name || 'Non assigné',
+        m.tools_count ?? 0,
+        m.stock_count ?? 0,
+        m.active ? 'Actif' : 'Inactif',
+      ];
+    });
+    exportToPdf(
+      'Registre Officiel des Magasins, Dépôts & Ateliers',
+      'Cartographie des centres logistiques et parcs locaux C.F.T. Bénédictins',
+      headers,
+      rows,
+      [
+        { label: 'Emplacements Totaux', value: magasins.length },
+        { label: 'Filtrés Affichés', value: filtered.length },
+      ],
+    );
+  }
+
   return (
     <div className="space-y-4 sm:space-y-5 pb-10">
       {portal}
 
-      {/* Header Mobile-First & Responsive */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
-            Magasins &amp; Dépôts
-          </h1>
-          <p className="text-xs text-ink-faint mt-0.5">
-            Gestion des ateliers, locaux de stockage et parcs locaux
-          </p>
-        </div>
+      {/* Top Page Header */}
+      <PageHeader
+        title="Magasins & Dépôts"
+        hint="Gestion des ateliers, locaux de stockage, parcs locaux et affectations"
+      />
 
-        {canManage && (
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<IconPlus size={16} />}
-            onClick={openNew}
-            className="self-start sm:self-auto rounded-xl shadow-xs"
-          >
-            Nouveau magasin
-          </Button>
-        )}
-      </div>
+      {/* Sticky Unified Navigation Bar */}
+      <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
+        <div className="flex flex-col gap-2">
+          {/* Row 1: Categories + Search + Actions + Overflow Menu */}
+          <div className="flex items-center justify-between gap-2">
+            {/* Left: Quick Category Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+              {LOCATION_CATEGORIES.map((cat) => {
+                const count = categoryCounts[cat.id] ?? 0;
+                if (cat.id !== 'all' && count === 0) return null;
+                const isSelected = activeCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setActiveCategory(cat.id)}
+                    className={cx(
+                      'flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 border shadow-2xs',
+                      isSelected
+                        ? 'bg-amber text-white border-amber shadow-xs'
+                        : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                    )}
+                  >
+                    <span>{cat.shortLabel}</span>
+                    <span
+                      className={cx(
+                        'text-[10px] font-mono tabular-nums px-1.5 py-0.2 rounded-full',
+                        isSelected ? 'bg-white/20 text-white font-bold' : 'bg-paper text-ink-faint',
+                      )}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
-      {/* Barre d'outils Apple : Recherche + Sélecteur de vue Grille / Liste */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-        <div className="relative flex-1">
-          <IconSearch size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Rechercher un magasin, bureau, atelier, salle ou responsable…"
-            className="w-full rounded-xl border border-line/70 dark:border-white/[0.08] bg-surface dark:bg-[#151922] py-2.5 pl-10 pr-9 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-slate-400 dark:focus:border-white/20 focus:outline-none transition-all shadow-2xs"
-          />
-          {q && (
-            <button
-              type="button"
-              onClick={() => setQ('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs font-semibold px-1.5 py-0.5 rounded-md hover:bg-paper"
-            >
-              Effacer
-            </button>
-          )}
-        </div>
-
-        {/* Sélecteur Apple : Vue Grille vs Vue Liste (Mobile-First) */}
-        <div className="p-1 rounded-xl bg-paper dark:bg-white/[0.04] border border-line/60 dark:border-white/[0.06] inline-flex items-center gap-1 self-end sm:self-auto shrink-0">
-          <button
-            type="button"
-            onClick={() => setViewMode('grid')}
-            className={cx(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
-              viewMode === 'grid'
-                ? 'bg-surface dark:bg-[#1C212D] text-ink shadow-xs font-semibold border border-line/60 dark:border-white/[0.08]'
-                : 'text-ink-soft hover:text-ink',
-            )}
-            title="Affichage en Grille Bento"
-          >
-            <LayoutGrid size={14} />
-            <span className="hidden sm:inline">Grille</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            className={cx(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
-              viewMode === 'list'
-                ? 'bg-surface dark:bg-[#1C212D] text-ink shadow-xs font-semibold border border-line/60 dark:border-white/[0.08]'
-                : 'text-ink-soft hover:text-ink',
-            )}
-            title="Affichage en Liste (Optimisé Mobile)"
-          >
-            <List size={14} />
-            <span className="hidden sm:inline">Liste</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Apple Segmented Control Filter Bar (Sober, minimaliste, affordance native) */}
-      <div className="p-1 rounded-2xl bg-paper dark:bg-white/[0.04] border border-line/60 dark:border-white/[0.06] inline-flex items-center gap-1 overflow-x-auto max-w-full no-scrollbar">
-        {LOCATION_CATEGORIES.map((cat) => {
-          const count = categoryCounts[cat.id] ?? 0;
-          if (cat.id !== 'all' && count === 0) return null;
-          const isSelected = activeCategory === cat.id;
-          return (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setActiveCategory(cat.id)}
-              className={cx(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all duration-150 shrink-0',
-                isSelected
-                  ? 'bg-surface dark:bg-[#1C212D] text-ink shadow-xs font-semibold border border-line/60 dark:border-white/[0.08]'
-                  : 'text-ink-soft hover:text-ink hover:bg-surface/50',
+            {/* Center: Real-Time Search Bar (Desktop / Tablet) */}
+            <div className="hidden md:flex flex-1 max-w-sm mx-2 items-center relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Rechercher magasin, atelier, responsable…"
+                className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+              />
+              {q && (
+                <button
+                  type="button"
+                  onClick={() => setQ('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                >
+                  <X size={12} />
+                </button>
               )}
-            >
-              <span>{cat.shortLabel}</span>
-              <span
-                className={cx(
-                  'text-[10px] font-mono tabular-nums px-1.5 py-0.2 rounded-full',
-                  isSelected ? 'bg-paper dark:bg-white/10 text-ink font-semibold' : 'text-ink-faint',
-                )}
+            </div>
+
+            {/* Right: Actions & Options */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<RefreshCw size={13} className={loading ? 'animate-spin' : ''} />}
+                onClick={() => setReloadKey((k) => k + 1)}
+                className="h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
+                title="Actualiser les dépôts"
               >
-                {count}
-              </span>
-            </button>
-          );
-        })}
+                <span className="hidden sm:inline">Actualiser</span>
+              </Button>
+
+              {canManage && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<IconPlus size={14} />}
+                  onClick={openNew}
+                  className="h-8 px-2 sm:px-3 text-xs shadow-2xs font-bold"
+                  title="Créer un nouvel atelier ou magasin"
+                >
+                  <span className="hidden sm:inline">+ Nouveau magasin</span>
+                  <span className="sm:hidden">+ Magasin</span>
+                </Button>
+              )}
+
+              {/* View mode toggle button */}
+              <div className="flex items-center rounded-lg border border-line bg-surface p-0.5 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={cx(
+                    'px-2 py-0.5 text-[10px] font-semibold rounded transition-colors flex items-center gap-1',
+                    viewMode === 'grid' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
+                  )}
+                  title="Affichage en Grille Bento"
+                >
+                  <LayoutGrid size={12} />
+                  <span className="hidden lg:inline">Grille</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={cx(
+                    'px-2 py-0.5 text-[10px] font-semibold rounded transition-colors flex items-center gap-1',
+                    viewMode === 'list' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
+                  )}
+                  title="Affichage en Liste"
+                >
+                  <List size={12} />
+                  <span className="hidden lg:inline">Liste</span>
+                </button>
+              </div>
+
+              {/* Hamburger Options Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Menu size={14} />}
+                    className="h-8 px-2 text-xs shadow-2xs"
+                    title="Options & Exports"
+                  >
+                    <span className="hidden sm:inline">Options</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
+                  <DropdownMenuLabel className="px-2.5 py-1.5 text-[11px] font-semibold text-ink-faint uppercase tracking-wider">
+                    Exports &amp; Rapports
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={handleExportMagasinsExcel}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                  >
+                    <Download size={14} className="text-emerald-500" />
+                    <span>Exporter vers Excel (.xlsx)</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={handleExportMagasinsPdf}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                  >
+                    <IconPrinter size={14} className="text-sky-500" />
+                    <span>Imprimer l'état des Dépôts (PDF)</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {/* Sub-row: Mobile Search (Visible on small screens) */}
+          <div className="md:hidden flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+            <div className="flex items-center relative flex-1">
+              <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Rechercher un magasin, atelier, responsable…"
+                className="h-7 w-full rounded-md border border-line bg-surface/90 pl-6 pr-6 text-[11px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
+              />
+              {q && (
+                <button
+                  type="button"
+                  onClick={() => setQ('')}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                >
+                  <X size={10} />
+                </button>
+              )}
+            </div>
+            <span className="text-[11px] text-ink-faint shrink-0 font-medium">
+              {filtered.length} lieu{filtered.length > 1 ? 'x' : ''}
+            </span>
+          </div>
+        </div>
       </div>
 
       {loading ? (

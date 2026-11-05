@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getDb } from '../db/index.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requirePerm } from '../middleware/permissions.js';
+import { hasPermission, requirePerm } from '../middleware/permissions.js';
 import { localDate } from '../lib/time.js';
 
 export const dashboardRoutes = new Hono();
@@ -12,6 +12,8 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
   const role = c.get('auth').user.role;
   const db = getDb();
   const today = localDate();
+  const canViewProjects = await hasPermission(role, 'projects.view');
+  const canViewProjectFinancials = canViewProjects && await hasPermission(role, 'financial.view');
 
   const toolRows = await db.query<{ status: string; n: number }>('SELECT status, count(*)::int AS n FROM tools GROUP BY status');
   const tools = { total: 0, disponible: 0, en_pret: 0, maintenance: 0, manquant: 0, reforme: 0 };
@@ -266,8 +268,67 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
      ORDER BY ab.created_at ASC
   `).catch(() => []);
 
+  // 8. Commandes & chantiers : visible uniquement aux rôles autorisés.
+  // Les montants financiers restent masqués sans le droit financial.view.
+  type ProjectDashboardSummary = {
+    total_count: number;
+    active_count: number;
+    delayed_count: number;
+    overtime_hours: number;
+    financial_damage_fcfa: number;
+  };
+  type ProjectAttention = {
+    code: string;
+    title: string;
+    category: string | null;
+    status: string;
+    delivery_deadline: string;
+    days_late: number;
+    overtime_hours: number;
+  };
+
+  const projectSummary = canViewProjects
+    ? await db.one<ProjectDashboardSummary>(`
+        SELECT
+          count(*)::int AS total_count,
+          count(*) FILTER (WHERE status <> 'termine')::int AS active_count,
+          count(*) FILTER (WHERE status <> 'termine' AND delivery_deadline < CURRENT_DATE)::int AS delayed_count,
+          COALESCE(sum(GREATEST(0, spent_hours - budget_hours)), 0)::float AS overtime_hours,
+          COALESCE(sum(
+            GREATEST(0, spent_hours - budget_hours) * hourly_rate_fcfa
+            + CASE
+                WHEN status <> 'termine' AND delivery_deadline < CURRENT_DATE
+                THEN (CURRENT_DATE - delivery_deadline) * penalty_rate_daily_fcfa
+                ELSE 0
+              END
+          ), 0)::float AS financial_damage_fcfa
+        FROM projects
+      `).catch((error) => {
+        console.error('[dashboard] synthèse projets indisponible:', error);
+        return null;
+      })
+    : null;
+
+  const projectAttention = canViewProjects && projectSummary
+    ? await db.query<ProjectAttention>(`
+        SELECT code, title, category, status,
+               delivery_deadline::text AS delivery_deadline,
+               GREATEST(0, CURRENT_DATE - delivery_deadline)::int AS days_late,
+               GREATEST(0, spent_hours - budget_hours)::float AS overtime_hours
+          FROM projects
+         WHERE status <> 'termine'
+           AND (delivery_deadline < CURRENT_DATE OR spent_hours > budget_hours)
+         ORDER BY
+           CASE WHEN delivery_deadline < CURRENT_DATE THEN 0 ELSE 1 END,
+           delivery_deadline ASC,
+           (spent_hours - budget_hours) DESC
+         LIMIT 3
+      `).catch(() => [] as ProjectAttention[])
+    : [];
+
   return c.json({
     role,
+    projectsAccess: canViewProjects,
     generatedAt: new Date().toISOString(),
     das01: tools,
     das02: { refs: stock?.refs ?? 0, low: stock?.low ?? 0, empty: stock?.empty ?? 0 },
@@ -320,5 +381,19 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
     lastMovements,
     etablis,
     pendingLeaves,
+    projects: projectSummary
+      ? {
+          totalCount: Number(projectSummary.total_count ?? 0),
+          activeCount: Number(projectSummary.active_count ?? 0),
+          delayedCount: Number(projectSummary.delayed_count ?? 0),
+          overtimeHours: Number(projectSummary.overtime_hours ?? 0),
+          financialDamageFcfa: canViewProjectFinancials ? Number(projectSummary.financial_damage_fcfa ?? 0) : null,
+          attention: projectAttention.map((project) => ({
+            ...project,
+            days_late: Number(project.days_late ?? 0),
+            overtime_hours: Number(project.overtime_hours ?? 0),
+          })),
+        }
+      : null,
   });
 });

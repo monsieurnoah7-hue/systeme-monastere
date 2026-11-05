@@ -121,6 +121,9 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       clearApiCache('/api/employees');
       clearApiCache('/api/leaves');
       clearApiCache('/api/dashboard');
+    } else if (path.includes('/projects')) {
+      clearApiCache('/api/projects');
+      clearApiCache('/api/dashboard');
     } else if (path.includes('/users') || path.includes('/permissions')) {
       clearApiCache('/api/users');
       clearApiCache('/api/permissions');
@@ -319,7 +322,12 @@ export async function fetchHolidays(year: number): Promise<Holiday[]> {
   return res.holidays || [];
 }
 
-export async function declarePresidentialDecree(data: { holiday_date: string; name: string; decree_ref?: string }): Promise<Holiday> {
+export async function declarePresidentialDecree(data: {
+  holiday_date: string;
+  name: string;
+  decree_ref?: string;
+  kind?: 'religious' | 'presidential_decree' | 'legal_national';
+}): Promise<Holiday> {
   const res = await api<{ holiday: Holiday }>('/api/leaves/holidays/decree', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -483,6 +491,7 @@ export type StockMovement = {
 
 export type Dashboard = {
   role: Role;
+  projectsAccess?: boolean;
   generatedAt: string;
   das01: { total: number; disponible: number; en_pret: number; maintenance: number; manquant: number; reforme: number };
   das02: { refs: number; low: number; empty: number };
@@ -570,14 +579,46 @@ export type Dashboard = {
     note: string | null;
     created_at: string;
   }[];
+  projects?: {
+    totalCount: number;
+    activeCount: number;
+    delayedCount: number;
+    overtimeHours: number;
+    financialDamageFcfa: number | null;
+    attention: {
+      code: string;
+      title: string;
+      category: string | null;
+      status: string;
+      delivery_deadline: string;
+      days_late: number;
+      overtime_hours: number;
+    }[];
+  } | null;
 };
 
 export type KioskSettings = {
+  early_checkin_time?: string;
   opening_time: string;
-  closing_time: string;
-  tolerance_minutes: number;
+  late_threshold_time?: string;
+  morning_lockout_time?: string;
+  meal_schedule_mode?: 'normal_12h' | 'delayed_13h';
   break_start_time?: string;
   break_end_time?: string;
+  break_normal_start?: string;
+  break_normal_end?: string;
+  resume_normal_start?: string;
+  resume_normal_end?: string;
+  resume_lockout_time?: string;
+  break_delayed_start?: string;
+  break_delayed_end?: string;
+  resume_delayed_start?: string;
+  resume_delayed_end?: string;
+  resume_delayed_lockout_time?: string;
+  closing_time: string;
+  closing_end_time?: string;
+  day_cutoff_time?: string;
+  tolerance_minutes: number;
   max_late_minutes_allowed?: number;
   workdays: number[];
   late_motifs: string[];
@@ -611,6 +652,17 @@ export type KioskIdentify = {
     cardDisplaySeconds: number;
     isExceptionalWorkday?: boolean;
     isLate?: boolean;
+    isTooEarlyForCheckin?: boolean;
+    isMorningLocked?: boolean;
+    isResumeLocked?: boolean;
+    isDayClosed?: boolean;
+    earlyCheckinTime?: string;
+    breakEndTime?: string;
+    resumeStartTime?: string;
+    resumeEndTime?: string;
+    resumeLockoutTime?: string;
+    mealScheduleMode?: 'normal_12h' | 'delayed_13h';
+    isMealDelayed?: boolean;
     activeLeave?: { kind: string; note: string | null } | null;
   };
   history: {
@@ -771,3 +823,194 @@ export type BackupInfo = {
   uploadedAt: string;
   size: number;
 };
+
+// =========================================================================
+// PARC AUTOMOBILE & GROUPES ÉLECTROGÈNES
+// =========================================================================
+export type Vehicle = {
+  id: string;
+  registration_number: string;
+  brand_model: string;
+  vehicle_type: 'camionnette' | 'pickup' | 'camion' | 'moto_coursier' | 'voiture_liaison';
+  assigned_role: 'coursier' | 'responsable_livraisons' | 'direction' | 'chauffeur' | 'autre';
+  assigned_worker_id?: string | null;
+  assigned_worker_name?: string | null;
+  insurance_company?: string | null;
+  insurance_policy_number?: string | null;
+  insurance_start_date?: string | null;
+  insurance_end_date?: string | null;
+  technical_visit_last_date?: string | null;
+  technical_visit_due_date?: string | null;
+  current_mileage: number;
+  last_oil_change_date?: string | null;
+  last_oil_change_mileage: number;
+  next_oil_change_mileage: number;
+  status: 'operationnel' | 'en_maintenance' | 'immobilise' | 'reforme';
+  photo_path?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Alertes calculées
+  insurance_status?: 'valide' | 'warning_30j' | 'urgent_15j' | 'expire';
+  insurance_days_left?: number | null;
+  tech_visit_status?: 'a_jour' | 'urgent_15j' | 'expire';
+  tech_visit_days_left?: number | null;
+  oil_change_status?: 'ok' | 'proche' | 'depasse';
+  mileage_to_oil_change?: number;
+};
+
+export type Generator = {
+  id: string;
+  name_code: string;
+  brand_model: string;
+  power_kva: number;
+  location: string;
+  assigned_manager_id?: string | null;
+  assigned_manager_name?: string | null;
+  running_hours: number;
+  last_oil_change_date?: string | null;
+  last_oil_change_hours: number;
+  oil_change_interval_hours: number;
+  next_oil_change_hours: number;
+  last_maintenance_date?: string | null;
+  next_maintenance_date?: string | null;
+  status: 'en_fonction' | 'en_veille' | 'en_maintenance' | 'hors_service';
+  fuel_level_pct: number;
+  photo_path?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Alertes calculées
+  oil_change_status?: 'ok' | 'proche' | 'depasse';
+  hours_to_oil_change?: number;
+};
+
+export type FleetSummary = {
+  vehicles_count: number;
+  generators_count: number;
+  alerts: {
+    insurance_urgent: number;
+    tech_visit_urgent: number;
+    oil_change_urgent: number;
+    generator_oil_urgent: number;
+    total_urgent: number;
+  };
+  vehicles: Vehicle[];
+  generators: Generator[];
+};
+
+export async function fetchFleetSummary(): Promise<FleetSummary> {
+  return api<FleetSummary>('/api/fleet/summary');
+}
+
+export async function createVehicle(data: Partial<Vehicle>): Promise<Vehicle> {
+  const res = await api<{ vehicle: Vehicle }>('/api/fleet/vehicles', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return res.vehicle;
+}
+
+export async function updateVehicle(id: string, data: Partial<Vehicle>): Promise<Vehicle> {
+  const res = await api<{ vehicle: Vehicle }>(`/api/fleet/vehicles/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+  return res.vehicle;
+}
+
+export async function deleteVehicle(id: string): Promise<void> {
+  await api(`/api/fleet/vehicles/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function createGenerator(data: Partial<Generator>): Promise<Generator> {
+  const res = await api<{ generator: Generator }>('/api/fleet/generators', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return res.generator;
+}
+
+export async function updateGenerator(id: string, data: Partial<Generator>): Promise<Generator> {
+  const res = await api<{ generator: Generator }>(`/api/fleet/generators/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+  return res.generator;
+}
+
+export async function deleteGenerator(id: string): Promise<void> {
+  await api(`/api/fleet/generators/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+// =========================================================================
+// COMMANDES, PROJETS & PLANIFICATION DES CHANTIERS DE POSE (PDF Pt 1 & 2)
+// =========================================================================
+export type Project = {
+  id: string;
+  code: string;
+  title: string;
+  client_name: string;
+  site_location: string;
+  category: string | null;
+  assigned_worker_ids: string[];
+  assigned_worker_names: string[];
+  budget_hours: number;
+  spent_hours: number;
+  hourly_rate_fcfa: number;
+  penalty_rate_daily_fcfa: number;
+  ratio_value: number | null;
+  ratio_unit: string | null;
+  ratio_basis: string | null;
+  delivery_deadline: string;
+  installation_start_date?: string | null;
+  installation_days: number;
+  status: 'planifie' | 'en_fabrication' | 'en_pose' | 'termine' | 'en_retard' | 'litige';
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Métriques de suivi & arbitrage Direction
+  is_delayed?: boolean;
+  delayed_days?: number;
+  days_to_deadline?: number;
+  overtime_hours?: number;
+  overtime_cost_fcfa?: number;
+  penalties_cost_fcfa?: number;
+  financial_damage_fcfa?: number;
+  hours_progress_pct?: number;
+};
+
+export type ProjectsResponse = {
+  projects: Project[];
+  summary: {
+    total_count: number;
+    active_count: number;
+    delayed_count: number;
+    total_overtime_hours: number;
+    total_financial_damage_fcfa: number;
+  };
+};
+
+export async function fetchProjects(): Promise<ProjectsResponse> {
+  return api<ProjectsResponse>('/api/projects');
+}
+
+export async function createProject(data: Partial<Project>): Promise<Project> {
+  const res = await api<{ project: Project }>('/api/projects', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return res.project;
+}
+
+export async function updateProject(id: string, data: Partial<Project>): Promise<Project> {
+  const res = await api<{ project: Project }>(`/api/projects/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+  return res.project;
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await api(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}

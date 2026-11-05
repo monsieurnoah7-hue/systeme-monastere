@@ -28,8 +28,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
+import { exportToExcel, exportToPdf } from '../lib/export';
+import {
   AlertTriangle,
   Ban,
+  CalendarDays,
   Camera,
   Check,
   CheckCheck,
@@ -39,23 +49,29 @@ import {
   Database,
   Download,
   Eye,
-  Filter,
+  FileSpreadsheet,
   HardDrive,
   KeyRound,
   Lock,
+  Menu,
+  Moon,
   Pencil,
   Plus,
+  Printer,
   RefreshCw,
   Save,
   Search,
   Shield,
   ShieldCheck,
+  Sliders,
   Smartphone,
   Sparkles,
+  Sun,
   Trash2,
   UserPlus,
   Users,
   UserX,
+  Utensils,
   X,
   Zap,
 } from 'lucide-react';
@@ -319,6 +335,7 @@ function AdminSettings({ user }: { user: User }) {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [motifDraft, setMotifDraft] = useState('');
+  const [kioskSubTab, setKioskSubTab] = useState<'horaires' | 'bornes' | 'regles'>('horaires');
 
   const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
   const [users, setUsers] = useState<AppUserRow[]>([]);
@@ -374,8 +391,11 @@ function AdminSettings({ user }: { user: User }) {
   // Filter states for accounts
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | Role>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [kpiCardFilter, setKpiCardFilter] = useState<'all' | 'active' | 'linked' | 'direction'>('all');
+  const [kpiCardFilter, setKpiCardFilter] = useState<'all' | 'active' | 'inactive' | 'linked' | 'direction'>('all');
+
+  // Permissions & RBAC filter states
+  const [permSearch, setPermSearch] = useState('');
+  const [permGroupFilter, setPermGroupFilter] = useState<'all' | string>('all');
 
   // Purge confirmation modal state
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
@@ -1075,14 +1095,12 @@ function AdminSettings({ user }: { user: User }) {
     return sortedUsers.filter((u) => {
       // Interactive KPI Card Filter
       if (kpiCardFilter === 'active' && !u.active) return false;
+      if (kpiCardFilter === 'inactive' && u.active) return false;
       if (kpiCardFilter === 'linked' && !u.employee_id) return false;
       if (kpiCardFilter === 'direction' && u.role !== 'direction') return false;
 
       // Role filter
       if (roleFilter !== 'all' && u.role !== roleFilter) return false;
-      // Status filter
-      if (statusFilter === 'active' && !u.active) return false;
-      if (statusFilter === 'inactive' && u.active) return false;
       // Search query
       if (userSearch.trim()) {
         const query = userSearch.toLowerCase();
@@ -1097,11 +1115,111 @@ function AdminSettings({ user }: { user: User }) {
       }
       return true;
     });
-  }, [sortedUsers, kpiCardFilter, roleFilter, statusFilter, userSearch, employeesById]);
+  }, [sortedUsers, kpiCardFilter, roleFilter, userSearch, employeesById]);
 
   // Key performance indicators
   const activeUsersCount = useMemo(() => users.filter((u) => u.active).length, [users]);
   const activeTerminalsCount = useMemo(() => terminals.filter((t) => t.active).length, [terminals]);
+
+  function handleExportPermissionsExcel() {
+    if (!permMatrix || !permDraft) return;
+    const dateStr = new Date().toISOString().split('T')[0];
+    const roleHeaders = permMatrix.roles.map((r) => availableRoles.find((ar) => ar.id === r)?.name ?? ROLE_LABEL[r] ?? r);
+    const headers = ['Groupe', 'Action Code', 'Libellé', 'Type', ...roleHeaders];
+    const rows: (string | number)[][] = [];
+    for (const group of permMatrix.groups) {
+      for (const act of group.actions) {
+        const meta = permMatrix.actions.find((a) => a.action === act);
+        const isView = meta?.kind === 'view' || act.endsWith('.view');
+        rows.push([
+          group.label,
+          act,
+          meta?.label ?? act,
+          isView ? 'Consultation' : 'Action',
+          ...permMatrix.roles.map((r) => {
+            if (r === 'direction') return 'Accordé (Permanent)';
+            return permDraft[act]?.[r] ? 'Accordé' : 'Refusé';
+          }),
+        ]);
+      }
+    }
+    exportToExcel(`Matrice_RBAC_Permissions_${dateStr}`, 'Permissions', headers, rows);
+  }
+
+  function handleExportPermissionsPdf() {
+    if (!permMatrix || !permDraft) return;
+    const headers = ['Action Code', 'Libellé', 'Chef d’atelier', 'Magasinier', 'Travailleur'];
+    const rows = permMatrix.actions.map((act) => [
+      act.action,
+      act.label,
+      permDraft[act.action]?.chef_atelier ? 'Accordé' : '—',
+      permDraft[act.action]?.magasinier ? 'Accordé' : '—',
+      permDraft[act.action]?.travailleur ? 'Accordé' : '—',
+    ]);
+    exportToPdf(
+      'Matrice de Contrôle d’Accès (RBAC)',
+      'Privilèges et habilitations de sécurité des rôles C.F.T. Bénédictins',
+      headers,
+      rows,
+      [
+        { label: 'Total Actions', value: permMatrix.actions.length },
+        { label: 'Total Groupes', value: permMatrix.groups.length },
+        { label: 'Rôles Configurés', value: permMatrix.roles.length },
+      ],
+    );
+  }
+
+  function handleExportUsersExcel() {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const headers = ['Identifiant', 'Nom / Libellé', 'Rôle', 'Matricule Ouvrier', 'Statut', 'Date Création'];
+    const rows = filteredUsers.map((u) => [
+      u.login,
+      u.display_name,
+      ROLE_LABEL[u.role] ?? u.role,
+      u.employee_id || 'Non lié',
+      u.active ? 'Actif' : 'Inactif',
+      u.created_at ? formatDateTime(u.created_at) : '—',
+    ]);
+    exportToExcel(`Comptes_Utilisateurs_${dateStr}`, 'Utilisateurs', headers, rows);
+  }
+
+  function handleExportUsersPdf() {
+    const headers = ['Identifiant', 'Nom / Libellé', 'Rôle', 'Matricule', 'Statut'];
+    const rows = filteredUsers.map((u) => [
+      u.login,
+      u.display_name,
+      ROLE_LABEL[u.role] ?? u.role,
+      u.employee_id || '—',
+      u.active ? 'Actif' : 'Inactif',
+    ]);
+    exportToPdf(
+      'Annuaire Officiel des Utilisateurs & Accès',
+      'Liste des comptes autorisés sur le Système Central CFTM Bénédictins',
+      headers,
+      rows,
+      [
+        { label: 'Total Comptes', value: users.length },
+        { label: 'Comptes Actifs', value: activeUsersCount },
+        { label: 'Liés à un Travailleur', value: users.filter((u) => !!u.employee_id).length },
+      ],
+    );
+  }
+
+  const displayGroups = useMemo(() => {
+    if (!permMatrix) return [];
+    const needle = permSearch.trim().toLowerCase();
+    return permMatrix.groups
+      .filter((g) => permGroupFilter === 'all' || g.label === permGroupFilter)
+      .map((g) => {
+        if (!needle) return g;
+        const matchedActions = g.actions.filter((act) => {
+          const meta = permMatrix.actions.find((a) => a.action === act);
+          return act.toLowerCase().includes(needle) || (meta?.label ?? '').toLowerCase().includes(needle);
+        });
+        return { ...g, actions: matchedActions };
+      })
+      .filter((g) => g.actions.length > 0);
+  }, [permMatrix, permSearch, permGroupFilter]);
 
   if (loading && !settings) {
     return (
@@ -1121,17 +1239,7 @@ function AdminSettings({ user }: { user: User }) {
       {/* Top Header */}
       <PageHeader
         title="Paramètres"
-        actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={isRefreshing}
-            icon={<RefreshCw size={15} className={cx(isRefreshing && 'animate-spin text-amber')} />}
-            onClick={() => setReload((value) => value + 1)}
-          >
-            {isRefreshing ? 'Actualisation…' : 'Actualiser'}
-          </Button>
-        }
+        hint="Configuration générale de l'atelier, des accès, bornes de pointage et sauvegardes CFTM"
       />
 
       {settingsError ? (
@@ -1141,61 +1249,477 @@ function AdminSettings({ user }: { user: User }) {
       ) : null}
 
       {/* Main Tabs Navigation */}
-      <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-6">
-        <div className="border-b border-line pb-px overflow-x-auto scroll-thin">
-          <TabsList variant="line" className="flex gap-1.5 sm:gap-2 bg-transparent p-0 w-max min-w-full">
-            <TabsTrigger
-              value="comptes"
-              className="shrink-0 whitespace-nowrap gap-2 px-3 py-2 text-xs sm:text-sm font-medium data-active:border-b-2 data-active:border-amber data-active:text-ink"
-            >
-              <Users size={16} />
-              <span>Comptes</span>
-              <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
-                {activeUsersCount}/{users.length}
-              </span>
-            </TabsTrigger>
+      <Tabs
+        value={activeTab}
+        onValueChange={(val) => {
+          setActiveTab(val as typeof activeTab);
+          const main = document.querySelector('main');
+          if (main && main.scrollTop > 120) {
+            main.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }}
+        className="w-full space-y-6"
+      >
+        {/* Sticky Unified Command Deck (Apple macOS / Google Material 3 - 100% Canvas Width Edge-to-Edge) */}
+        <div className="sticky top-0 lg:top-11 z-30 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs space-y-2 mb-6">
+          {/* Row 1: Master Navigation Tabs + Grouped Master Actions */}
+          <div className="flex items-center justify-between gap-2 sm:gap-3 min-w-0">
+            {/* Tabs Trigger list (Horizontally scrollable on small screens with no scrollbar) */}
+            <div className="overflow-x-auto no-scrollbar py-0.5 min-w-0 flex-1">
+              <TabsList variant="line" className="flex gap-1 sm:gap-2 bg-transparent p-0 w-max">
+                <TabsTrigger
+                  value="comptes"
+                  className="shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
+                >
+                  <Users size={14} className="text-amber" />
+                  <span>Comptes</span>
+                  <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
+                    {activeUsersCount}/{users.length}
+                  </span>
+                </TabsTrigger>
 
-            <TabsTrigger
-              value="permissions"
-              className="shrink-0 whitespace-nowrap relative gap-2 px-3 py-2 text-xs sm:text-sm font-medium data-active:border-b-2 data-active:border-amber data-active:text-ink"
-            >
-              <ShieldCheck size={16} />
-              <span>Rôles &amp; Permissions</span>
-              {hasUnsavedPerms ? (
-                <span className="h-2 w-2 rounded-full bg-amber" title="Modifications en attente" />
-              ) : null}
-            </TabsTrigger>
+                <TabsTrigger
+                  value="permissions"
+                  className="shrink-0 whitespace-nowrap relative gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
+                >
+                  <ShieldCheck size={14} className="text-amber" />
+                  <span>Rôles &amp; Permissions</span>
+                  {hasUnsavedPerms ? (
+                    <span className="h-2 w-2 rounded-full bg-amber animate-pulse" title="Modifications en attente" />
+                  ) : null}
+                </TabsTrigger>
 
-            <TabsTrigger
-              value="kiosk"
-              className="shrink-0 whitespace-nowrap gap-2 px-3 py-2 text-xs sm:text-sm font-medium data-active:border-b-2 data-active:border-amber data-active:text-ink"
-            >
-              <Clock size={16} />
-              <span>Pointage &amp; Kiosque</span>
-              <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
-                {activeTerminalsCount} act.
-              </span>
-            </TabsTrigger>
+                <TabsTrigger
+                  value="kiosk"
+                  className="shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
+                >
+                  <Clock size={14} className="text-amber" />
+                  <span className="hidden sm:inline">Pointage &amp; Kiosque</span>
+                  <span className="sm:hidden">Kiosque</span>
+                  <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
+                    {activeTerminalsCount} act.
+                  </span>
+                </TabsTrigger>
 
-            <TabsTrigger
-              value="securite"
-              className="shrink-0 whitespace-nowrap gap-2 px-3 py-2 text-xs sm:text-sm font-medium data-active:border-b-2 data-active:border-amber data-active:text-ink"
-            >
-              <KeyRound size={16} />
-              <span>Sécurité &amp; Profil</span>
-            </TabsTrigger>
+                <TabsTrigger
+                  value="securite"
+                  className="shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
+                >
+                  <KeyRound size={14} className="text-amber" />
+                  <span className="hidden sm:inline">Sécurité &amp; Profil</span>
+                  <span className="sm:hidden">Sécurité</span>
+                </TabsTrigger>
 
-            <TabsTrigger
-              value="sauvegardes"
-              className="shrink-0 whitespace-nowrap gap-2 px-3 py-2 text-xs sm:text-sm font-medium data-active:border-b-2 data-active:border-amber data-active:text-ink"
-            >
-              <HardDrive size={16} />
-              <span>Sauvegardes &amp; Système</span>
-              <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
-                {backups.length}
-              </span>
-            </TabsTrigger>
-          </TabsList>
+                <TabsTrigger
+                  value="sauvegardes"
+                  className="shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
+                >
+                  <HardDrive size={14} className="text-amber" />
+                  <span className="hidden sm:inline">Sauvegardes &amp; Système</span>
+                  <span className="sm:hidden">Sauvegardes</span>
+                  <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
+                    {backups.length}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            {/* Global Utilities & Master CTAs */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={isRefreshing}
+                icon={<RefreshCw size={13} className={cx(isRefreshing && 'animate-spin text-amber')} />}
+                onClick={() => setReload((value) => value + 1)}
+                className="h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
+                title="Actualiser les données"
+              >
+                <span className="hidden xl:inline">{isRefreshing ? 'Actualisation…' : 'Actualiser'}</span>
+              </Button>
+
+              {/* Contextual Primary Action CTA (Row 1) */}
+              {activeTab === 'comptes' && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<UserPlus size={14} />}
+                  onClick={() => {
+                    setUserForm({
+                      login: '',
+                      display_name: '',
+                      password: '',
+                      confirmPassword: '',
+                      role: 'magasinier',
+                      employee_id: '',
+                    });
+                    setFormError(null);
+                    setUserOpen(true);
+                  }}
+                  className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs whitespace-nowrap"
+                  title="Créer un nouveau compte utilisateur"
+                >
+                  <span className="hidden sm:inline">Nouveau compte</span>
+                  <span className="sm:hidden">Compte</span>
+                </Button>
+              )}
+
+              {activeTab === 'permissions' && (
+                hasUnsavedPerms ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={resetPermDraft}
+                      disabled={busy}
+                      className="h-8 px-2 sm:px-2.5 text-xs"
+                    >
+                      Annuler
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      disabled={busy}
+                      icon={busy ? <Spinner className="h-3 w-3" /> : <Save size={14} />}
+                      onClick={() => void savePermissions()}
+                      className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs whitespace-nowrap"
+                    >
+                      <span className="hidden sm:inline">Enregistrer</span>
+                      <span className="sm:hidden">Sauver</span>
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={<Plus size={14} />}
+                    onClick={() => {
+                      setNewActionForm({ action: '', label: '', group_label: 'Opérations Générales' });
+                      setNewActionError(null);
+                      setNewActionOpen(true);
+                    }}
+                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs whitespace-nowrap"
+                    title="Ajouter une action ou un module métier"
+                  >
+                    <span className="hidden sm:inline">Ajouter action</span>
+                    <span className="sm:hidden">Action</span>
+                  </Button>
+                )
+              )}
+
+              {activeTab === 'kiosk' && (
+                kioskSubTab === 'bornes' ? (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon={<Plus size={14} />}
+                    onClick={() => {
+                      setTerminalForm({ name: '', id: '' });
+                      setTerminalOpen(true);
+                    }}
+                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs whitespace-nowrap"
+                    title="Ajouter une borne de pointage"
+                  >
+                    <span className="hidden sm:inline">Nouvelle borne</span>
+                    <span className="sm:hidden">Borne</span>
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={savingSettings || !hasUnsavedSettings}
+                    icon={savingSettings ? <Spinner className="h-3 w-3" /> : <Save size={14} />}
+                    onClick={() => void handleSaveSettings()}
+                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs whitespace-nowrap"
+                  >
+                    <span className="hidden sm:inline">Enregistrer réglages</span>
+                    <span className="sm:hidden">Sauver</span>
+                  </Button>
+                )
+              )}
+
+              {activeTab === 'sauvegardes' && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={backupBusy}
+                  icon={backupBusy ? <Spinner className="h-3 w-3" /> : <HardDrive size={14} />}
+                  onClick={saveBackupNow}
+                  className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs whitespace-nowrap"
+                >
+                  <span className="hidden sm:inline">Créer instantané</span>
+                  <span className="sm:hidden">Instantané</span>
+                </Button>
+              )}
+
+              {/* Hamburger Overflow Options Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Menu size={14} />}
+                    className="h-8 px-2 sm:px-2.5 text-xs shadow-2xs gap-1.5"
+                    title="Options &amp; Exports"
+                  >
+                    <span className="hidden sm:inline">Options</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
+                  <DropdownMenuLabel className="px-2.5 py-1.5 text-[11px] font-semibold text-ink-faint uppercase tracking-wider">
+                    Actions &amp; Outils
+                  </DropdownMenuLabel>
+
+                  {activeTab === 'permissions' && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={handleExportPermissionsExcel}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <FileSpreadsheet size={14} className="text-emerald-500" />
+                        <span>Exporter Matrice RBAC (Excel)</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={handleExportPermissionsPdf}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <Printer size={14} className="text-sky-500" />
+                        <span>Imprimer Matrice RBAC (PDF)</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuSeparator className="my-1 border-line" />
+
+                      <DropdownMenuItem
+                        onClick={() => openCreateRoleModal()}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <Plus size={14} className="text-amber" />
+                        <span>Créer un nouveau Rôle métier</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={resetPermDraft}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <RefreshCw size={14} />
+                        <span>Réinitialiser modifications</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+
+                  {activeTab === 'comptes' && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={handleExportUsersExcel}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <FileSpreadsheet size={14} className="text-emerald-500" />
+                        <span>Exporter les Comptes (Excel)</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={handleExportUsersPdf}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <Printer size={14} className="text-sky-500" />
+                        <span>Imprimer les Comptes (PDF)</span>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuSeparator className="my-1 border-line" />
+
+                      <DropdownMenuItem
+                        onClick={() => setPurgeConfirmOpen(true)}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-red-500/10 text-red"
+                      >
+                        <Trash2 size={14} />
+                        <span>Purger comptes de test</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+
+                  {activeTab === 'kiosk' && (
+                    <DropdownMenuItem
+                      onClick={() => window.open('/pointage', '_blank')}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                    >
+                      <Smartphone size={14} className="text-amber" />
+                      <span>Ouvrir Kiosque plein écran</span>
+                    </DropdownMenuItem>
+                  )}
+
+                  {activeTab === 'sauvegardes' && (
+                    <DropdownMenuItem
+                      onClick={saveBackupNow}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                    >
+                      <Download size={14} className="text-emerald-500" />
+                      <span>Télécharger Sauvegarde SQL</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {/* Row 2: Continuous Search & Filters (Dedicated Sub-Row) */}
+          {activeTab === 'comptes' && (
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 flex-1 min-w-0">
+                {/* Real-time Search */}
+                <div className="relative w-44 sm:w-60 shrink-0">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                  <input
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Rechercher nom, login, rôle..."
+                    className="h-7.5 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                  />
+                  {userSearch && (
+                    <button
+                      onClick={() => setUserSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Status Chips */}
+                <div className="flex items-center gap-1 shrink-0">
+                  {[
+                    { key: 'all', label: 'Tous', count: users.length },
+                    { key: 'active', label: 'Actifs', count: activeUsersCount },
+                    { key: 'inactive', label: 'Inactifs', count: users.length - activeUsersCount },
+                    { key: 'direction', label: 'Direction', count: users.filter((u) => u.role === 'direction').length },
+                  ].map(({ key, label, count }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setKpiCardFilter(key as any)}
+                      className={cx(
+                        'px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs cursor-pointer',
+                        kpiCardFilter === key
+                          ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                          : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                      )}
+                    >
+                      <span>{label}</span>
+                      <span className="opacity-75 text-[10px] tabular-nums font-mono">{count}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Role select */}
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value as any)}
+                  className="h-7.5 rounded-lg border border-line bg-surface px-2 text-xs text-ink focus:border-amber focus:outline-none shadow-2xs max-w-[140px] shrink-0"
+                  title="Filtrer par rôle"
+                >
+                  <option value="all">Tous les rôles</option>
+                  {availableRoles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'permissions' && (
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+              {/* Real-time Search */}
+              <div className="relative w-44 sm:w-60 shrink-0">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                <input
+                  value={permSearch}
+                  onChange={(e) => setPermSearch(e.target.value)}
+                  placeholder="Filtrer action, permission..."
+                  className="h-7.5 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                />
+                {permSearch && (
+                  <button
+                    onClick={() => setPermSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* Module Filter Chips scrolling freely across 100% canvas width */}
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setPermGroupFilter('all')}
+                  className={cx(
+                    'px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs cursor-pointer',
+                    permGroupFilter === 'all'
+                      ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                      : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                  )}
+                >
+                  <span>Tous modules</span>
+                  <span className="opacity-75 text-[10px] tabular-nums font-mono">{permMatrix?.actions.length ?? 0}</span>
+                </button>
+                {permMatrix?.groups.map((g) => (
+                  <button
+                    key={g.label}
+                    type="button"
+                    onClick={() => setPermGroupFilter(g.label)}
+                    className={cx(
+                      'px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs whitespace-nowrap cursor-pointer',
+                      permGroupFilter === g.label
+                        ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                        : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                    )}
+                  >
+                    <span>{g.label}</span>
+                    <span className="opacity-75 text-[10px] tabular-nums font-mono">{g.actions.length}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'kiosk' && (
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+                {[
+                  { key: 'horaires', label: 'Horaires & Présences' },
+                  { key: 'bornes', label: `Bornes d'Atelier (${terminals.length})` },
+                  { key: 'regles', label: 'Règles & Retards' },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setKioskSubTab(key as any)}
+                    className={cx(
+                      'px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition-all border shadow-2xs whitespace-nowrap cursor-pointer',
+                      kioskSubTab === key
+                        ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                        : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'sauvegardes' && (
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+              <div className="text-xs text-ink-soft">
+                Rétention : <strong className="text-ink">{retentionDays} jours</strong> de conservation automatique
+              </div>
+              <div className="text-xs text-ink-faint">
+                {backups.length} sauvegarde{backups.length > 1 ? 's' : ''} système disponible{backups.length > 1 ? 's' : ''}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* =========================================================================
@@ -1291,81 +1815,23 @@ function AdminSettings({ user }: { user: User }) {
             </Card>
           </div>
 
-          {/* User Management Toolbar & Card */}
+          {/* User Management Table Card */}
           <Card className="shadow-card">
-            <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
-                  <Users size={18} className="text-amber" /> Gestion des accès applicatifs
-                </CardTitle>
-                <CardDescription className="text-xs text-ink-soft">
-                  Contrôlez les comptes habilités à administrer la menuiserie et gérer les stocks et outillages.
-                </CardDescription>
-              </div>
-              <Button
-                size="sm"
-                variant="primary"
-                icon={<UserPlus size={16} />}
-                onClick={() => {
-                  setUserForm({ login: '', display_name: '', password: '', confirmPassword: '', role: 'magasinier', employee_id: '' });
-                  setFormError(null);
-                  setUserOpen(true);
-                }}
-              >
-                Nouveau compte
-              </Button>
-            </CardHeader>
-
-            {/* Filters Bar */}
-            <div className="flex flex-col gap-3 bg-paper-2/40 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="relative min-w-0 flex-1">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-                <input
-                  type="text"
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  placeholder="Rechercher par nom, identifiant ou travailleur…"
-                  className="h-9 w-full rounded-btn border border-line-strong bg-surface pl-9 pr-3 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none"
-                />
-                {userSearch ? (
-                  <button
-                    onClick={() => setUserSearch('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink"
-                  >
-                    <X size={14} />
-                  </button>
-                ) : null}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 text-xs text-ink-soft">
-                  <Filter size={13} className="text-ink-faint" />
-                  <span>Rôle :</span>
+            <CardHeader className="border-b border-line pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
+                    <Users size={18} className="text-amber" /> Gestion des accès applicatifs
+                  </CardTitle>
+                  <CardDescription className="text-xs text-ink-soft">
+                    Contrôlez les comptes habilités à administrer la menuiserie et gérer les stocks et outillages.
+                  </CardDescription>
                 </div>
-                <select
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
-                  className="h-9 rounded-btn border border-line-strong bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
-                >
-                  <option value="all">Tous les rôles</option>
-                  {availableRoles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                  className="h-9 rounded-btn border border-line-strong bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
-                >
-                  <option value="all">Tous les statuts</option>
-                  <option value="active">Actifs uniquement</option>
-                  <option value="inactive">Inactifs uniquement</option>
-                </select>
+                <div className="text-xs font-medium text-ink-soft">
+                  {filteredUsers.length} profil{filteredUsers.length > 1 ? 's' : ''} répertorié{filteredUsers.length > 1 ? 's' : ''}
+                </div>
               </div>
-            </div>
+            </CardHeader>
 
             {/* Active KPI Filter Banner */}
             {kpiCardFilter !== 'all' && (
@@ -1656,7 +2122,7 @@ function AdminSettings({ user }: { user: User }) {
                   <UserX size={32} className="mx-auto text-ink-faint mb-2" />
                   <p className="font-semibold text-ink">Aucun compte utilisateur trouvé</p>
                   <p className="mt-1 text-xs text-ink-faint">
-                    {userSearch || roleFilter !== 'all' || statusFilter !== 'all'
+                    {userSearch || roleFilter !== 'all' || kpiCardFilter !== 'all'
                       ? 'Modifiez ou effacez vos filtres de recherche.'
                       : 'Cliquez sur « Nouveau compte » pour ajouter un collaborateur.'}
                   </p>
@@ -1770,46 +2236,20 @@ function AdminSettings({ user }: { user: User }) {
           </Card>
 
           {/* Card: Matrice RBAC */}
-          <Card className="shadow-card">
-            <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
-                  <ShieldCheck size={18} className="text-green" /> Matrice de contrôle d’accès (RBAC)
-                </CardTitle>
-                <CardDescription className="text-xs text-ink-soft">
-                  Configurez précisément les privilèges accordés à chaque rôle métier. Le rôle Direction est super-administrateur permanent.
-                </CardDescription>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  icon={<Plus size={14} />}
-                  onClick={() => {
-                    setNewActionForm({ action: '', label: '', group_label: 'Opérations Générales' });
-                    setNewActionError(null);
-                    setNewActionOpen(true);
-                  }}
-                >
-                  Ajouter une action / module
-                </Button>
-                {hasUnsavedPerms ? (
-                  <>
-                    <Button size="sm" variant="ghost" onClick={resetPermDraft} disabled={busy}>
-                      Annuler
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      disabled={busy}
-                      icon={busy ? <Spinner /> : <Check size={15} />}
-                      onClick={() => void savePermissions()}
-                    >
-                      Enregistrer
-                    </Button>
-                  </>
-                ) : null}
+          <Card className="shadow-card relative isolate overflow-hidden">
+            <CardHeader className="border-b border-line pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
+                    <ShieldCheck size={18} className="text-green" /> Matrice de contrôle d’accès (RBAC)
+                  </CardTitle>
+                  <CardDescription className="text-xs text-ink-soft">
+                    Configurez précisément les privilèges accordés à chaque rôle métier. Le rôle Direction est super-administrateur permanent.
+                  </CardDescription>
+                </div>
+                <div className="text-xs font-medium text-ink-soft">
+                  {displayGroups.reduce((acc, g) => acc + g.actions.length, 0)} permission{displayGroups.reduce((acc, g) => acc + g.actions.length, 0) > 1 ? 's' : ''} configurée{displayGroups.reduce((acc, g) => acc + g.actions.length, 0) > 1 ? 's' : ''}
+                </div>
               </div>
             </CardHeader>
 
@@ -1832,11 +2272,11 @@ function AdminSettings({ user }: { user: User }) {
                     <span>Glissez horizontalement pour configurer tous les rôles</span>
                     <span className="font-mono font-bold text-amber">← →</span>
                   </div>
-                  <div className="max-h-[72vh] overflow-y-auto overflow-x-auto scroll-thin relative border-b border-line">
+                  <div className="max-h-[calc(100vh-280px)] min-h-[380px] overflow-y-auto overflow-x-auto scroll-thin relative border-b border-line">
                     <table className="w-full min-w-[680px] text-left border-separate border-spacing-0">
                       <thead className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
                         <tr>
-                          <th className="sticky left-0 top-0 z-30 bg-surface-2/95 backdrop-blur-md px-4 py-3 border-r border-b border-line min-w-[200px] sm:min-w-[260px] shadow-[2px_2px_4px_rgba(0,0,0,0.12)]">
+                          <th className="sticky left-0 top-0 z-20 bg-surface-2 px-4 py-3 border-r border-b border-line min-w-[200px] sm:min-w-[260px] shadow-xs">
                             <div className="flex items-center justify-between">
                               <span>Module &amp; Action</span>
                               <span className="text-[10px] lowercase font-normal text-ink-faint">({permMatrix.actions.length} permissions)</span>
@@ -1849,7 +2289,7 @@ function AdminSettings({ user }: { user: User }) {
                             const roleName = roleDetail?.name ?? ROLE_LABEL[role] ?? role;
 
                             return (
-                              <th key={role} className="sticky top-0 z-20 bg-surface-2/95 backdrop-blur-md px-3 py-3 text-center min-w-[130px] border-r border-b border-line/60 align-top shadow-[0_2px_4px_rgba(0,0,0,0.12)]">
+                              <th key={role} className="sticky top-0 z-10 bg-surface-2 px-3 py-3 text-center min-w-[130px] border-r border-b border-line/60 align-top shadow-xs">
                                 <div className="flex flex-col items-center gap-1.5">
                                   <div className="flex items-center gap-1">
                                     <span
@@ -1923,7 +2363,14 @@ function AdminSettings({ user }: { user: User }) {
                         </tr>
                       </thead>
                       <tbody className="text-sm">
-                        {permMatrix.groups.map((group) => (
+                        {displayGroups.length === 0 ? (
+                          <tr>
+                            <td colSpan={permMatrix.roles.length + 1} className="py-12 text-center text-xs text-ink-soft">
+                              Aucune permission ne correspond au filtre ou à la recherche "{permSearch}".
+                            </td>
+                          </tr>
+                        ) : (
+                          displayGroups.map((group) => (
                           <Fragment key={group.label}>
                             <tr className="bg-paper-2/80 font-semibold text-ink text-xs uppercase tracking-wide">
                               <td colSpan={permMatrix.roles.length + 1} className="sticky left-0 px-4 py-2 text-ink-soft bg-paper-2/95 backdrop-blur-xs font-bold border-b border-line/60">
@@ -2004,7 +2451,7 @@ function AdminSettings({ user }: { user: User }) {
                               );
                             })}
                           </Fragment>
-                        ))}
+                        )))}
                       </tbody>
                     </table>
                   </div>
@@ -2030,82 +2477,559 @@ function AdminSettings({ user }: { user: User }) {
         </TabsContent>
 
         {/* =========================================================================
-            TAB 3: KIOSQUE & POINTAGE
+            TAB 3: KIOSQUE & POINTAGE (Apple / Linear Grade Redesign)
         ========================================================================= */}
         <TabsContent value="kiosk" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Kiosk Rules Card */}
-            <Card className="shadow-card">
-              <CardHeader className="border-b border-line pb-4">
-                <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
-                  <Clock size={18} className="text-amber" /> Horaires &amp; Règles de pointage
-                </CardTitle>
-                <CardDescription className="text-xs text-ink-soft">
-                  Paramètres de l’atelier appliqués en temps réel sur les bornes et tablettes de pointage.
-                </CardDescription>
-              </CardHeader>
+          {/* En-tête de section */}
+          <div className="border-b border-line pb-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-soft text-amber">
+                <Clock size={16} />
+              </span>
+              <h2 className="text-base sm:text-lg font-bold tracking-tight text-ink">
+                Cadence, Horaires &amp; Terminaux d'Atelier
+              </h2>
+            </div>
+            <p className="text-xs text-ink-soft mt-1">
+              Gérez les plages d'embauche, les verrous stricts d'accès et le parc de tablettes du CFTM.
+            </p>
+          </div>
 
-              <CardContent className="space-y-5 p-5">
-                {/* Heures d'ouverture / fermeture */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-ink-soft">Ouverture atelier</label>
-                    <input
-                      type="time"
-                      value={effectiveSettings?.opening_time || ''}
-                      onChange={(e) => updateSettingsDraft({ opening_time: e.target.value })}
-                      className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
-                    />
+          {/* SOUS-ONGLET 1 : HORAIRES & VERROUS */}
+          {kioskSubTab === 'horaires' && (
+            <div className="space-y-6">
+              {/* Le Ruban Chronologique Visuel de la Journée */}
+              <div className="rounded-2xl border border-line bg-gradient-to-r from-paper to-paper-2 p-4 sm:p-5 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-line pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2 w-2 rounded-full bg-amber animate-pulse" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+                      Ruban Chronologique Journalier CFTM
+                    </span>
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-ink-soft">Fermeture atelier</label>
-                    <input
-                      type="time"
-                      value={effectiveSettings?.closing_time || ''}
-                      onChange={(e) => updateSettingsDraft({ closing_time: e.target.value })}
-                      className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
-                    />
-                  </div>
+                  <span className="text-[11px] text-ink-faint">
+                    {effectiveSettings?.meal_schedule_mode === 'delayed_13h' ? 'Mode Repas Décalé actif (13h00)' : 'Mode Standard actif (12h00)'}
+                  </span>
                 </div>
 
-                {/* Plage horaire de pause méridienne */}
-                <div className="rounded-xl border border-line bg-surface-2/40 p-3.5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-ink">Pause Méridienne Réglementaire</p>
-                      <p className="text-[11px] text-ink-soft">
-                        Le bouton « Pause » de la borne reste verrouillé jusqu'à l'heure officielle.
-                      </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="rounded-xl border border-line bg-surface p-3 transition-all hover:border-amber/30">
+                    <div className="flex items-center justify-between text-[11px] text-ink-soft font-medium">
+                      <span>1. Matin</span>
+                      <Sun size={13} className="text-amber" />
                     </div>
+                    <p className="mt-1 font-mono text-base font-bold text-ink">{effectiveSettings?.opening_time || '07:30'}</p>
+                    <p className="text-[10px] text-ink-faint mt-0.5">Accueil dès {effectiveSettings?.early_checkin_time || '07:25'}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-ink-soft">Début officiel de la pause</label>
-                      <input
-                        type="time"
-                        value={effectiveSettings?.break_start_time || '12:00'}
-                        onChange={(e) => updateSettingsDraft({ break_start_time: e.target.value })}
-                        className="h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
-                      />
+
+                  <div className="rounded-xl border border-line bg-surface p-3 transition-all hover:border-amber/30">
+                    <div className="flex items-center justify-between text-[11px] text-ink-soft font-medium">
+                      <span>2. Verrou Matin</span>
+                      <Lock size={13} className="text-red" />
                     </div>
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-ink-soft">Fin officielle de la pause</label>
-                      <input
-                        type="time"
-                        value={effectiveSettings?.break_end_time || '13:00'}
-                        onChange={(e) => updateSettingsDraft({ break_end_time: e.target.value })}
-                        className="h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
-                      />
+                    <p className="mt-1 font-mono text-base font-bold text-red">{effectiveSettings?.morning_lockout_time || '10:00'}</p>
+                    <p className="text-[10px] text-amber mt-0.5">Retard dès {effectiveSettings?.late_threshold_time || '08:00'}</p>
+                  </div>
+
+                  <div className="rounded-xl border border-line bg-surface p-3 transition-all hover:border-blue/30">
+                    <div className="flex items-center justify-between text-[11px] text-ink-soft font-medium">
+                      <span>3. Pause Repas</span>
+                      <Utensils size={13} className="text-blue" />
                     </div>
+                    <p className="mt-1 font-mono text-base font-bold text-ink">
+                      {effectiveSettings?.meal_schedule_mode === 'delayed_13h'
+                        ? (effectiveSettings?.break_delayed_start || '13:00')
+                        : (effectiveSettings?.break_normal_start || '12:00')}
+                    </p>
+                    <p className="text-[10px] text-ink-faint mt-0.5">
+                      Reprise à {effectiveSettings?.meal_schedule_mode === 'delayed_13h'
+                        ? (effectiveSettings?.resume_delayed_start || '14:00')
+                        : (effectiveSettings?.resume_normal_start || '13:00')}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-line bg-surface p-3 transition-all hover:border-emerald/30">
+                    <div className="flex items-center justify-between text-[11px] text-ink-soft font-medium">
+                      <span>4. Clôture</span>
+                      <Moon size={13} className="text-emerald" />
+                    </div>
+                    <p className="mt-1 font-mono text-base font-bold text-ink">{effectiveSettings?.day_cutoff_time || '17:00'}</p>
+                    <p className="text-[10px] text-ink-faint mt-0.5">Départ dès {effectiveSettings?.closing_time || '16:30'}</p>
                   </div>
                 </div>
+              </div>
 
-                {/* Tolérance & Seuil de retard critique */}
-                <div className="space-y-4">
-                  <div>
+              {/* 3 Cartes Séquentielles Élégantes */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                {/* Séquence 1 : Matin */}
+                <Card className="shadow-xs border border-line bg-surface flex flex-col justify-between">
+                  <CardHeader className="border-b border-line pb-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-medium text-ink-soft">Tolérance de retard autorisée (avec motif)</label>
-                      <span className="font-mono text-xs font-semibold text-amber">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-soft text-amber">
+                          <Sun size={14} />
+                        </span>
+                        <CardTitle className="text-sm font-bold text-ink">1. Embauche Matin</CardTitle>
+                      </div>
+                      <span className="text-[10px] font-mono font-medium rounded-full bg-paper-2 px-2 py-0.5 text-ink-soft">
+                        Phase 01
+                      </span>
+                    </div>
+                    <CardDescription className="text-[11px] text-ink-soft mt-1">
+                      Accueil, embauche officielle, seuil de retard et verrouillage de l'accès.
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="space-y-4 p-4 text-xs">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-ink-soft font-medium">Prise d'effet officielle</label>
+                        <span className="text-[10px] text-ink-faint">Nominale</span>
+                      </div>
+                      <input
+                        type="time"
+                        value={effectiveSettings?.opening_time || '07:30'}
+                        onChange={(e) => updateSettingsDraft({ opening_time: e.target.value })}
+                        className="h-10 w-full rounded-xl border border-line bg-paper-2 px-3 font-mono text-sm font-semibold text-ink focus:border-amber focus:bg-surface focus:outline-none transition-colors"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="text-ink-soft font-medium block mb-1 text-[11px]">Accueil anticipé</label>
+                        <input
+                          type="time"
+                          value={effectiveSettings?.early_checkin_time || '07:25'}
+                          onChange={(e) => updateSettingsDraft({ early_checkin_time: e.target.value })}
+                          className="h-9 w-full rounded-xl border border-line bg-paper-2 px-2.5 font-mono text-xs font-semibold text-ink focus:border-amber focus:bg-surface focus:outline-none transition-colors"
+                        />
+                        <span className="text-[10px] text-ink-faint mt-0.5 block">Effet à {effectiveSettings?.opening_time || '07:30'}</span>
+                      </div>
+
+                      <div>
+                        <label className="text-ink-soft font-medium block mb-1 text-[11px]">Seuil de retard</label>
+                        <input
+                          type="time"
+                          value={effectiveSettings?.late_threshold_time || '08:00'}
+                          onChange={(e) => updateSettingsDraft({ late_threshold_time: e.target.value })}
+                          className="h-9 w-full rounded-xl border border-amber/30 bg-paper-2 px-2.5 font-mono text-xs font-semibold text-amber focus:border-amber focus:bg-surface focus:outline-none transition-colors"
+                        />
+                        <span className="text-[10px] text-amber mt-0.5 block">30 mn de battement</span>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-red/20 bg-red-wash/20 p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-red font-semibold text-[11px] flex items-center gap-1.5">
+                          <Lock size={12} />
+                          Verrou d'accès CFTM
+                        </label>
+                        <span className="text-[10px] text-red font-mono font-bold">Sécurité</span>
+                      </div>
+                      <input
+                        type="time"
+                        value={effectiveSettings?.morning_lockout_time || '10:00'}
+                        onChange={(e) => updateSettingsDraft({ morning_lockout_time: e.target.value })}
+                        className="h-9 w-full rounded-xl border border-red/30 bg-surface px-2.5 font-mono text-xs font-bold text-red focus:border-red focus:outline-none transition-colors"
+                      />
+                      <span className="text-[10px] text-ink-faint mt-1 block leading-tight">
+                        Pointage direct bloqué après cette heure. Nécessite l'autorisation du surveillant.
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Séquence 2 : Méridienne & Repas */}
+                <Card className="shadow-xs border border-line bg-surface flex flex-col justify-between">
+                  <CardHeader className="border-b border-line pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-soft text-blue">
+                          <Utensils size={14} />
+                        </span>
+                        <CardTitle className="text-sm font-bold text-ink">2. Méridienne &amp; Repas</CardTitle>
+                      </div>
+                      <span className="text-[10px] font-mono font-medium rounded-full bg-paper-2 px-2 py-0.5 text-ink-soft">
+                        Phase 02
+                      </span>
+                    </div>
+                    <CardDescription className="text-[11px] text-ink-soft mt-1">
+                      Gestion des temps de repas et commutateur pour jours festifs décalés.
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="space-y-4 p-4 text-xs">
+                    {/* Commutateur iOS élégant */}
+                    <div>
+                      <label className="text-ink-soft font-medium block mb-1.5">Régime horaire du repas :</label>
+                      <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-line bg-paper-2 p-1">
+                        <button
+                          type="button"
+                          onClick={() => updateSettingsDraft({ meal_schedule_mode: 'normal_12h' })}
+                          className={cx(
+                            'py-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer',
+                            (effectiveSettings?.meal_schedule_mode ?? 'normal_12h') === 'normal_12h'
+                              ? 'bg-surface text-ink shadow-xs border border-line'
+                              : 'text-ink-soft hover:text-ink',
+                          )}
+                        >
+                          Standard (12h00)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateSettingsDraft({ meal_schedule_mode: 'delayed_13h' })}
+                          className={cx(
+                            'py-2 rounded-lg text-xs font-bold transition-all text-center cursor-pointer',
+                            effectiveSettings?.meal_schedule_mode === 'delayed_13h'
+                              ? 'bg-amber text-amber-fg shadow-xs font-bold'
+                              : 'text-ink-soft hover:text-ink',
+                          )}
+                        >
+                          Décalé (13h00)
+                        </button>
+                      </div>
+                    </div>
+
+                    {(effectiveSettings?.meal_schedule_mode ?? 'normal_12h') === 'normal_12h' ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="text-ink-soft font-medium block mb-1 text-[11px]">Départ pause</label>
+                            <input
+                              type="time"
+                              value={effectiveSettings?.break_normal_start || '12:00'}
+                              onChange={(e) => updateSettingsDraft({ break_normal_start: e.target.value, break_start_time: e.target.value })}
+                              className="h-9 w-full rounded-xl border border-line bg-paper-2 px-2.5 font-mono text-xs font-semibold text-ink focus:border-amber focus:bg-surface focus:outline-none transition-colors"
+                            />
+                            <span className="text-[10px] text-ink-faint mt-0.5 block">jusqu'à {effectiveSettings?.break_normal_end || '12:25'}</span>
+                          </div>
+
+                          <div>
+                            <label className="text-ink-soft font-medium block mb-1 text-[11px]">Reprise atelier</label>
+                            <input
+                              type="time"
+                              value={effectiveSettings?.resume_normal_start || '13:00'}
+                              onChange={(e) => updateSettingsDraft({ resume_normal_start: e.target.value, break_end_time: e.target.value })}
+                              className="h-9 w-full rounded-xl border border-line bg-paper-2 px-2.5 font-mono text-xs font-semibold text-ink focus:border-amber focus:bg-surface focus:outline-none transition-colors"
+                            />
+                            <span className="text-[10px] text-ink-faint mt-0.5 block">jusqu'à {effectiveSettings?.resume_normal_end || '13:10'}</span>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-red/20 bg-red-wash/20 p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-red font-semibold text-[11px] flex items-center gap-1.5">
+                              <Lock size={12} />
+                              Verrou reprise normale
+                            </label>
+                            <span className="text-[10px] text-red font-mono font-bold">14h00</span>
+                          </div>
+                          <input
+                            type="time"
+                            value={effectiveSettings?.resume_lockout_time || '14:00'}
+                            onChange={(e) => updateSettingsDraft({ resume_lockout_time: e.target.value })}
+                            className="h-9 w-full rounded-xl border border-red/30 bg-surface px-2.5 font-mono text-xs font-bold text-red focus:border-red focus:outline-none transition-colors"
+                          />
+                          <span className="text-[10px] text-ink-faint mt-1 block">Accès verrouillé si retour non pointé à 14h00</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="text-amber font-medium block mb-1 text-[11px]">Départ pause décalée</label>
+                            <input
+                              type="time"
+                              value={effectiveSettings?.break_delayed_start || '13:00'}
+                              onChange={(e) => updateSettingsDraft({ break_delayed_start: e.target.value, break_start_time: e.target.value })}
+                              className="h-9 w-full rounded-xl border border-amber/30 bg-paper-2 px-2.5 font-mono text-xs font-semibold text-amber focus:border-amber focus:bg-surface focus:outline-none transition-colors"
+                            />
+                            <span className="text-[10px] text-ink-faint mt-0.5 block">jusqu'à {effectiveSettings?.break_delayed_end || '13:25'}</span>
+                          </div>
+
+                          <div>
+                            <label className="text-amber font-medium block mb-1 text-[11px]">Reprise décalée</label>
+                            <input
+                              type="time"
+                              value={effectiveSettings?.resume_delayed_start || '14:00'}
+                              onChange={(e) => updateSettingsDraft({ resume_delayed_start: e.target.value, break_end_time: e.target.value })}
+                              className="h-9 w-full rounded-xl border border-amber/30 bg-paper-2 px-2.5 font-mono text-xs font-semibold text-amber focus:border-amber focus:bg-surface focus:outline-none transition-colors"
+                            />
+                            <span className="text-[10px] text-ink-faint mt-0.5 block">jusqu'à {effectiveSettings?.resume_delayed_end || '14:10'}</span>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-red/20 bg-red-wash/20 p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-red font-semibold text-[11px] flex items-center gap-1.5">
+                              <Lock size={12} />
+                              Verrou reprise décalée
+                            </label>
+                            <span className="text-[10px] text-red font-mono font-bold">14h30</span>
+                          </div>
+                          <input
+                            type="time"
+                            value={effectiveSettings?.resume_delayed_lockout_time || '14:30'}
+                            onChange={(e) => updateSettingsDraft({ resume_delayed_lockout_time: e.target.value })}
+                            className="h-9 w-full rounded-xl border border-red/30 bg-surface px-2.5 font-mono text-xs font-bold text-red focus:border-red focus:outline-none transition-colors"
+                          />
+                          <span className="text-[10px] text-ink-faint mt-1 block">Accès verrouillé après 14h30</span>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="rounded-lg bg-paper-2 px-2.5 py-1.5 text-[11px] text-ink-faint flex items-center gap-1.5">
+                      <CheckCircle2 size={13} className="text-emerald" />
+                      <span>Dispense de selfie active pour la pause</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Séquence 3 : Soir & Clôture */}
+                <Card className="shadow-xs border border-line bg-surface flex flex-col justify-between">
+                  <CardHeader className="border-b border-line pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-soft text-emerald">
+                          <Moon size={14} />
+                        </span>
+                        <CardTitle className="text-sm font-bold text-ink">3. Clôture &amp; Sortie</CardTitle>
+                      </div>
+                      <span className="text-[10px] font-mono font-medium rounded-full bg-paper-2 px-2 py-0.5 text-ink-soft">
+                        Phase 03
+                      </span>
+                    </div>
+                    <CardDescription className="text-[11px] text-ink-soft mt-1">
+                      Fin de vacation des artisans et coupure journalière automatique.
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="space-y-4 p-4 text-xs">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-ink-soft font-medium">Début sortie atelier</label>
+                        <span className="text-[10px] text-ink-faint">Selfie requis</span>
+                      </div>
+                      <input
+                        type="time"
+                        value={effectiveSettings?.closing_time || '16:30'}
+                        onChange={(e) => updateSettingsDraft({ closing_time: e.target.value })}
+                        className="h-10 w-full rounded-xl border border-line bg-paper-2 px-3 font-mono text-sm font-semibold text-ink focus:border-amber focus:bg-surface focus:outline-none transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-ink-soft font-medium block mb-1 text-[11px]">Fin de fenêtre de sortie</label>
+                      <input
+                        type="time"
+                        value={effectiveSettings?.closing_end_time || '16:40'}
+                        onChange={(e) => updateSettingsDraft({ closing_end_time: e.target.value })}
+                        className="h-9 w-full rounded-xl border border-line bg-paper-2 px-2.5 font-mono text-xs font-semibold text-ink focus:border-amber focus:bg-surface focus:outline-none transition-colors"
+                      />
+                      <span className="text-[10px] text-ink-faint mt-0.5 block">Tolérance de pointage départ</span>
+                    </div>
+
+                    <div className="rounded-xl border border-line bg-paper-2 p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-ink font-semibold text-[11px] flex items-center gap-1.5">
+                          <Lock size={12} className="text-red" />
+                          Clôture système journalier
+                        </label>
+                        <span className="text-[10px] text-ink font-mono font-bold">17h00</span>
+                      </div>
+                      <input
+                        type="time"
+                        value={effectiveSettings?.day_cutoff_time || '17:00'}
+                        onChange={(e) => updateSettingsDraft({ day_cutoff_time: e.target.value })}
+                        className="h-9 w-full rounded-xl border border-line bg-surface px-2.5 font-mono text-xs font-bold text-ink focus:border-amber focus:outline-none transition-colors"
+                      />
+                      <span className="text-[10px] text-ink-faint mt-1 block">
+                        Clôture automatique par le système. Tout oubli génère une alerte non-pointé.
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Raccourci de réinitialisation canonique CFTM */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-dashed border-line p-3.5 bg-surface/50 text-xs">
+                <span className="text-ink-soft">
+                  Besoin de revenir aux créneaux nominaux du monastère (07h25 → 17h00) ?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateSettingsDraft({
+                      early_checkin_time: '07:25',
+                      opening_time: '07:30',
+                      late_threshold_time: '08:00',
+                      morning_lockout_time: '10:00',
+                      meal_schedule_mode: 'normal_12h',
+                      break_normal_start: '12:00',
+                      break_normal_end: '12:25',
+                      resume_normal_start: '13:00',
+                      resume_normal_end: '13:10',
+                      resume_lockout_time: '14:00',
+                      break_delayed_start: '13:00',
+                      break_delayed_end: '13:25',
+                      resume_delayed_start: '14:00',
+                      resume_delayed_end: '14:10',
+                      resume_delayed_lockout_time: '14:30',
+                      closing_time: '16:30',
+                      closing_end_time: '16:40',
+                      day_cutoff_time: '17:00',
+                    });
+                    toast('Créneaux officiels CFTM appliqués au brouillon.', 'info');
+                  }}
+                  className="font-semibold text-amber hover:underline self-start sm:self-auto cursor-pointer"
+                >
+                  Rétablir la grille standard CFTM
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* SOUS-ONGLET 2 : BORNES & TERMINAUX */}
+          {kioskSubTab === 'bornes' && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl border border-line bg-surface px-3 py-1.5 text-xs">
+                  <span className="text-ink-soft">Total tablettes : </span>
+                  <strong className="text-ink font-mono">{terminals.length}</strong>
+                </div>
+                <div className="rounded-xl border border-green/20 bg-green-wash/40 px-3 py-1.5 text-xs text-green">
+                  <span>Actives : </span>
+                  <strong className="font-mono">{terminals.filter((t) => t.active).length}</strong>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {terminals.map((terminal) => (
+                  <div
+                    key={terminal.id}
+                    className="rounded-2xl border border-line bg-surface p-4 shadow-xs transition-all hover:border-line-strong flex flex-col justify-between gap-3"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-soft text-blue">
+                            <Smartphone size={16} />
+                          </span>
+                          <div>
+                            <p className="font-bold text-sm text-ink">{terminal.name}</p>
+                            <span
+                              className={cx(
+                                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold mt-0.5',
+                                terminal.active
+                                  ? 'bg-green-wash text-green border border-green/20'
+                                  : 'bg-paper-2 text-ink-faint border border-line',
+                              )}
+                            >
+                              <span className={cx('h-1.5 w-1.5 rounded-full', terminal.active ? 'bg-green' : 'bg-ink-faint')} />
+                              {terminal.active ? 'Borne Active' : 'Borne Inactive'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          variant={terminal.active ? 'outline-danger' : 'secondary'}
+                          onClick={() => void toggleTerminal(terminal)}
+                        >
+                          {terminal.active ? 'Désactiver' : 'Activer'}
+                        </Button>
+                      </div>
+
+                      <div className="mt-3 rounded-xl border border-line bg-paper-2 p-2.5 space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-ink-soft text-[11px]">Identifiant Borne :</span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(terminal.id, terminal.id)}
+                            className="inline-flex items-center gap-1 font-mono text-[11px] text-ink font-semibold bg-surface px-2 py-0.5 rounded border border-line hover:bg-paper-2 transition-colors cursor-pointer"
+                            title="Copier le token"
+                          >
+                            {terminal.id}
+                            {copiedTerminalId === terminal.id ? (
+                              <CheckCheck size={12} className="text-green" />
+                            ) : (
+                              <Copy size={12} className="text-ink-faint" />
+                            )}
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-ink-soft">
+                          <span>Pointages reçus aujourd'hui :</span>
+                          <span className="font-mono font-bold text-ink">{terminal.punches_today}</span>
+                        </div>
+                        {terminal.last_used ? (
+                          <div className="flex items-center justify-between text-[11px] text-ink-faint">
+                            <span>Dernier usage :</span>
+                            <span>{formatDateTime(terminal.last_used)}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {terminals.length === 0 && (
+                  <div className="col-span-full rounded-2xl border border-dashed border-line p-8 text-center text-xs text-ink-faint">
+                    Aucune borne enregistrée pour le moment. Cliquez sur « Enregistrer une nouvelle borne ».
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SOUS-ONGLET 3 : RÈGLES & TOLÉRANCE */}
+          {kioskSubTab === 'regles' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Jours Ouvrés & Tolérances */}
+              <Card className="shadow-xs border border-line bg-surface">
+                <CardHeader className="border-b border-line pb-3">
+                  <CardTitle className="text-sm font-bold text-ink flex items-center gap-2">
+                    <CalendarDays size={16} className="text-amber" />
+                    Jours de Travail &amp; Tolérance de Retard
+                  </CardTitle>
+                  <CardDescription className="text-[11px] text-ink-soft">
+                    Définition des jours d'ouverture d'atelier et marge de retard acceptée.
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent className="space-y-5 p-5 text-xs">
+                  <div>
+                    <label className="text-ink-soft font-medium block mb-2">
+                      Jours de travail officiels :
+                    </label>
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {WEEKDAYS_ORDER.map((day) => {
+                        const isWork = effectiveSettings?.workdays.includes(day) ?? false;
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => toggleWorkday(day)}
+                            className={cx(
+                              'flex flex-col items-center justify-center rounded-xl border py-2.5 text-xs font-semibold transition-all shadow-xs cursor-pointer',
+                              isWork
+                                ? 'border-amber bg-amber-wash text-amber'
+                                : 'border-line bg-paper-2 text-ink-faint hover:bg-surface',
+                            )}
+                          >
+                            <span>{(WORKDAY_LABEL[day] ?? '').slice(0, 3)}</span>
+                            <span className={cx('mt-1 h-1.5 w-1.5 rounded-full', isWork ? 'bg-amber' : 'bg-transparent')} />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-ink-soft font-medium">Tolérance de retard autorisée (avec motif)</label>
+                      <span className="font-mono text-xs font-bold text-amber">
                         {effectiveSettings?.tolerance_minutes ?? 0} min
                       </span>
                     </div>
@@ -2116,79 +3040,67 @@ function AdminSettings({ user }: { user: User }) {
                       step={5}
                       value={effectiveSettings?.tolerance_minutes ?? 0}
                       onChange={(e) => updateSettingsDraft({ tolerance_minutes: Number(e.target.value) })}
-                      className="mt-2 w-full accent-[#d9480f]"
+                      className="w-full accent-amber"
                     />
-                    <p className="mt-1 text-[11px] text-ink-faint">
-                      Au-delà de cette tolérance, le kiosque impose la sélection d’un motif explicatif.
+                    <p className="text-[11px] text-ink-faint mt-1">
+                      Au-delà de cette tolérance, le travailleur doit sélectionner un motif justificatif sur la tablette.
                     </p>
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-medium text-ink-soft">Retard maximal autorisé avant blocage direct</label>
-                      <span className="font-mono text-xs font-semibold text-red">
-                        {effectiveSettings?.max_late_minutes_allowed ?? 60} min
-                      </span>
+                  <Separator />
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-ink-soft font-medium block mb-1">Affichage fiche borne (sec)</label>
+                      <input
+                        type="number"
+                        min={3}
+                        max={60}
+                        value={effectiveSettings?.card_display_seconds ?? 5}
+                        onChange={(e) => updateSettingsDraft({ card_display_seconds: Number(e.target.value) })}
+                        className="h-9 w-full rounded-xl border border-line bg-paper-2 px-3 text-xs font-semibold text-ink focus:border-amber focus:bg-surface focus:outline-none"
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={15}
-                      max={180}
-                      step={15}
-                      value={effectiveSettings?.max_late_minutes_allowed ?? 60}
-                      onChange={(e) => updateSettingsDraft({ max_late_minutes_allowed: Number(e.target.value) })}
-                      className="mt-2 w-full accent-red"
-                    />
-                    <p className="mt-1 text-[11px] text-ink-faint">
-                      Au-delà de cette durée, le pointage kiosque direct est automatiquement bloqué. L'ouvrier doit obligatoirement s'adresser au Frère Surveillant ou à la Direction pour régularisation.
-                    </p>
+
+                    <div>
+                      <label className="text-ink-soft font-medium block mb-1">Rétention photos (jours)</label>
+                      <input
+                        type="number"
+                        min={7}
+                        max={365}
+                        value={effectiveSettings?.selfie_retention_days ?? 30}
+                        onChange={(e) => updateSettingsDraft({ selfie_retention_days: Number(e.target.value) })}
+                        className="h-9 w-full rounded-xl border border-line bg-paper-2 px-3 text-xs font-semibold text-ink focus:border-amber focus:bg-surface focus:outline-none"
+                      />
+                    </div>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
 
-                <Separator />
+              {/* Motifs de Retard */}
+              <Card className="shadow-xs border border-line bg-surface">
+                <CardHeader className="border-b border-line pb-3">
+                  <CardTitle className="text-sm font-bold text-ink flex items-center gap-2">
+                    <Sliders size={16} className="text-amber" />
+                    Motifs de Retard Configurés
+                  </CardTitle>
+                  <CardDescription className="text-[11px] text-ink-soft">
+                    Liste des options sélectionnables par les ouvriers en cas de retard à l'embauche.
+                  </CardDescription>
+                </CardHeader>
 
-                {/* Jours ouvrés */}
-                <div>
-                  <label className="mb-2 block text-xs font-medium text-ink-soft">Jours de travail ouvrés</label>
-                  <div className="grid grid-cols-7 gap-1.5">
-                    {WEEKDAYS_ORDER.map((day) => {
-                      const isWork = effectiveSettings?.workdays.includes(day) ?? false;
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          onClick={() => toggleWorkday(day)}
-                          className={cx(
-                            'flex flex-col items-center justify-center rounded-btn border py-2 text-xs font-medium transition-all shadow-xs',
-                            isWork
-                              ? 'border-amber bg-amber-wash text-amber font-semibold'
-                              : 'border-line-strong bg-surface text-ink-faint hover:bg-paper-2',
-                          )}
-                        >
-                          <span className="text-[11px]">{(WORKDAY_LABEL[day] ?? '').slice(0, 3)}</span>
-                          <span className={cx('mt-0.5 h-1 w-1 rounded-full', isWork ? 'bg-amber' : 'bg-transparent')} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Motifs de retard */}
-                <div>
-                  <label className="mb-2 block text-xs font-medium text-ink-soft">Motifs de retard configurés</label>
-                  <div className="flex flex-wrap gap-1.5">
+                <CardContent className="space-y-4 p-5 text-xs">
+                  <div className="flex flex-wrap gap-2">
                     {(effectiveSettings?.late_motifs ?? []).map((motif) => (
                       <span
                         key={motif}
-                        className="inline-flex items-center gap-1.5 rounded-chip border border-line bg-paper-2 px-2.5 py-1 text-xs text-ink font-medium"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1 text-xs text-ink font-medium shadow-xs"
                       >
                         {motif}
                         <button
                           type="button"
                           onClick={() => removeMotif(motif)}
-                          className="rounded-full text-ink-faint hover:bg-red-wash hover:text-red p-0.5 transition-colors"
+                          className="rounded-full text-ink-faint hover:text-red hover:bg-red-wash p-0.5 transition-colors cursor-pointer"
                           title={`Retirer « ${motif} »`}
                         >
                           <X size={12} />
@@ -2197,7 +3109,7 @@ function AdminSettings({ user }: { user: User }) {
                     ))}
                   </div>
 
-                  <div className="mt-3 flex gap-2">
+                  <div className="flex gap-2 pt-2">
                     <input
                       type="text"
                       value={motifDraft}
@@ -2208,173 +3120,47 @@ function AdminSettings({ user }: { user: User }) {
                           addMotif();
                         }
                       }}
-                      placeholder="Nouveau motif (ex: Panne de transport)…"
-                      className="h-9 flex-1 rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none"
+                      placeholder="Ajouter un motif (ex: Pluie abondante)…"
+                      className="h-10 flex-1 rounded-xl border border-line bg-paper-2 px-3 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:bg-surface focus:outline-none"
                     />
-                    <Button size="sm" variant="ghost" onClick={addMotif} disabled={!motifDraft.trim()}>
+                    <Button size="sm" variant="primary" onClick={addMotif} disabled={!motifDraft.trim()}>
                       Ajouter
                     </Button>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
-                <Separator />
+          {/* Barre Flottante d'Enregistrement (Floating Action Dock façon Linear / Apple) */}
+          {hasUnsavedSettings && (
+            <div className="sticky bottom-4 z-20 mx-auto max-w-xl rounded-2xl border border-amber/40 bg-surface/95 backdrop-blur-xl p-3 shadow-xl transition-all animate-in fade-in slide-in-from-bottom-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 text-xs font-semibold text-ink pl-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber animate-pulse shrink-0" />
+                <span className="truncate">Modifications d'horaires prêtes à être appliquées</span>
+              </div>
 
-                {/* Affichage & Rétention */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-ink-soft">Affichage fiche (sec)</label>
-                    <input
-                      type="number"
-                      min={3}
-                      max={60}
-                      value={effectiveSettings?.card_display_seconds ?? 5}
-                      onChange={(e) => updateSettingsDraft({ card_display_seconds: Number(e.target.value) })}
-                      className="h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-ink-soft">Rétention selfies (jours)</label>
-                    <input
-                      type="number"
-                      min={7}
-                      max={365}
-                      value={effectiveSettings?.selfie_retention_days ?? 30}
-                      onChange={(e) => updateSettingsDraft({ selfie_retention_days: Number(e.target.value) })}
-                      className="h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-
-              <CardFooter className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-paper-2/30 px-5 py-3">
-                <div className="flex items-center gap-2 text-xs">
-                  {hasUnsavedSettings ? (
-                    <span className="flex items-center gap-1.5 font-medium text-amber">
-                      <span className="h-2 w-2 rounded-full bg-amber animate-pulse" />
-                      Modifications en attente d’enregistrement
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5 text-ink-faint">
-                      <CheckCircle2 size={14} className="text-green" />
-                      Paramètres synchronisés avec l'atelier
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {hasUnsavedSettings && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={savingSettings}
-                      onClick={resetSettingsDraft}
-                    >
-                      Annuler
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    disabled={savingSettings || !hasUnsavedSettings}
-                    onClick={() => void handleSaveSettings()}
-                  >
-                    {savingSettings ? <Spinner className="h-3.5 w-3.5" /> : <Save size={14} />}
-                    Enregistrer
-                  </Button>
-                </div>
-              </CardFooter>
-            </Card>
-
-            {/* Terminals Card */}
-            <Card className="shadow-card">
-              <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
-                    <Smartphone size={18} className="text-blue" /> Bornes &amp; Terminaux d’atelier
-                  </CardTitle>
-                  <CardDescription className="text-xs text-ink-soft">
-                    Tablettes et points d’accès autorisés à enregistrer les pointages.
-                  </CardDescription>
-                </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={savingSettings}
+                  onClick={resetSettingsDraft}
+                >
+                  Annuler
+                </Button>
                 <Button
                   size="sm"
                   variant="primary"
-                  icon={<Plus size={16} />}
-                  onClick={() => {
-                    setTerminalForm({ name: '', id: '' });
-                    setFormError(null);
-                    setTerminalOpen(true);
-                  }}
+                  disabled={savingSettings}
+                  onClick={() => void handleSaveSettings()}
+                  icon={savingSettings ? <Spinner className="h-3.5 w-3.5" /> : <Save size={14} />}
                 >
-                  Ajouter terminal
+                  Enregistrer
                 </Button>
-              </CardHeader>
-
-              <CardContent className="p-0">
-                <ul className="divide-y divide-line">
-                  {terminals.map((terminal) => (
-                    <li key={terminal.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between hover:bg-paper-2/30 transition-colors">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-sm text-ink">{terminal.name}</p>
-                          <span
-                            className={cx(
-                              'inline-flex items-center gap-1 rounded-chip border px-2 py-0.5 text-[11px] font-medium',
-                              terminal.active
-                                ? 'border-green/20 bg-green-wash text-green'
-                                : 'border-line-strong bg-grey-wash text-ink-faint',
-                            )}
-                          >
-                            <span className={cx('h-1.5 w-1.5 rounded-full', terminal.active ? 'bg-green' : 'bg-ink-faint')} />
-                            {terminal.active ? 'Actif' : 'Inactif'}
-                          </span>
-                        </div>
-
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(terminal.id, terminal.id)}
-                            className="inline-flex items-center gap-1 font-mono text-[11px] text-ink font-semibold bg-paper-2 px-1.5 py-0.5 rounded hover:bg-line transition-colors"
-                            title="Cliquer pour copier l'identifiant"
-                          >
-                            {terminal.id}
-                            {copiedTerminalId === terminal.id ? (
-                              <CheckCheck size={12} className="text-green" />
-                            ) : (
-                              <Copy size={12} className="text-ink-faint" />
-                            )}
-                          </button>
-                          <span>•</span>
-                          <span className="font-mono text-ink-soft">{terminal.punches_today} pointage(s) aujourd’hui</span>
-                          {terminal.last_used ? (
-                            <>
-                              <span>•</span>
-                              <span className="text-ink-faint">Dernier usage : {formatDateTime(terminal.last_used)}</span>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant={terminal.active ? 'outline-danger' : 'secondary'}
-                          onClick={() => void toggleTerminal(terminal)}
-                        >
-                          {terminal.active ? 'Désactiver' : 'Activer'}
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-
-                  {terminals.length === 0 ? (
-                    <li className="p-8 text-center text-xs text-ink-faint">
-                      Aucun terminal de pointage configuré. Cliquez sur « Ajouter terminal » pour en associer un.
-                    </li>
-                  ) : null}
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* =========================================================================

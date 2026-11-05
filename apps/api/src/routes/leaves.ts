@@ -53,6 +53,7 @@ const decreeBody = z.object({
   holiday_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format de date requis: AAAA-MM-JJ'),
   name: z.string().min(3, 'Intitulé du jour férié ou motif requis.'),
   decree_ref: z.string().optional(),
+  kind: z.enum(['religious', 'presidential_decree', 'legal_national']).default('presidential_decree'),
 });
 
 export type LeaveRow = {
@@ -158,19 +159,29 @@ leavesRoutes.post('/holidays/decree', requirePerm('leaves.manage'), async (c) =>
   }
   const db = getDb();
   const id = `decree-${body.data.holiday_date}-${Date.now()}`;
+  const selectedKind = body.data.kind || 'presidential_decree';
+  const defaultRef =
+    selectedKind === 'religious'
+      ? 'Solennité ou fête religieuse'
+      : selectedKind === 'legal_national'
+      ? 'Fête officielle d’État'
+      : 'Décret du Président de la République';
+  const ref = body.data.decree_ref?.trim() || defaultRef;
+
   const row = await db.one<CameroonHoliday>(
     `INSERT INTO holidays (id, holiday_date, name, kind, decree_ref, is_chome, created_by)
-     VALUES ($1, $2, $3, 'presidential_decree', $4, true, $5)
+     VALUES ($1, $2, $3, $4, $5, true, $6)
      ON CONFLICT (holiday_date) DO UPDATE
      SET name = EXCLUDED.name,
          decree_ref = EXCLUDED.decree_ref,
-         kind = 'presidential_decree'
+         kind = EXCLUDED.kind
      RETURNING id, holiday_date::text AS holiday_date, name, kind, decree_ref, is_chome`,
     [
       id,
       body.data.holiday_date,
       body.data.name.trim(),
-      body.data.decree_ref?.trim() || 'Décret du Président de la République',
+      selectedKind,
+      ref,
       actorName(c),
     ],
   );
@@ -182,7 +193,7 @@ leavesRoutes.post('/holidays/decree', requirePerm('leaves.manage'), async (c) =>
     after: row,
     actorId: actorId(c),
     actorName: actorName(c),
-    reason: `Déclaration jour férié présidentiel : ${body.data.name}`,
+    reason: `Déclaration jour férié / fête (${selectedKind}) : ${body.data.name}`,
   });
 
   return c.json({ holiday: row }, 201);

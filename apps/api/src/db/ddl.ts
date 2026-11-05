@@ -413,6 +413,120 @@ CREATE TABLE IF NOT EXISTS holidays (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS holidays_date_idx ON holidays(holiday_date);
+
+-- =========================================================================
+-- PARC AUTOMOBILE & GROUPES ÉLECTROGÈNES (CFTM MONASTÈRE)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS vehicles (
+  id text PRIMARY KEY,
+  registration_number text NOT NULL UNIQUE,
+  brand_model text NOT NULL,
+  vehicle_type text NOT NULL DEFAULT 'camionnette',
+  assigned_role text NOT NULL DEFAULT 'responsable_livraisons',
+  assigned_worker_id text REFERENCES employees(id) ON DELETE SET NULL,
+  assigned_worker_name text,
+
+  -- Suivi Assurances (Début, Fin, Seuil d'échéance)
+  insurance_company text,
+  insurance_policy_number text,
+  insurance_start_date date,
+  insurance_end_date date,
+
+  -- Suivi Visite Technique
+  technical_visit_last_date date,
+  technical_visit_due_date date,
+
+  -- Suivi Vidange & Kilométrage
+  current_mileage int NOT NULL DEFAULT 0,
+  last_oil_change_date date,
+  last_oil_change_mileage int NOT NULL DEFAULT 0,
+  next_oil_change_mileage int NOT NULL DEFAULT 0,
+
+  status text NOT NULL DEFAULT 'operationnel',
+  photo_path text,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS vehicles_registration_idx ON vehicles(registration_number);
+CREATE INDEX IF NOT EXISTS vehicles_insurance_end_idx ON vehicles(insurance_end_date);
+CREATE INDEX IF NOT EXISTS vehicles_tech_visit_idx ON vehicles(technical_visit_due_date);
+
+CREATE TABLE IF NOT EXISTS generators (
+  id text PRIMARY KEY,
+  name_code text NOT NULL UNIQUE,
+  brand_model text NOT NULL,
+  power_kva numeric NOT NULL DEFAULT 0,
+  location text NOT NULL DEFAULT 'Monastère Central',
+  assigned_manager_id text REFERENCES employees(id) ON DELETE SET NULL,
+  assigned_manager_name text,
+
+  -- Heures de marche & Maintenance
+  running_hours numeric NOT NULL DEFAULT 0,
+  last_oil_change_date date,
+  last_oil_change_hours numeric NOT NULL DEFAULT 0,
+  oil_change_interval_hours int NOT NULL DEFAULT 250,
+  next_oil_change_hours numeric NOT NULL DEFAULT 250,
+  last_maintenance_date date,
+  next_maintenance_date date,
+
+  status text NOT NULL DEFAULT 'en_fonction',
+  fuel_level_pct int NOT NULL DEFAULT 100,
+  photo_path text,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS generators_name_code_idx ON generators(name_code);
+
+-- =========================================================================
+-- PROJETS, COMMANDES ATELIER & CHANTIERS DE POSE (CFTM MONASTÈRE)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS projects (
+  id text PRIMARY KEY,
+  code text NOT NULL UNIQUE,
+  title text NOT NULL,
+  client_name text NOT NULL,
+  site_location text NOT NULL,
+  category text,
+  assigned_worker_ids text[] NOT NULL DEFAULT '{}',
+  assigned_worker_names text[] NOT NULL DEFAULT '{}',
+
+  -- Ratios horaires & Suivi financier (PDF Pt 1)
+  budget_hours numeric NOT NULL DEFAULT 0,
+  spent_hours numeric NOT NULL DEFAULT 0,
+  hourly_rate_fcfa numeric NOT NULL DEFAULT 0,
+  penalty_rate_daily_fcfa numeric NOT NULL DEFAULT 0,
+  ratio_value numeric,
+  ratio_unit text,
+  ratio_basis text,
+
+  -- Planification Livraisons & Pose sur Chantier (PDF Pt 2)
+  delivery_deadline date NOT NULL,
+  installation_start_date date,
+  installation_days numeric NOT NULL DEFAULT 0,
+
+  status text NOT NULL DEFAULT 'planifie' CHECK (status IN ('planifie', 'en_fabrication', 'en_pose', 'termine', 'en_retard', 'litige')),
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS projects_code_idx ON projects(code);
+CREATE INDEX IF NOT EXISTS projects_deadline_idx ON projects(delivery_deadline);
+
+-- Migration 016: projets et ratios entièrement configurables par la Direction.
+ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_category_check;
+ALTER TABLE projects ALTER COLUMN category DROP DEFAULT;
+ALTER TABLE projects ALTER COLUMN category DROP NOT NULL;
+ALTER TABLE projects ALTER COLUMN site_location DROP DEFAULT;
+ALTER TABLE projects ALTER COLUMN budget_hours DROP DEFAULT;
+ALTER TABLE projects ALTER COLUMN hourly_rate_fcfa DROP DEFAULT;
+ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa DROP DEFAULT;
+ALTER TABLE projects ALTER COLUMN installation_days DROP DEFAULT;
+ALTER TABLE projects ALTER COLUMN status SET DEFAULT 'planifie';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_value numeric;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_unit text;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_basis text;
 `;
 
-export const MIGRATION_NAME = '013_cameroon_holidays_system';
+export const MIGRATION_NAME = '016_configurable_projects_and_ratios';

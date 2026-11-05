@@ -102,6 +102,32 @@ authRoutes.get('/me', requireAuth, async (c) => {
   return c.json({ user: c.get('auth').user });
 });
 
+authRoutes.get('/connected-users', requireAuth, async (c) => {
+  const db = getDb();
+  const users = await db.query<{
+    id: number;
+    login: string;
+    display_name: string;
+    role: string;
+    photo_path: string | null;
+    last_active_at: string;
+  }>(
+    `SELECT DISTINCT ON (u.id)
+       u.id,
+       u.login,
+       u.display_name,
+       u.role,
+       coalesce(u.photo_path, e.photo_path) AS photo_path,
+       s.created_at AS last_active_at
+     FROM sessions s
+     JOIN users u ON u.id = s.user_id
+     LEFT JOIN employees e ON e.id = u.employee_id
+     WHERE s.expires_at > now() AND u.active = true
+     ORDER BY u.id, s.created_at DESC`,
+  );
+  return c.json({ users });
+});
+
 const profileSchema = z.object({
   login: z
     .string()

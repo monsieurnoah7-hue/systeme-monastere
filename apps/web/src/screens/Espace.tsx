@@ -24,17 +24,21 @@ import {
   IconHistory,
   IconWrench,
 } from '../components/Icons';
-import { formatDate } from '../lib/labels';
+import { formatDate, initials } from '../lib/labels';
 import {
   ShieldCheck,
   CheckCircle2,
   KeyRound,
-  ExternalLink,
   Users,
   Warehouse,
   FileCheck2,
   AlertTriangle,
   Plus,
+  Lock,
+  ChevronRight,
+  Clock,
+  User as UserIcon,
+  Compass,
 } from 'lucide-react';
 
 const SITUATION_LABEL: Record<string, string> = {
@@ -84,6 +88,39 @@ export function Espace({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+
+  // Mobile-first ergonomics & live presence
+  const [mobileTab, setMobileTab] = useState<'gouvernance' | 'profil'>('gouvernance');
+  const [connectedUsers, setConnectedUsers] = useState<Array<{
+    id: number;
+    login: string;
+    display_name: string;
+    role: string;
+    photo_path: string | null;
+    last_active_at: string;
+  }>>([]);
+  const [showConnectedMenu, setShowConnectedMenu] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchConnected = () => {
+      api<{ users: Array<{ id: number; login: string; display_name: string; role: string; photo_path: string | null; last_active_at: string }> }>(
+        '/api/auth/connected-users',
+      )
+        .then((res) => {
+          if (mounted && res?.users) {
+            setConnectedUsers(res.users);
+          }
+        })
+        .catch(() => {});
+    };
+    fetchConnected();
+    const interval = setInterval(fetchConnected, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const isDirection = user?.role === 'direction';
   const canEditLogin = isDirection || Boolean(permissions?.['profile.login_edit']) || Boolean(permissions?.['users.manage']);
@@ -238,80 +275,251 @@ export function Espace({
   // ESPACE EXÉCUTIF : DIRECTION DU MONASTÈRE (Super-Admin)
   // =========================================================================
   if (isDirection) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title={`Espace Direction · ${displayName || 'Direction'}`}
-        />
+    const userPhoto = user?.photo_path || overview?.employee?.photo_path || (user?.employee_id ? `/photos/employees/${user.employee_id}.jpg` : '/photos/employees/EMP-001.jpg');
 
-        <div className="rounded-xl border border-amber/30 bg-amber-wash/30 p-4">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-amber text-white">
-              <ShieldCheck size={20} />
+    return (
+      <div className="space-y-4">
+        {/* Executive Header Strip with Real Profile Photo & Facebook-Style Live Presence */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-line/70 pb-3.5">
+          <div className="flex items-center gap-3.5 min-w-0">
+            {/* Real Profile Photo with adequate & pleasant size and Facebook-style Presence Dot */}
+            <div className="relative shrink-0">
+              <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl overflow-hidden border-2 border-line/80 bg-surface shadow-md">
+                <img
+                  src={userPhoto}
+                  alt={displayName || 'Direction Générale'}
+                  className="h-full w-full object-cover object-top"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    target.style.display = 'none';
+                    if (target.nextElementSibling) {
+                      (target.nextElementSibling as HTMLElement).style.display = 'grid';
+                    }
+                  }}
+                />
+                <div
+                  style={{ display: 'none' }}
+                  className="h-full w-full place-items-center bg-amber-wash text-amber text-lg font-bold"
+                >
+                  {initials(displayName || 'Direction')}
+                </div>
+              </div>
+              {/* Facebook-style status dot */}
+              <span
+                className="absolute bottom-0 right-0 h-3 w-3 sm:h-3.5 sm:w-3.5 rounded-full bg-emerald-500 ring-2 ring-surface shadow-xs"
+                title="En direct"
+              />
             </div>
-            <div>
-              <p className="text-sm font-bold text-ink">Statut : Super-Administrateur Permanent</p>
-              <p className="text-xs text-ink-soft">
-                La Direction n'est soumise à aucun pointage ni contrôle de présence. Vous disposez de l'ensemble
-                des privilèges et définissez les rôles, les droits et les affectations.
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-ink truncate">
+                  {displayName || 'Direction Générale'}
+                </h1>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-amber-wash text-amber border border-amber/30 shadow-xs">
+                  <ShieldCheck size={12} className="shrink-0" />
+                  <span>Super-Admin Permanent</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-ink-soft truncate mt-0.5">
+                Direction du Monastère des Bénédictins · Tous privilèges exécutifs · Non soumis au pointage
               </p>
             </div>
           </div>
-        </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Card: Mon Profil & Identifiants Direction */}
-          <Card className="p-5 shadow-card">
-            <div className="flex items-center justify-between border-b border-line pb-3">
-              <div>
-                <h2 className="text-base font-bold text-ink">Mon Compte Direction</h2>
-                <p className="text-xs text-ink-soft">Modifiez votre nom d'affichage ou vos identifiants</p>
-              </div>
-              <span className="rounded-full bg-surface-2 px-2.5 py-1 font-mono text-xs font-semibold text-ink-soft">
-                login : {user?.login}
-              </span>
+          <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0 flex-wrap">
+            {/* Facebook-style Live Active Collaborators Indicator */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowConnectedMenu((prev) => !prev)}
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[11px] font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all cursor-pointer shadow-xs active:scale-95"
+                title="Afficher les sessions actives en direct"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span>
+                  {connectedUsers.length > 1
+                    ? `${connectedUsers.length} connectés en direct`
+                    : '1 connecté en direct'}
+                </span>
+                <ChevronRight
+                  size={12}
+                  className={`text-emerald-400 transition-transform ${showConnectedMenu ? 'rotate-90' : ''}`}
+                />
+              </button>
+
+              {/* Popover listing connected collaborators */}
+              {showConnectedMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowConnectedMenu(false)}
+                  />
+                  <div className="absolute left-0 sm:right-0 sm:left-auto top-full mt-2 w-72 max-w-[calc(100vw-2.5rem)] rounded-2xl border border-line bg-surface/95 backdrop-blur-md shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95">
+                    <div className="flex items-center justify-between border-b border-line pb-2 mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <h4 className="text-xs font-bold text-ink">Collaborateurs en direct</h4>
+                      </div>
+                      <span className="text-[10px] font-medium text-ink-soft bg-surface-2 px-2 py-0.5 rounded-full border border-line">
+                        {Math.max(1, connectedUsers.length)} en ligne
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                      {(connectedUsers.length > 0 ? connectedUsers : [{
+                        id: user?.id ?? 1,
+                        login: user?.login ?? 'direction',
+                        display_name: displayName || 'Direction Générale',
+                        role: user?.role ?? 'direction',
+                        photo_path: userPhoto,
+                        last_active_at: new Date().toISOString()
+                      }]).map((u) => {
+                        const isMe = u.id === user?.id || u.login === user?.login;
+                        const photo = u.photo_path || (u.login === 'direction' ? '/photos/employees/EMP-001.jpg' : null);
+                        return (
+                          <div
+                            key={u.id}
+                            className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
+                              isMe ? 'bg-amber-wash/40 border-amber/30' : 'bg-surface-2 border-line hover:border-line/80'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="relative h-8 w-8 rounded-lg overflow-hidden shrink-0 border border-line/60 bg-surface">
+                                {photo ? (
+                                  <img src={photo} alt={u.display_name} className="h-full w-full object-cover object-top" />
+                                ) : (
+                                  <div className="h-full w-full grid place-items-center bg-surface-2 text-[11px] font-bold text-ink">
+                                    {initials(u.display_name || u.login)}
+                                  </div>
+                                )}
+                                <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-surface" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-ink truncate flex items-center gap-1">
+                                  <span>{u.display_name}</span>
+                                  {isMe && (
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber text-paper font-bold">
+                                      Vous
+                                    </span>
+                                  )}
+                                </p>
+                                <p className="text-[10px] text-ink-soft truncate font-mono">@{u.login} · {u.role}</p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-medium text-emerald-400 shrink-0 flex items-center gap-1">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              En ligne
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            <form onSubmit={handleUpdateProfile} className="mt-4 space-y-4">
-              {/* Decoy hidden inputs to prevent Chrome / Edge aggressive autofill */}
-              <div style={{ display: 'none' }} aria-hidden="true">
-                <input type="text" name="fake_account_user" tabIndex={-1} autoComplete="off" />
-                <input type="password" name="fake_account_pass" tabIndex={-1} autoComplete="off" />
+            <span className="rounded-lg border border-line bg-surface-2 px-3 py-1 font-mono text-[11px] font-semibold text-ink-soft shadow-xs">
+              login : {user?.login}
+            </span>
+          </div>
+        </div>
+
+        {/* Mobile-First Segmented Control (Smartphones / Tablets) */}
+        <div className="grid grid-cols-2 p-1 rounded-xl bg-surface-2 border border-line lg:hidden gap-1">
+          <button
+            type="button"
+            onClick={() => setMobileTab('gouvernance')}
+            className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+              mobileTab === 'gouvernance'
+                ? 'bg-surface text-ink shadow-sm border border-line font-bold'
+                : 'text-ink-soft hover:text-ink'
+            }`}
+          >
+            <Compass size={14} className="text-blue" />
+            <span>Gouvernance &amp; Centres</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab('profil')}
+            className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+              mobileTab === 'profil'
+                ? 'bg-surface text-ink shadow-sm border border-line font-bold'
+                : 'text-ink-soft hover:text-ink'
+            }`}
+          >
+            <UserIcon size={14} className="text-amber" />
+            <span>Profil &amp; Paramètres</span>
+          </button>
+        </div>
+
+        {/* Dual-Panel Single-View Workspace with EQUAL HEIGHTS */}
+        <div className="grid gap-4 lg:grid-cols-12 items-stretch">
+          {/* Panel 1: Profil & Identifiants (7 cols on desktop, responsive on mobile) */}
+          <Card className={`lg:col-span-7 p-4 sm:p-5 shadow-card border-line flex flex-col justify-between ${mobileTab !== 'profil' ? 'hidden lg:flex' : 'flex'}`}>
+            <div>
+              <div className="flex items-center justify-between border-b border-line pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-paper-2 border border-line text-amber">
+                    <UserIcon size={13} />
+                  </span>
+                  <div>
+                    <h2 className="text-xs sm:text-sm font-bold text-ink">Profil &amp; Paramètres de Connexion</h2>
+                    <p className="text-[10px] sm:text-[11px] text-ink-soft">Identifiant officiel et sécurité du compte Direction</p>
+                  </div>
+                </div>
               </div>
 
-              <Field
-                label="Identifiant de connexion"
-                name="user_account_login"
-                id="user_account_login"
-                value={login}
-                autoComplete="off"
-                disabled={!canEditLogin}
-                onChange={(e) => setLogin(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
-                placeholder="ex. direction"
-                hint={
-                  canEditLogin
-                    ? 'Lettres minuscules, chiffres, points et tirets (min. 3 caractères)'
-                    : 'Modification réservée à la Direction ou ayants droit'
-                }
-                required
-              />
+              <form id="profile-form" onSubmit={handleUpdateProfile} className="mt-3.5 space-y-3.5">
+                {/* Decoy hidden inputs to prevent Chrome / Edge aggressive autofill */}
+                <div style={{ display: 'none' }} aria-hidden="true">
+                  <input type="text" name="fake_account_user" tabIndex={-1} autoComplete="off" />
+                  <input type="password" name="fake_account_pass" tabIndex={-1} autoComplete="off" />
+                </div>
 
-              <Field
-                label="Nom ou libellé d'affichage"
-                name="user_account_display_name"
-                id="user_account_display_name"
-                autoComplete="off"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="ex. Direction du Monastère"
-                required
-              />
+                {/* 2-column input row on tablet/desktop */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field
+                    label="Identifiant de connexion"
+                    name="user_account_login"
+                    id="user_account_login"
+                    value={login}
+                    autoComplete="off"
+                    disabled={!canEditLogin}
+                    onChange={(e) => setLogin(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
+                    placeholder="ex. direction"
+                    hint={
+                      canEditLogin
+                        ? 'Lettres minuscules, chiffres, points et tirets (min. 3)'
+                        : 'Modification réservée à la Direction'
+                    }
+                    required
+                  />
 
-              <div className="border-t border-line/60 pt-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-faint">
-                  Changer de mot de passe (optionnel)
-                </p>
-                <div className="space-y-3">
+                  <Field
+                    label="Nom ou libellé d'affichage"
+                    name="user_account_display_name"
+                    id="user_account_display_name"
+                    autoComplete="off"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="ex. Direction du Monastère"
+                    required
+                  />
+                </div>
+
+                {/* Password Fields directly visible - NO accordion */}
+                <div className="pt-2 border-t border-line/60 space-y-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <Lock size={12} className="text-amber" />
+                    <p className="text-xs font-semibold text-ink">Changer de mot de passe</p>
+                    <span className="text-[10px] text-ink-faint font-normal">(Optionnel)</span>
+                  </div>
+
                   <Field
                     label="Mot de passe actuel"
                     name="profile_current_password"
@@ -322,130 +530,204 @@ export function Espace({
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Requis uniquement si vous changez le mot de passe"
                   />
-                  <Field
-                    label="Nouveau mot de passe"
-                    name="profile_new_password"
-                    id="profile_new_password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Minimum 6 caractères"
-                  />
-                  <Field
-                    label="Confirmer le nouveau mot de passe"
-                    name="profile_confirm_password"
-                    id="profile_confirm_password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Répétez le mot de passe"
-                  />
-                </div>
-              </div>
 
-              {profileError && (
-                <div className="rounded-lg bg-red-wash/60 border border-red/20 p-2.5 text-xs font-medium text-red">
-                  {profileError}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <Field
+                      label="Nouveau mot de passe"
+                      name="profile_new_password"
+                      id="profile_new_password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min. 6 caractères"
+                    />
+                    <Field
+                      label="Confirmer le mot de passe"
+                      name="profile_confirm_password"
+                      id="profile_confirm_password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Répétez le mot de passe"
+                    />
+                  </div>
                 </div>
-              )}
-              {profileSuccess && (
-                <div className="rounded-lg bg-green-wash border border-green/20 p-2.5 text-xs font-medium text-green flex items-center gap-2">
-                  <CheckCircle2 size={16} />
-                  <span>{profileSuccess}</span>
-                </div>
-              )}
 
-              <Button type="submit" variant="primary" loading={profileSaving} className="w-full">
+                {profileError && (
+                  <div className="rounded-lg bg-red-wash/60 border border-red/20 p-2 text-xs font-medium text-red animate-in fade-in">
+                    {profileError}
+                  </div>
+                )}
+                {profileSuccess && (
+                  <div className="rounded-lg bg-green-wash border border-green/20 p-2 text-xs font-medium text-green flex items-center gap-2 animate-in fade-in">
+                    <CheckCircle2 size={15} />
+                    <span>{profileSuccess}</span>
+                  </div>
+                )}
+              </form>
+            </div>
+
+            <div className="flex items-center justify-end pt-3 mt-1 border-t border-line/40">
+              <Button
+                type="submit"
+                form="profile-form"
+                variant="primary"
+                size="sm"
+                loading={profileSaving}
+                className="w-full sm:w-auto px-5 h-9 font-semibold shadow-xs text-xs"
+              >
                 {profileSaving ? 'Enregistrement…' : 'Enregistrer les modifications'}
               </Button>
-            </form>
+            </div>
           </Card>
 
-          {/* Card: Raccourcis de Gouvernance & Attribution */}
-          <Card className="p-5 shadow-card">
-            <h2 className="text-base font-bold text-ink">Gouvernance &amp; Attribution des Droits</h2>
-            <p className="text-xs text-ink-soft">Accès direct aux modules de configuration maîtres</p>
-
-            <div className="mt-4 space-y-3">
-              <div className="rounded-xl border border-line bg-surface p-3.5 flex items-center justify-between hover:border-amber/40 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-9 w-9 place-items-center rounded-lg bg-amber-wash text-amber">
-                    <KeyRound size={18} />
-                  </div>
+          {/* Panel 2: Raccourcis de Gouvernance & Attribution (5 cols on desktop, responsive on mobile) */}
+          <Card className={`lg:col-span-5 p-4 sm:p-5 shadow-card border-line flex flex-col justify-between ${mobileTab !== 'gouvernance' ? 'hidden lg:flex' : 'flex'}`}>
+            <div>
+              <div className="flex items-center justify-between border-b border-line pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-paper-2 border border-line text-blue">
+                    <Compass size={13} />
+                  </span>
                   <div>
-                    <p className="text-xs font-bold text-ink">Rôles &amp; Permissions Dynamiques</p>
-                    <p className="text-[11px] text-ink-soft">Créer des rôles sur-mesure et allouer les privilèges</p>
+                    <h2 className="text-xs sm:text-sm font-bold text-ink">Gouvernance &amp; Centres Maîtres</h2>
+                    <p className="text-[10px] sm:text-[11px] text-ink-soft">Accès directs aux modules de contrôle</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    sessionStorage.setItem('parametres_active_tab', 'permissions');
-                    if (onNavigate) {
-                      onNavigate('parametres');
-                    } else {
-                      window.location.hash = 'parametres';
-                      window.dispatchEvent(new CustomEvent('nav-view', { detail: 'parametres' }));
-                    }
-                  }}
-                  className="rounded-lg bg-paper-2 hover:bg-amber-wash hover:text-amber active:scale-95 transition-all px-3 py-1.5 text-xs font-semibold text-ink flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  Gérer <ExternalLink size={12} />
-                </button>
+              </div>
+            </div>
+
+            <div className="mt-3.5 flex-1 flex flex-col justify-between gap-2.5">
+              {/* Tile 1: Rôles & Permissions Dynamiques */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  sessionStorage.setItem('parametres_active_tab', 'permissions');
+                  if (onNavigate) {
+                    onNavigate('parametres');
+                  } else {
+                    window.location.hash = 'parametres';
+                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'parametres' }));
+                  }
+                }}
+                className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-amber/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-amber-wash text-amber border border-amber/20">
+                    <KeyRound size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-ink truncate group-hover:text-amber transition-colors">
+                      Rôles &amp; Permissions Dynamiques
+                    </p>
+                    <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                      Créer des rôles sur-mesure et allouer les privilèges
+                    </p>
+                  </div>
+                </div>
+                <span className="shrink-0 text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all ml-2">
+                  <ChevronRight size={16} />
+                </span>
               </div>
 
-              <div className="rounded-xl border border-line bg-surface p-3.5 flex items-center justify-between hover:border-blue/40 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-9 w-9 place-items-center rounded-lg bg-blue-wash text-blue">
-                    <Warehouse size={18} />
+              {/* Tile 2: Pointage & Kiosques CFTM */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  sessionStorage.setItem('parametres_active_tab', 'kiosk');
+                  if (onNavigate) {
+                    onNavigate('parametres');
+                  } else {
+                    window.location.hash = 'parametres';
+                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'parametres' }));
+                  }
+                }}
+                className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-amber/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-amber-wash text-amber border border-amber/20">
+                    <Clock size={16} />
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-ink">Magasins, Dépôts &amp; Quincaillerie</p>
-                    <p className="text-[11px] text-ink-soft">Créer les magasins et allouer les outils de chaque pôle</p>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-ink truncate group-hover:text-amber transition-colors">
+                      Pointage &amp; Kiosques d'Atelier
+                    </p>
+                    <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                      Cadences, verrous stricts &amp; bornes tablettes
+                    </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onNavigate) {
-                      onNavigate('magasins');
-                    } else {
-                      window.location.hash = 'magasins';
-                      window.dispatchEvent(new CustomEvent('nav-view', { detail: 'magasins' }));
-                    }
-                  }}
-                  className="rounded-lg bg-paper-2 hover:bg-blue-wash hover:text-blue active:scale-95 transition-all px-3 py-1.5 text-xs font-semibold text-ink flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  Voir <ExternalLink size={12} />
-                </button>
+                <span className="shrink-0 text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all ml-2">
+                  <ChevronRight size={16} />
+                </span>
               </div>
 
-              <div className="rounded-xl border border-line bg-surface p-3.5 flex items-center justify-between hover:border-green/40 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-9 w-9 place-items-center rounded-lg bg-green-wash text-green">
-                    <Users size={18} />
+              {/* Tile 3: Magasins & Stocks */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  if (onNavigate) {
+                    onNavigate('magasins');
+                  } else {
+                    window.location.hash = 'magasins';
+                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'magasins' }));
+                  }
+                }}
+                className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-blue/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-blue-wash text-blue border border-blue/20">
+                    <Warehouse size={16} />
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-ink">Comptes Utilisateurs &amp; Travailleurs</p>
-                    <p className="text-[11px] text-ink-soft">Assigner les responsabilités aux collaborateurs</p>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-ink truncate group-hover:text-blue transition-colors">
+                      Magasins, Dépôts &amp; Quincaillerie
+                    </p>
+                    <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                      Gestion des dépôts et affectation des outillages
+                    </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onNavigate) {
-                      onNavigate('employes');
-                    } else {
-                      window.location.hash = 'employes';
-                      window.dispatchEvent(new CustomEvent('nav-view', { detail: 'employes' }));
-                    }
-                  }}
-                  className="rounded-lg bg-paper-2 hover:bg-green-wash hover:text-green active:scale-95 transition-all px-3 py-1.5 text-xs font-semibold text-ink flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  Équipe <ExternalLink size={12} />
-                </button>
+                <span className="shrink-0 text-ink-faint group-hover:text-blue group-hover:translate-x-0.5 transition-all ml-2">
+                  <ChevronRight size={16} />
+                </span>
+              </div>
+
+              {/* Tile 4: Travailleurs & Collaborateurs */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  if (onNavigate) {
+                    onNavigate('employes');
+                  } else {
+                    window.location.hash = 'employes';
+                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'employes' }));
+                  }
+                }}
+                className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-green/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-green-wash text-green border border-green/20">
+                    <Users size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-ink truncate group-hover:text-green transition-colors">
+                      Comptes Utilisateurs &amp; Travailleurs
+                    </p>
+                    <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                      Fiches ouvriers, affectations &amp; responsabilités
+                    </p>
+                  </div>
+                </div>
+                <span className="shrink-0 text-ink-faint group-hover:text-green group-hover:translate-x-0.5 transition-all ml-2">
+                  <ChevronRight size={16} />
+                </span>
               </div>
             </div>
           </Card>

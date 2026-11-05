@@ -15,3 +15,5 @@ data/pglite/
 .env*
 *.tsbuildinfo
 persona_audit_reports/
+chrome_test_profile/
+recapitulatif_comptes_travailleurs.json
