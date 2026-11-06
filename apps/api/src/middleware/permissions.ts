@@ -1,6 +1,6 @@
 import type { Context, Next } from 'hono';
 import { getDb } from '../db/index.js';
-import { DEFAULT_PERMISSIONS, isSuperAdmin, type PermissionAction } from '../lib/permissions.js';
+import { DEFAULT_PERMISSIONS, PERMISSION_VIEW_DEPENDENCIES, isSuperAdmin, type PermissionAction } from '../lib/permissions.js';
 import type { Role } from '../types.js';
 
 const cache = new Map<string, { allowed: boolean; at: number }>();
@@ -16,7 +16,16 @@ export async function hasPermission(role: string, action: PermissionAction): Pro
     [role, action],
   );
   // fall back to the default role map when no explicit override exists
-  const allowed = row ? row.allowed : (DEFAULT_PERMISSIONS[action] ?? []).includes(role as Role);
+  let allowed = row ? row.allowed : (DEFAULT_PERMISSIONS[action] ?? []).includes(role as Role);
+  if (!allowed) {
+    const impliedBy = PERMISSION_VIEW_DEPENDENCIES[action] ?? [];
+    for (const childAction of impliedBy) {
+      if (await hasPermission(role, childAction)) {
+        allowed = true;
+        break;
+      }
+    }
+  }
   cache.set(key, { allowed, at: Date.now() });
   return allowed;
 }

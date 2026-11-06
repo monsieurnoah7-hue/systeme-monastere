@@ -290,31 +290,17 @@ async function downloadFile(url: string, filename: string, init?: RequestInit): 
   setTimeout(() => URL.revokeObjectURL(href), 4_000);
 }
 
-export function Parametres({ user }: { user: User }) {
-  const [terminalPermission, setTerminalPermission] = useState<boolean | null>(user.role === 'direction' ? true : null);
-
-  useEffect(() => {
-    if (user.role === 'direction') return;
-    let cancelled = false;
-    api<{ permissions: Record<string, boolean> }>('/api/permissions/me', { bypassCache: true })
-      .then((result) => {
-        if (!cancelled) setTerminalPermission(Boolean(result.permissions?.['terminals.manage']));
-      })
-      .catch(() => {
-        if (!cancelled) setTerminalPermission(false);
-      });
-    return () => { cancelled = true; };
-  }, [user.role]);
-
-  if (user.role !== 'direction' && terminalPermission === null) {
+export function Parametres({ user, permissions }: { user: User; permissions?: Record<string, boolean> | null }) {
+  if (user.role !== 'direction' && permissions == null) {
     return <div className="grid min-h-48 place-items-center"><Spinner /></div>;
   }
 
-  if (user.role !== 'direction' && terminalPermission) {
-    return <TerminalManager />;
-  }
-
-  if (user.role !== 'direction') {
+  const currentPermissions = permissions ?? {};
+  const canOpenSettings = user.role === 'direction' || Boolean(
+    currentPermissions['terminals.manage'] || currentPermissions['settings.view'] || currentPermissions['settings.edit'] ||
+    currentPermissions['users.view'] || currentPermissions['users.manage'] || currentPermissions['permissions.manage'],
+  );
+  if (!canOpenSettings) {
     return (
       <div className="space-y-6">
         <PageHeader title="Paramètres" hint="Réglages de l’atelier." />
@@ -332,7 +318,15 @@ export function Parametres({ user }: { user: User }) {
     );
   }
 
-  return <AdminSettings user={user} />;
+  const hasOtherScopedAccess = Boolean(
+    currentPermissions['settings.view'] || currentPermissions['settings.edit'] || currentPermissions['users.view'] ||
+    currentPermissions['users.manage'] || currentPermissions['permissions.manage'],
+  );
+  if (user.role !== 'direction' && currentPermissions['terminals.manage'] && !hasOtherScopedAccess) {
+    return <TerminalManager />;
+  }
+
+  return <AdminSettings user={user} permissions={currentPermissions} />;
 }
 
 function TerminalManager() {
@@ -439,21 +433,38 @@ function TerminalManager() {
   );
 }
 
-function AdminSettings({ user }: { user: User }) {
+function AdminSettings({ user, permissions }: { user: User; permissions: Record<string, boolean> }) {
   const toast = useToast();
+  const isDirection = user.role === 'direction';
+  const canViewUsers = isDirection || Boolean(permissions['users.view'] || permissions['users.manage']);
+  const canManageUsers = isDirection || Boolean(permissions['users.manage']);
+  const canManagePermissions = isDirection || Boolean(permissions['permissions.manage']);
+  const canViewSettings = isDirection || Boolean(permissions['settings.view'] || permissions['settings.edit']);
+  const canEditSettings = isDirection || Boolean(permissions['settings.edit']);
+  const canManageTerminals = isDirection || Boolean(permissions['terminals.manage']);
+  const canUseBackups = isDirection;
+  const canViewKiosk = canViewSettings || canManageTerminals;
+  const availableTabs = [
+    ...(canViewUsers ? ['comptes'] : []),
+    ...(canManagePermissions ? ['permissions'] : []),
+    ...(canViewKiosk ? ['kiosk'] : []),
+    'securite',
+    ...(canUseBackups ? ['sauvegardes'] : []),
+  ] as const;
+  const defaultTab = canViewUsers ? 'comptes' : canManagePermissions ? 'permissions' : canViewKiosk ? 'kiosk' : 'securite';
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<'comptes' | 'permissions' | 'kiosk' | 'securite' | 'sauvegardes'>(() => {
     try {
       const saved = sessionStorage.getItem('parametres_active_tab');
-      if (saved && ['comptes', 'permissions', 'kiosk', 'securite', 'sauvegardes'].includes(saved)) {
+      if (saved && availableTabs.includes(saved as (typeof availableTabs)[number])) {
         sessionStorage.removeItem('parametres_active_tab');
         return saved as 'comptes' | 'permissions' | 'kiosk' | 'securite' | 'sauvegardes';
       }
     } catch {
       /* ignore storage error */
     }
-    return 'comptes';
+    return defaultTab;
   });
 
   // Core data states
@@ -462,7 +473,13 @@ function AdminSettings({ user }: { user: User }) {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [motifDraft, setMotifDraft] = useState('');
-  const [kioskSubTab, setKioskSubTab] = useState<'horaires' | 'bornes' | 'regles'>('horaires');
+  const [kioskSubTab, setKioskSubTab] = useState<'horaires' | 'bornes' | 'regles'>(canViewSettings ? 'horaires' : 'bornes');
+
+  useEffect(() => {
+    if (!availableTabs.includes(activeTab)) setActiveTab(defaultTab);
+    if (!canViewSettings && kioskSubTab !== 'bornes') setKioskSubTab('bornes');
+    if (!canManageTerminals && kioskSubTab === 'bornes') setKioskSubTab('horaires');
+  }, [permissions, activeTab, defaultTab, canManageTerminals, canViewSettings, kioskSubTab, availableTabs]);
 
   const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
   const [users, setUsers] = useState<AppUserRow[]>([]);
@@ -547,22 +564,37 @@ function AdminSettings({ user }: { user: User }) {
     else setIsRefreshing(true);
 
     Promise.all([
-      api<{ settings: KioskSettings }>('/api/settings'),
-      api<{ terminals: TerminalInfo[] }>('/api/terminals'),
-      api<{ users: AppUserRow[] }>('/api/users'),
-      api<{ employees: Employee[] }>('/api/employees'),
-      api<PermissionMatrix>('/api/permissions').catch(() => null),
-      user.role === 'direction'
+      canViewSettings
+        ? api<{ settings: KioskSettings }>('/api/settings')
+        : Promise.resolve(null),
+      canManageTerminals
+        ? api<{ terminals: TerminalInfo[] }>('/api/terminals')
+        : Promise.resolve(null),
+      canViewUsers
+        ? api<{ users: AppUserRow[] }>('/api/users')
+        : Promise.resolve(null),
+      permissions['employees.view'] || isDirection
+        ? api<{ employees: Employee[] }>('/api/employees').catch(() => null)
+        : Promise.resolve(null),
+      canManagePermissions
+        ? api<PermissionMatrix>('/api/permissions').catch(() => null)
+        : Promise.resolve(null),
+      canUseBackups
         ? api<{ backups: BackupInfo[]; retentionDays: number }>('/api/admin/backups').catch(() => null)
         : Promise.resolve(null),
     ])
       .then(([setRes, termRes, userRes, empRes, permRes, backupRes]) => {
         if (cancelled) return;
-        setSettings(setRes.settings);
-        setSettingsDraft(setRes.settings);
-        setTerminals(termRes.terminals);
-        setUsers(userRes.users);
-        setEmployees(empRes.employees);
+        if (setRes) {
+          setSettings(setRes.settings);
+          setSettingsDraft(setRes.settings);
+        } else {
+          setSettings(null);
+          setSettingsDraft(null);
+        }
+        setTerminals(termRes?.terminals ?? []);
+        setUsers(userRes?.users ?? []);
+        setEmployees(empRes?.employees ?? []);
         if (permRes) {
           setPermMatrix(permRes);
           setPermDraft(permRes.matrix);
@@ -570,6 +602,8 @@ function AdminSettings({ user }: { user: User }) {
         if (backupRes) {
           setBackups(backupRes.backups);
           setRetentionDays(backupRes.retentionDays);
+        } else {
+          setBackups([]);
         }
         setSettingsError(null);
       })
@@ -585,7 +619,7 @@ function AdminSettings({ user }: { user: User }) {
     return () => {
       cancelled = true;
     };
-  }, [reload, user.role]);
+  }, [reload, user.role, canViewSettings, canManageTerminals, canViewUsers, canManagePermissions, canUseBackups, permissions['employees.view'], isDirection]);
 
   const effectiveSettings = settingsDraft ?? settings;
 
@@ -1348,7 +1382,7 @@ function AdminSettings({ user }: { user: User }) {
       .filter((g) => g.actions.length > 0);
   }, [permMatrix, permSearch, permGroupFilter]);
 
-  if (loading && !settings) {
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-24 text-sm text-ink-soft">
         <Spinner className="h-6 w-6 text-amber" />
@@ -1357,7 +1391,7 @@ function AdminSettings({ user }: { user: User }) {
     );
   }
 
-  if (!settings) {
+  if (canViewSettings && !settings) {
     return <EmptyState title="Paramètres indisponibles" hint={settingsError ?? undefined} />;
   }
 
@@ -1394,7 +1428,7 @@ function AdminSettings({ user }: { user: User }) {
             {/* Tabs Trigger list (Horizontally scrollable on small screens with no scrollbar) */}
             <div className="overflow-x-auto no-scrollbar py-0.5 min-w-0 flex-1">
               <TabsList variant="line" className="flex gap-1 sm:gap-2 bg-transparent p-0 w-max">
-                <TabsTrigger
+                {canViewUsers && <TabsTrigger
                   value="comptes"
                   className="shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
                 >
@@ -1403,9 +1437,9 @@ function AdminSettings({ user }: { user: User }) {
                   <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
                     {activeUsersCount}/{users.length}
                   </span>
-                </TabsTrigger>
+                </TabsTrigger>}
 
-                <TabsTrigger
+                {canManagePermissions && <TabsTrigger
                   value="permissions"
                   className="shrink-0 whitespace-nowrap relative gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
                 >
@@ -1414,9 +1448,9 @@ function AdminSettings({ user }: { user: User }) {
                   {hasUnsavedPerms ? (
                     <span className="h-2 w-2 rounded-full bg-amber animate-pulse" title="Modifications en attente" />
                   ) : null}
-                </TabsTrigger>
+                </TabsTrigger>}
 
-                <TabsTrigger
+                {canViewKiosk && <TabsTrigger
                   value="kiosk"
                   className="shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
                 >
@@ -1426,7 +1460,7 @@ function AdminSettings({ user }: { user: User }) {
                   <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
                     {activeTerminalsCount} act.
                   </span>
-                </TabsTrigger>
+                </TabsTrigger>}
 
                 <TabsTrigger
                   value="securite"
@@ -1437,7 +1471,7 @@ function AdminSettings({ user }: { user: User }) {
                   <span className="sm:hidden">Sécurité</span>
                 </TabsTrigger>
 
-                <TabsTrigger
+                {canUseBackups && <TabsTrigger
                   value="sauvegardes"
                   className="shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
                 >
@@ -1447,7 +1481,7 @@ function AdminSettings({ user }: { user: User }) {
                   <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
                     {backups.length}
                   </span>
-                </TabsTrigger>
+                </TabsTrigger>}
               </TabsList>
             </div>
 
@@ -1466,7 +1500,7 @@ function AdminSettings({ user }: { user: User }) {
               </Button>
 
               {/* Contextual Primary Action CTA (Row 1) */}
-              {activeTab === 'comptes' && (
+              {activeTab === 'comptes' && canManageUsers && (
                 <Button
                   size="sm"
                   variant="primary"
@@ -1491,7 +1525,7 @@ function AdminSettings({ user }: { user: User }) {
                 </Button>
               )}
 
-              {activeTab === 'permissions' && (
+              {activeTab === 'permissions' && canManagePermissions && (
                 hasUnsavedPerms ? (
                   <>
                     <Button
@@ -1534,7 +1568,7 @@ function AdminSettings({ user }: { user: User }) {
                 )
               )}
 
-              {activeTab === 'kiosk' && (
+              {activeTab === 'kiosk' && ((kioskSubTab === 'bornes' && canManageTerminals) || (kioskSubTab !== 'bornes' && canEditSettings)) && (
                 kioskSubTab === 'bornes' ? (
                   <Button
                     size="sm"
@@ -1565,7 +1599,7 @@ function AdminSettings({ user }: { user: User }) {
                 )
               )}
 
-              {activeTab === 'sauvegardes' && (
+              {activeTab === 'sauvegardes' && canUseBackups && (
                 <Button
                   size="sm"
                   variant="primary"
@@ -1597,7 +1631,7 @@ function AdminSettings({ user }: { user: User }) {
                     Actions &amp; Outils
                   </DropdownMenuLabel>
 
-                  {activeTab === 'permissions' && (
+                  {activeTab === 'permissions' && canManagePermissions && (
                     <>
                       <DropdownMenuItem
                         onClick={handleExportPermissionsExcel}
@@ -1635,7 +1669,7 @@ function AdminSettings({ user }: { user: User }) {
                     </>
                   )}
 
-                  {activeTab === 'comptes' && (
+                  {activeTab === 'comptes' && canManageUsers && (
                     <>
                       <DropdownMenuItem
                         onClick={handleExportUsersExcel}
@@ -1655,17 +1689,17 @@ function AdminSettings({ user }: { user: User }) {
 
                       <DropdownMenuSeparator className="my-1 border-line" />
 
-                      <DropdownMenuItem
+                      {isDirection && <DropdownMenuItem
                         onClick={() => setPurgeConfirmOpen(true)}
                         className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-red-500/10 text-red"
                       >
                         <Trash2 size={14} />
                         <span>Purger comptes de test</span>
-                      </DropdownMenuItem>
+                      </DropdownMenuItem>}
                     </>
                   )}
 
-                  {activeTab === 'kiosk' && (
+                  {activeTab === 'kiosk' && canViewKiosk && (
                     <DropdownMenuItem
                       onClick={() => window.open('/pointage', '_blank')}
                       className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
@@ -1675,7 +1709,7 @@ function AdminSettings({ user }: { user: User }) {
                     </DropdownMenuItem>
                   )}
 
-                  {activeTab === 'sauvegardes' && (
+                  {activeTab === 'sauvegardes' && canUseBackups && (
                     <DropdownMenuItem
                       onClick={saveBackupNow}
                       className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
@@ -1690,7 +1724,7 @@ function AdminSettings({ user }: { user: User }) {
           </div>
 
           {/* Row 2: Continuous Search & Filters (Dedicated Sub-Row) */}
-          {activeTab === 'comptes' && (
+          {activeTab === 'comptes' && canViewUsers && (
             <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 flex-1 min-w-0">
                 {/* Real-time Search */}
@@ -1755,7 +1789,7 @@ function AdminSettings({ user }: { user: User }) {
             </div>
           )}
 
-          {activeTab === 'permissions' && (
+          {activeTab === 'permissions' && canManagePermissions && (
             <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
               {/* Real-time Search */}
               <div className="relative w-44 sm:w-60 shrink-0">
@@ -1811,13 +1845,13 @@ function AdminSettings({ user }: { user: User }) {
             </div>
           )}
 
-          {activeTab === 'kiosk' && (
+          {activeTab === 'kiosk' && canViewKiosk && (
             <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
                 {[
-                  { key: 'horaires', label: 'Horaires & Présences' },
-                  { key: 'bornes', label: `Bornes d'Atelier (${terminals.length})` },
-                  { key: 'regles', label: 'Règles & Retards' },
+                  ...(canViewSettings ? [{ key: 'horaires', label: 'Horaires & Présences' }] : []),
+                  ...(canManageTerminals ? [{ key: 'bornes', label: `Bornes d'Atelier (${terminals.length})` }] : []),
+                  ...(canViewSettings ? [{ key: 'regles', label: 'Règles & Retards' }] : []),
                 ].map(({ key, label }) => (
                   <button
                     key={key}
@@ -1837,7 +1871,7 @@ function AdminSettings({ user }: { user: User }) {
             </div>
           )}
 
-          {activeTab === 'sauvegardes' && (
+          {activeTab === 'sauvegardes' && canUseBackups && (
             <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
               <div className="text-xs text-ink-soft">
                 Rétention : <strong className="text-ink">{retentionDays} jours</strong> de conservation automatique
@@ -1852,7 +1886,7 @@ function AdminSettings({ user }: { user: User }) {
         {/* =========================================================================
             TAB 1: COMPTES UTILISATEURS
         ========================================================================= */}
-        <TabsContent value="comptes" className="space-y-6">
+        {canViewUsers && <TabsContent value="comptes" className="space-y-6">
           {/* Quick Interactive Metrics */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Card
@@ -2016,11 +2050,11 @@ function AdminSettings({ user }: { user: User }) {
                         >
                           {/* Photo Avatar */}
                           <td className="py-2 px-3 text-center border-r border-line">
-                            <div
-                              onClick={() => {
+                          <div
+                            onClick={canManageUsers ? () => {
                                 setProfilePhotoTarget({ type: 'user', userId: account.id, current: account.photo_path, name: account.display_name });
                                 setProfilePhotoOpen(true);
-                              }}
+                            } : undefined}
                               className={cx(
                                 'group relative mx-auto grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden cursor-pointer hover:border-amber transition-colors',
                                 theme.bg,
@@ -2087,7 +2121,7 @@ function AdminSettings({ user }: { user: User }) {
 
                           {/* Actions */}
                           <td className="py-2.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            {canManageUsers && <div className="flex items-center justify-end gap-1.5">
                               <Button size="sm" variant="ghost" onClick={() => openEditAccount(account)} className="h-7 text-xs px-2.5">
                                 Modifier
                               </Button>
@@ -2124,7 +2158,7 @@ function AdminSettings({ user }: { user: User }) {
                                   <Trash2 size={13} />
                                 </Button>
                               )}
-                            </div>
+                            </div>}
                           </td>
                         </tr>
                       );
@@ -2148,10 +2182,10 @@ function AdminSettings({ user }: { user: User }) {
                     >
                       <div className="flex items-start gap-3">
                         <div
-                          onClick={() => {
+                          onClick={canManageUsers ? () => {
                             setProfilePhotoTarget({ type: 'user', userId: account.id, current: account.photo_path, name: account.display_name });
                             setProfilePhotoOpen(true);
-                          }}
+                          } : undefined}
                           className={cx(
                             'relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden',
                             theme.bg,
@@ -2201,7 +2235,7 @@ function AdminSettings({ user }: { user: User }) {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-line/50">
+                      {canManageUsers && <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-line/50">
                         <Button size="sm" variant="ghost" onClick={() => openEditAccount(account)} className="h-8 text-xs flex-1">
                           Modifier
                         </Button>
@@ -2238,7 +2272,7 @@ function AdminSettings({ user }: { user: User }) {
                             <Trash2 size={14} />
                           </Button>
                         )}
-                      </div>
+                      </div>}
                     </div>
                   );
                 })}
@@ -2257,12 +2291,12 @@ function AdminSettings({ user }: { user: User }) {
               ) : null}
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
 
         {/* =========================================================================
             TAB 2: ROLES & PERMISSIONS (RBAC)
         ========================================================================= */}
-        <TabsContent value="permissions" className="space-y-6">
+        {canManagePermissions && <TabsContent value="permissions" className="space-y-6">
           {/* Card: Rôles Applicatifs CFT */}
           <Card className="shadow-card">
             <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -2601,12 +2635,12 @@ function AdminSettings({ user }: { user: User }) {
               ) : null}
             </CardFooter>
           </Card>
-        </TabsContent>
+        </TabsContent>}
 
         {/* =========================================================================
             TAB 3: KIOSQUE & POINTAGE (Apple / Linear Grade Redesign)
         ========================================================================= */}
-        <TabsContent value="kiosk" className="space-y-6">
+        {canViewKiosk && <TabsContent value="kiosk" className="space-y-6">
           {/* En-tête de section */}
           <div className="border-b border-line pb-3">
             <div className="flex items-center gap-2">
@@ -2623,7 +2657,8 @@ function AdminSettings({ user }: { user: User }) {
           </div>
 
           {/* SOUS-ONGLET 1 : HORAIRES & VERROUS */}
-          {kioskSubTab === 'horaires' && (
+          {kioskSubTab === 'horaires' && canViewSettings && (
+            <fieldset disabled={!canEditSettings} className="min-w-0 border-0 p-0">
             <div className="space-y-6">
               {/* Le Ruban Chronologique Visuel de la Journée */}
               <div className="rounded-2xl border border-line bg-gradient-to-r from-paper to-paper-2 p-4 sm:p-5 shadow-xs">
@@ -3014,10 +3049,11 @@ function AdminSettings({ user }: { user: User }) {
                 </button>
               </div>
             </div>
+            </fieldset>
           )}
 
           {/* SOUS-ONGLET 2 : BORNES & TERMINAUX */}
-          {kioskSubTab === 'bornes' && (
+          {kioskSubTab === 'bornes' && canManageTerminals && (
             <div className="space-y-6">
               <div className="flex items-center gap-3">
                 <div className="rounded-xl border border-line bg-surface px-3 py-1.5 text-xs">
@@ -3109,7 +3145,8 @@ function AdminSettings({ user }: { user: User }) {
           )}
 
           {/* SOUS-ONGLET 3 : RÈGLES & TOLÉRANCE */}
-          {kioskSubTab === 'regles' && (
+          {kioskSubTab === 'regles' && canViewSettings && (
+            <fieldset disabled={!canEditSettings} className="min-w-0 border-0 p-0">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Jours Ouvrés & Tolérances */}
               <Card className="shadow-xs border border-line bg-surface">
@@ -3257,10 +3294,11 @@ function AdminSettings({ user }: { user: User }) {
                 </CardContent>
               </Card>
             </div>
+            </fieldset>
           )}
 
           {/* Barre Flottante d'Enregistrement (Floating Action Dock façon Linear / Apple) */}
-          {hasUnsavedSettings && (
+          {hasUnsavedSettings && canEditSettings && (
             <div className="sticky bottom-4 z-20 mx-auto max-w-xl rounded-2xl border border-amber/40 bg-surface/95 backdrop-blur-xl p-3 shadow-xl transition-all animate-in fade-in slide-in-from-bottom-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 text-xs font-semibold text-ink pl-1">
                 <span className="h-2.5 w-2.5 rounded-full bg-amber animate-pulse shrink-0" />
@@ -3288,7 +3326,7 @@ function AdminSettings({ user }: { user: User }) {
               </div>
             </div>
           )}
-        </TabsContent>
+        </TabsContent>}
 
         {/* =========================================================================
             TAB 4: SECURITE & PROFIL
@@ -3416,7 +3454,7 @@ function AdminSettings({ user }: { user: User }) {
         {/* =========================================================================
             TAB 5: SAUVEGARDES & SYSTEME
         ========================================================================= */}
-        <TabsContent value="sauvegardes" className="space-y-6">
+        {canUseBackups && <TabsContent value="sauvegardes" className="space-y-6">
           {/* Quick Metrics for Backups */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Card className="p-4 shadow-card">
@@ -3682,7 +3720,7 @@ function AdminSettings({ user }: { user: User }) {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
 
       {/* =========================================================================

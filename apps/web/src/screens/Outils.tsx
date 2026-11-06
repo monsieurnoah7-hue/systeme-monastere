@@ -204,6 +204,9 @@ export function Outils({
   const canLoan = hasPerm('loans.create') || (!permissions && user.role === 'magasinier');
   const canReturn = hasPerm('loans.return') || (!permissions && user.role === 'magasinier');
   const canManage = canCreate || canEdit;
+  const canViewTools = hasPerm('tools.view');
+  const canViewLoans = hasPerm('loans.view');
+  const initialTab: 'tools' | 'loans' | 'fleet' = canViewTools ? 'tools' : canViewLoans ? 'loans' : 'tools';
 
   const canViewFinancial = hasPerm('financial.view');
   const canViewReports = hasPerm('reports.view') || canViewFinancial;
@@ -225,14 +228,21 @@ export function Outils({
 
   const [newOpen, setNewOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'tools' | 'loans' | 'fleet'>('tools');
+  const [activeTab, setActiveTab] = useState<'tools' | 'loans' | 'fleet'>(initialTab);
   const [fleetSummary, setFleetSummary] = useState<FleetSummary | null>(null);
   const [activeLoans, setActiveLoans] = useState<ToolLoan[]>([]);
   const [loansSearch, setLoansSearch] = useState('');
 
   const loadFleet = useCallback(() => {
-    fetchFleetSummary().then(setFleetSummary).catch(() => {});
-  }, []);
+    if (canViewTools) fetchFleetSummary().then(setFleetSummary).catch(() => {});
+  }, [canViewTools]);
+
+  useEffect(() => {
+    if (!canViewTools && !canViewLoans) return;
+    if (activeTab === 'tools' && !canViewTools) setActiveTab('loans');
+    else if (activeTab === 'loans' && !canViewLoans) setActiveTab('tools');
+    else if (activeTab === 'fleet' && !canViewTools) setActiveTab(canViewLoans ? 'loans' : 'tools');
+  }, [activeTab, canViewTools, canViewLoans]);
 
   useEffect(() => {
     loadFleet();
@@ -323,6 +333,11 @@ export function Outils({
       if (value) params.set(key, value);
     });
     let cancelled = false;
+    if (!canViewTools) {
+      setTools([]);
+      setLoading(false);
+      return () => { cancelled = true; };
+    }
     if (tools.length === 0) setLoading(true);
     api<{ tools: Tool[]; facets: Facets }>(`/api/tools?${params.toString()}`)
       .then((res) => {
@@ -340,7 +355,7 @@ export function Outils({
     return () => {
       cancelled = true;
     };
-  }, [filters, reload, tools.length]);
+  }, [filters, reload, tools.length, canViewTools]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -391,6 +406,10 @@ export function Outils({
 
   useEffect(() => {
     let cancelled = false;
+    if (!canViewLoans) {
+      setActiveLoans([]);
+      return () => { cancelled = true; };
+    }
     api<{ loans: ToolLoan[] }>('/api/loans?status=out')
       .then((res) => {
         if (!cancelled) setActiveLoans(res.loans || []);
@@ -401,7 +420,7 @@ export function Outils({
     return () => {
       cancelled = true;
     };
-  }, [reload]);
+  }, [reload, canViewLoans]);
 
   useEffect(() => {
     if (!scan) return;
@@ -888,7 +907,7 @@ export function Outils({
               {/* Left: Radix Navigation Tabs with Live Badges */}
               <div className="overflow-x-auto overflow-y-hidden no-scrollbar shrink-0">
                 <TabsList variant="line" className="flex gap-1 sm:gap-2.5 bg-transparent p-0 w-max">
-                  <TabsTrigger
+                  {canViewTools && <TabsTrigger
                     value="tools"
                     className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
                   >
@@ -897,9 +916,9 @@ export function Outils({
                     <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
                       {tools.length}
                     </span>
-                  </TabsTrigger>
+                  </TabsTrigger>}
 
-                  <TabsTrigger
+                  {canViewLoans && <TabsTrigger
                     value="loans"
                     className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
                   >
@@ -910,9 +929,9 @@ export function Outils({
                         {activeLoans.length}
                       </span>
                     )}
-                  </TabsTrigger>
+                  </TabsTrigger>}
 
-                  <TabsTrigger
+                  {canViewTools && <TabsTrigger
                     value="fleet"
                     className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
                   >
@@ -927,7 +946,7 @@ export function Outils({
                         {fleetSummary.vehicles_count + fleetSummary.generators_count}
                       </span>
                     ) : null}
-                  </TabsTrigger>
+                  </TabsTrigger>}
                 </TabsList>
               </div>
 
@@ -1234,7 +1253,7 @@ export function Outils({
         </div>
 
         {/* Tab 3: Flotte & Groupes */}
-        <TabsContent value="fleet" className="space-y-4">
+        {canViewTools && <TabsContent value="fleet" className="space-y-4">
           <FleetView
             summary={fleetSummary}
             canManage={canManage}
@@ -1243,10 +1262,10 @@ export function Outils({
               setReload((v) => v + 1);
             }}
           />
-        </TabsContent>
+        </TabsContent>}
 
         {/* Tab 2: Prêts & Sorties en cours */}
-        <TabsContent value="loans" className="space-y-3">
+        {canViewLoans && <TabsContent value="loans" className="space-y-3">
           {/* Active Loans Search & Overview */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-xl border border-line bg-surface shadow-xs">
             <div className="relative w-full sm:max-w-md">
@@ -1376,10 +1395,10 @@ export function Outils({
               </div>
             </div>
           )}
-        </TabsContent>
+        </TabsContent>}
 
         {/* Tab 1: Matériel & Machines */}
-        <TabsContent value="tools" className="space-y-4">
+        {canViewTools && <TabsContent value="tools" className="space-y-4">
           {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2.5">
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
@@ -2157,7 +2176,7 @@ export function Outils({
           </div>
         </>
       )}
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
 
       {/* Detail Drawer */}

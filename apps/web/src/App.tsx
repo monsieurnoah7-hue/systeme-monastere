@@ -66,7 +66,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   useEffect(() => {
     let cancelled = false;
     function fetchPermissions() {
-      api<{ role: string; superAdmin: boolean; permissions: Record<string, boolean> }>('/api/permissions/me')
+      api<{ role: string; superAdmin: boolean; permissions: Record<string, boolean> }>('/api/permissions/me', { bypassCache: true })
         .then((res) => {
           if (!cancelled && res?.permissions) setPermissions(res.permissions);
         })
@@ -75,10 +75,19 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     fetchPermissions();
 
     const onPermsUpdated = () => fetchPermissions();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchPermissions();
+    };
+    const refreshTimer = window.setInterval(fetchPermissions, 30_000);
     window.addEventListener('permissions:updated', onPermsUpdated);
+    window.addEventListener('focus', onPermsUpdated);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
       window.removeEventListener('permissions:updated', onPermsUpdated);
+      window.removeEventListener('focus', onPermsUpdated);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(refreshTimer);
     };
   }, [user.role]);
 
@@ -265,7 +274,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
             )}
             {visitedViews.has('parametres') && (
               <div className={activeView === 'parametres' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'parametres'}>
-                <Parametres user={user} />
+                <Parametres user={user} permissions={permissions} />
               </div>
             )}
           </Suspense>

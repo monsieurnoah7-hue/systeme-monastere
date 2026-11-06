@@ -288,20 +288,14 @@ stockRoutes.post('/refs/:id/photo', requirePerm('stock.photo_edit'), async (c) =
 
 stockRoutes.post(
   '/movements',
-  requirePerm('stock.move'),
   async (c) => {
     const body = movementBody.safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: 'Mouvement invalide (type, quantité et référence requis).' }, 400);
     const data = body.data;
     const role = c.get('auth')?.user.role;
-    if (data.move_type === 'correction' && role !== 'magasinier' && role !== 'direction') {
-      return c.json({ error: 'Seul le magasinier ou la direction peut corriger le stock.' }, 403);
-    }
-    if (data.move_type === 'transfer' && role !== 'magasinier' && role !== 'direction') {
-      return c.json({ error: 'Seul le magasinier ou la direction peut effectuer un transfert inter-dépôts.' }, 403);
-    }
-    if (data.move_type !== 'out' && role === 'chef_atelier') {
-      return c.json({ error: 'Le chef d’atelier ne peut enregistrer qu’une sortie de matériel.' }, 403);
+    const requiredPermission = data.move_type === 'correction' ? 'stock.correct' : 'stock.move';
+    if (!role || !(await hasPermission(role, requiredPermission))) {
+      return c.json({ error: 'Droit insuffisant pour ce type de mouvement de stock.' }, 403);
     }
     if (data.move_type === 'correction' && !data.note?.trim()) {
       return c.json({ error: 'Le motif est obligatoire pour une régularisation d’inventaire.' }, 400);
@@ -689,7 +683,7 @@ const batchTransferRefsSchema = z.object({
   magasin_id: z.string().nullable().optional(),
 });
 
-stockRoutes.post('/refs/batch-transfer', requirePerm('stock.edit_ref'), async (c) => {
+stockRoutes.post('/refs/batch-transfer', requirePerm('stock.move'), async (c) => {
   const body = batchTransferRefsSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) return c.json({ error: 'Données de transfert invalides.' }, 400);
 

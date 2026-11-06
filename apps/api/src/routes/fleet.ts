@@ -232,7 +232,7 @@ async function ensureFleetBootstrap() {
 // -------------------------------------------------------------------------
 // 1. Vue Synthèse & Compteurs d'alertes
 // -------------------------------------------------------------------------
-fleetRoutes.get('/summary', requireAuth, async (c) => {
+fleetRoutes.get('/summary', requireAuth, requirePerm('tools.view'), async (c) => {
   await ensureFleetBootstrap();
   const db = getDb();
 
@@ -310,7 +310,7 @@ const vehicleBody = z.object({
   notes: z.string().nullable().optional(),
 });
 
-fleetRoutes.get('/vehicles', requireAuth, async (c) => {
+fleetRoutes.get('/vehicles', requireAuth, requirePerm('tools.view'), async (c) => {
   await ensureFleetBootstrap();
   const db = getDb();
   const rows = await db.query<VehicleRow>(`
@@ -519,7 +519,7 @@ const generatorPatchBody = generatorBody.partial().extend({
   fuel_level_pct: numberInput(0).optional(),
 });
 
-fleetRoutes.get('/generators', requireAuth, async (c) => {
+fleetRoutes.get('/generators', requireAuth, requirePerm('tools.view'), async (c) => {
   await ensureFleetBootstrap();
   const db = getDb();
   const rows = await db.query<GeneratorRow>(`

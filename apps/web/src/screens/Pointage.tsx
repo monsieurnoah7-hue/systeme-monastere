@@ -294,6 +294,7 @@ export function Pointage({
   const isSuper = user?.role === 'direction';
   const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
   const canExportReports = !user || hasPerm('reports.export') || (!permissions && (user.role === 'direction' || user.role === 'chef_atelier'));
+  const canCorrectAttendance = Boolean(user && hasPerm('attendance.correct'));
 
   const [activeMainTab, setActiveMainTab] = useState<'timesheets' | 'kiosk'>(() => {
     if (typeof window !== 'undefined') {
@@ -316,6 +317,16 @@ export function Pointage({
 
   // Timesheets Overview state
   const [attendanceDetail, setAttendanceDetail] = useState<NonNullable<DashboardType['das04']>['detail']>([]);
+  const [attendanceDate, setAttendanceDate] = useState('');
+  const [correctionTarget, setCorrectionTarget] = useState<{
+    employeeId: string;
+    employeeName: string;
+    punchType: 'in' | 'out';
+  } | null>(null);
+  const [correctionTime, setCorrectionTime] = useState('');
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
+  const [correctionBusy, setCorrectionBusy] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tsLoading, setTsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -379,19 +390,57 @@ export function Pointage({
   const loadTimesheets = useCallback(() => {
     setTsLoading(true);
     Promise.all([
-      api<DashboardType>('/api/dashboard').catch(() => null),
+      api<{ date: string; detail: NonNullable<DashboardType['das04']>['detail'] }>('/api/attendance').catch(() => null),
       api<{ employees: Employee[] }>('/api/employees').catch(() => ({ employees: [] })),
       api<{ terminals: Terminal[] }>('/api/kiosk/terminals').catch(() => ({ terminals: [] })),
     ])
-      .then(([dashRes, empRes, termRes]) => {
-        if (dashRes?.das04?.detail) {
-          setAttendanceDetail(dashRes.das04.detail);
+      .then(([attendanceRes, empRes, termRes]) => {
+        if (attendanceRes) {
+          setAttendanceDetail(attendanceRes.detail);
+          setAttendanceDate(attendanceRes.date);
         }
         setEmployees(empRes.employees);
         setTerminals(termRes.terminals);
       })
       .finally(() => setTsLoading(false));
   }, []);
+
+  function openAttendanceCorrection(
+    row: NonNullable<DashboardType['das04']>['detail'][number],
+    punchType: 'in' | 'out',
+  ) {
+    const currentTime = punchType === 'in' ? row.inAt : row.outAt;
+    if (!currentTime) return;
+    setCorrectionTarget({ employeeId: row.id, employeeName: row.fullName, punchType });
+    setCorrectionTime(currentTime);
+    setCorrectionReason('');
+    setCorrectionError(null);
+  }
+
+  async function saveAttendanceCorrection() {
+    if (!correctionTarget || !attendanceDate) return;
+    setCorrectionBusy(true);
+    setCorrectionError(null);
+    try {
+      await api('/api/attendance/correction', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          employee_id: correctionTarget.employeeId,
+          punch_date: attendanceDate,
+          punch_type: correctionTarget.punchType,
+          time: correctionTime,
+          reason: correctionReason.trim(),
+        }),
+      });
+      setCorrectionTarget(null);
+      window.dispatchEvent(new CustomEvent('mf-refresh-data'));
+      loadTimesheets();
+    } catch (err) {
+      setCorrectionError(err instanceof Error ? err.message : 'La correction n’a pas pu être enregistrée.');
+    } finally {
+      setCorrectionBusy(false);
+    }
+  }
 
   useEffect(() => {
     loadTimesheets();
@@ -900,7 +949,7 @@ export function Pointage({
           {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
           <div className={cx('overflow-hidden rounded-xl border border-line bg-surface shadow-card', viewMode === 'cards' && 'hidden sm:block')}>
             <div className="overflow-x-auto scroll-thin touch-pan-y touch-pan-x overscroll-x-contain">
-              <table className="w-full text-left sheet-grid min-w-[760px] table-rhythm">
+              <table className={cx('w-full text-left sheet-grid table-rhythm', canCorrectAttendance ? 'min-w-[860px]' : 'min-w-[760px]')}>
                 <thead>
                   <tr>
                     <th className="sheet-th sticky-col min-w-[190px] col-lead">Travailleur / ID</th>
@@ -910,6 +959,7 @@ export function Pointage({
                     <th className="sheet-th w-32 text-center">Durée travaillée</th>
                     <th className="sheet-th w-28 text-center">Pause</th>
                     <th className="sheet-th w-28 text-center">Tolérance / Écart</th>
+                    {canCorrectAttendance && <th className="sheet-th w-36 text-center">Corriger</th>}
                   </tr>
                 </thead>
                 <tbody className="text-xs divide-y divide-line">
@@ -989,13 +1039,21 @@ export function Pointage({
                             <span className="text-ink-faint">—</span>
                           )}
                         </td>
+                        {canCorrectAttendance && (
+                          <td className="sheet-cell text-center">
+                            <div className="flex justify-center gap-1">
+                              {row.inAt && <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => openAttendanceCorrection(row, 'in')}>Arrivée</Button>}
+                              {row.outAt && <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px]" onClick={() => openAttendanceCorrection(row, 'out')}>Départ</Button>}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
 
                   {filteredAttendance.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-xs text-ink-faint">
+                      <td colSpan={canCorrectAttendance ? 8 : 7} className="py-12 text-center text-xs text-ink-faint">
                         Aucun pointage ne correspond aux critères de filtre.
                       </td>
                     </tr>
@@ -1022,6 +1080,7 @@ export function Pointage({
                     <td className="sheet-cell text-center font-mono tabular-nums text-amber">
                       {totalLate} retards
                     </td>
+                    {canCorrectAttendance && <td className="sheet-cell" />}
                   </tr>
                 </tfoot>
               </table>
@@ -1084,6 +1143,12 @@ export function Pointage({
                     </span>
                   </div>
                 </div>
+                {canCorrectAttendance && (row.inAt || row.outAt) && (
+                  <div className="mt-2 flex justify-end gap-2 border-t border-line/60 pt-2">
+                    {row.inAt && <Button size="sm" variant="ghost" onClick={() => openAttendanceCorrection(row, 'in')}>Corriger l’arrivée</Button>}
+                    {row.outAt && <Button size="sm" variant="ghost" onClick={() => openAttendanceCorrection(row, 'out')}>Corriger le départ</Button>}
+                  </div>
+                )}
               </Card>
             ))}
           </div>
@@ -1770,6 +1835,52 @@ export function Pointage({
           </Modal>
         </div>
       ) : null}
+      <Modal
+        open={Boolean(correctionTarget)}
+        title={correctionTarget ? `Corriger ${correctionTarget.punchType === 'in' ? 'l’arrivée' : 'le départ'}` : 'Corriger un pointage'}
+        onClose={() => { if (!correctionBusy) setCorrectionTarget(null); }}
+        footer={
+          <>
+            <Button variant="ghost" disabled={correctionBusy} onClick={() => setCorrectionTarget(null)}>Annuler</Button>
+            <Button
+              variant="primary"
+              disabled={correctionBusy || !correctionTime || correctionReason.trim().length < 5}
+              onClick={() => void saveAttendanceCorrection()}
+            >
+              {correctionBusy ? <Spinner /> : 'Enregistrer la correction'}
+            </Button>
+          </>
+        }
+      >
+        {correctionTarget && (
+          <div className="space-y-4">
+            <p className="text-sm font-semibold text-ink">{correctionTarget.employeeName}</p>
+            <p className="text-xs text-ink-soft">Date : {attendanceDate} · Heure actuelle : {correctionTime}</p>
+            {correctionError ? <Banner tone="error">{correctionError}</Banner> : null}
+            <label className="block text-xs font-medium text-ink-soft">
+              Heure corrigée
+              <input
+                type="time"
+                value={correctionTime}
+                onChange={(event) => setCorrectionTime(event.target.value)}
+                className="mt-1.5 h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-medium text-ink-soft">
+              Motif obligatoire
+              <textarea
+                value={correctionReason}
+                onChange={(event) => setCorrectionReason(event.target.value)}
+                rows={3}
+                minLength={5}
+                placeholder="Ex. Heure vérifiée sur le registre papier après panne de la borne."
+                className="mt-1.5 w-full rounded-btn border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-amber focus:outline-none"
+              />
+            </label>
+            <p className="text-[11px] text-ink-faint">L’ancienne heure et le motif seront conservés dans l’historique d’audit.</p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

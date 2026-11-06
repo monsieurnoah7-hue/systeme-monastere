@@ -27,7 +27,6 @@ function isPersistable(path: string): boolean {
     path.startsWith('/api/tools') ||
     path.startsWith('/api/stock') ||
     path.startsWith('/api/employees') ||
-    path.startsWith('/api/permissions') ||
     path.startsWith('/api/settings') ||
     path.startsWith('/api/dashboard') ||
     path.startsWith('/api/me')
@@ -123,6 +122,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     } else if (path.includes('/employees') || path.includes('/leaves') || path.includes('/attendance')) {
       clearApiCache('/api/employees');
       clearApiCache('/api/leaves');
+      clearApiCache('/api/attendance');
       clearApiCache('/api/dashboard');
     } else if (path.includes('/projects')) {
       clearApiCache('/api/projects');
@@ -494,6 +494,7 @@ export type StockMovement = {
 
 export type Dashboard = {
   role: Role;
+  date: string;
   projectsAccess?: boolean;
   generatedAt: string;
   das01: { total: number; disponible: number; en_pret: number; maintenance: number; manquant: number; reforme: number };

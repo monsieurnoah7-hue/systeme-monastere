@@ -49,6 +49,29 @@ export const PERMISSION_ACTIONS = [
 
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 
+/** A user allowed to perform an operation needs read access to its module. */
+export const PERMISSION_VIEW_DEPENDENCIES: Partial<Record<PermissionAction, readonly PermissionAction[]>> = {
+  'tools.view': ['tools.create', 'tools.edit', 'tools.delete', 'tools.edit_status', 'tools.photo_edit'],
+  'loans.view': ['loans.create', 'loans.return'],
+  'magasins.view': ['magasins.manage'],
+  'stock.view': ['stock.create_ref', 'stock.edit_ref', 'stock.delete_ref', 'stock.photo_edit', 'stock.move', 'stock.correct'],
+  'attendance.view': ['attendance.correct'],
+  'leaves.view': ['leaves.manage'],
+  'employees.view': ['employees.create', 'employees.edit', 'employees.photo_edit', 'employees.print_badge'],
+  'projects.view': ['projects.create', 'projects.edit', 'projects.delete'],
+  'reports.view': ['reports.export'],
+  'settings.view': ['settings.edit'],
+  'users.view': ['users.manage'],
+};
+
+export function applyPermissionViewDependencies(permissions: Record<string, boolean>): Record<string, boolean> {
+  const effective = { ...permissions };
+  for (const [view, actions] of Object.entries(PERMISSION_VIEW_DEPENDENCIES)) {
+    if (actions.some((action) => effective[action])) effective[view] = true;
+  }
+  return effective;
+}
+
 export const PERMISSION_LABELS: Record<PermissionAction, string> = {
   'tools.view': 'Consulter les outils',
   'tools.create': 'Créer des outils',
@@ -157,8 +180,12 @@ export const PERMISSION_GROUPS: { label: string; actions: PermissionAction[] }[]
     actions: ['stock.view', 'stock.create_ref', 'stock.edit_ref', 'stock.delete_ref', 'stock.photo_edit', 'stock.move', 'stock.correct'],
   },
   {
-    label: 'Présences & congés',
-    actions: ['attendance.view', 'attendance.correct', 'leaves.view', 'leaves.manage'],
+    label: 'Pointage & kiosque',
+    actions: ['attendance.view', 'attendance.correct'],
+  },
+  {
+    label: 'Congés & permissions',
+    actions: ['leaves.view', 'leaves.manage'],
   },
   {
     label: 'Travailleurs',

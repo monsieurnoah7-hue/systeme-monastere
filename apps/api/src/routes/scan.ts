@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requirePerm } from '../middleware/permissions.js';
+import { hasPermission, requirePerm } from '../middleware/permissions.js';
 
 export const scanRoutes = new Hono();
 
@@ -21,6 +21,10 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
   if (!parsed.success) return c.json({ error: 'Code requis.' }, 400);
   const rawCode = parsed.data.q.trim();
   const upper = rawCode.toUpperCase();
+  const role = c.get('auth')?.user.role;
+  const canRead = async (permission: 'tools.view' | 'stock.view' | 'employees.view' | 'terminals.manage') =>
+    Boolean(role && await hasPermission(role, permission));
+  const forbidden = () => c.json({ error: 'Votre droit de scan ne couvre pas la consultation de cet élément.' }, 403);
 
   let toolId = stripPrefix(rawCode, 'montfebe:tool:');
   let badgeToken = stripPrefix(rawCode, 'montfebe:badge:');
@@ -36,6 +40,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
   const db = getDb();
 
   if (kitId) {
+    if (!await canRead('employees.view')) return forbidden();
     const kit = await db.one(`
       SELECT k.*, e.full_name AS employee_name, e.job_title AS employee_job, e.photo_path AS employee_photo,
              m.name AS source_magasin_name
@@ -51,6 +56,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
   }
 
   if (toolId) {
+    if (!await canRead('tools.view')) return forbidden();
     const tool = await db.one(
       `SELECT t.*,
               COALESCE(t.total_qty, 1)::int AS total_qty,
@@ -72,6 +78,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
   }
 
   if (badgeToken) {
+    if (!await canRead('employees.view')) return forbidden();
     const employee = await db.one(
       `SELECT id, full_name, job_title, photo_path, active FROM employees WHERE badge_token = $1`,
       [badgeToken],
@@ -80,6 +87,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
   }
 
   if (stockId && /^\d+$/.test(stockId)) {
+    if (!await canRead('stock.view')) return forbidden();
     const ref = await db.one(
       `SELECT r.*, (r.initial_qty + COALESCE(m.qty, 0))::text AS qty
          FROM stock_refs r
@@ -111,16 +119,25 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
       WHERE t.id = $1`,
     [upper],
   );
-  if (tool) return c.json({ kind: 'tool', tool, code: rawCode });
+  if (tool) {
+    if (!await canRead('tools.view')) return forbidden();
+    return c.json({ kind: 'tool', tool, code: rawCode });
+  }
 
   const employee = await db.one(
     `SELECT id, full_name, job_title, photo_path, active FROM employees WHERE id = $1 OR badge_token = $1`,
     [upper],
   );
-  if (employee) return c.json({ kind: 'employee', employee, code: rawCode, via: 'id' });
+  if (employee) {
+    if (!await canRead('employees.view')) return forbidden();
+    return c.json({ kind: 'employee', employee, code: rawCode, via: 'id' });
+  }
 
   const terminal = await db.one(`SELECT id, name FROM terminals WHERE id = $1 AND active = true`, [upper]);
-  if (terminal) return c.json({ kind: 'terminal', terminal, code: rawCode });
+  if (terminal) {
+    if (!await canRead('terminals.manage')) return forbidden();
+    return c.json({ kind: 'terminal', terminal, code: rawCode });
+  }
 
   // Direct kit match by id or code
   const directKit = await db.one(`
@@ -132,6 +149,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
      WHERE k.id = $1 OR k.code = $1
   `, [upper]);
   if (directKit) {
+    if (!await canRead('employees.view')) return forbidden();
     const items = await db.query(`SELECT * FROM etabli_kit_items WHERE kit_id = $1 ORDER BY item_num ASC`, [directKit.id]);
     return c.json({ kind: 'etabli_kit', kit: directKit, items, code: rawCode });
   }
@@ -146,6 +164,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
      WHERE i.tool_code = $1
   `, [upper]);
   if (kitItem) {
+    if (!await canRead('employees.view')) return forbidden();
     return c.json({ kind: 'etabli_kit_item', item: kitItem, code: rawCode });
   }
 

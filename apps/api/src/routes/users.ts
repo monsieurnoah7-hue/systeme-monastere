@@ -59,6 +59,9 @@ usersRoutes.post('/', requirePerm('users.manage'), async (c) => {
   if (!body.success) return c.json({ error: body.error.issues[0]?.message ?? 'Compte invalide.' }, 400);
   const data = body.data;
   const db = getDb();
+  if (c.get('auth')?.user.role !== 'direction' && data.role === 'direction') {
+    return c.json({ error: 'Seule la Direction peut créer un autre compte administrateur.' }, 403);
+  }
 
   const existing = await db.one('SELECT id FROM users WHERE login = $1', [data.login]);
   if (existing) return c.json({ error: `L’identifiant « ${data.login} » est déjà utilisé.` }, 409);
@@ -99,6 +102,9 @@ usersRoutes.patch('/:id', requirePerm('users.manage'), async (c) => {
   const before = await db.one<UserListRow & { password_hash: string }>('SELECT * FROM users WHERE id = $1', [id]);
   if (!before) return c.json({ error: 'Compte introuvable.' }, 404);
   const patch = body.data;
+  if (c.get('auth')?.user.role !== 'direction' && (before.role === 'direction' || patch.role === 'direction')) {
+    return c.json({ error: 'Seule la Direction peut gérer les comptes administrateurs.' }, 403);
+  }
 
   if (patch.active === false && before.id === actorId(c)) {
     return c.json({ error: 'Vous ne pouvez pas désactiver votre propre compte.' }, 409);

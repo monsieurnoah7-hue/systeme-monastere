@@ -289,7 +289,7 @@ export function ProjectsView({
             variant="primary"
             icon={<Plus size={14} />}
             onClick={openCreate}
-            className="!h-full !min-h-[58px] w-auto !bg-ink !text-paper hover:!bg-surface-3 hover:!text-ink lg:!h-8 lg:!min-h-0 lg:w-auto"
+            className="!h-full !min-h-[48px] w-auto !bg-ink !text-paper hover:!bg-surface-3 hover:!text-ink lg:!h-8 lg:!min-h-0 lg:w-auto"
           >
             <span className="sm:hidden">Nouveau</span>
             <span className="hidden sm:inline">Nouvelle commande / projet</span>

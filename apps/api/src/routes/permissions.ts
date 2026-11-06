@@ -8,20 +8,21 @@ import {
   PERMISSION_GROUPS,
   PERMISSION_KINDS,
   PERMISSION_LABELS,
+  applyPermissionViewDependencies,
   ROLE_ARCHETYPES,
   buildMatrix,
   isSuperAdmin,
   type PermissionAction,
 } from '../lib/permissions.js';
-import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth.js';
-import { invalidatePermissionCache } from '../middleware/permissions.js';
+import { actorId, actorName, requireAuth } from '../middleware/auth.js';
+import { invalidatePermissionCache, requirePerm } from '../middleware/permissions.js';
 
 export const permissionsRoutes = new Hono();
 
 permissionsRoutes.use('*', requireAuth);
 
 // Liste unifiée des permissions & modules
-permissionsRoutes.get('/', requireRole('direction'), async (c) => {
+permissionsRoutes.get('/', requirePerm('permissions.manage'), async (c) => {
   const db = getDb();
   const dbRoles = await db.query<{ id: string; name: string; description: string | null; is_system: boolean }>(
     `SELECT id, name, description, is_system 
@@ -91,6 +92,15 @@ permissionsRoutes.get('/', requireRole('direction'), async (c) => {
       (matrix as any)[ca.action] = row;
     }
   }
+  // Rendre visibles dans la matrice les droits de consultation nécessaires à
+  // toute action accordée (ex. Modifier un outil implique aussi de le consulter).
+  for (const roleId of roleIds) {
+    const rolePermissions = Object.fromEntries(allActionKeys.map((action) => [action, Boolean((matrix as any)[action]?.[roleId]) ]));
+    const effective = applyPermissionViewDependencies(rolePermissions);
+    for (const action of allActionKeys) {
+      if ((matrix as any)[action]) (matrix as any)[action][roleId] = Boolean(effective[action]);
+    }
+  }
 
   return c.json({
     actions: allActions,
@@ -108,7 +118,7 @@ const createActionSchema = z.object({
 });
 
 // Création d'une nouvelle permission / module par le Super-Admin
-permissionsRoutes.post('/actions', requireRole('direction'), async (c) => {
+permissionsRoutes.post('/actions', requirePerm('permissions.manage'), async (c) => {
   const body = createActionSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) {
     return c.json({ error: body.error.issues[0]?.message ?? 'Paramètres d’action invalides.' }, 400);
@@ -174,7 +184,7 @@ permissionsRoutes.get('/roles', async (c) => {
   return c.json({ roles });
 });
 
-permissionsRoutes.get('/archetypes', requireRole('direction'), async (c) => {
+permissionsRoutes.get('/archetypes', requirePerm('permissions.manage'), async (c) => {
   return c.json({
     archetypes: Object.entries(ROLE_ARCHETYPES).map(([id, arch]) => ({
       id,
@@ -195,7 +205,7 @@ const createRoleSchema = z.object({
   permissions: z.array(z.string()).optional(),
 });
 
-permissionsRoutes.post('/roles', requireRole('direction'), async (c) => {
+permissionsRoutes.post('/roles', requirePerm('permissions.manage'), async (c) => {
   const body = createRoleSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) {
     return c.json({ error: body.error.issues[0]?.message ?? 'Données du rôle invalides.' }, 400);
@@ -287,7 +297,7 @@ const updateRoleSchema = z.object({
   description: z.string().max(250).optional().nullable(),
 });
 
-permissionsRoutes.put('/roles/:id', requireRole('direction'), async (c) => {
+permissionsRoutes.put('/roles/:id', requirePerm('permissions.manage'), async (c) => {
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'Identifiant requis.' }, 400);
   const body = updateRoleSchema.safeParse(await c.req.json().catch(() => ({})));
@@ -329,7 +339,7 @@ permissionsRoutes.put('/roles/:id', requireRole('direction'), async (c) => {
   return c.json({ ok: true });
 });
 
-permissionsRoutes.delete('/roles/:id', requireRole('direction'), async (c) => {
+permissionsRoutes.delete('/roles/:id', requirePerm('permissions.manage'), async (c) => {
   const id = c.req.param('id');
   if (!id) return c.json({ error: 'Identifiant requis.' }, 400);
   const db = getDb();
@@ -395,7 +405,7 @@ permissionsRoutes.get('/me', async (c) => {
   if (!rowsMap.has('profile.photo_edit_self')) {
     permissions['profile.photo_edit_self'] = true;
   }
-  return c.json({ role, superAdmin: false, permissions });
+  return c.json({ role, superAdmin: false, permissions: applyPermissionViewDependencies(permissions) });
 });
 
 const saveBody = z.object({
@@ -405,7 +415,7 @@ const saveBody = z.object({
   ),
 });
 
-permissionsRoutes.put('/', requireRole('direction'), async (c) => {
+permissionsRoutes.put('/', requirePerm('permissions.manage'), async (c) => {
   const body = saveBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) return c.json({ error: 'Matrice de permissions invalide.' }, 400);
   const db = getDb();
@@ -452,5 +462,12 @@ permissionsRoutes.put('/', requireRole('direction'), async (c) => {
     actorId: actorId(c),
     actorName: actorName(c),
   });
-  return c.json({ ok: true, matrix: buildMatrix(after, validRoleIds) });
+  const matrix = buildMatrix(after, validRoleIds);
+  for (const roleId of validRoleIds) {
+    const effective = applyPermissionViewDependencies(
+      Object.fromEntries(PERMISSION_ACTIONS.map((action) => [action, matrix[action]?.[roleId] ?? false])),
+    );
+    for (const action of PERMISSION_ACTIONS) matrix[action][roleId] = Boolean(effective[action]);
+  }
+  return c.json({ ok: true, matrix });
 });

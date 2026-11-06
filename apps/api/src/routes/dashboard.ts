@@ -328,6 +328,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
 
   return c.json({
     role,
+    date: today,
     projectsAccess: canViewProjects,
     generatedAt: new Date().toISOString(),
     das01: tools,

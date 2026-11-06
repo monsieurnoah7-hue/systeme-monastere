@@ -2,7 +2,6 @@ import { type ReactNode, useEffect, useState } from 'react';
 import {
   Briefcase,
   Clock,
-  Fingerprint,
   Gauge,
   LogOut,
   Menu,
@@ -66,7 +65,12 @@ export function computeAllowedViews(
     if (permissions['dashboard.view']) {
       views.push('dashboard');
     }
-    if (permissions['projects.view']) {
+    if (
+      permissions['projects.view'] ||
+      permissions['projects.create'] ||
+      permissions['projects.edit'] ||
+      permissions['projects.delete']
+    ) {
       views.push('projets');
     }
 
@@ -76,7 +80,9 @@ export function computeAllowedViews(
       permissions['loans.view'] ||
       permissions['tools.create'] ||
       permissions['tools.edit'] ||
+      permissions['tools.delete'] ||
       permissions['tools.edit_status'] ||
+      permissions['tools.photo_edit'] ||
       permissions['loans.create'] ||
       permissions['loans.return']
     ) {
@@ -89,6 +95,8 @@ export function computeAllowedViews(
       permissions['stock.move'] ||
       permissions['stock.create_ref'] ||
       permissions['stock.edit_ref'] ||
+      permissions['stock.delete_ref'] ||
+      permissions['stock.photo_edit'] ||
       permissions['stock.correct']
     ) {
       views.push('stock');
@@ -105,7 +113,9 @@ export function computeAllowedViews(
       permissions['employees.create'] ||
       permissions['employees.edit'] ||
       permissions['employees.photo_edit'] ||
-      permissions['employees.print_badge']
+      permissions['employees.print_badge'] ||
+      permissions['leaves.view'] ||
+      permissions['leaves.manage']
     ) {
       views.push('employes');
     }
@@ -321,18 +331,18 @@ export function Shell({
         ========================================================================= */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Mobile Top Header */}
-          <header className="no-print sticky top-0 z-20 flex items-center justify-between border-b border-line bg-surface/95 px-4 py-2.5 backdrop-blur lg:hidden">
-            <div className="flex items-center gap-2.5">
+          <header className="no-print sticky top-0 z-20 flex min-h-14 items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 py-2.5 backdrop-blur sm:px-4 lg:hidden">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
               <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-charcoal border border-line p-1 shadow-xs">
                 <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-5 w-5 object-contain" />
               </div>
-              <div className="leading-tight">
-                <span className="text-xs font-bold text-ink">CFTM Bénédictins Mont Fébé</span>
-                <span className="block text-[10px] text-ink-soft">{ROLE_LABEL[user.role]}</span>
+              <div className="min-w-0 leading-tight">
+                <span className="block max-w-[min(48vw,15rem)] truncate text-xs font-bold text-ink sm:max-w-[16rem]">CFTM Bénédictins Mont Fébé</span>
+                <span className="block truncate text-[10px] text-ink-soft">{ROLE_LABEL[user.role]}</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
               {!isOnline && (
                 <span className="flex items-center gap-1 rounded-full bg-amber-wash border border-amber/30 px-2 py-0.5 text-[10px] font-medium text-amber">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber" />
@@ -468,8 +478,8 @@ export function Shell({
           {/* =========================================================================
               MOBILE BOTTOM NAVIGATION BAR
           ========================================================================= */}
-          <nav className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/98 shadow-pop backdrop-blur lg:hidden pb-[env(safe-area-inset-bottom)]">
-            <div className="relative mx-auto flex max-w-md items-center justify-around px-2 h-16">
+          <nav aria-label="Navigation principale" className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/98 shadow-pop backdrop-blur lg:hidden pb-[env(safe-area-inset-bottom)]">
+            <div className="relative mx-auto flex h-16 max-w-xl items-center justify-around px-2">
               {mobileNav.slice(0, 2).map((item) => {
                 const Icon = item.icon;
                 const isActive = item.id === view;
@@ -488,20 +498,17 @@ export function Shell({
                 );
               })}
 
-              {/* Central Floating Punch Trigger Button (Mobile-First Hero Action) */}
-              <div className="flex flex-1 items-center justify-center">
+              {/* Le raccourci de scan n’apparaît que si le rôle y est autorisé. */}
+              {onScan && <div className="flex flex-1 items-center justify-center">
                 <button
-                  onClick={() => {
-                    if (onScan) onScan();
-                    else onView('pointage');
-                  }}
+                  onClick={onScan}
                   className="group -top-3.5 relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber text-white shadow-float ring-4 ring-surface active:scale-90 transition-transform"
-                  title="Scanner / Pointer"
-                  aria-label="Pointer ou scanner"
+                  title="Scanner un code"
+                  aria-label="Scanner un code QR ou code-barres"
                 >
-                  <Fingerprint size={22} className="group-active:scale-110 transition-transform" />
+                  <QrCode size={21} className="group-active:scale-110 transition-transform" />
                 </button>
-              </div>
+              </div>}
 
               {mobileNav.slice(2, 4).map((item) => {
                 const Icon = item.icon;

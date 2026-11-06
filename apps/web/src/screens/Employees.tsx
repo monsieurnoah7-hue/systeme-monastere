@@ -1366,11 +1366,18 @@ export function Employees({
   const canEdit = hasPerm('employees.edit') || (!permissions && user.role === 'direction');
   const canPhoto = hasPerm('employees.photo_edit') || (!permissions && user.role === 'direction');
   const canPrintBadge = hasPerm('employees.print_badge') || (!permissions && user.role === 'direction');
+  const canViewEmployees = hasPerm('employees.view') || canCreate || canEdit || canPhoto || canPrintBadge;
+  const canViewLeaves = hasPerm('leaves.view') || hasPerm('leaves.manage');
   const canManageLeaves = hasPerm('leaves.manage') || (!permissions && user.role === 'direction');
   const canExportReports = hasPerm('reports.export') || (!permissions && user.role === 'direction');
   const canManage = canCreate || canEdit;
 
-  const [activeTab, setActiveTab] = useState<'people' | 'timeoff'>('people');
+  const [activeTab, setActiveTab] = useState<'people' | 'timeoff'>(canViewEmployees ? 'people' : 'timeoff');
+
+  useEffect(() => {
+    if (activeTab === 'people' && !canViewEmployees && canViewLeaves) setActiveTab('timeoff');
+    else if (activeTab === 'timeoff' && !canViewLeaves && canViewEmployees) setActiveTab('people');
+  }, [activeTab, canViewEmployees, canViewLeaves]);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [todayStatus, setTodayStatus] = useState<TodayEmployee[]>([]);
@@ -1503,9 +1510,15 @@ export function Employees({
     let cancelled = false;
     if (employees.length === 0) setLoading(true);
     Promise.all([
-      api<{ employees: Employee[] }>('/api/employees'),
-      api<{ employees: TodayEmployee[] }>('/api/employees/today-status').catch(() => ({ employees: [] })),
-      api<{ leaves: Leave[] }>('/api/leaves?status=all').catch(() => ({ leaves: [] })),
+      canViewEmployees
+        ? api<{ employees: Employee[] }>('/api/employees')
+        : Promise.resolve({ employees: [] as Employee[] }),
+      canViewEmployees
+        ? api<{ employees: TodayEmployee[] }>('/api/employees/today-status').catch(() => ({ employees: [] }))
+        : Promise.resolve({ employees: [] as TodayEmployee[] }),
+      canViewLeaves
+        ? api<{ leaves: Leave[] }>('/api/leaves?status=all').catch(() => ({ leaves: [] }))
+        : Promise.resolve({ leaves: [] as Leave[] }),
       api<{ roles: { id: string; name: string }[] }>('/api/permissions/roles').catch(() => ({ roles: [] })),
       api<{ holidays: Holiday[] }>(`/api/leaves/holidays?year=${new Date().getFullYear()}`).catch(() => ({ holidays: [] })),
     ])
@@ -1528,7 +1541,7 @@ export function Employees({
     return () => {
       cancelled = true;
     };
-  }, [reload, employees.length]);
+  }, [reload, employees.length, canViewEmployees, canViewLeaves]);
 
   useEffect(() => {
     function loadRoles() {
@@ -2012,7 +2025,7 @@ export function Employees({
               {/* Left: Radix Navigation Tabs with Live Badges */}
               <div className="overflow-x-auto overflow-y-hidden no-scrollbar shrink-0">
                 <TabsList variant="line" className="flex gap-1 sm:gap-2.5 bg-transparent p-0 w-max">
-                  <TabsTrigger
+                  {canViewEmployees && <TabsTrigger
                     value="people"
                     className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
                   >
@@ -2021,9 +2034,9 @@ export function Employees({
                     <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
                       {employees.filter((e) => e.active).length}
                     </span>
-                  </TabsTrigger>
+                  </TabsTrigger>}
 
-                  <TabsTrigger
+                  {canViewLeaves && <TabsTrigger
                     value="timeoff"
                     className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
                   >
@@ -2034,12 +2047,12 @@ export function Employees({
                         {leaves.filter((l) => l.status === 'pending').length} attente
                       </span>
                     )}
-                  </TabsTrigger>
+                  </TabsTrigger>}
                 </TabsList>
               </div>
 
               {/* Center: Integrated Real-Time Search Input (People only) */}
-              {activeTab === 'people' && (
+          {activeTab === 'people' && canViewEmployees && (
                 <div className="hidden md:flex items-center flex-1 max-w-xs relative min-w-[180px]">
                   <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
                   <input
@@ -2133,13 +2146,13 @@ export function Employees({
                         <DropdownMenuSeparator className="my-1 border-line" />
                       </>
                     )}
-                    <DropdownMenuItem
+                    {canManageLeaves && <DropdownMenuItem
                       onClick={openLeave}
                       className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
                     >
                       <CalendarCheck2 size={14} className="text-amber" />
                       <span>Poser un Congé / Permission</span>
-                    </DropdownMenuItem>
+                    </DropdownMenuItem>}
                     {activeTab === 'timeoff' && canManageLeaves && (
                       <>
                         <DropdownMenuItem
@@ -2163,7 +2176,7 @@ export function Employees({
                         </DropdownMenuItem>
                       </>
                     )}
-                    {activeTab === 'people' && (
+                    {activeTab === 'people' && canViewEmployees && (
                       <>
                         <DropdownMenuSeparator className="my-1 border-line" />
                         <DropdownMenuItem
@@ -2261,7 +2274,7 @@ export function Employees({
             )}
 
             {/* Sub Row: Continuous Filter Chips & Controls for Time-Off */}
-            {activeTab === 'timeoff' && (
+          {activeTab === 'timeoff' && canViewLeaves && (
               <div className="flex flex-col gap-1.5 pt-1 border-t border-line/40 text-xs">
                 {/* Month Navigator & View Switcher (100% Responsive on Desktop & Mobile) */}
                 <div className="flex items-center justify-between gap-2 w-full pb-1 border-b border-line/30">
@@ -2429,7 +2442,7 @@ export function Employees({
         {/* =========================================================================
             TAB 1: PEOPLE / EQUIPE
         ========================================================================= */}
-        <TabsContent value="people" className="space-y-4">
+        {canViewEmployees && <TabsContent value="people" className="space-y-4">
           {/* Quick Metrics */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Card className="p-3.5 shadow-card">
@@ -2679,12 +2692,12 @@ export function Employees({
               )}
             </div>
           </div>
-        </TabsContent>
+        </TabsContent>}
 
         {/* =========================================================================
             TAB 2: TIME-OFF CALENDAR
         ========================================================================= */}
-        <TabsContent value="timeoff" className="space-y-4">
+        {canViewLeaves && <TabsContent value="timeoff" className="space-y-4">
           <TimeOffCalendarView
             leaves={leaves}
             employees={employees}
@@ -2703,7 +2716,7 @@ export function Employees({
             filterStatus={timeOffFilterStatus}
             setFilterStatus={setTimeOffFilterStatus}
           />
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
 
       {/* =========================================================================

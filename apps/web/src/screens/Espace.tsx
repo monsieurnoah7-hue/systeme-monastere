@@ -10,10 +10,8 @@ import {
   Field,
   Modal,
   PageHeader,
-  SegmentedControl,
   Skeleton,
   Spinner,
-  StatCard,
   cx,
   useToast,
 } from '../components/ui';
@@ -766,76 +764,120 @@ export function Espace({
   const retardsRows = historyRows.filter((h) => h.late_minutes > 0);
   const tools = catalog?.tools.filter((t) => magasinFilter === 'all' || t.magasin_id === magasinFilter) ?? [];
   const availableTools = tools.filter((t) => t.status === 'disponible');
+  const situationTone = situation === 'present' ? 'border-green/25 bg-green-wash text-green'
+    : situation === 'late' ? 'border-amber/30 bg-amber/10 text-amber'
+      : situation === 'conge' || situation === 'permission' ? 'border-blue/25 bg-blue-wash text-blue'
+        : 'border-line bg-surface-2 text-ink-soft';
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto w-full max-w-6xl space-y-4 pb-4 sm:space-y-5">
       <PageHeader
-        title={`Espace Personnel · ${employee.full_name}`}
-        hint={`Matricule ${employee.id} · ${employee.job_title}`}
+        title="Mon espace"
+        hint={`${employee.full_name} · ${employee.id} · ${employee.job_title}`}
       />
 
-      {/* Hero Card : Situation du jour */}
-      <Card className="bg-gradient-to-br from-charcoal to-charcoal-2 text-white shadow-pop">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-white/50">Ma situation aujourd'hui</p>
-            <p className="mt-1 text-2xl font-extrabold tracking-tight text-white">
-              {SITUATION_LABEL[situation] ?? situation}
-            </p>
-            {situationNote && <p className="mt-1 text-sm text-white/70">{situationNote}</p>}
+      <Card className="overflow-hidden border-line bg-surface p-0 shadow-card">
+        <div className="grid gap-0 md:grid-cols-[minmax(0,1fr)_minmax(280px,0.9fr)]">
+          <div className="p-4 sm:p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-faint">Aujourd’hui</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2.5">
+              <span className={cx('inline-flex min-h-8 items-center rounded-full border px-3 text-sm font-semibold', situationTone)}>
+                {SITUATION_LABEL[situation] ?? situation}
+              </span>
+              {situationNote && <span className="text-xs leading-5 text-ink-soft">{situationNote}</span>}
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-xs uppercase tracking-wider text-white/50">Pointages enregistrés</p>
-            <p className="mt-1 font-mono text-xl font-bold text-amber">
-              {today?.in_at ?? '-'} → {today?.out_at ?? '-'}
-            </p>
+          <div className="border-t border-line bg-surface-2/35 px-4 py-3 md:border-l md:border-t-0 sm:px-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-faint">Mes horaires enregistrés</p>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[11px] text-ink-faint">Arrivée</p>
+                <p className="mt-0.5 font-mono text-lg font-semibold tabular-nums text-ink">{today?.in_at ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-ink-faint">Départ</p>
+                <p className="mt-0.5 font-mono text-lg font-semibold tabular-nums text-ink">{today?.out_at ?? '—'}</p>
+              </div>
+            </div>
             {today?.break_in && (
-              <p className="text-xs text-white/60">
-                Pause : {today.break_in} → {today.break_out ?? 'en cours'}
+              <p className="mt-2 border-t border-line/70 pt-2 text-xs text-ink-soft">
+                Pause {today.break_in}–{today.break_out ?? 'en cours'}
               </p>
             )}
           </div>
         </div>
       </Card>
 
-      {/* KPIs du mois */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Présences ce mois" value={month.daysPresent} icon={<IconClock size={16} />} />
-        <StatCard
-          label="Retards constatés"
-          value={month.lateCount}
-          tone={month.lateCount > 0 ? 'amber' : 'neutral'}
-          icon={<IconAlert size={16} />}
-        />
-        <StatCard
-          label="Outils en ma possession"
-          value={openLoans.length}
-          tone={openLoans.length > 0 ? 'amber' : 'neutral'}
-          icon={<IconWrench size={16} />}
-        />
+      <div className="grid grid-cols-3 gap-2 sm:gap-3" aria-label="Résumé du mois">
+        {[
+          { label: 'Présences', value: month.daysPresent, icon: <IconClock size={15} />, tone: 'text-blue' },
+          { label: 'Retards', value: month.lateCount, icon: <IconAlert size={15} />, tone: month.lateCount ? 'text-amber' : 'text-ink-faint' },
+          { label: 'Outils prêtés', value: openLoans.length, icon: <IconWrench size={15} />, tone: openLoans.length ? 'text-amber' : 'text-ink-faint' },
+        ].map((item) => (
+          <Card key={item.label} className="min-w-0 p-3 shadow-xs sm:p-4">
+            <div className="flex items-center justify-between gap-1">
+              <span className="truncate text-[10px] font-medium text-ink-soft sm:text-xs">{item.label}</span>
+              <span className={cx('shrink-0', item.tone)}>{item.icon}</span>
+            </div>
+            <p className="mt-1.5 text-xl font-semibold leading-none tabular-nums text-ink sm:text-2xl">{item.value}</p>
+          </Card>
+        ))}
       </div>
 
-      {/* 5 Onglets complets et horodatés */}
-      <SegmentedControl
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: 'presences', label: 'Présences & Pauses', icon: <IconClock size={14} /> },
-          { value: 'retards', label: `Retards (${retardsRows.length})`, icon: <AlertTriangle size={14} /> },
-          { value: 'conges', label: `Congés (${leaves.length})`, icon: <FileCheck2 size={14} /> },
-          { value: 'outillage', label: `Mes Outils (${loansHistory.length})`, icon: <IconWrench size={14} /> },
-          { value: 'catalogue', label: 'Matériel Disponible', icon: <IconBox size={14} /> },
-          { value: 'profil', label: 'Mon Compte', icon: <KeyRound size={14} /> },
-        ]}
-      />
+      <nav aria-label="Rubriques de mon espace" className="grid grid-cols-3 gap-1.5 rounded-xl border border-line bg-surface p-1.5 sm:flex sm:flex-wrap sm:gap-1 sm:p-1">
+        {[
+          { value: 'presences' as const, label: 'Présences', icon: <IconClock size={15} /> },
+          { value: 'retards' as const, label: 'Retards', count: retardsRows.length, icon: <AlertTriangle size={15} /> },
+          { value: 'conges' as const, label: 'Congés', count: leaves.length, icon: <FileCheck2 size={15} /> },
+          { value: 'outillage' as const, label: 'Mes outils', count: loansHistory.length, icon: <IconWrench size={15} /> },
+          { value: 'catalogue' as const, label: 'Disponibles', icon: <IconBox size={15} /> },
+          { value: 'profil' as const, label: 'Mon compte', icon: <KeyRound size={15} /> },
+        ].map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            aria-current={tab === item.value ? 'page' : undefined}
+            onClick={() => setTab(item.value)}
+            className={cx(
+              'flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-semibold transition-colors sm:min-h-10 sm:flex-1 sm:px-3 sm:text-xs',
+              tab === item.value
+                ? 'border-line bg-paper-2 text-ink shadow-xs'
+                : 'border-transparent text-ink-soft hover:bg-paper-2/70 hover:text-ink',
+            )}
+          >
+            <span className={cx('shrink-0', tab === item.value ? 'text-amber' : 'text-ink-faint')}>{item.icon}</span>
+            <span className="truncate">{item.label}</span>
+            {item.count !== undefined && <span className="shrink-0 text-[10px] tabular-nums text-ink-faint">{item.count}</span>}
+          </button>
+        ))}
+      </nav>
 
       {/* ONGLET 1 : PRÉSENCES & PAUSES */}
       {tab === 'presences' && (
         <Card padded={false} className="shadow-card overflow-hidden">
           {historyRows.length === 0 ? (
-            <EmptyState icon={<IconHistory size={24} />} title="Aucun pointage récent" />
+            <div className="flex min-h-36 flex-col items-center justify-center gap-2 px-5 py-8 text-center">
+              <span className="grid h-10 w-10 place-items-center rounded-full border border-line bg-surface-2 text-ink-faint"><IconHistory size={19} /></span>
+              <div><p className="text-sm font-semibold text-ink">Aucun pointage récent</p><p className="mt-1 text-xs text-ink-soft">Vos horaires apparaîtront ici après votre pointage.</p></div>
+            </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="space-y-2 p-3 md:hidden">
+              {historyRows.map((h) => (
+                <article key={h.date} className="rounded-xl border border-line bg-surface p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-ink">{formatDate(h.date)}</h3>
+                    {h.late_minutes > 0 ? <Chip tone="amber">Retard {h.late_minutes} min</Chip> : h.in_at ? <Chip tone="green">Ponctuel</Chip> : <span className="text-xs text-ink-faint">Absent</span>}
+                  </div>
+                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line pt-2.5 text-xs">
+                    {[['Arrivée', h.in_at], ['Départ', h.out_at], ['Début pause', h.break_in], ['Reprise', h.break_out]].map(([label, time]) => (
+                      <div key={label} className="flex items-center justify-between gap-2"><dt className="text-ink-faint">{label}</dt><dd className="font-mono font-medium tabular-nums text-ink">{time || '—'}</dd></div>
+                    ))}
+                  </dl>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm table-rhythm">
                 <thead>
                   <tr className="border-b border-line bg-surface-2/60 text-left text-xs uppercase tracking-wider text-ink-faint">
@@ -876,6 +918,7 @@ export function Espace({
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </Card>
       )}
@@ -890,7 +933,17 @@ export function Espace({
               <p className="text-xs text-ink-faint mt-1">Votre assiduité et votre ponctualité sont exemplaires.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="space-y-2 p-3 md:hidden">
+              {retardsRows.map((h) => (
+                <article key={h.date} className="rounded-xl border border-line bg-surface p-3">
+                  <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-ink">{formatDate(h.date)}</h3><Chip tone="amber">{h.late_minutes} min</Chip></div>
+                  <p className="mt-2 text-xs text-ink-soft">Arrivée constatée <span className="ml-1 font-mono font-semibold text-amber">{h.in_at ?? '—'}</span></p>
+                  <p className="mt-1 text-xs text-ink-faint">{h.late_reason || 'Motif non précisé'}</p>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line bg-surface-2/60 text-left text-xs uppercase tracking-wider text-ink-faint">
@@ -916,6 +969,7 @@ export function Espace({
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </Card>
       )}
@@ -953,7 +1007,20 @@ export function Espace({
             {leaves.length === 0 ? (
               <EmptyState icon={<FileCheck2 size={24} />} title="Aucun congé ou permission enregistré" />
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="space-y-2 p-3 md:hidden">
+                {leaves.map((l) => (
+                  <article key={l.id} className="rounded-xl border border-line bg-surface p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div><h3 className="text-sm font-semibold text-ink">{l.kind === 'conge' ? 'Congé annuel' : l.kind === 'permission' ? 'Permission exceptionnelle' : 'Absence autorisée'}</h3><p className="mt-1 text-xs text-ink-soft">Du {formatDate(l.from_date)} au {formatDate(l.to_date)}</p></div>
+                      <Chip tone={l.status === 'approved' ? 'green' : l.status === 'pending' ? 'amber' : 'red'}>{l.status === 'approved' ? 'Accordé' : l.status === 'pending' ? 'En examen' : 'Refusé'}</Chip>
+                    </div>
+                    {l.note && <p className="mt-2 border-t border-line pt-2 text-xs text-ink-soft">{l.note}</p>}
+                    {l.reviewed_by && <p className="mt-1 text-[11px] text-ink-faint">Avis : {l.review_note || 'Traité'} · {l.reviewed_by}</p>}
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-line bg-surface-2/60 text-left text-xs uppercase tracking-wider text-ink-faint">
@@ -1001,6 +1068,7 @@ export function Espace({
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </Card>
         </div>
@@ -1044,7 +1112,17 @@ export function Espace({
             {loansHistory.length === 0 ? (
               <EmptyState icon={<IconWrench size={24} />} title="Aucun emprunt d'outil enregistré" />
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="space-y-2 p-3 md:hidden">
+                {loansHistory.map((l) => (
+                  <article key={l.id} className="rounded-xl border border-line bg-surface p-3">
+                    <div className="flex items-start justify-between gap-2"><div><h3 className="text-sm font-semibold text-ink">{l.tool_name}</h3><p className="text-[11px] font-mono text-ink-faint">{l.tool_id}</p></div>{l.returned_at ? <Chip tone={l.return_condition === 'bon' ? 'green' : 'amber'}>{LOAN_COND_LABEL[l.return_condition ?? 'bon'] ?? l.return_condition}</Chip> : <Chip tone="amber">À rendre</Chip>}</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-2 text-xs"><div><p className="text-ink-faint">Sortie</p><p className="mt-0.5 text-ink">{formatDate(l.out_at)}</p></div><div><p className="text-ink-faint">Retour</p><p className="mt-0.5 text-ink">{l.returned_at ? formatDate(l.returned_at) : 'En cours'}</p></div></div>
+                    {l.motive && <p className="mt-2 text-xs text-ink-soft">Motif : {l.motive}</p>}
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-line bg-surface-2/60 text-left text-xs uppercase tracking-wider text-ink-faint">
@@ -1094,6 +1172,7 @@ export function Espace({
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </Card>
         </div>
