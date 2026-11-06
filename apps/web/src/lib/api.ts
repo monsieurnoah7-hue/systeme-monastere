@@ -809,6 +809,7 @@ export type TerminalInfo = {
   registered_at: string;
   last_used: string | null;
   punches_today: number;
+  authorized_user_ids?: number[];
 };
 
 export type AppUserRow = {

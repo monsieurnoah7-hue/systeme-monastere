@@ -329,9 +329,85 @@ export function Parametres({ user, permissions }: { user: User; permissions?: Re
   return <AdminSettings user={user} permissions={currentPermissions} />;
 }
 
+type TerminalEligibleUser = { id: number; display_name: string; login: string; role: string; employee_id: string | null };
+
+function TerminalAuthorizationEditor({
+  terminal,
+  users,
+  onSaved,
+}: {
+  terminal: TerminalInfo;
+  users: TerminalEligibleUser[];
+  onSaved: (userIds: number[]) => void;
+}) {
+  const toast = useToast();
+  const [selected, setSelected] = useState<number[]>(terminal.authorized_user_ids ?? []);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => setSelected(terminal.authorized_user_ids ?? []), [terminal.id, terminal.authorized_user_ids?.join(',')]);
+
+  function toggleUser(userId: number) {
+    setSelected((current) => current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]);
+  }
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      await api(`/api/terminals/${encodeURIComponent(terminal.id)}/authorizations`, {
+        method: 'PUT',
+        body: JSON.stringify({ user_ids: selected }),
+      });
+      onSaved(selected);
+      toast('Autorisations du terminal enregistrées.', 'success');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Enregistrement des accès impossible.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <details className="rounded-xl border border-line bg-paper/60 p-3">
+      <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-xs font-semibold text-ink marker:hidden">
+        <span>Responsables autorisés</span>
+        <span className="rounded-full bg-surface px-2 py-1 text-[10px] font-mono text-ink-soft">{selected.length}</span>
+      </summary>
+      <div className="mt-2 border-t border-line pt-3">
+        <p className="mb-2 text-[11px] leading-relaxed text-ink-soft">
+          Seuls les comptes sélectionnés ayant le droit « Utiliser les terminaux de pointage autorisés » pourront ouvrir cette borne.
+        </p>
+        {users.length === 0 ? (
+          <p className="rounded-lg bg-surface p-3 text-xs text-ink-faint">Aucun compte n’a encore ce droit. Accordez-le d’abord au rôle dans la matrice des accès.</p>
+        ) : (
+          <div className="max-h-52 space-y-1 overflow-y-auto">
+            {users.map((account) => (
+              <label key={account.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-transparent px-2.5 py-2 hover:border-line hover:bg-surface">
+                <input type="checkbox" checked={selected.includes(account.id)} onChange={() => toggleUser(account.id)} className="h-4 w-4 shrink-0 accent-amber" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium text-ink">{account.display_name}</span>
+                  <span className="block truncate text-[10px] text-ink-faint">@{account.login} · {ROLE_LABEL[account.role] ?? account.role}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+        {error && <p role="alert" className="mt-2 text-xs text-red">{error}</p>}
+        <div className="mt-3 flex justify-end">
+          <Button size="sm" variant="primary" disabled={saving || users.length === 0} onClick={() => void save()}>
+            {saving ? <Spinner /> : 'Enregistrer les accès'}
+          </Button>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 function TerminalManager() {
   const toast = useToast();
   const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
+  const [terminalUsers, setTerminalUsers] = useState<TerminalEligibleUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -344,8 +420,12 @@ function TerminalManager() {
     setLoading(true);
     setError(null);
     try {
-      const result = await api<{ terminals: TerminalInfo[] }>('/api/terminals', { bypassCache: true });
+      const [result, userResult] = await Promise.all([
+        api<{ terminals: TerminalInfo[] }>('/api/terminals', { bypassCache: true }),
+        api<{ users: TerminalEligibleUser[] }>('/api/terminals/eligible-users', { bypassCache: true }),
+      ]);
       setTerminals(result.terminals);
+      setTerminalUsers(userResult.users);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Chargement des bornes impossible.');
     } finally {
@@ -410,6 +490,13 @@ function TerminalManager() {
                 <Button size="sm" variant={terminal.active ? 'outline-danger' : 'secondary'} onClick={() => void toggleTerminal(terminal)}>
                   {terminal.active ? 'Désactiver' : 'Activer'}
                 </Button>
+              </CardContent>
+              <CardContent className="pt-0">
+                <TerminalAuthorizationEditor
+                  terminal={terminal}
+                  users={terminalUsers}
+                  onSaved={(userIds) => setTerminals((current) => current.map((item) => item.id === terminal.id ? { ...item, authorized_user_ids: userIds } : item))}
+                />
               </CardContent>
             </Card>
           ))}
@@ -482,6 +569,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
   }, [permissions, activeTab, defaultTab, canManageTerminals, canViewSettings, kioskSubTab, availableTabs]);
 
   const [terminals, setTerminals] = useState<TerminalInfo[]>([]);
+  const [eligibleTerminalUsers, setEligibleTerminalUsers] = useState<TerminalEligibleUser[]>([]);
   const [users, setUsers] = useState<AppUserRow[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [permMatrix, setPermMatrix] = useState<PermissionMatrix | null>(null);
@@ -489,6 +577,18 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!canManageTerminals) {
+      setEligibleTerminalUsers([]);
+      return () => { cancelled = true; };
+    }
+    api<{ users: TerminalEligibleUser[] }>('/api/terminals/eligible-users', { bypassCache: true })
+      .then((result) => { if (!cancelled) setEligibleTerminalUsers(result.users); })
+      .catch(() => { if (!cancelled) setEligibleTerminalUsers([]); });
+    return () => { cancelled = true; };
+  }, [canManageTerminals, reload]);
 
   // Backup & Reset states
   const [backups, setBackups] = useState<BackupInfo[]>([]);
@@ -3130,6 +3230,13 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                             <span>{formatDateTime(terminal.last_used)}</span>
                           </div>
                         ) : null}
+                      </div>
+                      <div className="mt-3">
+                        <TerminalAuthorizationEditor
+                          terminal={terminal}
+                          users={eligibleTerminalUsers}
+                          onSaved={(userIds) => setTerminals((current) => current.map((item) => item.id === terminal.id ? { ...item, authorized_user_ids: userIds } : item))}
+                        />
                       </div>
                     </div>
                   </div>

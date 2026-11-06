@@ -251,6 +251,15 @@ CREATE INDEX IF NOT EXISTS audit_entity_idx ON audit_log(entity, entity_id);
 
 // Idempotent adjustments for databases created before breaks/permissions/magasins/leaves/tools accounting.
 export const MIGRATION_DDL = `
+CREATE TABLE IF NOT EXISTS terminal_authorizations (
+  terminal_id text NOT NULL REFERENCES terminals(id) ON DELETE CASCADE,
+  user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  assigned_by bigint REFERENCES users(id) ON DELETE SET NULL,
+  assigned_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (terminal_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS terminal_authorizations_user_idx ON terminal_authorizations(user_id, terminal_id);
+
 ALTER TABLE attendance DROP CONSTRAINT IF EXISTS attendance_punch_type_check;
 ALTER TABLE attendance ADD CONSTRAINT attendance_punch_type_check
   CHECK (punch_type IN ('in','out','break_in','break_out'));
@@ -531,4 +540,4 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_basis text;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_quantity numeric;
 `;
 
-export const MIGRATION_NAME = '017_project_ratio_quantity';
+export const MIGRATION_NAME = '018_terminal_authorizations';

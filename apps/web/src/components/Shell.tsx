@@ -124,6 +124,7 @@ export function computeAllowedViews(
     if (
       permissions['attendance.view'] ||
       permissions['attendance.correct'] ||
+      permissions['terminals.access'] ||
       permissions['leaves.view'] ||
       permissions['leaves.manage']
     ) {

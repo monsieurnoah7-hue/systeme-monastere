@@ -5,6 +5,9 @@ import { verifyPassword } from '../lib/crypto.js';
 import { checkSelfie } from '../lib/images.js';
 import { loadSettings } from '../lib/settings.js';
 import { saveSelfie } from '../lib/selfie-store.js';
+import { isSuperAdmin } from '../lib/permissions.js';
+import { requireAuth } from '../middleware/auth.js';
+import { hasPermission, requirePerm } from '../middleware/permissions.js';
 import { formatHm, localDate, minutesOfDay, parseHm } from '../lib/time.js';
 
 type LockState = { fails: number; lockedUntil: number };
@@ -61,9 +64,21 @@ const punchBody = z.object({
 });
 
 export const kioskRoutes = new Hono();
+kioskRoutes.use('*', requireAuth);
 
-kioskRoutes.get('/terminals', async (c) => {
-  const terminals = await getDb().query('SELECT id, name FROM terminals WHERE active = true ORDER BY name');
+kioskRoutes.get('/terminals', requirePerm('terminals.access'), async (c) => {
+  const auth = c.get('auth');
+  const db = getDb();
+  const terminals = isSuperAdmin(auth.user.role)
+    ? await db.query('SELECT id, name FROM terminals WHERE active = true ORDER BY name')
+    : await db.query(
+      `SELECT t.id, t.name
+         FROM terminals t
+         JOIN terminal_authorizations ta ON ta.terminal_id = t.id
+        WHERE t.active = true AND ta.user_id = $1
+        ORDER BY t.name`,
+      [auth.user.id],
+    );
   return c.json({ terminals });
 });
 
@@ -72,7 +87,7 @@ kioskRoutes.get('/settings', async (c) => {
   return c.json({ settings });
 });
 
-kioskRoutes.post('/identify', async (c) => {
+kioskRoutes.post('/identify', requirePerm('terminals.access'), async (c) => {
   const body = identifyBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) return c.json({ error: 'Terminal et identifiant requis.' }, 400);
 
@@ -80,6 +95,9 @@ kioskRoutes.post('/identify', async (c) => {
   if (locked) return c.json({ error: locked, locked: true }, 423);
 
   const db = getDb();
+  if (!await canUseTerminal(c.get('auth').user.id, c.get('auth').user.role, body.data.terminalId)) {
+    return c.json({ error: 'Ce compte n’est pas autorisé à utiliser ce terminal.' }, 403);
+  }
   const terminal = await db.one<{ id: string }>('SELECT id FROM terminals WHERE id = $1 AND active = true', [body.data.terminalId]);
   if (!terminal) return c.json({ error: 'Terminal non enregistré par la direction.' }, 403);
 
@@ -269,11 +287,14 @@ const verifyPinBody = z.object({
   pin: z.string().min(1),
 });
 
-kioskRoutes.post('/verify-pin', async (c) => {
+kioskRoutes.post('/verify-pin', requirePerm('terminals.access'), async (c) => {
   const body = verifyPinBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) return c.json({ error: 'Code secret requis.' }, 400);
 
   const db = getDb();
+  if (!await canUseTerminal(c.get('auth').user.id, c.get('auth').user.role, body.data.terminalId)) {
+    return c.json({ error: 'Ce compte n’est pas autorisé à utiliser ce terminal.' }, 403);
+  }
   const terminal = await db.one<{ id: string }>('SELECT id FROM terminals WHERE id = $1 AND active = true', [body.data.terminalId]);
   if (!terminal) return c.json({ error: 'Terminal non enregistré par la direction.' }, 403);
 
@@ -308,11 +329,14 @@ kioskRoutes.post('/verify-pin', async (c) => {
   return c.json({ ok: true });
 });
 
-kioskRoutes.post('/punch', async (c) => {
+kioskRoutes.post('/punch', requirePerm('terminals.access'), async (c) => {
   const body = punchBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) return c.json({ error: 'Données de pointage incomplètes.' }, 400);
 
   const db = getDb();
+  if (!await canUseTerminal(c.get('auth').user.id, c.get('auth').user.role, body.data.terminalId)) {
+    return c.json({ error: 'Ce compte n’est pas autorisé à utiliser ce terminal.' }, 403);
+  }
   const terminal = await db.one<{ id: string }>('SELECT id FROM terminals WHERE id = $1 AND active = true', [body.data.terminalId]);
   if (!terminal) return c.json({ error: 'Terminal non enregistré par la direction.' }, 403);
 
@@ -504,7 +528,7 @@ kioskRoutes.post('/punch', async (c) => {
   });
 });
 
-kioskRoutes.post('/unlock', async (c) => {
+kioskRoutes.post('/unlock', requirePerm('terminals.access'), async (c) => {
   const body = z.object({ password: z.string().min(1) }).safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) return c.json({ error: 'Mot de passe requis pour déverrouiller la borne.' }, 400);
 
@@ -520,3 +544,13 @@ kioskRoutes.post('/unlock', async (c) => {
 
   return c.json({ ok: true });
 });
+
+async function canUseTerminal(userId: number, role: string, terminalId: string): Promise<boolean> {
+  if (isSuperAdmin(role)) return true;
+  if (!await hasPermission(role, 'terminals.access')) return false;
+  const assignment = await getDb().one(
+    'SELECT 1 AS allowed FROM terminal_authorizations WHERE terminal_id = $1 AND user_id = $2',
+    [terminalId, userId],
+  );
+  return Boolean(assignment);
+}

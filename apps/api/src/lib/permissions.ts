@@ -43,6 +43,7 @@ export const PERMISSION_ACTIONS = [
   'profile.photo_edit_self',
   'profile.login_edit',
   'terminals.manage',
+  'terminals.access',
   'permissions.manage',
   'scanner.use',
 ] as const;
@@ -115,6 +116,7 @@ export const PERMISSION_LABELS: Record<PermissionAction, string> = {
   'profile.photo_edit_self': 'Modifier sa propre photo de profil',
   'profile.login_edit': 'Modifier son propre identifiant de connexion (login)',
   'terminals.manage': 'Gérer les terminaux',
+  'terminals.access': 'Utiliser les terminaux de pointage autorisés',
   'permissions.manage': 'Gérer les permissions',
   'scanner.use': 'Utiliser le scanner QR & codes-barres (App)',
 };
@@ -162,6 +164,7 @@ export const PERMISSION_KINDS: Record<PermissionAction, 'view' | 'action'> = {
   'profile.photo_edit_self': 'action',
   'profile.login_edit': 'action',
   'terminals.manage': 'action',
+  'terminals.access': 'action',
   'permissions.manage': 'action',
   'scanner.use': 'action',
 };
@@ -181,7 +184,7 @@ export const PERMISSION_GROUPS: { label: string; actions: PermissionAction[] }[]
   },
   {
     label: 'Pointage & kiosque',
-    actions: ['attendance.view', 'attendance.correct'],
+    actions: ['attendance.view', 'attendance.correct', 'terminals.access'],
   },
   {
     label: 'Congés & permissions',
@@ -252,6 +255,7 @@ export const DEFAULT_PERMISSIONS: Record<PermissionAction, Role[]> = {
   'profile.photo_edit_self': ['direction', 'magasinier', 'chef_atelier', 'travailleur'],
   'profile.login_edit': ['direction'],
   'terminals.manage': ['direction'],
+  'terminals.access': ['direction'],
   'permissions.manage': ['direction'],
   'scanner.use': ['direction'],
 };

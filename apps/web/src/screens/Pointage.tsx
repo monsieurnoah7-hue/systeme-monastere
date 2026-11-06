@@ -25,6 +25,26 @@ import { exportToExcel, exportToPdf } from '../lib/export';
 type Terminal = { id: string; name: string };
 type Stage = 'terminal' | 'identify' | 'validate_pin' | 'actions' | 'capture' | 'confirm';
 
+function AttendanceAvatar({ employee, size = 'h-8 w-8' }: {
+  employee: NonNullable<DashboardType['das04']>['detail'][number];
+  size?: string;
+}) {
+  return (
+    <span className={cx('relative grid shrink-0 place-items-center overflow-hidden rounded-full border border-line bg-paper-2 text-[10px] font-bold text-ink-soft', size)}>
+      <span aria-hidden="true">{initials(employee.fullName)}</span>
+      {employee.photoPath && (
+        <img
+          src={employee.photoPath}
+          alt=""
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={(event) => { event.currentTarget.style.display = 'none'; }}
+        />
+      )}
+    </span>
+  );
+}
+
 const TERMINAL_KEY = 'mf.terminal';
 const PIN_TIMEOUT_SECONDS = 3 * 60;
 const ACTION_TIMEOUT_SECONDS = 3 * 60;
@@ -295,25 +315,32 @@ export function Pointage({
   const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
   const canExportReports = !user || hasPerm('reports.export') || (!permissions && (user.role === 'direction' || user.role === 'chef_atelier'));
   const canCorrectAttendance = Boolean(user && hasPerm('attendance.correct'));
+  const canViewAttendance = !user || hasPerm('attendance.view');
+  const canAccessKiosk = Boolean(user && hasPerm('terminals.access'));
 
   const [activeMainTab, setActiveMainTab] = useState<'timesheets' | 'kiosk'>(() => {
     if (typeof window !== 'undefined') {
-      if (window.location.hash === '#kiosk' || window.location.hash === '#pointage/kiosk') return 'kiosk';
+      if ((window.location.hash === '#kiosk' || window.location.hash === '#pointage/kiosk') && canAccessKiosk) return 'kiosk';
       const p = new URLSearchParams(window.location.search);
-      if (p.get('tab') === 'kiosk') return 'kiosk';
+      if (p.get('tab') === 'kiosk' && canAccessKiosk) return 'kiosk';
     }
-    return 'timesheets';
+    return canViewAttendance ? 'timesheets' : 'kiosk';
   });
 
   useEffect(() => {
     const onHash = () => {
       if (window.location.hash === '#kiosk' || window.location.hash === '#pointage/kiosk') {
-        setActiveMainTab('kiosk');
+        setActiveMainTab(canAccessKiosk ? 'kiosk' : 'timesheets');
       }
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, []);
+  }, [canAccessKiosk]);
+
+  useEffect(() => {
+    if (activeMainTab === 'timesheets' && !canViewAttendance && canAccessKiosk) setActiveMainTab('kiosk');
+    else if (activeMainTab === 'kiosk' && !canAccessKiosk && canViewAttendance) setActiveMainTab('timesheets');
+  }, [activeMainTab, canAccessKiosk, canViewAttendance]);
 
   // Timesheets Overview state
   const [attendanceDetail, setAttendanceDetail] = useState<NonNullable<DashboardType['das04']>['detail']>([]);
@@ -390,9 +417,15 @@ export function Pointage({
   const loadTimesheets = useCallback(() => {
     setTsLoading(true);
     Promise.all([
-      api<{ date: string; detail: NonNullable<DashboardType['das04']>['detail'] }>('/api/attendance').catch(() => null),
-      api<{ employees: Employee[] }>('/api/employees').catch(() => ({ employees: [] })),
-      api<{ terminals: Terminal[] }>('/api/kiosk/terminals').catch(() => ({ terminals: [] })),
+      canViewAttendance
+        ? api<{ date: string; detail: NonNullable<DashboardType['das04']>['detail'] }>('/api/attendance').catch(() => null)
+        : Promise.resolve(null),
+      canViewAttendance
+        ? api<{ employees: Employee[] }>('/api/employees').catch(() => ({ employees: [] }))
+        : Promise.resolve({ employees: [] as Employee[] }),
+      canAccessKiosk
+        ? api<{ terminals: Terminal[] }>('/api/kiosk/terminals').catch(() => ({ terminals: [] }))
+        : Promise.resolve({ terminals: [] as Terminal[] }),
     ])
       .then(([attendanceRes, empRes, termRes]) => {
         if (attendanceRes) {
@@ -403,7 +436,7 @@ export function Pointage({
         setTerminals(termRes.terminals);
       })
       .finally(() => setTsLoading(false));
-  }, []);
+  }, [canAccessKiosk, canViewAttendance]);
 
   function openAttendanceCorrection(
     row: NonNullable<DashboardType['das04']>['detail'][number],
@@ -447,8 +480,20 @@ export function Pointage({
   }, [loadTimesheets]);
 
   useEffect(() => {
-    if (stage !== 'terminal' && terminals.length > 0 && !terminalId) setStage('terminal');
-  }, [terminals, terminalId, stage]);
+    if (!canAccessKiosk || tsLoading) return;
+    if (!terminalId) {
+      if (stage !== 'terminal') setStage('terminal');
+      return;
+    }
+    if (terminals.length === 0 || !terminals.some((terminal) => terminal.id === terminalId)) {
+      clear();
+      setIdentified(null);
+      setStage('terminal');
+      setError('Cette borne n’est pas autorisée pour votre compte. Choisissez une borne qui vous est affectée.');
+    } else if (stage === 'terminal') {
+      setStage('identify');
+    }
+  }, [canAccessKiosk, clear, stage, terminalId, terminals, tsLoading]);
 
   useEffect(() => {
     if (stage !== 'actions' && stage !== 'validate_pin' && stage !== 'capture') return;
@@ -694,14 +739,14 @@ export function Pointage({
           </div>
 
           <div className="flex items-center gap-1.5">
-            <button
+            {canViewAttendance && <button
               onClick={() => setActiveMainTab('timesheets')}
               className="px-2.5 py-1 rounded-lg text-xs font-semibold text-ink-soft hover:text-ink bg-surface border border-line shadow-2xs transition-colors flex items-center gap-1.5"
             >
               <FileSpreadsheet size={13} />
               <span className="hidden sm:inline">Feuille des Présences</span>
               <span className="sm:hidden">Présences</span>
-            </button>
+            </button>}
             {!isKioskLocked && (
               <button
                 onClick={lockKiosk}
@@ -721,8 +766,8 @@ export function Pointage({
           </div>
 
           {/* Mode Toggle Switcher */}
-          <div className="flex items-center rounded-xl border border-line bg-surface p-1 shadow-xs">
-            <button
+          <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1 shadow-xs">
+            {canViewAttendance && <button
               onClick={() => setActiveMainTab('timesheets')}
               className={cx(
                 'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
@@ -733,14 +778,14 @@ export function Pointage({
             >
               <FileSpreadsheet size={15} />
               <span>Présences</span>
-            </button>
-            <button
+            </button>}
+            {canAccessKiosk && <button
               onClick={() => setActiveMainTab('kiosk')}
               className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all text-ink-soft hover:text-ink"
             >
               <Smartphone size={15} />
               <span>Borne Kiosque</span>
-            </button>
+            </button>}
           </div>
         </div>
       )}
@@ -748,7 +793,7 @@ export function Pointage({
       {/* =========================================================================
           MODE 1 : FEUILLES DE PRÉSENCE (VUE TABLEUR)
       ========================================================================= */}
-      {activeMainTab === 'timesheets' ? (
+      {activeMainTab === 'timesheets' && canViewAttendance ? (
         <div className="space-y-5">
           {/* Timesheets KPI Summary */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -978,9 +1023,7 @@ export function Pointage({
                         {/* Sticky Worker Column */}
                         <td className={cx('sheet-cell sticky-col col-lead', idx % 2 === 0 ? 'bg-surface' : 'bg-[#181d28]')}>
                           <div className="flex items-center gap-2.5">
-                            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-paper-2 text-[10px] font-bold text-ink-soft border border-line">
-                              {initials(row.fullName)}
-                            </span>
+                            <AttendanceAvatar employee={row} size="h-8 w-8" />
                             <div className="min-w-0">
                               <span className="truncate block font-semibold text-ink text-xs">{row.fullName}</span>
                               <span className="truncate block text-[10px] text-ink-faint">{row.jobTitle}</span>
@@ -1093,9 +1136,7 @@ export function Pointage({
               <Card key={row.id} className="p-3.5 shadow-card">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <span className="grid h-8 w-8 place-items-center rounded-full bg-paper-2 text-xs font-bold text-ink">
-                      {initials(row.fullName)}
-                    </span>
+                    <AttendanceAvatar employee={row} />
                     <div>
                       <p className="font-semibold text-xs text-ink">{row.fullName}</p>
                       <p className="text-[10px] text-ink-faint">{row.jobTitle}</p>
@@ -1158,7 +1199,7 @@ export function Pointage({
       {/* =========================================================================
           MODE 2 : BORNE KIOSQUE (INTERACTION DIRECTE OUVRIER / TABLETTE)
       ========================================================================= */}
-      {activeMainTab === 'kiosk' || isKioskLocked ? (
+      {canAccessKiosk && (activeMainTab === 'kiosk' || isKioskLocked) ? (
         <div
           className={cx(
             'py-2 transition-all',
@@ -1183,8 +1224,8 @@ export function Pointage({
               </p>
               <div className="mt-4 space-y-3">
                 {terminals.length === 0 ? (
-                  <Banner tone="info" title="Aucun terminal enregistré">
-                    La direction doit enregistrer une tablette dans Paramètres &gt; Bornes avant le premier pointage.
+                  <Banner tone="info" title="Aucun terminal autorisé pour ce compte">
+                    Demandez à la Direction de vous accorder le droit d’utiliser le kiosque et de vous affecter à une borne.
                   </Banner>
                 ) : (
                   terminals.map((terminal) => (

@@ -3,8 +3,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { writeAudit } from '../lib/audit.js';
-import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth.js';
-import { requirePerm } from '../middleware/permissions.js';
+import { actorId, actorName, requireAuth } from '../middleware/auth.js';
+import { hasPermission, requirePerm } from '../middleware/permissions.js';
 
 export const terminalsRoutes = new Hono();
 
@@ -19,6 +19,7 @@ const patchBody = z.object({
   name: z.string().min(3).optional(),
   active: z.boolean().optional(),
 });
+const authorizationBody = z.object({ user_ids: z.array(z.number().int().positive()).max(100) });
 
 type TerminalRow = {
   id: string;
@@ -28,7 +29,8 @@ type TerminalRow = {
 };
 
 terminalsRoutes.get('/', requirePerm('terminals.manage'), async (c) => {
-  const terminals = await getDb().query<TerminalRow & { last_used: string | null; punches_today: string }>(
+  const db = getDb();
+  const terminals = await db.query<TerminalRow & { last_used: string | null; punches_today: string }>(
     `SELECT t.id, t.name, t.active, t.registered_at,
             max(a.server_at)::text AS last_used,
             count(*) FILTER (WHERE a.punch_date = CURRENT_DATE)::text AS punches_today
@@ -37,9 +39,29 @@ terminalsRoutes.get('/', requirePerm('terminals.manage'), async (c) => {
       GROUP BY t.id, t.name, t.active, t.registered_at
       ORDER BY t.name`,
   );
+  const authorizations = await db.query<{ terminal_id: string; user_id: string }>(
+    'SELECT terminal_id, user_id::text AS user_id FROM terminal_authorizations ORDER BY terminal_id, user_id',
+  );
   return c.json({
-    terminals: terminals.map((t) => ({ ...t, punches_today: Number(t.punches_today) })),
+    terminals: terminals.map((t) => ({
+      ...t,
+      punches_today: Number(t.punches_today),
+      authorized_user_ids: authorizations.filter((a) => a.terminal_id === t.id).map((a) => Number(a.user_id)),
+    })),
   });
+});
+
+terminalsRoutes.get('/eligible-users', requirePerm('terminals.manage'), async (c) => {
+  const accounts = await getDb().query<{ id: string; display_name: string; login: string; role: string; employee_id: string | null }>(
+    `SELECT id::text AS id, display_name, login, role, employee_id
+       FROM users WHERE active = true AND role <> 'direction'
+      ORDER BY display_name`,
+  );
+  const users = [];
+  for (const account of accounts) {
+    if (await hasPermission(account.role, 'terminals.access')) users.push({ ...account, id: Number(account.id) });
+  }
+  return c.json({ users });
 });
 
 terminalsRoutes.post('/', requirePerm('terminals.manage'), async (c) => {
@@ -102,4 +124,49 @@ terminalsRoutes.patch('/:id', requirePerm('terminals.manage'), async (c) => {
     actorName: actorName(c),
   });
   return c.json({ terminal: updated });
+});
+
+terminalsRoutes.put('/:id/authorizations', requirePerm('terminals.manage'), async (c) => {
+  const id = c.req.param('id') ?? '';
+  const parsed = authorizationBody.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: 'Liste de responsables invalide.' }, 400);
+
+  const db = getDb();
+  const terminal = await db.one<TerminalRow>('SELECT * FROM terminals WHERE id = $1', [id]);
+  if (!terminal) return c.json({ error: 'Terminal introuvable.' }, 404);
+  const userIds = [...new Set(parsed.data.user_ids)];
+  const before = await db.query<{ user_id: string }>(
+    'SELECT user_id::text AS user_id FROM terminal_authorizations WHERE terminal_id = $1 ORDER BY user_id', [id],
+  );
+
+  for (const userId of userIds) {
+    const account = await db.one<{ id: string; role: string; active: boolean }>(
+      'SELECT id::text AS id, role, active FROM users WHERE id = $1', [userId],
+    );
+    if (!account || !account.active) return c.json({ error: 'Un compte sélectionné est introuvable ou inactif.' }, 400);
+    if (!await hasPermission(account.role, 'terminals.access')) {
+      return c.json({ error: 'Accordez d’abord le droit « Utiliser les terminaux de pointage autorisés » au rôle de ce compte.' }, 400);
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.query('DELETE FROM terminal_authorizations WHERE terminal_id = $1', [id]);
+    for (const userId of userIds) {
+      await tx.query(
+        'INSERT INTO terminal_authorizations (terminal_id, user_id, assigned_by) VALUES ($1, $2, $3)',
+        [id, userId, actorId(c)],
+      );
+    }
+  });
+
+  await writeAudit(db, {
+    entity: 'terminal',
+    entityId: id,
+    action: 'authorization_update',
+    before: before.map((row) => Number(row.user_id)),
+    after: userIds,
+    actorId: actorId(c),
+    actorName: actorName(c),
+  });
+  return c.json({ ok: true, authorized_user_ids: userIds });
 });
