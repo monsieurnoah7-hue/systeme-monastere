@@ -1890,33 +1890,37 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
           )}
 
           {activeTab === 'permissions' && canManagePermissions && (
-            <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-2 pt-2 border-t border-line/40 text-xs">
               {/* Real-time Search */}
-              <div className="relative w-44 sm:w-60 shrink-0">
+              <div className="relative w-full sm:w-60 shrink-0">
                 <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
                 <input
                   value={permSearch}
                   onChange={(e) => setPermSearch(e.target.value)}
-                  placeholder="Filtrer action, permission..."
-                  className="h-7.5 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                  aria-label="Rechercher une permission par nom ou identifiant"
+                  placeholder="Rechercher une permission…"
+                  className="h-11 w-full rounded-lg border border-line bg-surface/90 pl-9 pr-10 text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none focus-visible:ring-2 focus-visible:ring-amber transition-all shadow-2xs"
                 />
                 {permSearch && (
                   <button
+                    type="button"
+                    aria-label="Effacer la recherche"
                     onClick={() => setPermSearch('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-md text-ink-faint hover:text-ink hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                   >
-                    <X size={12} />
+                    <X size={15} />
                   </button>
                 )}
               </div>
 
-              {/* Module Filter Chips scrolling freely across 100% canvas width */}
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 flex-1 min-w-0">
+              {/* Module filters wrap so every option can be reached without horizontal scrolling. */}
+              <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0" role="group" aria-label="Filtrer par module">
                 <button
                   type="button"
+                  aria-pressed={permGroupFilter === 'all'}
                   onClick={() => setPermGroupFilter('all')}
                   className={cx(
-                    'px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs cursor-pointer',
+                    'min-h-10 px-3 rounded-full text-xs font-semibold shrink-0 transition-colors flex items-center gap-1.5 border shadow-2xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2',
                     permGroupFilter === 'all'
                       ? 'bg-amber text-white border-amber shadow-xs font-bold'
                       : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
@@ -1929,9 +1933,10 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                   <button
                     key={g.label}
                     type="button"
+                    aria-pressed={permGroupFilter === g.label}
                     onClick={() => setPermGroupFilter(g.label)}
                     className={cx(
-                      'px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs whitespace-nowrap cursor-pointer',
+                      'min-h-10 px-3 rounded-full text-xs font-semibold shrink-0 transition-colors flex items-center gap-1.5 border shadow-2xs whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2',
                       permGroupFilter === g.label
                         ? 'bg-amber text-white border-amber shadow-xs font-bold'
                         : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
@@ -2515,25 +2520,21 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
             </CardHeader>
 
             {hasUnsavedPerms ? (
-              <div className="flex items-center justify-between bg-amber-wash/80 border-b border-amber/20 px-5 py-2.5 text-xs text-amber font-medium">
+              <div role="status" aria-live="polite" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-amber-wash/80 border-b border-amber/20 px-4 sm:px-5 py-3 text-sm text-amber font-medium">
                 <span className="flex items-center gap-2">
                   <AlertTriangle size={15} />
                   Vous avez des modifications de permissions non sauvegardées.
                 </span>
-                <span className="underline cursor-pointer" onClick={() => void savePermissions()}>
+                <button type="button" disabled={busy} className="min-h-11 self-start sm:self-auto rounded-lg px-3 font-semibold underline underline-offset-2 hover:bg-amber/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber disabled:opacity-50" onClick={() => void savePermissions()}>
                   Sauvegarder maintenant
-                </span>
+                </button>
               </div>
             ) : null}
 
             <CardContent className="p-0">
               {permMatrix && permDraft ? (
                 <div>
-                  <div className="sm:hidden px-4 py-2 bg-surface-2/60 border-b border-line flex items-center justify-between text-[11px] text-ink-soft">
-                    <span>Glissez horizontalement pour configurer tous les rôles</span>
-                    <span className="font-mono font-bold text-amber">← →</span>
-                  </div>
-                  <div className="max-h-[calc(100vh-280px)] min-h-[380px] overflow-y-auto overflow-x-auto scroll-thin relative border-b border-line">
+                  <div className="hidden md:block max-h-[calc(100vh-280px)] min-h-[380px] overflow-y-auto overflow-x-auto scroll-thin relative border-b border-line">
                     <table className="w-full min-w-[680px] text-left border-separate border-spacing-0">
                       <thead className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
                         <tr>
@@ -2692,9 +2693,10 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                                           type="button"
                                           role="checkbox"
                                           aria-checked={isChecked}
+                                          aria-label={`${isChecked ? 'Retirer' : 'Accorder'} « ${meta?.label ?? action} » au rôle « ${roleName} »`}
                                           onClick={() => togglePerm(action, role)}
                                           className={cx(
-                                            'inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs font-bold transition-all shadow-xs active:scale-90',
+                                            'inline-flex h-11 w-11 items-center justify-center rounded-lg border text-xs font-bold transition-colors shadow-xs active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
                                             isChecked
                                               ? isView
                                                 ? 'border-blue-500 bg-blue-600 text-white shadow-xs'
@@ -2715,6 +2717,74 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                         )))}
                       </tbody>
                     </table>
+                  </div>
+                  <div className="md:hidden border-b border-line divide-y divide-line/70">
+                    <div className="px-4 py-3 bg-surface-2/60 text-xs text-ink-soft">
+                      Touchez un rôle pour accorder ou retirer ce droit. Les changements sont enregistrés ensemble.
+                    </div>
+                    {displayGroups.length === 0 ? (
+                      <p className="px-4 py-10 text-center text-sm text-ink-soft" role="status">
+                        Aucune permission ne correspond à votre recherche.
+                      </p>
+                    ) : displayGroups.map((group) => (
+                      <section key={group.label} aria-label={group.label}>
+                        <h3 className="sticky top-0 z-[1] bg-paper-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-ink-soft border-y border-line/70">
+                          {group.label}
+                        </h3>
+                        <div className="p-3 space-y-3">
+                          {group.actions.map((action) => {
+                            const meta = permMatrix.actions.find((item) => item.action === action);
+                            const isView = meta?.kind === 'view' || action.endsWith('.view');
+                            return (
+                              <article key={action} className="rounded-xl border border-line bg-surface p-3 shadow-xs">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <h4 className="text-sm font-semibold leading-5 text-ink">{meta?.label ?? action}</h4>
+                                    <p className="mt-1 font-mono text-[11px] text-ink-faint break-all">{action}</p>
+                                  </div>
+                                  <span className={cx(
+                                    'shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium',
+                                    isView ? 'border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-amber/30 bg-amber/10 text-amber-700 dark:text-amber-300',
+                                  )}>
+                                    {isView ? <Eye size={13} aria-hidden="true" /> : <Zap size={13} aria-hidden="true" />}
+                                    {isView ? 'Lecture' : 'Action'}
+                                  </span>
+                                </div>
+                                <div className="mt-3 grid grid-cols-1 min-[390px]:grid-cols-2 gap-2">
+                                  {permMatrix.roles.map((role) => {
+                                    const roleDetail = availableRoles.find((item) => item.id === role);
+                                    const roleName = roleDetail?.name ?? ROLE_LABEL[role] ?? role;
+                                    const checked = role === 'direction' || !!permDraft[action]?.[role];
+                                    const locked = role === 'direction';
+                                    return (
+                                      <button
+                                        key={role}
+                                        type="button"
+                                        role="checkbox"
+                                        aria-checked={checked}
+                                        aria-disabled={locked || undefined}
+                                        aria-label={locked ? `Accès permanent garanti pour ${roleName}` : `${checked ? 'Retirer' : 'Accorder'} « ${meta?.label ?? action} » au rôle « ${roleName} »`}
+                                        disabled={locked}
+                                        onClick={() => togglePerm(action, role)}
+                                        className={cx(
+                                          'min-h-11 flex items-center justify-between gap-2 rounded-lg border px-3 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-default',
+                                          locked ? 'border-green/30 bg-green/5 text-ink-soft' : checked ? 'border-amber/40 bg-amber/10 text-ink' : 'border-line bg-paper/50 text-ink-soft hover:border-ink-faint',
+                                        )}
+                                      >
+                                        <span className="truncate">{roleName}</span>
+                                        <span className={cx('inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border', checked ? locked ? 'border-green/30 bg-green/10 text-green' : 'border-amber bg-amber text-white' : 'border-line text-transparent')}>
+                                          <Check size={13} aria-hidden="true" />
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ))}
                   </div>
                 </div>
               ) : (
