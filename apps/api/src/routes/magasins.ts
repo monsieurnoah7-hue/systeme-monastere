@@ -4,6 +4,7 @@ import { getDb } from '../db/index.js';
 import { writeAudit } from '../lib/audit.js';
 import { actorId, actorName, requireAuth } from '../middleware/auth.js';
 import { requirePerm } from '../middleware/permissions.js';
+import { visibleStoreIds, canAccessStore } from '../lib/store-access.js';
 
 export type MagasinRow = {
   id: string;
@@ -57,13 +58,15 @@ export const magasinsRoutes = new Hono();
 magasinsRoutes.use('*', requireAuth);
 
 magasinsRoutes.get('/', requirePerm('magasins.view'), async (c) => {
-  const magasins = await getDb().query<MagasinRow>(
+  const rows = await getDb().query<MagasinRow>(
     `SELECT m.*,
             (SELECT count(*)::int FROM tools t WHERE t.magasin_id = m.id) AS tools_count,
             (SELECT count(*)::int FROM stock_refs s WHERE s.magasin_id = m.id) AS stock_count
        FROM magasins m
       ORDER BY m.name`,
   );
+  const ids = await visibleStoreIds(c.get('auth').user.id);
+  const magasins = ids === null ? rows : rows.filter((magasin) => ids.includes(magasin.id));
   return c.json({ magasins });
 });
 
@@ -238,6 +241,7 @@ magasinsRoutes.get('/:id', requirePerm('magasins.view'), async (c) => {
   const db = getDb();
   const magasin = await db.one<MagasinRow>('SELECT * FROM magasins WHERE id = $1', [id]);
   if (!magasin) return c.json({ error: 'Magasin introuvable.' }, 404);
+  if (!await canAccessStore(c.get('auth').user.id, id, 'can_view')) return c.json({ error: 'Ce magasin ne vous est pas attribué.' }, 403);
   const [tools, stock, loans] = await Promise.all([
     db.query(
       `SELECT t.id, t.name, t.category, t.status, t.condition, t.status_reason,

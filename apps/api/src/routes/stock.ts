@@ -6,6 +6,7 @@ import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth
 import { hasPermission, requirePerm } from '../middleware/permissions.js';
 import { isSuperAdmin } from '../lib/permissions.js';
 import type { Role } from '../types.js';
+import { canAccessStore, visibleStoreIds } from '../lib/store-access.js';
 
 export const stockRoutes = new Hono();
 
@@ -54,6 +55,7 @@ type StockRefRow = {
   category: string;
   unit: string;
   location: string;
+  magasin_id?: string | null;
   min_qty: string;
   supplier: string | null;
   brand: string | null;
@@ -87,6 +89,11 @@ stockRoutes.get('/refs', requirePerm('stock.view'), async (c) => {
   if (magasinId) {
     params.push(magasinId);
     magasinWhere = `WHERE r.magasin_id = $1`;
+  }
+  const storeIds = await visibleStoreIds(c.get('auth').user.id);
+  if (storeIds !== null) {
+    params.push(storeIds);
+    magasinWhere += `${magasinWhere ? ' AND' : 'WHERE'} r.magasin_id = ANY($${params.length}::text[])`;
   }
   const refs = await getDb().query(
     `SELECT r.*, m.name AS magasin_name, m.code AS magasin_code,
@@ -135,6 +142,11 @@ stockRoutes.get('/movements', requirePerm('stock.view'), async (c) => {
   if (q) {
     params.push(`%${q.toLowerCase()}%`);
     where.push(`(lower(r.name) LIKE $${params.length} OR lower(coalesce(m.beneficiary,'')) LIKE $${params.length} OR lower(coalesce(m.actor,'')) LIKE $${params.length} OR lower(coalesce(m.doc_ref,'')) LIKE $${params.length})`);
+  }
+  const storeIds = await visibleStoreIds(c.get('auth').user.id);
+  if (storeIds !== null) {
+    params.push(storeIds);
+    where.push(`r.magasin_id = ANY($${params.length}::text[])`);
   }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const movements = await getDb().query(
@@ -310,6 +322,12 @@ stockRoutes.post(
     const db = getDb();
     const ref = await db.one<StockRefRow>('SELECT * FROM stock_refs WHERE id = $1', [data.ref_id]);
     if (!ref) return c.json({ error: 'Référence introuvable.' }, 404);
+    if (!await canAccessStore(c.get('auth').user.id, ref.magasin_id, 'can_move_stock')) {
+      return c.json({ error: 'Vous ne pouvez pas enregistrer de mouvement dans ce magasin.' }, 403);
+    }
+    if (data.move_type === 'transfer' && !await canAccessStore(c.get('auth').user.id, data.target_magasin_id, 'can_move_stock')) {
+      return c.json({ error: 'Le magasin destinataire ne vous est pas attribué.' }, 403);
+    }
 
     const current = await refQty(data.ref_id);
 
@@ -690,6 +708,15 @@ stockRoutes.post('/refs/batch-transfer', requirePerm('stock.move'), async (c) =>
   const { ids, magasin_id } = body.data;
   const db = getDb();
   const targetMagasin = magasin_id?.trim() || null;
+  const userId = c.get('auth').user.id;
+  const sourceRefs = await db.query<{ id: number; magasin_id: string | null }>(
+    'SELECT id, magasin_id FROM stock_refs WHERE id = ANY($1::bigint[])', [ids],
+  );
+  if (sourceRefs.length !== ids.length) return c.json({ error: 'Une ou plusieurs références sont introuvables.' }, 404);
+  for (const ref of sourceRefs) {
+    if (!await canAccessStore(userId, ref.magasin_id, 'can_move_stock')) return c.json({ error: 'Une référence provient d’un magasin non attribué.' }, 403);
+  }
+  if (!await canAccessStore(userId, targetMagasin, 'can_move_stock')) return c.json({ error: 'Le magasin de destination ne vous est pas attribué.' }, 403);
 
   let magName = '📁 Brouillon / Non affecté';
   let magLocation = 'Quincaillerie';

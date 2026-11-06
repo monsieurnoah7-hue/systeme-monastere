@@ -259,6 +259,18 @@ CREATE TABLE IF NOT EXISTS terminal_authorizations (
   PRIMARY KEY (terminal_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS terminal_authorizations_user_idx ON terminal_authorizations(user_id, terminal_id);
+CREATE TABLE IF NOT EXISTS user_magasin_access (
+  user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  magasin_id text NOT NULL REFERENCES magasins(id) ON DELETE CASCADE,
+  can_view boolean NOT NULL DEFAULT true,
+  can_scan boolean NOT NULL DEFAULT false,
+  can_move_stock boolean NOT NULL DEFAULT false,
+  can_lend_tools boolean NOT NULL DEFAULT false,
+  can_return_tools boolean NOT NULL DEFAULT false,
+  assigned_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, magasin_id)
+);
+CREATE INDEX IF NOT EXISTS user_magasin_access_magasin_idx ON user_magasin_access(magasin_id, user_id);
 
 ALTER TABLE attendance DROP CONSTRAINT IF EXISTS attendance_punch_type_check;
 ALTER TABLE attendance ADD CONSTRAINT attendance_punch_type_check
@@ -505,7 +517,7 @@ CREATE TABLE IF NOT EXISTS projects (
   budget_hours numeric NOT NULL DEFAULT 0,
   spent_hours numeric NOT NULL DEFAULT 0,
   hourly_rate_fcfa numeric NOT NULL DEFAULT 0,
-  penalty_rate_daily_fcfa numeric NOT NULL DEFAULT 0,
+  penalty_rate_daily_fcfa numeric NOT NULL DEFAULT 10000,
   ratio_value numeric,
   ratio_unit text,
   ratio_basis text,
@@ -523,6 +535,30 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 CREATE INDEX IF NOT EXISTS projects_code_idx ON projects(code);
 CREATE INDEX IF NOT EXISTS projects_deadline_idx ON projects(delivery_deadline);
+CREATE TABLE IF NOT EXISTS project_work_logs (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  employee_id text NOT NULL REFERENCES employees(id),
+  work_date date NOT NULL DEFAULT CURRENT_DATE,
+  hours numeric NOT NULL CHECK (hours > 0),
+  note text,
+  created_by bigint REFERENCES users(id),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS project_work_logs_project_worker_idx ON project_work_logs(project_id, employee_id, work_date);
+CREATE TABLE IF NOT EXISTS project_incidents (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  kind text NOT NULL CHECK (kind IN ('power_outage','scope_change','justified_absence','unjustified_absence','work_accident','other')),
+  description text NOT NULL,
+  delay_days numeric NOT NULL DEFAULT 0 CHECK (delay_days >= 0),
+  employee_ids text[] NOT NULL DEFAULT '{}',
+  excluded_from_accountability boolean NOT NULL DEFAULT true,
+  event_date date NOT NULL DEFAULT CURRENT_DATE,
+  created_by bigint REFERENCES users(id),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS project_incidents_project_idx ON project_incidents(project_id, event_date);
 
 -- Migrations 016/017: projets configurables et quantité pour calculer le budget par ratio.
 ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_category_check;
@@ -538,6 +574,8 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_value numeric;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_unit text;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_basis text;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_quantity numeric;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_deadline date;
+ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa SET DEFAULT 10000;
 `;
 
 export const MIGRATION_NAME = '018_terminal_authorizations';

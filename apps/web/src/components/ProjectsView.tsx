@@ -14,8 +14,8 @@ import {
   Edit2,
   Trash2,
 } from 'lucide-react';
-import type { Project, ProjectsResponse, Employee } from '../lib/api';
-import { createProject, updateProject, deleteProject } from '../lib/api';
+import type { Project, ProjectsResponse, Employee, ProjectIncident } from '../lib/api';
+import { createProject, updateProject, deleteProject, addProjectWorkLog, fetchProjectIncidents, addProjectIncident } from '../lib/api';
 import { Button, Card, Modal, Banner, Spinner, cx } from './ui';
 
 export function ProjectsView({
@@ -48,7 +48,14 @@ export function ProjectsView({
   // Quick Hours Modal
   const [quickHoursProject, setQuickHoursProject] = useState<Project | null>(null);
   const [quickHoursValue, setQuickHoursValue] = useState<string>('');
+  const [quickHoursEmployeeId, setQuickHoursEmployeeId] = useState('');
+  const [quickHoursDate, setQuickHoursDate] = useState(new Date().toISOString().slice(0, 10));
   const [quickHoursBusy, setQuickHoursBusy] = useState(false);
+  const [incidentProject, setIncidentProject] = useState<Project | null>(null);
+  const [incidents, setIncidents] = useState<ProjectIncident[]>([]);
+  const [incidentBusy, setIncidentBusy] = useState(false);
+  const [incidentError, setIncidentError] = useState<string | null>(null);
+  const [incidentForm, setIncidentForm] = useState({ kind: 'power_outage' as ProjectIncident['kind'], description: '', delay_days: '0', event_date: new Date().toISOString().slice(0, 10), employee_id: '' });
 
   const projects = data?.projects ?? [];
   const summary = data?.summary;
@@ -99,8 +106,9 @@ export function ProjectsView({
       assigned_worker_names: [],
       ratio_basis: null,
       ratio_quantity: null,
-      penalty_rate_daily_fcfa: 0,
+      penalty_rate_daily_fcfa: 10000,
       delivery_deadline: '',
+      ratio_deadline: '',
       installation_start_date: '',
       status: 'planifie',
     });
@@ -137,6 +145,10 @@ export function ProjectsView({
     try {
       const projectForm = {
         ...form,
+        // Le cumul est géré par les feuilles de temps : ne jamais réécrire
+        // une ancienne valeur du formulaire lors d'une modification du projet.
+        spent_hours: undefined,
+        ratio_deadline: form.ratio_deadline || form.delivery_deadline,
         ...(calculatedBudget !== null ? { budget_hours: calculatedBudget } : {}),
         ...(legacyRatioUnchanged ? { ratio_value: undefined, ratio_unit: undefined, ratio_quantity: undefined } : {}),
       };
@@ -165,19 +177,57 @@ export function ProjectsView({
   }
 
   async function handleAddHours() {
-    if (!quickHoursProject) return;
+    if (!quickHoursProject || !quickHoursEmployeeId) return;
     const added = Number(quickHoursValue);
     if (isNaN(added) || added <= 0) return;
     setQuickHoursBusy(true);
     try {
-      const newSpent = Number(quickHoursProject.spent_hours) + added;
-      await updateProject(quickHoursProject.id, { spent_hours: newSpent });
+      await addProjectWorkLog(quickHoursProject.id, {
+        employee_id: quickHoursEmployeeId,
+        work_date: quickHoursDate,
+        hours: added,
+        note: null,
+      });
       setQuickHoursProject(null);
       onRefresh();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Erreur');
     } finally {
       setQuickHoursBusy(false);
+    }
+  }
+
+  async function openIncidentLog(project: Project) {
+    setIncidentProject(project);
+    setIncidents([]);
+    setIncidentError(null);
+    setIncidentForm({ kind: 'power_outage', description: '', delay_days: '0', event_date: new Date().toISOString().slice(0, 10), employee_id: '' });
+    try {
+      setIncidents(await fetchProjectIncidents(project.id));
+    } catch (e) {
+      setIncidentError(e instanceof Error ? e.message : 'Impossible de charger les imprévus.');
+    }
+  }
+
+  async function handleAddIncident() {
+    if (!incidentProject || incidentForm.description.trim().length < 3) return;
+    setIncidentBusy(true);
+    try {
+      const incident = await addProjectIncident(incidentProject.id, {
+        kind: incidentForm.kind,
+        description: incidentForm.description.trim(),
+        delay_days: Number(incidentForm.delay_days) || 0,
+        employee_ids: incidentForm.employee_id ? [incidentForm.employee_id] : [],
+        excluded_from_accountability: incidentForm.kind !== 'unjustified_absence',
+        event_date: incidentForm.event_date,
+      });
+      setIncidents((current) => [incident, ...current]);
+      setIncidentForm((current) => ({ ...current, description: '', delay_days: '0' }));
+      onRefresh();
+    } catch (e) {
+      setIncidentError(e instanceof Error ? e.message : 'Impossible d’enregistrer l’imprévu.');
+    } finally {
+      setIncidentBusy(false);
     }
   }
 
@@ -491,17 +541,25 @@ export function ProjectsView({
                           </span>
                         </div>
 
-                        {/* Préjudice financier estimé si dépassement / retard */}
-                        {(hasOvertime || isOverdue) && (
+                        <div className="flex items-center justify-between rounded-lg border border-line bg-paper-2/40 p-2.5 text-[11px]">
+                          <span className="text-ink-faint flex items-center gap-1"><Clock size={12} /> Échéance du ratio :</span>
+                          <span className="font-mono font-bold text-ink">{p.ratio_deadline || p.delivery_deadline} · {p.ratio_delayed_workdays || 0} jour(s) ouvré(s) de retard</span>
+                        </div>
+
+                        {/* Estimation du coût projet; aucune retenue sur salaire n’est effectuée. */}
+                        {(hasOvertime || (p.ratio_delayed_workdays || 0) > 0) && (
                           <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-2 text-[11px] flex items-center justify-between text-red-600 dark:text-red-400">
                             <span className="font-semibold flex items-center gap-1">
                               <AlertTriangle size={12} />
-                              Manque à gagner évalué :
+                              Impact estimé · hors paie :
                             </span>
                             <span className="font-mono font-extrabold text-xs">
                               {(p.financial_damage_fcfa || 0).toLocaleString()} FCFA
                             </span>
                           </div>
+                        )}
+                        {hasOvertime && !p.accountability_data_complete && (
+                          <p className="text-[10px] text-ink-faint">Ventilation par exécutant incomplète : l’impact imputable attend les heures individuelles.</p>
                         )}
                       </div>
                     </div>
@@ -510,14 +568,22 @@ export function ProjectsView({
                     <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
                       {canEdit && <button
                         type="button"
+                        disabled={!p.assigned_worker_ids?.length}
+                        title={!p.assigned_worker_ids?.length ? 'Affectez d’abord au moins un exécutant' : 'Saisir les heures par exécutant'}
                         onClick={() => {
                           setQuickHoursProject(p);
                           setQuickHoursValue('');
+                          setQuickHoursEmployeeId(p.assigned_worker_ids?.[0] || '');
+                          setQuickHoursDate(new Date().toISOString().slice(0, 10));
                         }}
-                        className="flex items-center gap-1.5 rounded-lg border border-line bg-transparent px-3 py-2 text-[11px] font-semibold text-ink-soft transition-colors hover:bg-paper-2 hover:text-ink cursor-pointer"
+                        className="flex items-center gap-1.5 rounded-lg border border-line bg-transparent px-3 py-2 text-[11px] font-semibold text-ink-soft transition-colors hover:bg-paper-2 hover:text-ink cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Clock size={12} />
                         <span>Pointer Heures</span>
+                      </button>}
+
+                      {canEdit && <button type="button" onClick={() => void openIncidentLog(p)} className="rounded-lg border border-line px-3 py-2 text-[11px] font-semibold text-ink-soft hover:bg-paper-2 hover:text-ink">
+                        Signaler un imprévu
                       </button>}
 
                       {(canEdit || canDelete) && (
@@ -784,16 +850,18 @@ export function ProjectsView({
                 </p>
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Heures Consommées</label>
+                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Heures cumulées par exécutant</label>
                 <input
                   type="number"
                   value={form.spent_hours ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, spent_hours: e.target.value === '' ? undefined : Number(e.target.value) }))}
-                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
+                  readOnly
+                  aria-describedby="project-hours-help"
+                  className="h-9 w-full rounded-lg border border-line bg-paper-2 px-2.5 font-mono text-xs text-ink"
                 />
+                <p id="project-hours-help" className="mt-1 text-[10px] text-ink-faint">Mis à jour par les pointages individuels.</p>
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Taux Horaire (FCFA)</label>
+                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Coût horaire estimé (FCFA)</label>
                 <input
                   type="number"
                   value={form.hourly_rate_fcfa ?? ''}
@@ -836,7 +904,7 @@ export function ProjectsView({
                 />
               </div>
             </div>
-            <p className="text-[10px] text-ink-faint">Exemple : 2,5 heures par carreau × 4 carreaux = 10 heures de budget.</p>
+            <p className="text-[10px] text-ink-faint">Exemple : 2,5 h par carreau × 4 carreaux = 10 h. Référence d’impact : 10 000 FCFA par heure dépassée et par jour ouvré imputable, sans retenue automatique sur salaire.</p>
           </div>
 
           {/* Planification et délais propres à ce projet */}
@@ -854,6 +922,16 @@ export function ProjectsView({
                   onChange={(e) => setForm((f) => ({ ...f, delivery_deadline: e.target.value }))}
                   className="h-9 w-full rounded-lg border border-amber/50 bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
                 />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-semibold text-ink-soft">Échéance prévue du ratio</label>
+                <input
+                  type="date"
+                  value={form.ratio_deadline || ''}
+                  onChange={(e) => setForm((f) => ({ ...f, ratio_deadline: e.target.value || null }))}
+                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+                />
+                <p className="mt-1 text-[10px] text-ink-faint">Par défaut, la date limite de livraison.</p>
               </div>
               <div>
                 <label className="mb-1 block text-[11px] font-medium text-ink-soft">Début Pose Chantier</label>
@@ -914,7 +992,7 @@ export function ProjectsView({
             <Button variant="ghost" onClick={() => setQuickHoursProject(null)}>Annuler</Button>
             <Button
               variant="primary"
-              disabled={quickHoursBusy}
+              disabled={quickHoursBusy || !quickHoursEmployeeId || !quickHoursValue}
               onClick={() => void handleAddHours()}
               className="!bg-ink !text-paper hover:!bg-surface-3 hover:!text-ink"
             >
@@ -925,10 +1003,21 @@ export function ProjectsView({
       >
         <div className="space-y-3 text-xs">
           <p className="text-ink-soft">
-            Ajoutez le nombre d'heures effectuées par l'équipe aujourd'hui sur cette commande. Le système mettra à jour en direct le ratio par rapport au budget prévisionnel.
+            Saisissez les heures réellement travaillées par un exécutant. Elles alimentent le cumul et permettent une estimation par personne.
           </p>
           <div>
-            <label className="mb-1 block font-semibold text-ink">Nombre d'heures à ajouter</label>
+            <label className="mb-1 block font-semibold text-ink">Exécutant</label>
+            <select value={quickHoursEmployeeId} onChange={(e) => setQuickHoursEmployeeId(e.target.value)} className="h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink">
+              <option value="">Choisir un exécutant</option>
+              {quickHoursProject?.assigned_worker_ids.map((id, index) => <option key={id} value={id}>{quickHoursProject.assigned_worker_names[index] || employees.find((employee) => String(employee.id) === id)?.full_name || id}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block font-semibold text-ink">Date de travail</label>
+            <input type="date" value={quickHoursDate} onChange={(e) => setQuickHoursDate(e.target.value)} className="h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink" />
+          </div>
+          <div>
+            <label className="mb-1 block font-semibold text-ink">Heures effectuées</label>
             <input
               type="number"
               value={quickHoursValue}
@@ -937,6 +1026,45 @@ export function ProjectsView({
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono font-bold text-xs text-ink focus:border-amber focus:outline-none"
             />
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!incidentProject}
+        title={`Imprévus · ${incidentProject?.code ?? ''}`}
+        onClose={() => setIncidentProject(null)}
+        footer={<><Button variant="ghost" onClick={() => setIncidentProject(null)}>Fermer</Button><Button variant="primary" disabled={incidentBusy || !incidentForm.description.trim()} onClick={() => void handleAddIncident()}>{incidentBusy ? <Spinner /> : 'Enregistrer l’imprévu'}</Button></>}
+      >
+        <div className="space-y-4 text-sm">
+          <p className="rounded-lg border border-line bg-paper-2/50 p-3 text-xs text-ink-soft">Les jours fériés chômés et les jours non travaillés du profil sont exclus du décompte. Les coupures, changements de commande, absences et accidents sont consignés ici pour ajuster l’échéance. Cette estimation n’entraîne aucune retenue salariale.</p>
+          {incidentError && <Banner tone="error">{incidentError}</Banner>}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-ink-soft">Type d’imprévu
+              <select value={incidentForm.kind} onChange={(e) => setIncidentForm((f) => ({ ...f, kind: e.target.value as ProjectIncident['kind'] }))} className="mt-1 h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink">
+                <option value="power_outage">Coupure d’électricité</option><option value="scope_change">Travaux supplémentaires / changement de commande</option><option value="justified_absence">Absence justifiée</option><option value="unjustified_absence">Absence non justifiée</option><option value="work_accident">Accident de travail</option><option value="other">Autre imprévu</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-ink-soft">Personne concernée
+              <select value={incidentForm.employee_id} onChange={(e) => setIncidentForm((f) => ({ ...f, employee_id: e.target.value }))} className="mt-1 h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink">
+                <option value="">Toute l’équipe affectée</option>
+                {incidentProject?.assigned_worker_ids.map((id, index) => <option key={id} value={id}>{incidentProject.assigned_worker_names[index] || id}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-ink-soft">Date de l’événement
+              <input type="date" value={incidentForm.event_date} onChange={(e) => setIncidentForm((f) => ({ ...f, event_date: e.target.value }))} className="mt-1 h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink" />
+            </label>
+            <label className="text-xs font-semibold text-ink-soft">Jours ouvrés perdus
+              <input type="number" min="0" max="365" step="1" value={incidentForm.delay_days} onChange={(e) => setIncidentForm((f) => ({ ...f, delay_days: e.target.value }))} className="mt-1 h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink" />
+            </label>
+          </div>
+          <label className="block text-xs font-semibold text-ink-soft">Description / référence
+            <textarea value={incidentForm.description} onChange={(e) => setIncidentForm((f) => ({ ...f, description: e.target.value }))} rows={2} maxLength={500} className="mt-1 w-full rounded-lg border border-line bg-surface p-3 text-sm text-ink" placeholder="Ex. panne du générateur, période et justificatif…" />
+          </label>
+          {incidentForm.kind === 'unjustified_absence' && <p className="rounded-lg bg-amber-wash p-3 text-xs text-amber">Cette absence reste imputable à la personne concernée et ne décale pas l’échéance du ratio.</p>}
+          <section className="border-t border-line pt-3" aria-label="Historique des imprévus">
+            <h3 className="font-semibold text-ink">Historique</h3>
+            {incidents.length === 0 ? <p className="mt-2 text-xs text-ink-faint">Aucun imprévu enregistré.</p> : <ul className="mt-2 space-y-2">{incidents.map((incident) => <li key={incident.id} className="rounded-lg border border-line p-3 text-xs"><div className="flex justify-between gap-3 font-semibold text-ink"><span>{incident.kind.replaceAll('_', ' ')}</span><span>{incident.delay_days} j</span></div><p className="mt-1 text-ink-soft">{incident.event_date} · {incident.description}</p><p className="mt-1 text-ink-faint">{incident.excluded_from_accountability ? 'Décale l’échéance imputable' : 'Reste imputable à l’exécutant'}</p></li>)}</ul>}
+          </section>
         </div>
       </Modal>
     </div>

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import { hasPermission, requirePerm } from '../middleware/permissions.js';
+import { canAccessStore } from '../lib/store-access.js';
 
 export const scanRoutes = new Hono();
 
@@ -22,6 +23,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
   const rawCode = parsed.data.q.trim();
   const upper = rawCode.toUpperCase();
   const role = c.get('auth')?.user.role;
+  const userId = c.get('auth')?.user.id;
   const canRead = async (permission: 'tools.view' | 'stock.view' | 'employees.view' | 'terminals.manage') =>
     Boolean(role && await hasPermission(role, permission));
   const forbidden = () => c.json({ error: 'Votre droit de scan ne couvre pas la consultation de cet élément.' }, 403);
@@ -49,7 +51,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
         JOIN magasins m ON m.id = k.source_magasin_id
        WHERE k.id = $1 OR k.code = $1
     `, [kitId.toUpperCase()]);
-    if (kit) {
+    if (kit && userId && await canAccessStore(userId, kit.source_magasin_id, 'can_scan')) {
       const items = await db.query(`SELECT * FROM etabli_kit_items WHERE kit_id = $1 ORDER BY item_num ASC`, [kit.id]);
       return c.json({ kind: 'etabli_kit', kit, items, code: rawCode });
     }
@@ -74,7 +76,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
         WHERE t.id = $1`,
       [toolId],
     );
-    if (tool) return c.json({ kind: 'tool', tool, code: rawCode });
+    if (tool && userId && await canAccessStore(userId, tool.magasin_id, 'can_scan')) return c.json({ kind: 'tool', tool, code: rawCode });
   }
 
   if (badgeToken) {
@@ -98,7 +100,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
         WHERE r.id = $1`,
       [Number(stockId)],
     );
-    if (ref) return c.json({ kind: 'stock', ref: { ...ref, qty: Number(ref.qty) }, code: rawCode });
+    if (ref && userId && await canAccessStore(userId, ref.magasin_id, 'can_scan')) return c.json({ kind: 'stock', ref: { ...ref, qty: Number(ref.qty) }, code: rawCode });
   }
 
   // raw id fallbacks
@@ -119,7 +121,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
       WHERE t.id = $1`,
     [upper],
   );
-  if (tool) {
+  if (tool && userId && await canAccessStore(userId, tool.magasin_id, 'can_scan')) {
     if (!await canRead('tools.view')) return forbidden();
     return c.json({ kind: 'tool', tool, code: rawCode });
   }
@@ -148,7 +150,7 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
       JOIN magasins m ON m.id = k.source_magasin_id
      WHERE k.id = $1 OR k.code = $1
   `, [upper]);
-  if (directKit) {
+  if (directKit && userId && await canAccessStore(userId, directKit.source_magasin_id, 'can_scan')) {
     if (!await canRead('employees.view')) return forbidden();
     const items = await db.query(`SELECT * FROM etabli_kit_items WHERE kit_id = $1 ORDER BY item_num ASC`, [directKit.id]);
     return c.json({ kind: 'etabli_kit', kit: directKit, items, code: rawCode });
@@ -156,14 +158,14 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
 
   // Direct kit item match by tool_code
   const kitItem = await db.one(`
-    SELECT i.*, k.code AS kit_code, k.location AS etabli_location,
+    SELECT i.*, k.code AS kit_code, k.location AS etabli_location, k.source_magasin_id,
            e.full_name AS employee_name, e.job_title AS employee_job, e.photo_path AS employee_photo
       FROM etabli_kit_items i
       JOIN etabli_kits k ON k.id = i.kit_id
       JOIN employees e ON e.id = k.employee_id
      WHERE i.tool_code = $1
   `, [upper]);
-  if (kitItem) {
+  if (kitItem && userId && await canAccessStore(userId, kitItem.source_magasin_id, 'can_scan')) {
     if (!await canRead('employees.view')) return forbidden();
     return c.json({ kind: 'etabli_kit_item', item: kitItem, code: rawCode });
   }

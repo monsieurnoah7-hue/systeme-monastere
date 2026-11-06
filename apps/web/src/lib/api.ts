@@ -968,6 +968,7 @@ export type Project = {
   ratio_unit: string | null;
   ratio_basis: string | null;
   ratio_quantity: number | null;
+  ratio_deadline: string | null;
   delivery_deadline: string;
   installation_start_date?: string | null;
   installation_days: number;
@@ -984,6 +985,28 @@ export type Project = {
   penalties_cost_fcfa?: number;
   financial_damage_fcfa?: number;
   hours_progress_pct?: number;
+  ratio_delayed_workdays?: number;
+  attributable_overtime_hours?: number;
+  accountability_data_complete?: boolean;
+};
+
+export type ProjectWorkLog = {
+  id: number;
+  employee_id: string;
+  employee_name: string;
+  work_date: string;
+  hours: number;
+  note: string | null;
+};
+
+export type ProjectIncident = {
+  id: number;
+  kind: 'power_outage' | 'scope_change' | 'justified_absence' | 'unjustified_absence' | 'work_accident' | 'other';
+  description: string;
+  delay_days: number;
+  employee_ids: string[];
+  excluded_from_accountability: boolean;
+  event_date: string;
 };
 
 export type ProjectsResponse = {
@@ -1015,6 +1038,25 @@ export async function updateProject(id: string, data: Partial<Project>): Promise
     body: JSON.stringify(data),
   });
   return res.project;
+}
+
+export async function addProjectWorkLog(id: string, data: Pick<ProjectWorkLog, 'employee_id' | 'work_date' | 'hours' | 'note'>): Promise<Project> {
+  const res = await api<{ project: Project }>(`/api/projects/${encodeURIComponent(id)}/work-logs`, {
+    method: 'POST', body: JSON.stringify(data),
+  });
+  return res.project;
+}
+
+export async function fetchProjectIncidents(id: string): Promise<ProjectIncident[]> {
+  const res = await api<{ incidents: ProjectIncident[] }>(`/api/projects/${encodeURIComponent(id)}/incidents`);
+  return res.incidents;
+}
+
+export async function addProjectIncident(id: string, data: Omit<ProjectIncident, 'id'>): Promise<ProjectIncident> {
+  const res = await api<{ incident: ProjectIncident }>(`/api/projects/${encodeURIComponent(id)}/incidents`, {
+    method: 'POST', body: JSON.stringify(data),
+  });
+  return res.incident;
 }
 
 export async function deleteProject(id: string): Promise<void> {

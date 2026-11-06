@@ -2,6 +2,109 @@ import { env } from '../env.js';
 import { DDL, MIGRATION_DDL, MIGRATION_NAME } from './ddl.js';
 import { getDb } from './index.js';
 import { syncOfficialCftmData } from './cftm-data.js';
+import { DEFAULT_PERMISSIONS, PERMISSION_ACTIONS } from '../lib/permissions.js';
+
+type AccessProvision = {
+  employeeId: string;
+  role: string;
+  roleName: string;
+  description: string;
+  baseRole: string;
+  grants: string[];
+  logins?: string[];
+  terminal?: string;
+  stores?: { id: string; scan?: boolean; stock?: boolean; lend?: boolean; return?: boolean }[];
+};
+
+const REQUESTED_ACCESS: AccessProvision[] = [
+  { employeeId: 'EMP-001', role: 'direction', roleName: 'Direction (Super-Admin)', description: 'Super-administrateur du système', baseRole: 'direction', grants: [], terminal: 'TERM-FEAD' },
+  { employeeId: 'EMP-002', role: 'sg_pointage', roleName: 'Secrétariat général · pointage', description: 'Consultation des présences et accès à la borne dédiée', baseRole: 'travailleur', grants: ['attendance.view', 'terminals.access'], logins: ['mekeli'], terminal: 'TERM-7AFD' },
+  { employeeId: 'EMP-003', role: 'direction_formation_magasin', roleName: 'Direction formation · magasins autorisés', description: 'Accès de consultation et mouvements dans les magasins attribués, plus borne de pointage', baseRole: 'travailleur', grants: ['attendance.view', 'terminals.access', 'scanner.use', 'tools.view', 'loans.view', 'loans.create', 'loans.return', 'magasins.view', 'stock.view', 'stock.move', 'dashboard.view'], logins: ['kouomou'], terminal: 'TERM-BB37', stores: ['MAG-019', 'MAG-021', 'MAG-022', 'MAG-006'].map((id) => ({ id, scan: true, stock: true, lend: true, return: true })) },
+  { employeeId: 'EMP-004', role: 'direction_projets', roleName: 'Direction des projets', description: 'Pilotage et mise à jour des commandes et chantiers', baseRole: 'travailleur', grants: ['projects.view', 'projects.create', 'projects.edit', 'dashboard.view', 'reports.view'], logins: ['kamga'] },
+  { employeeId: 'EMP-005', role: 'economat_magasin', roleName: 'Économat · magasins autorisés', description: 'Entrées et sorties dans les magasins attribués', baseRole: 'travailleur', grants: ['scanner.use', 'tools.view', 'loans.view', 'loans.create', 'loans.return', 'magasins.view', 'stock.view', 'stock.move', 'dashboard.view'], logins: ['etoga'], stores: ['MAG-019', 'MAG-021', 'MAG-022', 'MAG-006'].map((id) => ({ id, scan: true, stock: true, lend: true, return: true })) },
+  { employeeId: 'EMP-006', role: 'controleur_chef', roleName: 'Contrôleur en chef · ateliers et magasins dédiés', description: 'Supervision atelier, pointage, scan des outils et mouvements limités aux panneaux et machines défectueuses', baseRole: 'chef_atelier', grants: ['terminals.access', 'scanner.use', 'stock.move'], logins: ['chef', 'lawson'], terminal: 'TERM-622B', stores: ['MAG-012', 'MAG-014'].map((id) => ({ id, scan: true } )).concat(['MAG-022', 'MAG-018'].map((id) => ({ id, scan: true, stock: true, lend: true, return: true }))) },
+  { employeeId: 'EMP-007', role: 'controleur_adjoint', roleName: 'Contrôleur adjoint · scan ateliers', description: 'Supervision existante et scan des outils des ateliers', baseRole: 'chef_atelier', grants: ['scanner.use'], logins: ['mvogo'], stores: ['MAG-012', 'MAG-014'].map((id) => ({ id, scan: true })) },
+  { employeeId: 'EMP-008', role: 'responsable_livraisons_parc', roleName: 'Responsable des livraisons · gestion du parc', description: 'Gestion du parc automobile et des groupes électrogènes', baseRole: 'travailleur', grants: ['tools.view', 'tools.create', 'tools.edit', 'tools.delete', 'tools.edit_status'], logins: ['magasin226', 'minkoumba'] },
+  { employeeId: 'EMP-009', role: 'expert_comptable', roleName: 'Expert-comptable', description: 'Consultation financière et rapports comptables', baseRole: 'travailleur', grants: ['financial.view', 'reports.view', 'reports.export', 'dashboard.view'], logins: ['sangue'] },
+  { employeeId: 'EMP-010', role: 'comptable', roleName: 'Comptable', description: 'Consultation financière et rapports comptables', baseRole: 'travailleur', grants: ['financial.view', 'reports.view', 'dashboard.view'], logins: ['sandjo'] },
+  { employeeId: 'EMP-025', role: 'scanner_atelier_obionda', roleName: 'Scanner atelier · Obionda', description: 'Consultation et scan des outils dans les ateliers', baseRole: 'travailleur', grants: ['scanner.use', 'tools.view'], logins: ['obionda'], stores: ['MAG-012', 'MAG-014'].map((id) => ({ id, scan: true })) },
+  { employeeId: 'EMP-028', role: 'scanner_atelier_tiembomba', roleName: 'Scanner atelier · Tiembomba', description: 'Consultation et scan des outils dans les ateliers', baseRole: 'travailleur', grants: ['scanner.use', 'tools.view'], logins: ['tiembomba'], stores: ['MAG-012', 'MAG-014'].map((id) => ({ id, scan: true })) },
+  { employeeId: 'EMP-055', role: 'vigile_pointage', roleName: 'Vigile · pointage', description: 'Consultation des présences et accès à la borne dédiée', baseRole: 'travailleur', grants: ['attendance.view', 'terminals.access'], logins: ['abdoulaye', 'njarayam'], terminal: 'TERM-D527' },
+];
+
+async function provisionRequestedAccess(): Promise<void> {
+  const db = getDb();
+  await db.query(`INSERT INTO terminals (id, name) VALUES
+    ('TERM-D527', 'Borne · Vigile'),
+    ('TERM-7AFD', 'Borne · Secrétariat général'),
+    ('TERM-BB37', 'Borne · Direction formation'),
+    ('TERM-622B', 'Borne · Contrôleur en chef'),
+    ('TERM-FEAD', 'Borne · Super-Admin')
+    ON CONFLICT (id) DO NOTHING`);
+
+  for (const item of REQUESTED_ACCESS) {
+    const marker = `019_access_${item.employeeId.toLowerCase()}`;
+    if (await db.one('SELECT name FROM _migrations WHERE name = $1', [marker])) continue;
+    const user = await db.one<{ id: number; role: string }>(
+      `SELECT id, role FROM users WHERE active = true AND (
+         employee_id = $1 OR lower(login) = ANY($2::text[])
+       ) ORDER BY (employee_id = $1) DESC, id LIMIT 1`,
+      [item.employeeId, item.logins ?? []],
+    );
+    if (!user) continue; // Retry on a later cold start if the worker account is created afterward.
+
+    if (item.employeeId !== 'EMP-001') {
+      await db.query(
+        `INSERT INTO roles (id, name, description, is_system) VALUES ($1, $2, $3, false)
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description`,
+        [item.role, item.roleName, item.description],
+      );
+      const configured = await db.query<{ action: string; allowed: boolean }>(
+        'SELECT action, allowed FROM role_permissions WHERE role = $1', [item.baseRole],
+      );
+      const basePermissions = new Map(configured.map((permission) => [permission.action, permission.allowed]));
+      const allowedPermissions = PERMISSION_ACTIONS.map((action) =>
+        item.grants.includes(action) || (basePermissions.get(action) ?? DEFAULT_PERMISSIONS[action].includes(item.baseRole as any)),
+      );
+      await db.query(
+        `INSERT INTO role_permissions (role, action, allowed)
+         SELECT $1, permission.action, permission.allowed
+           FROM unnest($2::text[], $3::boolean[]) AS permission(action, allowed)
+         ON CONFLICT (role, action) DO UPDATE SET allowed = EXCLUDED.allowed`,
+        [item.role, [...PERMISSION_ACTIONS], allowedPermissions],
+      );
+      await db.query('UPDATE users SET role = $2 WHERE id = $1', [user.id, item.role]);
+    }
+
+    if (item.terminal) {
+      await db.query('DELETE FROM terminal_authorizations WHERE user_id = $1', [user.id]);
+      await db.query(
+        'INSERT INTO terminal_authorizations (terminal_id, user_id, assigned_by) VALUES ($1, $2, (SELECT id FROM users WHERE employee_id = \'EMP-001\' ORDER BY id LIMIT 1)) ON CONFLICT DO NOTHING',
+        [item.terminal, user.id],
+      );
+    }
+
+    if (item.stores) {
+      await db.query('DELETE FROM user_magasin_access WHERE user_id = $1', [user.id]);
+      for (const store of item.stores) {
+        await db.query(
+          `INSERT INTO user_magasin_access (user_id, magasin_id, can_view, can_scan, can_move_stock, can_lend_tools, can_return_tools)
+           SELECT $1, id, true, $3, $4, $5, $6 FROM magasins WHERE id = $2
+           ON CONFLICT (user_id, magasin_id) DO UPDATE SET can_view = true, can_scan = EXCLUDED.can_scan,
+             can_move_stock = EXCLUDED.can_move_stock, can_lend_tools = EXCLUDED.can_lend_tools, can_return_tools = EXCLUDED.can_return_tools`,
+          [user.id, store.id, Boolean(store.scan), Boolean(store.stock), Boolean(store.lend), Boolean(store.return)],
+        );
+      }
+    }
+    await db.query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [marker]);
+  }
+
+  const penaltyMarker = '019_project_penalty_rate_v1';
+  if (!(await db.one('SELECT name FROM _migrations WHERE name = $1', [penaltyMarker]))) {
+    await db.query('UPDATE projects SET penalty_rate_daily_fcfa = 10000 WHERE penalty_rate_daily_fcfa = 0');
+    await db.query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [penaltyMarker]);
+  }
+}
 
 // Un seul aller-retour par lot : verrou conseil inclus dans la même
 // requête multi-énoncés → transaction implicite unique, les cold starts
@@ -56,6 +159,8 @@ export async function migrate(): Promise<void> {
     }
     await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [SEED_LOCK]);
   }
+
+  await provisionRequestedAccess();
 }
 
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {

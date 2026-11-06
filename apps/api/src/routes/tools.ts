@@ -5,6 +5,7 @@ import { writeAudit } from '../lib/audit.js';
 import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth.js';
 import { hasPermission, requirePerm } from '../middleware/permissions.js';
 import { isSuperAdmin } from '../lib/permissions.js';
+import { canAccessStore, visibleStoreIds } from '../lib/store-access.js';
 import { TOOL_STATUSES, type Role, type ToolRow, type ToolStatus } from '../types.js';
 import { Context } from 'hono';
 
@@ -111,6 +112,14 @@ toolsRoutes.get('/', requirePerm('tools.view'), async (c) => {
     params.push(magasin_id);
     where.push(`t.magasin_id = $${params.length}`);
   }
+  const storeIds = await visibleStoreIds(c.get('auth').user.id);
+  if (storeIds !== null) {
+    if (storeIds.length === 0) where.push('FALSE');
+    else {
+      params.push(storeIds);
+      where.push(`t.magasin_id = ANY($${params.length}::text[])`);
+    }
+  }
   const sql = `SELECT t.*,
                       COALESCE(t.total_qty, 1)::int AS total_qty,
                       COALESCE(al.loaned_qty, 0)::int AS loaned_qty,
@@ -132,8 +141,12 @@ toolsRoutes.get('/', requirePerm('tools.view'), async (c) => {
 
   const [rawTools, cats, locs] = await Promise.all([
     db.query<any>(sql, params),
-    db.query<{ category: string }>('SELECT DISTINCT category FROM tools ORDER BY category'),
-    db.query<{ location: string }>('SELECT DISTINCT location FROM tools ORDER BY location'),
+    storeIds === null
+      ? db.query<{ category: string }>('SELECT DISTINCT category FROM tools ORDER BY category')
+      : db.query<{ category: string }>('SELECT DISTINCT category FROM tools WHERE magasin_id = ANY($1::text[]) ORDER BY category', [storeIds]),
+    storeIds === null
+      ? db.query<{ location: string }>('SELECT DISTINCT location FROM tools ORDER BY location')
+      : db.query<{ location: string }>('SELECT DISTINCT location FROM tools WHERE magasin_id = ANY($1::text[]) ORDER BY location', [storeIds]),
   ]);
 
   const tools = canViewFinancial
@@ -167,6 +180,7 @@ toolsRoutes.get('/:id', requirePerm('tools.view'), async (c) => {
     [id],
   );
   if (!tool) return c.json({ error: 'Outil introuvable.' }, 404);
+  if (!await canAccessStore(c.get('auth').user.id, tool.magasin_id, 'can_view')) return c.json({ error: 'Cet outil est dans un atelier ou magasin non attribué.' }, 403);
 
   const authState = c.get('auth');
   const userRole = authState?.user?.role;

@@ -4,6 +4,7 @@ import { getDb } from '../db/index.js';
 import { writeAudit } from '../lib/audit.js';
 import { actorId, actorName, requireAuth, requireRole } from '../middleware/auth.js';
 import { requirePerm } from '../middleware/permissions.js';
+import { canAccessStore, visibleStoreIds } from '../lib/store-access.js';
 
 const createBody = z.object({
   toolId: z.string().min(1),
@@ -32,6 +33,9 @@ loansRoutes.use('*', requireAuth);
 loansRoutes.get('/', requirePerm('loans.view'), async (c) => {
   const status = c.req.query('status') ?? 'out';
   const db = getDb();
+  const params: unknown[] = [status];
+  const storeIds = await visibleStoreIds(c.get('auth').user.id);
+  const storeFilter = storeIds === null ? '' : (params.push(storeIds), ` AND t.magasin_id = ANY($${params.length}::text[])`);
   const loans = await db.query(
     `SELECT l.*, 
             COALESCE(l.qty, 1)::int AS qty,
@@ -41,10 +45,10 @@ loansRoutes.get('/', requirePerm('loans.view'), async (c) => {
        FROM loans l
        JOIN tools t ON t.id = l.tool_id
        JOIN employees e ON e.id = l.employee_id
-      WHERE l.status = $1
+      WHERE l.status = $1${storeFilter}
       ORDER BY l.out_at DESC
       LIMIT 200`,
-    [status],
+    params,
   );
   return c.json({ loans });
 });
@@ -59,10 +63,11 @@ loansRoutes.post('/', requirePerm('loans.create'), async (c) => {
     const tool = await tx.one<{
       id: string;
       status: string;
+      magasin_id: string | null;
       total_qty: number;
       loaned_qty: number;
     }>(
-      `SELECT t.id, t.status, COALESCE(t.total_qty, 1)::int AS total_qty,
+      `SELECT t.id, t.status, t.magasin_id, COALESCE(t.total_qty, 1)::int AS total_qty,
               COALESCE(al.loaned_qty, 0)::int AS loaned_qty
          FROM tools t
          LEFT JOIN (
@@ -73,6 +78,7 @@ loansRoutes.post('/', requirePerm('loans.create'), async (c) => {
       [body.data.toolId],
     );
     if (!tool) return { error: 'Outil introuvable.' } as const;
+    if (!await canAccessStore(c.get('auth').user.id, tool.magasin_id, 'can_lend_tools')) return { error: 'Vous ne pouvez pas prêter d’outil depuis ce magasin.' } as const;
     const available = tool.total_qty - tool.loaned_qty;
     if (available < requestedQty) {
       return {
@@ -143,6 +149,8 @@ loansRoutes.patch('/:id', requirePerm('loans.create'), async (c) => {
       motive: string;
     }>('SELECT * FROM loans WHERE id = $1 FOR UPDATE', [id]);
     if (!loan) return { error: 'Prêt introuvable.' } as const;
+    const loanTool = await tx.one<{ magasin_id: string | null }>('SELECT magasin_id FROM tools WHERE id = $1', [loan.tool_id]);
+    if (!await canAccessStore(c.get('auth').user.id, loanTool?.magasin_id, 'can_lend_tools')) return { error: 'Ce prêt dépend d’un magasin non attribué.' } as const;
     if (loan.status !== 'out') return { error: 'Ce prêt n’est plus actif.' } as const;
 
     const newQty = body.data.qty !== undefined ? body.data.qty : loan.qty;
@@ -212,6 +220,9 @@ loansRoutes.post('/:id/return', requirePerm('loans.return'), async (c) => {
       returned_qty: number;
     }>('SELECT * FROM loans WHERE id = $1 FOR UPDATE', [id]);
     if (!loan) return { error: 'Prêt introuvable.' } as const;
+    const loanTool = await tx.one<{ magasin_id: string | null }>('SELECT magasin_id FROM tools WHERE id = $1', [loan.tool_id]);
+    if (!await canAccessStore(c.get('auth').user.id, loanTool?.magasin_id, 'can_return_tools')) return { error: 'Vous ne pouvez pas enregistrer un retour dans ce magasin.' } as const;
+    if (body.data.magasinId && !await canAccessStore(c.get('auth').user.id, body.data.magasinId, 'can_return_tools')) return { error: 'Le magasin de retour ne vous est pas attribué.' } as const;
     if (loan.status !== 'out') return { error: 'Ce prêt est déjà clôturé.' } as const;
 
     const remaining = Math.max(1, (loan.qty ?? 1) - (loan.returned_qty ?? 0));
