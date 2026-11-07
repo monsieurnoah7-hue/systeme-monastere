@@ -128,7 +128,12 @@ function WorkshopPulseRibbon({
     ? das04.present + das04.absent + das04.late + das04.conge + das04.permission
     : 0;
   const attendanceRate = totalTeam > 0 && das04 ? Math.round((das04.present / totalTeam) * 100) : 0;
-  const totalArbitrages = pendingLeavesCount + das05.overdueLoans + (das05.lowStock > 0 ? 1 : 0);
+  const totalArbitrages = pendingLeavesCount + das05.overdueLoans + das05.lowStock;
+  const arbitrationSummary = [
+    pendingLeavesCount ? `${pendingLeavesCount} visa en attente` : null,
+    das05.overdueLoans ? `${das05.overdueLoans} prêt${das05.overdueLoans > 1 ? 's' : ''} en retard` : null,
+    das05.lowStock ? `${das05.lowStock} article${das05.lowStock > 1 ? 's' : ''} sous seuil` : null,
+  ].filter(Boolean).join(' · ');
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -162,9 +167,10 @@ function WorkshopPulseRibbon({
       {/* 2. Arbitrages & Vigilance */}
       <button
         type="button"
+        disabled={totalArbitrages === 0}
         onClick={onOpenAlerts}
         className={cx(
-          "group flex flex-col justify-between p-3.5 rounded-2xl border transition-all text-left cursor-pointer shadow-xs active:scale-[0.99]",
+          "group flex flex-col justify-between p-3.5 rounded-2xl border transition-all text-left cursor-pointer shadow-xs active:scale-[0.99] disabled:cursor-default disabled:active:scale-100",
           totalArbitrages > 0
             ? "border-amber/40 bg-amber-wash/30 hover:bg-amber-wash/50"
             : "border-line bg-surface hover:border-line-strong hover:bg-surface-2/40"
@@ -173,7 +179,7 @@ function WorkshopPulseRibbon({
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex items-center gap-1.5">
             <AlertTriangle size={14} className={totalArbitrages > 0 ? "text-amber" : "text-emerald-500"} />
-            Arbitrages Requis
+            Arbitrages &amp; actions
           </span>
           <span className={cx(
             "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border",
@@ -192,12 +198,12 @@ function WorkshopPulseRibbon({
             {totalArbitrages}
           </span>
           <span className="text-xs text-ink-faint font-medium">
-            {totalArbitrages > 1 ? 'décisions urgentes' : 'décision urgente'}
+            {totalArbitrages > 1 ? 'éléments à traiter' : 'élément à traiter'}
           </span>
         </div>
-        <p className="mt-1 text-[11px] text-ink-soft truncate">
+        <p className="mt-1 text-[11px] leading-snug text-ink-soft">
           {totalArbitrages > 0
-            ? `${pendingLeavesCount} visa en attente · ${das05.overdueLoans} retard prêt`
+            ? arbitrationSummary
             : 'Aucun arbitrage bloquant'}
         </p>
       </button>
@@ -2136,7 +2142,19 @@ export function Dashboard({ active = true }: { active?: boolean }) {
         pendingLeavesCount={data.pendingLeaves?.length ?? 0}
         onOpenAttendance={() => setDrawer({ kind: 'attendance' })}
         onOpenTools={() => openTools('disponible', 'Outillage')}
-        onOpenAlerts={() => setDrawer({ kind: 'overdue' })}
+        onOpenAlerts={() => {
+          if ((data.pendingLeaves?.length ?? 0) > 0) {
+            document.getElementById('dashboard-action-inbox')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else if (das05.overdueLoans > 0) {
+            setDrawer({ kind: 'overdue' });
+          } else if (das05.lowStock > 0) {
+            setDrawer({ kind: 'stock' });
+          } else if (das05.missingTools > 0) {
+            setDrawer({ kind: 'missingTools' });
+          } else if (das05.missingOut > 0) {
+            setDrawer({ kind: 'missingOut' });
+          }
+        }}
         onOpenEtablis={() => {
           const heading = document.getElementById('etablis-heading') || document.getElementById('etablis-section');
           if (!heading) return;
@@ -2176,7 +2194,7 @@ export function Dashboard({ active = true }: { active?: boolean }) {
       ) : null}
 
       {/* Centre de Triage & Décisions Prioritaires (Action Inbox) */}
-      <section className="space-y-3">
+      <section id="dashboard-action-inbox" className="scroll-mt-24 space-y-3">
         {data.pendingLeaves && data.pendingLeaves.length > 0 ? (
           <PendingLeavesBanner
             leaves={data.pendingLeaves}

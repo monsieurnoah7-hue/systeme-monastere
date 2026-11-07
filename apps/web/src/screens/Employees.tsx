@@ -2662,11 +2662,22 @@ export function Employees({
                       <div className="shrink-0">{dayChip(employee)}</div>
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
-                      <span className="font-mono text-[11px] text-ink-faint">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/40 pt-2 text-xs">
+                      <span className="min-w-0 font-mono text-[11px] text-ink-faint">
                         Badge : <strong className="text-ink">{employee.badge_token ?? '—'}</strong>
                       </span>
-                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex min-w-0 flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        {canPrintBadge && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<Printer size={14} />}
+                            onClick={() => { setBadgeCopies(1); setBadgeFor(employee); }}
+                            aria-label={`Voir ou imprimer le badge de ${employee.full_name}`}
+                          >
+                            Voir le badge
+                          </Button>
+                        )}
                         <Button size="sm" variant="ghost" onClick={() => setDetailFor(employee)}>
                           Détail
                         </Button>
