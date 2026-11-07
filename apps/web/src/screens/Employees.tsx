@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   api,
   type Employee,
@@ -213,6 +213,9 @@ function TimeOffCalendarView({
   filterStatus: 'all' | 'approved' | 'pending' | 'rejected';
   setFilterStatus: (s: 'all' | 'approved' | 'pending' | 'rejected') => void;
 }) {
+  const weekdayTrackRef = useRef<HTMLDivElement>(null);
+  const calendarTrackRef = useRef<HTMLDivElement>(null);
+  const [stickyWeekdayTop, setStickyWeekdayTop] = useState(0);
   const [selectedLeave, setSelectedLeave] = useState<Leave | null>(null);
   const [editingLeave, setEditingLeave] = useState<Leave | null>(null);
   const [editForm, setEditForm] = useState<{
@@ -230,6 +233,31 @@ function TimeOffCalendarView({
     holidays: Holiday[];
     leaves: Leave[];
   } | null>(null);
+
+  useEffect(() => {
+    const toolbar = document.querySelector<HTMLElement>('[data-timeoff-sticky-toolbar="true"]');
+    if (!toolbar) return;
+    const updateOffset = () => {
+      const stickyTop = Number.parseFloat(window.getComputedStyle(toolbar).top) || 0;
+      setStickyWeekdayTop(Math.ceil(stickyTop + toolbar.getBoundingClientRect().height));
+    };
+    updateOffset();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateOffset) : null;
+    observer?.observe(toolbar);
+    window.addEventListener('resize', updateOffset);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateOffset);
+    };
+  }, []);
+
+  const syncCalendarHorizontalScroll = (source: 'weekday' | 'calendar') => {
+    const sourceEl = source === 'weekday' ? weekdayTrackRef.current : calendarTrackRef.current;
+    const targetEl = source === 'weekday' ? calendarTrackRef.current : weekdayTrackRef.current;
+    if (sourceEl && targetEl && targetEl.scrollLeft !== sourceEl.scrollLeft) {
+      targetEl.scrollLeft = sourceEl.scrollLeft;
+    }
+  };
 
   function startEditingLeave(leave: Leave) {
     setEditingLeave(leave);
@@ -561,25 +589,45 @@ function TimeOffCalendarView({
 
       {/* 5. Affichage selon le mode choisi : Vue Grille Calendaire OU Registre Tabulaire Jibble */}
       {viewMode === 'calendar' ? (
-        <Card className="overflow-x-auto scroll-thin shadow-card p-0">
-          <div className="min-w-[640px]">
-            {/* En-tête des jours de la semaine (Lun - Dim) - Fixe au défilement (sticky) */}
-            <div className="grid grid-cols-7 border-b border-line bg-paper-2/95 backdrop-blur-md text-center text-xs font-semibold text-ink-soft sticky top-0 z-10 shadow-xs">
-              {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d, idx) => (
-                <div
-                  key={d}
-                  className={cx(
-                    'py-2.5 border-r border-line last:border-r-0',
-                    idx === 6 && 'text-ink-faint bg-paper/60' // Dimanche
-                  )}
-                >
-                  {d}
-                </div>
-              ))}
+        <Card className="shadow-card p-0">
+          {/* Le rail des jours reste collé sous les commandes sticky du planning. */}
+          <div
+            className="sticky z-30 border-b border-line bg-paper/95 shadow-xs backdrop-blur-md"
+            style={{ top: `${stickyWeekdayTop}px` }}
+          >
+            <div
+              ref={weekdayTrackRef}
+              onScroll={() => syncCalendarHorizontalScroll('weekday')}
+              className="overflow-x-auto no-scrollbar"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
+              <div className="grid min-w-[640px] grid-cols-7 bg-paper-2/95 text-center text-xs font-semibold text-ink-soft">
+                {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((d, idx) => (
+                  <div
+                    key={d}
+                    className={cx(
+                      'border-r border-line py-2.5 last:border-r-0',
+                      idx === 6 && 'bg-paper/60 text-ink-faint'
+                    )}
+                  >
+                    {d}
+                  </div>
+                ))}
+              </div>
             </div>
+          </div>
 
             {/* Corps de la Grille */}
-            <div className="grid grid-cols-7 sheet-grid">
+            <div
+              ref={calendarTrackRef}
+              onScroll={() => syncCalendarHorizontalScroll('calendar')}
+              className="overflow-x-auto scroll-thin"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+              tabIndex={0}
+              role="region"
+              aria-label="Calendrier mensuel des congés, défilement horizontal sur petit écran"
+            >
+            <div className="grid min-w-[640px] grid-cols-7 sheet-grid">
               {/* Cases vides début de mois */}
               {blanks.map((b) => (
                 <div key={`blank-${b}`} className="min-h-28 bg-paper/40 p-2 border-r border-b border-line" />
@@ -724,7 +772,7 @@ function TimeOffCalendarView({
                 );
               })}
             </div>
-          </div>
+            </div>
         </Card>
       ) : (
         /* VUE REGISTRE DES DEMANDES STYLE JIBBLE */
@@ -2020,7 +2068,7 @@ export function Employees({
       {/* Tabs Switcher: Équipe vs Calendrier Time-Off with Sticky Control Navbar */}
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-6">
         {/* Sticky Navigation Bar with Tabs, Real-Time Search, Filters & Hamburger Menu */}
-        <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
+        <div data-timeoff-sticky-toolbar={activeTab === 'timeoff' ? 'true' : undefined} className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
           <div className="flex flex-col gap-2">
             {/* Top Row: Tabs, Search & Priority Actions */}
             <div className="flex items-center justify-between gap-2 sm:gap-3 min-w-0">
