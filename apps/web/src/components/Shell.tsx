@@ -188,9 +188,11 @@ function NavButton({
   const Icon = item.icon;
   return (
     <button
+      type="button"
       onClick={onClick}
+      aria-current={active ? 'page' : undefined}
       className={cx(
-        'group relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-medium transition-all duration-150',
+        'group relative flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors duration-150 lg:min-h-0 lg:px-2.5 lg:text-xs',
         active
           ? 'bg-blue-500/10 text-sky-400 font-semibold border border-blue-500/20 shadow-xs'
           : 'text-ink-soft hover:bg-surface-2 hover:text-ink border border-transparent',
@@ -235,8 +237,16 @@ export function Shell({
   const effectiveAllowed = allowedList ?? allowedViews(user.role);
   const items = NAV.filter((item) => effectiveAllowed.includes(item.id));
 
-  // Quick navigation items for mobile bottom bar
-  const mobileNav = items.slice(0, 4);
+  // Keep the most-used destinations in the dock and always include the active screen.
+  const mobilePriority: ViewId[] = ['dashboard', 'pointage', 'projets', 'outils', 'stock', 'employes', 'magasins', 'espace', 'parametres'];
+  const mobileNavBase = mobilePriority
+    .map((id) => items.find((item) => item.id === id))
+    .filter((item): item is NavItem => Boolean(item))
+    .slice(0, 4);
+  const currentMobileItem = items.find((item) => item.id === view);
+  const mobileNav = currentMobileItem && !mobileNavBase.some((item) => item.id === currentMobileItem.id)
+    ? [...mobileNavBase.slice(0, 3), currentMobileItem]
+    : mobileNavBase;
 
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
@@ -332,7 +342,7 @@ export function Shell({
         ========================================================================= */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Mobile Top Header */}
-          <header className="no-print sticky top-0 z-20 flex min-h-14 items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 py-2.5 backdrop-blur sm:px-4 lg:hidden">
+          <header className="no-print sticky top-0 z-20 flex min-h-14 items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur sm:px-4 lg:hidden lg:pt-2.5">
             <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
               <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-charcoal border border-line p-1 shadow-xs">
                 <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-5 w-5 object-contain" />
@@ -353,7 +363,7 @@ export function Shell({
               {onScan && (
                 <button
                   onClick={onScan}
-                  className="flex items-center gap-1 rounded-full bg-amber-wash border border-amber/20 px-2.5 py-1 text-xs font-semibold text-amber shadow-xs active:scale-95"
+                  className="flex min-h-11 items-center gap-1 rounded-full bg-amber-wash border border-amber/20 px-3 py-1 text-xs font-semibold text-amber shadow-xs active:scale-95"
                   aria-label="Scanner"
                 >
                   <QrCode size={15} />
@@ -361,8 +371,11 @@ export function Shell({
                 </button>
               )}
               <button
+                type="button"
                 onClick={() => setMenuOpen((v) => !v)}
-                className="rounded-lg p-2 text-ink-soft hover:bg-paper-2"
+                aria-expanded={menuOpen}
+                aria-controls="mobile-primary-menu"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                 aria-label="Menu"
               >
                 {menuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -372,13 +385,15 @@ export function Shell({
 
           {/* Mobile Slide-over Drawer Menu */}
           <Drawer open={menuOpen} direction="right" onOpenChange={setMenuOpen}>
-            <DrawerContent className="gap-0 bg-surface p-0 sm:max-w-80">
+            <DrawerContent id="mobile-primary-menu" className="gap-0 bg-surface p-0 sm:max-w-80">
               <DrawerHeader className="border-b border-line px-4 py-3.5">
                 <div className="flex items-center justify-between">
                   <DrawerTitle className="text-sm font-bold text-ink">Menu principal</DrawerTitle>
                   <button
+                    type="button"
                     onClick={() => setMenuOpen(false)}
-                    className="rounded-lg p-1 text-ink-faint hover:text-ink"
+                    className="grid h-11 w-11 place-items-center rounded-lg text-ink-faint hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                    aria-label="Fermer le menu"
                   >
                     <X size={18} />
                   </button>
@@ -419,8 +434,9 @@ export function Shell({
 
                 <div className="mt-6 border-t border-line pt-3">
                   <button
+                    type="button"
                     onClick={onLogout}
-                    className="flex w-full items-center gap-2.5 rounded-lg border border-red/20 bg-red-wash/40 px-3 py-2 text-xs font-semibold text-red transition-colors"
+                    className="flex min-h-11 w-full items-center gap-2.5 rounded-lg border border-red/20 bg-red-wash/40 px-3 py-2 text-sm font-semibold text-red transition-colors"
                   >
                     <LogOut size={16} />
                     Se déconnecter
@@ -488,8 +504,11 @@ export function Shell({
                   <button
                     key={item.id}
                     onClick={() => onView(item.id)}
+                    type="button"
+                    aria-label={item.label}
+                    aria-current={isActive ? 'page' : undefined}
                     className={cx(
-                      'flex flex-1 flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors',
+                      'flex min-w-0 min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber',
                       isActive ? 'text-amber font-semibold' : 'text-ink-soft hover:text-ink',
                     )}
                   >
@@ -518,8 +537,11 @@ export function Shell({
                   <button
                     key={item.id}
                     onClick={() => onView(item.id)}
+                    type="button"
+                    aria-label={item.label}
+                    aria-current={isActive ? 'page' : undefined}
                     className={cx(
-                      'flex flex-1 flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors',
+                      'flex min-w-0 min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber',
                       isActive ? 'text-amber font-semibold' : 'text-ink-soft hover:text-ink',
                     )}
                   >

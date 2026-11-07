@@ -5,8 +5,8 @@ import {
   type EtabliKitAudit,
   api,
 } from '../lib/api';
-import { QrCode } from './QrCode';
-import { QR_PREFIX } from '../lib/qr';
+import { QR_PREFIX, qrDataUrl } from '../lib/qr';
+import { usePrintSheet } from '../lib/print';
 import {
   Button,
   Modal,
@@ -24,6 +24,7 @@ import {
   User,
   Search,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 
 interface EtabliKitCardProps {
@@ -32,6 +33,68 @@ interface EtabliKitCardProps {
   audits?: EtabliKitAudit[];
   onRefresh?: () => void;
   canManage?: boolean;
+  canAddItems?: boolean;
+}
+
+type KitLabelFormat = 'compact' | 'standard';
+type KitPaperFormat = 'A4' | 'Letter';
+
+async function generateKitQrCodes(items: EtabliKitItem[]) {
+  const uniqueItems = [...new Map(items.map((item) => [item.id, item])).values()];
+  const entries = await Promise.all(uniqueItems.map(async (item) => [item.id, await qrDataUrl(`${QR_PREFIX.kitItem}${item.tool_code}`, 240)] as const));
+  return Object.fromEntries(entries);
+}
+
+function EtabliLabelsSheet({ kit, labels, codes, kitQr, format, paper }: {
+  kit: EtabliKit;
+  labels: EtabliKitItem[];
+  codes: Record<number, string>;
+  kitQr: string;
+  format: KitLabelFormat;
+  paper: KitPaperFormat;
+}) {
+  const compact = format === 'compact';
+  const labelWidth = compact ? '38mm' : '63.5mm';
+  const labelHeight = compact ? '21mm' : '38.1mm';
+  return (
+    <div className="label-sheet" style={{ width: paper === 'A4' ? '200mm' : '203.2mm', margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
+      <style>{`@page { size: ${paper} portrait; margin: 5mm; }`}</style>
+      <div className="label-grid" style={{ gridTemplateColumns: `repeat(auto-fill, ${labelWidth})`, gap: '2mm' }}>
+        <div className="tool-label-card flex overflow-hidden border border-gray-500 bg-white text-gray-900" style={{ width: labelWidth, height: labelHeight, boxSizing: 'border-box', breakInside: 'avoid' }}>
+          <div className="flex shrink-0 items-center justify-center" style={{ width: compact ? '17mm' : '29mm', height: '100%', padding: compact ? '1mm' : '2mm', boxSizing: 'border-box' }}>
+            <img src={kitQr} alt={`QR établi ${kit.etabli_number}`} className="h-full w-full object-contain" />
+          </div>
+          <div className={`flex min-w-0 flex-1 flex-col justify-center leading-tight ${compact ? 'py-[1mm] pr-[1mm]' : 'py-[2mm] pr-[2mm]'}`}>
+            <div className="mb-[0.8mm] flex items-center gap-1 border-b border-gray-200 pb-[0.6mm]">
+              <img src="/emblem.png" alt="" className={compact ? 'h-[3mm] w-[3mm] object-contain' : 'h-[4mm] w-[4mm] object-contain'} />
+              <span className={`font-bold tracking-wide text-gray-800 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>CFTM</span>
+            </div>
+            <p className={`truncate font-mono font-bold text-gray-950 ${compact ? 'text-[6pt]' : 'text-[6.5pt]'}`}>{kit.code}</p>
+            <p className={`truncate font-semibold text-gray-800 ${compact ? 'text-[5.5pt]' : 'text-[7.5pt]'}`}>Établi N°{kit.etabli_number}</p>
+            <p className={`truncate text-gray-600 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>{kit.employee_name}</p>
+          </div>
+        </div>
+        {labels.map((item, index) => (
+          <div key={`${item.id}-${index}`} className="tool-label-card flex overflow-hidden border border-gray-500 bg-white text-gray-900" style={{ width: labelWidth, height: labelHeight, boxSizing: 'border-box', breakInside: 'avoid' }}>
+            <div className="flex shrink-0 items-center justify-center" style={{ width: compact ? '17mm' : '29mm', height: '100%', padding: compact ? '1mm' : '2mm', boxSizing: 'border-box' }}>
+              <img src={codes[item.id]} alt={`QR ${item.tool_code}`} className="h-full w-full object-contain" />
+            </div>
+            <div className={`flex min-w-0 flex-1 flex-col justify-center leading-tight ${compact ? 'py-[1mm] pr-[1mm]' : 'py-[2mm] pr-[2mm]'}`}>
+              <div className="mb-[0.8mm] flex items-center gap-1 border-b border-gray-200 pb-[0.6mm]">
+                <img src="/emblem.png" alt="" className={compact ? 'h-[3mm] w-[3mm] object-contain' : 'h-[4mm] w-[4mm] object-contain'} />
+                <span className={`font-bold tracking-wide text-gray-800 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>CFTM</span>
+              </div>
+              <p className={`truncate font-mono font-bold text-gray-950 ${compact ? 'text-[6pt]' : 'text-[6.5pt]'}`}>
+                {compact ? `${kit.code}-${String(item.item_num).padStart(2, '0')}` : item.tool_code}
+              </p>
+              <p className={`truncate font-semibold text-gray-800 ${compact ? 'text-[5.5pt]' : 'text-[7.5pt]'}`}>{item.name}</p>
+              <p className={`truncate text-gray-600 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>Établi {kit.etabli_number}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
@@ -40,10 +103,20 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
   audits = [],
   onRefresh,
   canManage = false,
+  canAddItems = false,
 }) => {
   const toast = useToast();
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemQty, setNewItemQty] = useState(1);
+  const [newItemUnit, setNewItemUnit] = useState('pièce');
+  const [addItemBusy, setAddItemBusy] = useState(false);
+  const [printBusy, setPrintBusy] = useState(false);
+  const [labelFormat, setLabelFormat] = useState<KitLabelFormat>('compact');
+  const [paperFormat, setPaperFormat] = useState<KitPaperFormat>('A4');
+  const [labelCopies, setLabelCopies] = useState<Record<number, number>>({});
   const [selectedItemForEdit, setSelectedItemForEdit] = useState<EtabliKitItem | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,6 +126,33 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
   const [auditStatus, setAuditStatus] = useState<'conforme' | 'anomalie' | 'incomplet'>('conforme');
   const [auditNotes, setAuditNotes] = useState('');
   const [itemAuditStates, setItemAuditStates] = useState<Record<number, { is_present: boolean; condition: EtabliKitItem['condition'] }>>({});
+  const { print, portal } = usePrintSheet();
+
+  const openPrintModal = () => {
+    setLabelCopies(Object.fromEntries(items.map((item) => [item.id, Math.min(100, Math.max(1, item.qty))])));
+    setShowPrintModal(true);
+  };
+
+  const submitNewItem = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAddItemBusy(true);
+    try {
+      await api<{ item: EtabliKitItem }>(`/api/kits/${kit.id}/items`, {
+        method: 'POST',
+        body: JSON.stringify({ name: newItemName, qty: newItemQty, unit: newItemUnit }),
+      });
+      toast(`« ${newItemName.trim()} » ajouté à l’établi ${kit.etabli_number}. Son QR est prêt à imprimer.`, 'success');
+      setNewItemName('');
+      setNewItemQty(1);
+      setNewItemUnit('pièce');
+      setShowAddItemModal(false);
+      onRefresh?.();
+    } catch (err) {
+      toast((err as Error).message || 'Impossible d’ajouter cet outil à l’établi.', 'error');
+    } finally {
+      setAddItemBusy(false);
+    }
+  };
 
   const openAudit = () => {
     const initial: Record<number, { is_present: boolean; condition: EtabliKitItem['condition'] }> = {};
@@ -112,6 +212,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
   const present = items.filter((i) => i.is_present && i.condition === 'bon').length;
   const anomalies = total - present;
   const percentage = total > 0 ? Math.round((present / total) * 100) : 100;
+  const printLabelCount = items.reduce((sum, item) => sum + Math.max(0, labelCopies[item.id] ?? 0), 1);
 
   // Filtered tools
   const filteredItems = useMemo(() => {
@@ -236,7 +337,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
         </div>
 
         {/* 2 Boutons d'Action Ergonomiques Apple */}
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-2" style={{ gridTemplateColumns: canManage && canAddItems ? 'repeat(3, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))' }}>
           {canManage && (
             <button
               type="button"
@@ -250,14 +351,24 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
 
           <button
             type="button"
-            onClick={() => setShowPrintModal(true)}
+            onClick={openPrintModal}
             className={`flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-xs font-bold text-slate-200 transition-all hover:bg-slate-700 active:scale-[0.98] ${
-              !canManage ? 'col-span-2' : ''
+              !canManage && !canAddItems ? 'col-span-2' : ''
             }`}
           >
             <Printer className="h-4 w-4 text-slate-400" />
             <span>QR Codes Planche</span>
           </button>
+          {canAddItems && (
+            <button
+              type="button"
+              onClick={() => setShowAddItemModal(true)}
+              className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-xs font-bold text-slate-200 transition-colors hover:bg-slate-700"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Ajouter un outil</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -559,7 +670,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
       ========================================================================= */}
       <Modal
         open={showPrintModal}
-        title={`Planche QR Codes — Établi N°${kit.etabli_number}`}
+        title={`Étiquettes de l’établi ${kit.etabli_number}`}
         onClose={() => setShowPrintModal(false)}
         footer={
           <div className="flex justify-end gap-2">
@@ -569,59 +680,111 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
             <Button
               variant="primary"
               size="sm"
-              onClick={() => window.print()}
+              disabled={printBusy || printLabelCount > 500 || !items.some((item) => (labelCopies[item.id] ?? 0) > 0)}
+              onClick={async () => {
+                const labels = items.flatMap((item) => Array.from({ length: Math.min(100, Math.max(0, labelCopies[item.id] ?? 0)) }, () => item));
+                try {
+                  setPrintBusy(true);
+                  const [codes, kitQr] = await Promise.all([
+                    generateKitQrCodes(labels),
+                    qrDataUrl(`${QR_PREFIX.kit}${kit.id}`, 240),
+                  ]);
+                  print(<EtabliLabelsSheet kit={kit} labels={labels} codes={codes} kitQr={kitQr} format={labelFormat} paper={paperFormat} />);
+                  setShowPrintModal(false);
+                } catch {
+                  toast('Impossible de préparer les QR de cet établi.', 'error');
+                } finally {
+                  setPrintBusy(false);
+                }
+              }}
               className="gap-2 bg-emerald-600 text-white"
             >
               <Printer className="h-4 w-4" />
-              <span>Imprimer la Planche</span>
+              <span>{printBusy ? 'Préparation…' : 'Imprimer la planche'}</span>
             </Button>
           </div>
         }
       >
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-700 bg-white p-4 text-slate-950 text-center">
-            <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-              CFTM • MONASTÈRE MONT-FÉBÉ
-            </div>
-            <div className="text-base font-black text-slate-950 mt-0.5">
-              PASSEPORT ÉTABLI N°{kit.etabli_number}
-            </div>
-            <div className="text-xs font-bold text-slate-700">
-              {kit.employee_name}
-            </div>
-
-            <div className="my-3 flex justify-center">
-              <QrCode value={`${QR_PREFIX.kit}${kit.id}`} size={150} />
-            </div>
-
-            <div className="font-mono text-xs font-bold text-slate-900">{kit.id}</div>
-            <div className="text-[10px] text-slate-500 mt-1">
-              {kit.source_magasin_name} • {kit.location}
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-xs font-semibold text-slate-300">Format des étiquettes
+              <select value={labelFormat} onChange={(event) => setLabelFormat(event.target.value as KitLabelFormat)} className="mt-1 h-10 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 text-slate-100">
+                <option value="compact">Compact · 38 × 21 mm</option>
+                <option value="standard">Standard · 63,5 × 38,1 mm</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-300">Papier
+              <select value={paperFormat} onChange={(event) => setPaperFormat(event.target.value as KitPaperFormat)} className="mt-1 h-10 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 text-slate-100">
+                <option value="A4">A4</option>
+                <option value="Letter">Letter</option>
+              </select>
+            </label>
           </div>
-
-          <div className="max-h-52 overflow-y-auto space-y-1.5 border-t border-slate-800 pt-3">
-            <span className="text-xs font-bold text-slate-300">
-              Mini-étiquettes d'outils ({items.length})
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              {items.map((it) => (
-                <div
-                  key={it.id}
-                  className="flex items-center gap-2 rounded border border-slate-700 bg-slate-800 p-1.5 text-[11px]"
-                >
-                  <QrCode value={`CFTM:TOOL:${it.tool_code}`} size={32} />
-                  <div className="min-w-0">
-                    <div className="font-mono font-bold text-emerald-400 truncate">
-                      {it.tool_code}
-                    </div>
-                    <div className="text-slate-300 truncate text-[10px]">{it.name}</div>
-                  </div>
-                </div>
-              ))}
+          <p className="text-xs text-slate-300">Chaque établi et chaque outil reçoit son QR propre. Les quantités commencent selon l’inventaire, mais restent modifiables avant impression.</p>
+          <div className="max-h-72 space-y-1.5 overflow-y-auto border-t border-slate-700 pt-3">
+            <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-200">
+              <span>Établi + outils et sac ({items.length} références)</span>
+              <span>{printLabelCount} étiquette(s)</span>
             </div>
+            {printLabelCount > 500 && <p className="mb-2 text-xs text-amber-300">Limite de 500 étiquettes par planche pour conserver une impression fluide. Réduisez les quantités ou imprimez en plusieurs fois.</p>}
+            {items.map((item) => (
+              <label key={item.id} className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-semibold text-slate-100">{item.name}</span>
+                  <span className="block truncate font-mono text-[10px] text-slate-400">{item.tool_code}</span>
+                </span>
+                <span className="text-[10px] text-slate-400">Qté {item.qty}</span>
+                <input
+                  aria-label={`Nombre d’étiquettes pour ${item.name}`}
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={labelCopies[item.id] ?? 0}
+                  onChange={(event) => {
+                    const quantity = Math.min(100, Math.max(0, Math.trunc(Number(event.target.value) || 0)));
+                    setLabelCopies((current) => ({ ...current, [item.id]: quantity }));
+                  }}
+                  className="h-9 w-16 rounded-md border border-slate-700 bg-slate-800 px-2 text-center text-sm text-slate-100"
+                />
+              </label>
+            ))}
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={showAddItemModal}
+        title={`Ajouter un outil · Établi ${kit.etabli_number}`}
+        onClose={() => setShowAddItemModal(false)}
+        footer={(
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowAddItemModal(false)}>Annuler</Button>
+            <Button type="submit" form="etabli-add-item-form" variant="primary" size="sm" disabled={addItemBusy} className="bg-emerald-600 text-white">
+              {addItemBusy ? <Spinner /> : 'Ajouter à cet établi'}
+            </Button>
+          </div>
+        )}
+      >
+        <form id="etabli-add-item-form" onSubmit={(event) => void submitNewItem(event)} className="space-y-4">
+          <p className="text-xs leading-relaxed text-slate-300">
+            Cet objet sera enregistré uniquement dans la dotation de l’établi {kit.etabli_number}. Son code et son QR seront uniques à cet établi.
+          </p>
+          <label className="block text-xs font-semibold text-slate-200">
+            Nom de l’outil ou du matériel
+            <input autoFocus required minLength={2} maxLength={120} value={newItemName} onChange={(event) => setNewItemName(event.target.value)} placeholder="Ex. Sac de chantier" className="mt-1.5 h-10 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100 placeholder:text-slate-500" />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs font-semibold text-slate-200">
+              Quantité dotée
+              <input type="number" min={1} max={1000} step={1} required value={newItemQty} onChange={(event) => setNewItemQty(Math.min(1000, Math.max(1, Math.trunc(Number(event.target.value) || 1))))} className="mt-1.5 h-10 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100" />
+            </label>
+            <label className="block text-xs font-semibold text-slate-200">
+              Unité
+              <input required maxLength={24} value={newItemUnit} onChange={(event) => setNewItemUnit(event.target.value)} placeholder="pièce, jeu…" className="mt-1.5 h-10 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100" />
+            </label>
+          </div>
+        </form>
       </Modal>
 
       {/* =========================================================================
@@ -693,6 +856,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
           </div>
         )}
       </Modal>
+      {portal}
     </div>
   );
 };

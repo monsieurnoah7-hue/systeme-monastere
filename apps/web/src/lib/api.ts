@@ -700,7 +700,7 @@ export type ScanResult =
   | { kind: 'stock'; ref: StockRef; code: string }
   | { kind: 'terminal'; terminal: { id: string; name: string }; code: string }
   | { kind: 'etabli_kit'; kit: EtabliKit; items: EtabliKitItem[]; code: string }
-  | { kind: 'etabli_kit_item'; item: EtabliKitItem & { kit_code: string; etabli_location: string; employee_name: string; employee_job: string; employee_photo: string | null }; code: string }
+  | { kind: 'etabli_kit_item'; item: EtabliKitItem & { kit_code: string; etabli_number: number; etabli_location: string }; code: string }
   | { kind: 'ignored'; reason: string }
   | { kind: 'unknown'; code: string };
 

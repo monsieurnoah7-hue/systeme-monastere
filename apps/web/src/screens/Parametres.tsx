@@ -1534,12 +1534,12 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
         <div className="sticky top-0 lg:top-11 z-30 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2.5 bg-paper border-b border-line shadow-xs mb-3 sm:mb-6">
           {/* Row 1: Master Navigation Tabs + Grouped Master Actions */}
           <div className="flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 min-w-0">
-            {/* Tabs Trigger list (Horizontally scrollable on small screens with no scrollbar) */}
-            <div className="overflow-x-auto no-scrollbar py-0.5 min-w-0 flex-1">
-              <TabsList variant="line" className="flex gap-1 sm:gap-2 bg-transparent p-0 w-max">
+            {/* All primary sections stay visible on narrow screens; desktop keeps a compact row. */}
+            <div className="min-w-0 flex-1">
+              <TabsList variant="line" className="grid w-full grid-cols-3 gap-1 bg-transparent p-0 lg:flex lg:w-max lg:gap-2">
                 {canViewUsers && <TabsTrigger
                   value="comptes"
-                  className="min-h-10 shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
+                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal lg:shrink-0 lg:whitespace-nowrap lg:gap-1.5 lg:px-3 lg:text-sm"
                 >
                   <Users size={14} className="text-amber" />
                   <span>Comptes</span>
@@ -1550,11 +1550,11 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
                 {canManagePermissions && <TabsTrigger
                   value="permissions"
-                  className="min-h-10 shrink-0 whitespace-nowrap relative gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
+                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal lg:shrink-0 lg:whitespace-nowrap lg:gap-1.5 lg:px-3 lg:text-sm"
                 >
                   <ShieldCheck size={14} className="text-amber" />
-                  <span className="hidden sm:inline">Rôles &amp; Permissions</span>
-                  <span className="sm:hidden">Accès</span>
+                  <span className="hidden xl:inline">Rôles &amp; Permissions</span>
+                  <span className="xl:hidden">Accès</span>
                   {hasUnsavedPerms ? (
                     <span className="h-2 w-2 rounded-full bg-amber animate-pulse" title="Modifications en attente" />
                   ) : null}
@@ -1562,11 +1562,11 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
                 {canViewKiosk && <TabsTrigger
                   value="kiosk"
-                  className="min-h-10 shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
+                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal lg:shrink-0 lg:whitespace-nowrap lg:gap-1.5 lg:px-3 lg:text-sm"
                 >
                   <Clock size={14} className="text-amber" />
-                  <span className="hidden sm:inline">Pointage &amp; Kiosque</span>
-                  <span className="sm:hidden">Kiosque</span>
+                  <span className="hidden xl:inline">Pointage &amp; Kiosque</span>
+                  <span className="xl:hidden">Kiosque</span>
                   <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
                     {activeTerminalsCount} act.
                   </span>
@@ -1574,20 +1574,20 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
                 <TabsTrigger
                   value="securite"
-                  className="min-h-10 shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
+                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal lg:shrink-0 lg:whitespace-nowrap lg:gap-1.5 lg:px-3 lg:text-sm"
                 >
                   <KeyRound size={14} className="text-amber" />
-                  <span className="hidden sm:inline">Sécurité &amp; Profil</span>
-                  <span className="sm:hidden">Sécurité</span>
+                  <span className="hidden xl:inline">Sécurité &amp; Profil</span>
+                  <span className="xl:hidden">Sécurité</span>
                 </TabsTrigger>
 
                 {canUseBackups && <TabsTrigger
                   value="sauvegardes"
-                  className="min-h-10 shrink-0 whitespace-nowrap gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium"
+                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal lg:shrink-0 lg:whitespace-nowrap lg:gap-1.5 lg:px-3 lg:text-sm"
                 >
                   <HardDrive size={14} className="text-amber" />
-                  <span className="hidden sm:inline">Sauvegardes &amp; Système</span>
-                  <span className="sm:hidden">Sauvegardes</span>
+                  <span className="hidden xl:inline">Sauvegardes &amp; Système</span>
+                  <span className="xl:hidden">Sauvegardes</span>
                   <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
                     {backups.length}
                   </span>

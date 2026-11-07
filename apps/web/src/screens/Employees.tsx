@@ -1436,6 +1436,8 @@ export function Employees({
   const [pinModalBusy, setPinModalBusy] = useState(false);
 
   const [badgeFor, setBadgeFor] = useState<Employee | null>(null);
+  const [badgeCopies, setBadgeCopies] = useState(1);
+  const [badgePaper, setBadgePaper] = useState<'A4' | 'Letter'>('A4');
   const [deleteEmployeeFor, setDeleteEmployeeFor] = useState<Employee | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -2023,14 +2025,15 @@ export function Employees({
             {/* Top Row: Tabs, Search & Priority Actions */}
             <div className="flex items-center justify-between gap-2 sm:gap-3 min-w-0">
               {/* Left: Radix Navigation Tabs with Live Badges */}
-              <div className="overflow-x-auto overflow-y-hidden no-scrollbar shrink-0">
-                <TabsList variant="line" className="flex gap-1 sm:gap-2.5 bg-transparent p-0 w-max">
+              <div className="min-w-0 flex-1">
+                <TabsList variant="line" className="grid w-full grid-cols-2 gap-1 bg-transparent p-0 sm:flex sm:w-max sm:gap-2.5">
                   {canViewEmployees && <TabsTrigger
                     value="people"
-                    className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
+                    className="min-w-0 gap-1 px-1.5 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
                   >
                     <Users size={15} />
-                    <span>Répertoire de l’Équipe</span>
+                    <span className="truncate sm:hidden">Équipe</span>
+                    <span className="hidden sm:inline">Répertoire de l’Équipe</span>
                     <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
                       {employees.filter((e) => e.active).length}
                     </span>
@@ -2038,10 +2041,11 @@ export function Employees({
 
                   {canViewLeaves && <TabsTrigger
                     value="timeoff"
-                    className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
+                    className="min-w-0 gap-1 px-1.5 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
                   >
                     <CalendarIcon size={15} />
-                    <span>Planning des Congés</span>
+                    <span className="truncate sm:hidden">Congés</span>
+                    <span className="hidden sm:inline">Planning des Congés</span>
                     {leaves.filter((l) => l.status === 'pending').length > 0 && (
                       <span className="ml-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-bold text-amber">
                         {leaves.filter((l) => l.status === 'pending').length} attente
@@ -2336,7 +2340,7 @@ export function Employees({
 
                 {/* Filter Chips & Dropdowns */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 py-0.5">
                     <span className="text-[10px] uppercase font-bold text-ink-faint mr-1 shrink-0 hidden sm:inline">
                       Filtre :
                     </span>
@@ -2344,7 +2348,7 @@ export function Employees({
                       type="button"
                       onClick={() => setTimeOffFilterKind('all')}
                       className={cx(
-                        'rounded-lg px-2.5 py-0.5 text-[11px] font-semibold transition-all shrink-0 border',
+                        'min-h-10 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all border',
                         timeOffFilterKind === 'all'
                           ? 'bg-amber text-white border-amber shadow-2xs font-bold'
                           : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink'
@@ -2356,7 +2360,7 @@ export function Employees({
                       type="button"
                       onClick={() => setTimeOffFilterKind('conge')}
                       className={cx(
-                        'rounded-lg px-2 py-0.5 text-[11px] font-semibold flex items-center gap-1.5 transition-all shrink-0 border',
+                        'min-h-10 rounded-lg px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-all border',
                         timeOffFilterKind === 'conge'
                           ? 'bg-blue text-white border-blue shadow-2xs font-bold'
                           : 'bg-surface text-ink-soft border-line/70 hover:bg-blue-wash hover:text-blue'
@@ -2583,7 +2587,7 @@ export function Employees({
                                   </Button>
                                 )}
                                 {canPrintBadge && (
-                                  <Button size="sm" variant="ghost" onClick={() => setBadgeFor(employee)}>
+                                  <Button size="sm" variant="ghost" onClick={() => { setBadgeCopies(1); setBadgeFor(employee); }}>
                                     Badge
                                   </Button>
                                 )}
@@ -3077,7 +3081,8 @@ export function Employees({
                   <EtabliKitCard
                     kit={employeeKit.kit}
                     items={employeeKit.items}
-                    canManage={canEdit}
+                    canManage={hasPerm('tools.edit_status')}
+                    canAddItems={hasPerm('tools.create')}
                     onRefresh={() => {
                       if (detailFor) {
                         api<{ kit: EtabliKit | null; items: EtabliKitItem[] }>(`/api/kits/by-employee/${detailFor.id}`)
@@ -3458,7 +3463,7 @@ export function Employees({
               icon={<Printer size={15} />}
               disabled={!badgeFor?.badge_token}
               onClick={() => {
-                if (badgeFor) print(<BadgeSheet employees={[badgeFor]} />);
+                if (badgeFor) print(<BadgeSheet employees={Array.from({ length: badgeCopies }, () => badgeFor)} paper={badgePaper} />);
                 setBadgeFor(null);
               }}
             >
@@ -3475,6 +3480,27 @@ export function Employees({
           ) : (
             <Banner tone="info">Badge non encore créé.</Banner>
           )}
+
+          <label className="block text-sm font-medium text-ink">
+            Nombre d’exemplaires
+            <input
+              aria-label="Nombre d’exemplaires du badge"
+              type="number"
+              min={1}
+              max={100}
+              step={1}
+              value={badgeCopies}
+              onChange={(event) => setBadgeCopies(Math.min(100, Math.max(1, Math.trunc(Number(event.target.value) || 1))))}
+              className="mt-1.5 h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink"
+            />
+          </label>
+          <label className="block text-sm font-medium text-ink">
+            Format du papier
+            <select value={badgePaper} onChange={(event) => setBadgePaper(event.target.value as 'A4' | 'Letter')} className="mt-1.5 h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink">
+              <option value="A4">A4</option>
+              <option value="Letter">Letter</option>
+            </select>
+          </label>
 
           <Button
             variant="danger"
@@ -3900,29 +3926,22 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
   return (
     <div
       className={cx(
-        'badge-card relative flex flex-col justify-between overflow-hidden rounded-xl border border-gray-300 bg-white text-gray-900 shadow-sm',
-        isPreview ? 'h-[200px] w-full max-w-[340px] p-3 text-[13px]' : 'h-[54mm] w-[85.6mm] p-[3mm] text-[8pt]',
+        'badge-card relative flex flex-col justify-between overflow-hidden rounded-[3mm] border border-gray-300 bg-white text-gray-900 shadow-sm',
+        isPreview ? 'h-[200px] w-full max-w-[340px] p-3 text-[13px]' : 'h-[53.98mm] w-[85.6mm] p-[3mm] text-[8pt]',
       )}
       style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif' }}
     >
-      {/* Ligne accent ambre monastique */}
-      <div className="absolute inset-x-0 top-0 h-[3px] bg-[#ff5500]" />
-
-      {/* En-tête officiel avec le vrai logo du Monastère */}
       <div className="flex items-center gap-2 border-b border-gray-200 pb-1.5">
         <img
-          src="/logo.png"
-          alt="C.F.T. Bénédictins Mont Fébé"
-          className={cx('object-contain shrink-0', isPreview ? 'h-8' : 'h-[7.5mm]')}
+          src="/emblem.png"
+          alt=""
+          className={cx('object-contain shrink-0', isPreview ? 'h-7 w-7' : 'h-[6mm] w-[6mm]')}
         />
         <div className="min-w-0 flex-1 leading-tight">
-          <p className="text-[7pt] font-extrabold uppercase tracking-wider text-gray-950">
-            C.F.T. des Bénédictins du Mont Fébé
-          </p>
-          <p className="text-[5.5pt] font-bold tracking-wider text-[#ff5500] uppercase">
-            Centre de Formation Technique · Menuiserie
-          </p>
+          <p className="text-[8pt] font-bold tracking-wide text-gray-950">CFTM</p>
+          <p className="text-[5.5pt] font-medium text-gray-600">Bénédictins du Mont‑Fébé</p>
         </div>
+        <span className="text-[5.5pt] font-semibold uppercase tracking-[0.12em] text-gray-500">Personnel</span>
       </div>
 
       {/* Corps : Identité & Photo à gauche, QR Code à droite */}
@@ -3942,11 +3961,8 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
 
           <div className="min-w-0 flex-1 space-y-0.5">
             <div className="flex items-center gap-1.5">
-              <span className="rounded bg-gray-100 border border-gray-300 px-1 py-0.2 font-mono text-[6pt] font-bold text-gray-800">
+              <span className="font-mono text-[6pt] font-semibold text-gray-600">
                 {employee.id}
-              </span>
-              <span className="rounded bg-orange-50 text-[#ff5500] border border-orange-200 px-1 py-0.2 text-[5.5pt] font-bold uppercase tracking-wider">
-                {employee.active ? 'Actif' : 'Inactif'}
               </span>
             </div>
 
@@ -3980,28 +3996,28 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
         </div>
       </div>
 
-      {/* Bandeau de sécurité inférieur */}
-      <div className="flex items-center justify-between border-t border-gray-200 pt-1 text-[5pt] font-medium text-gray-400 uppercase tracking-widest">
-        <span>CARTE PROFESSIONNELLE D'ATELIER</span>
-        <span>POINTAGE & OUTILLAGE</span>
+      <div className="flex items-center justify-between border-t border-gray-200 pt-1 text-[5pt] font-medium text-gray-500">
+        <span>Carte professionnelle</span>
+        <span className="font-semibold uppercase tracking-wider">Pointage</span>
       </div>
     </div>
   );
 }
 
-function BadgeSheet({ employees }: { employees: Employee[] }) {
+function BadgeSheet({ employees, paper = 'A4' }: { employees: Employee[]; paper?: 'A4' | 'Letter' }) {
   return (
     <div className="a4-page" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
+      <style>{`@page { size: ${paper} portrait; margin: 10mm; }`}</style>
       <div style={{ marginBottom: '6mm', borderBottom: '1px solid #e5e7eb', paddingBottom: '3mm' }} className="flex items-center justify-between">
         <div>
           <p style={{ fontSize: '12pt', fontWeight: 700, color: '#ff6603', margin: 0 }}>
-            C.F.T. des Bénédictins du Mont Fébé
+            CFTM · Bénédictins du Mont‑Fébé
           </p>
           <p style={{ fontSize: '8.5pt', color: '#6b7280', margin: '1mm 0 0' }}>
-            Planche de badges professionnels · {employees.length} carte(s) format ISO CR-80 (85,6 × 54 mm)
+            Planche de badges · {employees.length} carte(s) · format ID‑1 (85,6 × 53,98 mm)
           </p>
         </div>
-        <img src="/logo.png" alt="Logo" style={{ height: '10mm', objectFit: 'contain' }} />
+        <img src="/emblem.png" alt="" style={{ height: '9mm', width: '9mm', objectFit: 'contain' }} />
       </div>
       <div className="badge-grid">
         {employees.map((employee) => (

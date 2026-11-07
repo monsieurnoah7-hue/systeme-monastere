@@ -1,11 +1,11 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type ScanResult, type User } from './lib/api';
 import { computeAllowedViews, Shell, type ViewId } from './components/Shell';
-import { Scanner } from './components/Scanner';
 import { EmptyState, Spinner, ToastHost, useToast } from './components/ui';
 import { UndoProvider } from './components/UndoToast';
 import { Login } from './screens/Login';
 
+const Scanner = lazy(() => import('./components/Scanner').then((m) => ({ default: m.Scanner })));
 const Pointage = lazy(() => import('./screens/Pointage').then((m) => ({ default: m.Pointage })));
 const Projets = lazy(() => import('./screens/Projets'));
 const Outils = lazy(() => import('./screens/Outils').then((m) => ({ default: m.Outils })));
@@ -96,23 +96,6 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [view, setView] = useState<ViewId>(defaultView);
   const [visitedViews, setVisitedViews] = useState<Set<ViewId>>(() => new Set([defaultView]));
 
-  // Preload remaining screen chunks in background during browser idle
-  useEffect(() => {
-    const idle = typeof window !== 'undefined' && 'requestIdleCallback' in window
-      ? (window as any).requestIdleCallback
-      : (cb: () => void) => setTimeout(cb, 200);
-    idle(() => {
-      import('./screens/Dashboard').catch(() => {});
-      import('./screens/Outils').catch(() => {});
-      import('./screens/Magasins').catch(() => {});
-      import('./screens/Stock').catch(() => {});
-      import('./screens/Employees').catch(() => {});
-      import('./screens/Pointage').catch(() => {});
-      import('./screens/Parametres').catch(() => {});
-      import('./screens/Espace').catch(() => {});
-    });
-  }, []);
-
   // Track visited views to keep them alive in DOM for instant 0ms tab switching
   useEffect(() => {
     if (view) {
@@ -143,6 +126,10 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         setView('outils');
         setScanMessage(`Outil ${result.tool.id} — ${result.tool.name}`);
         break;
+      case 'etabli_kit_item':
+        setView('outils');
+        setScanMessage(`${result.item.name} · Établi ${result.item.etabli_number} · ${result.item.etabli_location}`);
+        break;
       case 'stock':
         setView('stock');
         setScanMessage(`Stock — ${result.ref.name}`);
@@ -165,7 +152,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       default:
         setScanMessage(`Code non reconnu : ${result.code}`);
     }
-    if (result.kind === 'tool' || result.kind === 'stock' || result.kind === 'employee') {
+    if (result.kind === 'tool' || result.kind === 'stock' || result.kind === 'employee' || result.kind === 'etabli_kit_item') {
       setScan(result);
     }
   }, [user.role]);
@@ -234,7 +221,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           >
             {visitedViews.has('dashboard') && (
               <div className={activeView === 'dashboard' ? 'contents' : 'hidden'} aria-hidden={activeView !== 'dashboard'}>
-                <Dashboard />
+                <Dashboard active={activeView === 'dashboard'} />
               </div>
             )}
             {visitedViews.has('projets') && (
@@ -280,7 +267,11 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           </Suspense>
         )}
       </Shell>
-      <Scanner open={scannerOpen} onClose={() => setScannerOpen(false)} onResult={onScanResult} />
+      {scannerOpen && (
+        <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-charcoal"><Spinner /></div>}>
+          <Scanner open onClose={() => setScannerOpen(false)} onResult={onScanResult} />
+        </Suspense>
+      )}
     </>
   );
 }

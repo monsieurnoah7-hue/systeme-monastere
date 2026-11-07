@@ -160,6 +160,24 @@ export async function migrate(): Promise<void> {
     await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [SEED_LOCK]);
   }
 
+  // Chaque établi reçoit son propre sac de chantier, y compris sur les bases déjà initialisées.
+  await getDb().query(`
+    INSERT INTO etabli_kit_items (kit_id, item_num, name, qty, unit, tool_code, condition, is_present)
+    SELECT k.id,
+           COALESCE(MAX(i.item_num), 0)::int + 1,
+           'Sac de chantier', 1, 'pièce',
+           'CFTM-' || k.code || '-SAC-' || LPAD(k.etabli_number::text, 2, '0'),
+           'bon', true
+      FROM etabli_kits k
+      LEFT JOIN etabli_kit_items i ON i.kit_id = k.id
+     WHERE NOT EXISTS (
+       SELECT 1 FROM etabli_kit_items bag
+        WHERE bag.kit_id = k.id AND lower(bag.name) = lower('Sac de chantier')
+     )
+     GROUP BY k.id, k.code, k.etabli_number
+    ON CONFLICT (tool_code) DO NOTHING
+  `);
+
   await provisionRequestedAccess();
 }
 

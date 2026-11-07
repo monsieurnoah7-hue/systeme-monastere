@@ -40,7 +40,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const BTN_BASE =
-  'relative inline-flex items-center justify-center gap-2 rounded-btn font-medium select-none ' +
+  'relative inline-flex min-w-0 items-center justify-center gap-2 rounded-btn font-medium select-none touch-manipulation ' +
   'transition-all duration-[120ms] ease-[cubic-bezier(0.16,1,0.3,1)] ' +
   'active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100 ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue';
@@ -56,8 +56,8 @@ const BTN_VARIANT: Record<string, string> = {
   success: 'bg-green text-white shadow-xs hover:bg-green-2 hover:shadow-card',
 };
 const BTN_SIZE: Record<string, string> = {
-  sm: 'h-8 px-3 text-[12px] rounded-[6px]',
-  md: 'h-9 px-3.5 text-xs rounded-[8px]',
+  sm: 'h-8 min-h-11 px-3 text-xs rounded-[6px] sm:min-h-0',
+  md: 'h-9 min-h-11 px-3.5 text-sm rounded-[8px] sm:min-h-0',
   lg: 'h-11 px-5 text-sm rounded-[8px]',
   xl: 'h-12 px-6 text-base rounded-[10px]',
 };
@@ -150,7 +150,7 @@ export function Card({
         'rounded-card border border-line bg-surface shadow-card',
         hover &&
           'transition-all duration-[160ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:shadow-card-hover hover:-translate-y-[1px]',
-        padded && 'p-5',
+        padded && 'p-3 sm:p-5',
         className,
       )}
     >
@@ -177,7 +177,7 @@ export function PageHeader({
           <p className="mb-1 text-[11px] font-semibold tracking-[0.14em] text-blue uppercase">{eyebrow}</p>
         ) : null}
         <h1 className="text-xl font-bold tracking-tight text-ink sm:text-2xl">{title}</h1>
-        {hint ? <p className="mt-1 text-xs text-ink-soft">{hint}</p> : null}
+        {hint ? <p className="mt-1 text-sm text-ink-soft">{hint}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
@@ -188,15 +188,20 @@ export function PasswordInput({
   className,
   inputMode,
   autoComplete,
+  id: providedId,
+  'aria-describedby': describedBy,
   ...props
 }: InputHTMLAttributes<HTMLInputElement>) {
   const [show, setShow] = useState(false);
+  const id = providedId ?? useId();
   return (
     <div className="relative w-full">
       <input
         type={show ? 'text' : 'password'}
+        id={id}
         inputMode={inputMode}
         autoComplete={autoComplete ?? 'new-password'}
+        aria-describedby={describedBy}
         data-lpignore="true"
         data-1p-ignore="true"
         className={cx(className, 'pr-9 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden')}
@@ -204,11 +209,11 @@ export function PasswordInput({
       />
       <button
         type="button"
-        tabIndex={-1}
         onClick={() => setShow((v) => !v)}
+        aria-pressed={show}
         title={show ? 'Masquer' : 'Afficher'}
         aria-label={show ? 'Masquer la saisie' : 'Afficher la saisie'}
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-amber focus:text-amber transition-colors p-1"
+        className="absolute right-1 top-1/2 grid min-h-11 min-w-11 -translate-y-1/2 place-items-center rounded-md text-ink-faint transition-colors hover:text-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber sm:min-h-9 sm:min-w-9"
       >
         {show ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>
@@ -222,17 +227,22 @@ export function Field({
   className,
   type,
   autoComplete,
+  id: providedId,
+  'aria-describedby': describedBy,
   'aria-invalid': ariaInvalid,
   ...rest
 }: InputHTMLAttributes<HTMLInputElement> & { label?: string; hint?: string }) {
-  const id = useId();
+  const generatedId = useId();
+  const id = providedId ?? generatedId;
+  const hintId = `${id}-hint`;
+  const combinedDescribedBy = [describedBy, hint ? hintId : null].filter(Boolean).join(' ') || undefined;
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = type === 'password';
   const effectiveType = isPassword ? (showPassword ? 'text' : 'password') : type;
 
   return (
-    <label htmlFor={id} className={cx('block', className)}>
-      {label ? <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">{label}</span> : null}
+    <div className={cx('block', className)}>
+      {label ? <label htmlFor={id} className="mb-1.5 block text-[12px] font-medium text-ink-soft">{label}</label> : null}
       <div className="relative">
         <input
           id={id}
@@ -241,8 +251,9 @@ export function Field({
           data-lpignore="true"
           data-1p-ignore="true"
           aria-invalid={ariaInvalid}
+          aria-describedby={combinedDescribedBy}
           className={cx(
-            'h-9 w-full rounded-btn border bg-surface px-3 text-xs text-ink placeholder:text-ink-faint',
+            'h-11 w-full min-w-0 rounded-btn border bg-surface px-3 text-base text-ink placeholder:text-ink-faint sm:text-sm',
             isPassword ? 'pr-9 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden' : '',
             'transition-colors duration-[120ms] focus:outline-none focus:ring-2',
             ariaInvalid
@@ -254,42 +265,50 @@ export function Field({
         {isPassword && (
           <button
             type="button"
-            tabIndex={-1}
             onClick={() => setShowPassword((v) => !v)}
+            aria-pressed={showPassword}
             title={showPassword ? 'Masquer' : 'Afficher'}
             aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-amber focus:text-amber transition-colors p-1"
+            className="absolute right-1 top-1/2 grid min-h-11 min-w-11 -translate-y-1/2 place-items-center rounded-md text-ink-faint transition-colors hover:text-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber sm:min-h-9 sm:min-w-9"
           >
             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         )}
       </div>
-      {hint ? <span className="mt-1 block text-[11px] text-ink-faint">{hint}</span> : null}
-    </label>
+      {hint ? <span id={hintId} className="mt-1 block text-xs text-ink-faint">{hint}</span> : null}
+    </div>
   );
 }
 
 export function SelectField({
   label,
+  hint,
   className,
+  id: providedId,
+  'aria-describedby': describedBy,
   children,
   ...rest
-}: SelectHTMLAttributes<HTMLSelectElement> & { label?: string }) {
-  const id = useId();
+}: SelectHTMLAttributes<HTMLSelectElement> & { label?: string; hint?: string }) {
+  const generatedId = useId();
+  const id = providedId ?? generatedId;
+  const hintId = `${id}-hint`;
+  const combinedDescribedBy = [describedBy, hint ? hintId : null].filter(Boolean).join(' ') || undefined;
   return (
-    <label htmlFor={id} className={cx('block', className)}>
-      {label ? <span className="mb-1.5 block text-[12px] font-medium text-ink-soft">{label}</span> : null}
+    <div className={cx('block', className)}>
+      {label ? <label htmlFor={id} className="mb-1.5 block text-[12px] font-medium text-ink-soft">{label}</label> : null}
       <select
         id={id}
+        aria-describedby={combinedDescribedBy}
         className={cx(
-          'h-9 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink',
+          'h-11 w-full min-w-0 rounded-btn border border-line-strong bg-surface px-3 text-base text-ink sm:text-sm',
           'transition-colors duration-[120ms] focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/15',
         )}
         {...rest}
       >
         {children}
       </select>
-    </label>
+      {hint ? <span id={hintId} className="mt-1 block text-xs text-ink-faint">{hint}</span> : null}
+    </div>
   );
 }
 
@@ -305,7 +324,7 @@ export function TextArea({
       <textarea
         id={id}
         className={cx(
-          'w-full rounded-btn border border-line-strong bg-surface px-3 py-2 text-xs text-ink placeholder:text-ink-faint',
+          'min-h-28 w-full min-w-0 rounded-btn border border-line-strong bg-surface px-3 py-2 text-base text-ink placeholder:text-ink-faint sm:text-sm',
           'transition-colors duration-[120ms] focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/15',
         )}
         rows={3}
@@ -431,7 +450,7 @@ export function Drawer({
     >
       <DrawerContent
         className={cx(
-          'h-full gap-0 bg-paper p-0 shadow-pop',
+          'h-dvh w-[min(92vw,28rem)] gap-0 bg-paper p-0 pb-[env(safe-area-inset-bottom)] shadow-pop',
           wide ? 'sm:max-w-2xl' : 'sm:max-w-lg',
         )}
       >
@@ -449,7 +468,7 @@ export function Drawer({
             </div>
             <button
               onClick={onClose}
-              className="rounded-btn p-1.5 text-ink-soft transition-colors hover:bg-grey-wash hover:text-ink"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-btn text-ink-soft transition-colors hover:bg-grey-wash hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
               aria-label="Fermer le panneau"
             >
               <IconX size={18} />
@@ -487,7 +506,7 @@ export function Modal({
       <DialogContent
         showCloseButton={false}
         className={cx(
-          'grid max-h-[92vh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden bg-paper p-0 sm:rounded-card',
+          'grid max-h-[92vh] max-h-[92dvh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden bg-paper p-0 pb-[env(safe-area-inset-bottom)] sm:rounded-card',
           wide ? 'sm:max-w-2xl' : 'sm:max-w-lg',
         )}
       >
@@ -496,7 +515,7 @@ export function Modal({
             <DialogTitle className="text-base font-semibold text-ink">{title}</DialogTitle>
             <button
               onClick={onClose}
-              className="rounded-btn p-1.5 text-ink-soft transition-colors hover:bg-grey-wash hover:text-ink"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-btn text-ink-soft transition-colors hover:bg-grey-wash hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
               aria-label="Fermer"
             >
               <IconX size={18} />
@@ -504,9 +523,9 @@ export function Modal({
           </div>
           <DialogDescription className="sr-only">{title}</DialogDescription>
         </DialogHeader>
-        <div className="scroll-thin min-h-0 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="scroll-thin min-h-0 overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
         {footer ? (
-          <footer className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>
+          <footer className="flex flex-col gap-2 border-t border-line px-4 py-3 sm:flex-row sm:justify-end sm:px-5">{footer}</footer>
         ) : null}
       </DialogContent>
     </Dialog>

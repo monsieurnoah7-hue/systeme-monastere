@@ -144,6 +144,63 @@ kitsRoutes.get('/by-employee/:employeeId', requirePerm('employees.view'), async 
   return c.json({ kit, items });
 });
 
+const createKitItemSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  qty: z.number().int().min(1).max(1000).default(1),
+  unit: z.string().trim().min(1).max(24).default('pièce'),
+  notes: z.string().trim().max(500).optional(),
+});
+
+// Ajouter une dotation physique à un seul établi. Le code QR est stable et propre au kit.
+kitsRoutes.post('/:id/items', requirePerm('tools.create'), async (c) => {
+  const kitId = c.req.param('id');
+  const body = createKitItemSchema.parse(await c.req.json());
+  const db = getDb();
+
+  const result = await db.transaction(async (tx) => {
+    const kit = await tx.one<{ id: string; code: string }>(
+      'SELECT id, code FROM etabli_kits WHERE id = $1 FOR UPDATE',
+      [kitId],
+    );
+    if (!kit) return { item: null, duplicateBag: false };
+
+    const isBag = body.name.toLocaleLowerCase('fr').replace(/\s+/g, ' ') === 'sac de chantier';
+    if (isBag) {
+      const existingBag = await tx.one<{ id: number }>(
+        `SELECT id FROM etabli_kit_items WHERE kit_id = $1 AND lower(name) = lower('Sac de chantier') LIMIT 1`,
+        [kitId],
+      );
+      if (existingBag) return { item: null, duplicateBag: true };
+    }
+
+    const last = await tx.one<{ item_num: number }>(
+      'SELECT COALESCE(MAX(item_num), 0)::int AS item_num FROM etabli_kit_items WHERE kit_id = $1',
+      [kitId],
+    );
+    const itemNum = (last?.item_num ?? 0) + 1;
+    const toolCode = `CFTM-${kit.code}-IT-${String(itemNum).padStart(3, '0')}`;
+    const created = await tx.one<EtabliKitItemRow>(`
+      INSERT INTO etabli_kit_items (kit_id, item_num, name, qty, unit, tool_code, condition, is_present, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, 'bon', true, $7)
+      RETURNING *
+    `, [kitId, itemNum, body.name, body.qty, body.unit, toolCode, body.notes ?? null]);
+
+    await writeAudit(tx, {
+      action: 'etabli_kit.item_create',
+      entity: 'etabli_kit_item',
+      entityId: String(created?.id ?? ''),
+      after: created,
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+    return { item: created, duplicateBag: false };
+  });
+
+  if (result.duplicateBag) return c.json({ error: 'Cet établi possède déjà son sac de chantier.' }, 409);
+  if (!result.item) return c.json({ error: 'Établi introuvable.' }, 404);
+  return c.json({ item: result.item }, 201);
+});
+
 // 4. Mettre à jour l'état d'un outil individuel du kit (Signalement / Remplacement / Restitution)
 const updateItemSchema = z.object({
   condition: z.enum(['bon', 'a_affuter', 'a_reparer', 'manquant', 'reforme']).optional(),

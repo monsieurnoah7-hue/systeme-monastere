@@ -68,13 +68,19 @@ const FINITION_ITEMS = [
 
 function buildItems(code: string, num: number, isFinition: boolean) {
   const base = isFinition ? FINITION_ITEMS : STANDARD_ITEMS;
-  return base.map((it) => ({
+  return [...base.map((it) => ({
     item_num: it.item_num,
     name: it.name,
     qty: it.qty,
     unit: it.unit,
     tool_code: `CFTM-${code}-${it.code}-${String(num).padStart(2, '0')}`,
-  }));
+  })), {
+    item_num: base.length + 1,
+    name: 'Sac de chantier',
+    qty: 1,
+    unit: 'pièce',
+    tool_code: `CFTM-${code}-SAC-${String(num).padStart(2, '0')}`,
+  }];
 }
 
 // SEULS LES AYANTS DROIT LÉGITIMES DES ATELIERS & ÉTABLIS SONT INCLUS :

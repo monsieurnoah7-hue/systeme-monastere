@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   api,
   type Employee,
@@ -78,104 +78,52 @@ import {
 } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { ImagePickerModal } from '../components/ImagePickerModal';
-import { ExcelImportModal } from '../components/ExcelImportModal';
 import { FleetView } from '../components/FleetView';
 import { computePortfolioAudit, computeToolAccounting, formatCurrency } from '../lib/accounting';
 import { fetchFleetSummary, type FleetSummary } from '../lib/api';
 
+const ExcelImportModal = lazy(() => import('../components/ExcelImportModal').then((module) => ({ default: module.ExcelImportModal })));
+
 type ToolDetail = { tool: Tool; events: ToolEvent[]; loan: ToolLoan | null };
 type Facets = { categories: string[]; locations: string[] };
 
-function ToolLabelCard({ tool, qrSrc }: { tool: Tool; qrSrc?: string }) {
+type LabelFormat = 'compact' | 'standard';
+type PaperFormat = 'A4' | 'Letter';
+
+async function makeToolQrSheet(tools: Tool[]) {
+  const ids = [...new Set(tools.map((tool) => tool.id))];
+  const entries = await Promise.all(ids.map(async (id) => [id, await qrDataUrl(`${QR_PREFIX.tool}${id}`, 240)] as const));
+  return Object.fromEntries(entries);
+}
+
+function ToolLabelCard({ tool, qrSrc, format }: { tool: Tool; qrSrc?: string; format: LabelFormat }) {
+  const compact = format === 'compact';
+  const qrSize = compact ? '17mm' : '29mm';
   return (
-    <div
-      className="tool-label-card relative flex flex-col justify-between overflow-hidden rounded-lg border-2 border-gray-800 bg-white p-2 text-gray-900 shadow-xs"
-      style={{
-        fontFamily: '"IBM Plex Sans", -apple-system, sans-serif',
-        breakInside: 'avoid',
-      }}
-    >
-      {/* En-tête officiel du Monastère */}
-      <div className="flex items-center justify-between border-b border-gray-300 pb-1">
-        <div className="flex items-center gap-1.5">
-          <img src="/logo.png" alt="Logo" className="h-4 object-contain" />
-          <span className="text-[6pt] font-extrabold uppercase tracking-wider text-gray-900">
-            C.F.T. Bénédictins Mont Fébé
-          </span>
-        </div>
-        <span className="rounded bg-orange-100 px-1 py-0.2 text-[5pt] font-bold text-[#ff5500] uppercase tracking-wider">
-          Atelier
-        </span>
+    <div className="tool-label-card flex overflow-hidden border border-gray-500 bg-white text-gray-900" style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif', breakInside: 'avoid', width: compact ? '38mm' : '63.5mm', height: compact ? '21mm' : '38.1mm' }}>
+      <div className="flex shrink-0 items-center justify-center bg-white" style={{ boxSizing: 'border-box', width: qrSize, height: '100%', padding: compact ? '1mm' : '2mm' }}>
+        {qrSrc ? <img src={qrSrc} alt={`QR ${tool.id}`} className="h-full w-full object-contain" /> : <div className="h-full w-full bg-gray-100" />}
       </div>
-
-      {/* Corps : QR Code + Données Outil */}
-      <div className="flex items-center gap-2 py-1.5">
-        <div className="grid h-[24mm] w-[24mm] shrink-0 place-items-center rounded border border-gray-300 bg-white p-0.5">
-          {qrSrc ? (
-            <img src={qrSrc} alt={`QR ${tool.id}`} className="h-full w-full object-contain" />
-          ) : (
-            <div className="h-full w-full bg-gray-100" />
-          )}
+      <div className={`flex min-w-0 flex-1 flex-col justify-center leading-tight ${compact ? 'py-[1mm] pr-[1mm]' : 'py-[2mm] pr-[2mm]'}`}>
+        <div className="mb-[1mm] flex items-center gap-1 border-b border-gray-200 pb-[0.8mm]">
+          <img src="/emblem.png" alt="" className={compact ? 'h-[3mm] w-[3mm] object-contain' : 'h-[4mm] w-[4mm] object-contain'} />
+          <span className={`font-bold tracking-wide text-gray-800 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>CFTM</span>
         </div>
-
-        <div className="min-w-0 flex-1 leading-tight">
-          <p className="font-mono text-[11pt] font-black tracking-tight text-gray-950">
-            {tool.id}
-          </p>
-          <p className="truncate text-[7.5pt] font-bold text-gray-900 leading-snug">
-            {tool.name}
-          </p>
-          <p className="mt-0.5 truncate text-[6pt] text-gray-600">
-            {tool.category} · {tool.location}
-          </p>
-          <div className="mt-1 flex items-center gap-1">
-            <span className="text-[5.5pt] text-gray-500 font-mono">
-              MAGASIN : {tool.magasin_id ?? 'Central'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Pied de sécurité */}
-      <div className="flex items-center justify-between border-t border-gray-200 pt-0.5 text-[4.8pt] font-semibold uppercase tracking-wider text-gray-500">
-        <span>PROPRIÉTÉ DU MONASTÈRE</span>
-        <span>SCAN RETOUR OBLIGATOIRE</span>
+        <p className={`truncate font-mono font-bold tracking-tight text-gray-950 ${compact ? 'text-[7pt]' : 'text-[10pt]'}`}>{tool.id}</p>
+        <p className={`truncate font-semibold text-gray-800 ${compact ? 'text-[5.5pt]' : 'text-[7.5pt]'}`}>{tool.name}</p>
+        <p className={`truncate text-gray-600 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>{compact ? tool.location : `${tool.category} · ${tool.location}`}</p>
       </div>
     </div>
   );
 }
 
-function A4Sheet({ tools }: { tools: Tool[] }) {
-  const [codes, setCodes] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.all(
-      tools.map(async (tool) => [tool.id, await qrDataUrl(`${QR_PREFIX.tool}${tool.id}`, 240)] as const),
-    ).then((entries) => {
-      if (!cancelled) setCodes(Object.fromEntries(entries));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [tools]);
-
+function A4Sheet({ tools, codes, format = 'compact', paper = 'A4' }: { tools: Tool[]; codes: Record<string, string>; format?: LabelFormat; paper?: PaperFormat }) {
   return (
-    <div className="a4-page" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
-      <div style={{ marginBottom: '6mm', borderBottom: '1px solid #d3cabd', paddingBottom: '3mm' }} className="flex items-center justify-between">
-        <div>
-          <p style={{ fontSize: '12pt', fontWeight: 700, color: '#ff6603', margin: 0 }}>
-            C.F.T. des Bénédictins du Mont Fébé
-          </p>
-          <p style={{ fontSize: '8.5pt', color: '#5b5651', margin: '1mm 0 0' }}>
-            Planche d’étiquettes outillage &amp; machines · {tools.length} référence(s) · format d’atelier avec découpe
-          </p>
-        </div>
-        <img src="/logo.png" alt="Logo" style={{ height: '10mm', objectFit: 'contain' }} />
-      </div>
-      <div className="a4-grid">
+    <div className="label-sheet" style={{ fontFamily: '"IBM Plex Sans", sans-serif', width: paper === 'A4' ? '200mm' : '203.2mm', margin: '0 auto' }}>
+      <style>{`@page { size: ${paper} portrait; margin: 5mm; }`}</style>
+      <div className="label-grid" style={{ gridTemplateColumns: `repeat(auto-fill, ${format === 'compact' ? '38mm' : '63.5mm'})`, gap: '2mm' }}>
         {tools.map((tool) => (
-          <ToolLabelCard key={tool.id} tool={tool} qrSrc={codes[tool.id]} />
+          <ToolLabelCard key={tool.id} tool={tool} qrSrc={codes[tool.id]} format={format} />
         ))}
       </div>
     </div>
@@ -314,6 +262,10 @@ export function Outils({
   const [assignMagasinId, setAssignMagasinId] = useState('');
   const [printOpen, setPrintOpen] = useState(false);
   const [printPick, setPrintPick] = useState<Record<string, boolean>>({});
+  const [printCopies, setPrintCopies] = useState<Record<string, number>>({});
+  const [labelFormat, setLabelFormat] = useState<LabelFormat>('compact');
+  const [paperFormat, setPaperFormat] = useState<PaperFormat>('A4');
+  const [printPreparing, setPrintPreparing] = useState(false);
   const { print, portal } = usePrintSheet();
   const [busy, setBusy] = useState(false);
 
@@ -905,14 +857,15 @@ export function Outils({
             {/* Row 1: Tabs, Search & Priority Actions */}
             <div className="flex items-center justify-between gap-2 sm:gap-3 min-w-0">
               {/* Left: Radix Navigation Tabs with Live Badges */}
-              <div className="overflow-x-auto overflow-y-hidden no-scrollbar shrink-0">
-                <TabsList variant="line" className="flex gap-1 sm:gap-2.5 bg-transparent p-0 w-max">
+              <div className="min-w-0 flex-1">
+                <TabsList variant="line" className={cx('grid w-full gap-1 bg-transparent p-0 sm:flex sm:w-max sm:gap-2.5', canViewTools ? (canViewLoans ? 'grid-cols-3' : 'grid-cols-2') : 'grid-cols-1')}>
                   {canViewTools && <TabsTrigger
                     value="tools"
-                    className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
+                    className="min-w-0 gap-1 px-1 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
                   >
                     <IconWrench size={15} />
-                    <span>Matériel &amp; Outils</span>
+                    <span className="truncate sm:hidden">Outils</span>
+                    <span className="hidden sm:inline">Matériel &amp; Outils</span>
                     <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
                       {tools.length}
                     </span>
@@ -920,10 +873,11 @@ export function Outils({
 
                   {canViewLoans && <TabsTrigger
                     value="loans"
-                    className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
+                    className="min-w-0 gap-1 px-1 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
                   >
                     <Clock size={15} />
-                    <span>Prêts en cours</span>
+                    <span className="truncate sm:hidden">Prêts</span>
+                    <span className="hidden sm:inline">Prêts en cours</span>
                     {activeLoans.length > 0 && (
                       <span className="ml-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-bold text-amber">
                         {activeLoans.length}
@@ -933,10 +887,11 @@ export function Outils({
 
                   {canViewTools && <TabsTrigger
                     value="fleet"
-                    className="shrink-0 whitespace-nowrap gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold"
+                    className="min-w-0 gap-1 px-1 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
                   >
                     <Truck size={15} />
-                    <span>Flotte &amp; Groupes</span>
+                    <span className="truncate sm:hidden">Flotte</span>
+                    <span className="hidden sm:inline">Flotte &amp; Groupes</span>
                     {fleetSummary && fleetSummary.alerts.total_urgent > 0 ? (
                       <span className="ml-1 rounded-full bg-red-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold animate-pulse">
                         {fleetSummary.alerts.total_urgent}
@@ -1117,7 +1072,7 @@ export function Outils({
             {activeTab === 'tools' && (
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1 border-t border-line/40 text-xs">
                 {/* Horizontal Status Chips */}
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 min-w-0 flex-1">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 py-0.5">
                   <span className="text-[10px] uppercase font-bold text-ink-faint mr-1 shrink-0 hidden sm:inline">
                     Filtre :
                   </span>
@@ -1133,7 +1088,7 @@ export function Outils({
                       key={key}
                       onClick={() => setFilters((f) => ({ ...f, status: key }))}
                       className={cx(
-                        'rounded-lg px-2.5 py-0.5 text-[11px] font-semibold transition-all shrink-0 border flex items-center gap-1',
+                        'min-h-10 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all border flex items-center gap-1',
                         filters.status === key
                           ? 'bg-amber text-white border-amber shadow-2xs font-bold'
                           : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
@@ -2363,8 +2318,16 @@ export function Outils({
                   className="mt-3"
                   size="sm"
                   icon={<IconPrinter size={16} />}
-                  onClick={() => {
-                    print(<A4Sheet tools={[detail.tool]} />);
+                  onClick={async () => {
+                    try {
+                      setPrintPreparing(true);
+                      const codes = await makeToolQrSheet([detail.tool]);
+                      print(<A4Sheet tools={[detail.tool]} codes={codes} />);
+                    } catch {
+                      toast('Impossible de préparer le QR pour l’impression.', 'error');
+                    } finally {
+                      setPrintPreparing(false);
+                    }
                   }}
                 >
                   Imprimer l’étiquette
@@ -3257,24 +3220,51 @@ export function Outils({
             <Button
               variant="primary"
               icon={<IconPrinter size={18} />}
-              disabled={!tools.some((tool) => printPick[tool.id])}
-              onClick={() => {
-                print(<A4Sheet tools={tools.filter((tool) => printPick[tool.id])} />);
-                setPrintOpen(false);
+              disabled={printPreparing || !tools.some((tool) => printPick[tool.id] && (printCopies[tool.id] ?? 1) > 0)}
+              onClick={async () => {
+                const labels = tools.flatMap((tool) => Array.from(
+                  { length: printPick[tool.id] ? Math.min(100, Math.max(0, printCopies[tool.id] ?? 1)) : 0 },
+                  () => tool,
+                ));
+                try {
+                  setPrintPreparing(true);
+                  const codes = await makeToolQrSheet(labels);
+                  print(<A4Sheet tools={labels} codes={codes} format={labelFormat} paper={paperFormat} />);
+                  setPrintOpen(false);
+                } catch {
+                  toast('Impossible de préparer les QR pour l’impression.', 'error');
+                } finally {
+                  setPrintPreparing(false);
+                }
               }}
             >
-              Imprimer la sélection
+              {printPreparing ? 'Préparation…' : 'Imprimer la sélection'}
             </Button>
           </>
         }
       >
         <div className="space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-line">
-            <span className="text-xs text-ink-soft">Cochez les outils à imprimer sur la planche</span>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs font-medium text-ink-soft">Format de l’étiquette
+              <select value={labelFormat} onChange={(event) => setLabelFormat(event.target.value as LabelFormat)} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-2 text-ink">
+                <option value="compact">Compact · 38 × 21 mm</option>
+                <option value="standard">Standard · 63,5 × 38,1 mm</option>
+              </select>
+            </label>
+            <label className="text-xs font-medium text-ink-soft">Papier
+              <select value={paperFormat} onChange={(event) => setPaperFormat(event.target.value as PaperFormat)} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-2 text-ink">
+                <option value="A4">A4</option>
+                <option value="Letter">Letter</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex items-center justify-between border-b border-line pb-2">
+            <span className="text-xs text-ink-soft">Choisissez les objets et le nombre d’étiquettes à tirer.</span>
             <button
               onClick={() => {
                 const allSelected = tools.every((t) => printPick[t.id]);
                 setPrintPick(Object.fromEntries(tools.map((t) => [t.id, !allSelected])));
+                setPrintCopies(Object.fromEntries(tools.map((t) => [t.id, !allSelected ? Math.max(1, printCopies[t.id] ?? 1) : 0])));
               }}
               className="text-xs font-semibold text-amber hover:underline"
             >
@@ -3283,20 +3273,37 @@ export function Outils({
           </div>
           <div className="max-h-80 overflow-y-auto space-y-1 pr-1">
             {tools.map((tool) => (
-              <label
+              <div
                 key={tool.id}
-                className="flex cursor-pointer items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2 hover:bg-paper"
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-2 hover:bg-paper"
               >
                 <input
+                  id={`print-tool-${tool.id}`}
                   type="checkbox"
                   checked={!!printPick[tool.id]}
-                  onChange={(event) => setPrintPick((p) => ({ ...p, [tool.id]: event.target.checked }))}
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setPrintPick((p) => ({ ...p, [tool.id]: checked }));
+                    setPrintCopies((p) => ({ ...p, [tool.id]: checked ? Math.max(1, p[tool.id] ?? 1) : 0 }));
+                  }}
                   className="h-4 w-4 rounded accent-amber"
                 />
+                <label htmlFor={`print-tool-${tool.id}`} className="sr-only">Sélectionner {tool.name}</label>
                 <span className="font-mono text-xs font-bold text-amber">{tool.id}</span>
                 <span className="min-w-0 flex-1 truncate text-xs font-medium text-ink">{tool.name}</span>
-                <span className="text-[11px] text-ink-faint">{tool.category}</span>
-              </label>
+                <span className="hidden text-[11px] text-ink-faint sm:inline">{tool.category}</span>
+                <input
+                  aria-label={`Nombre d’étiquettes pour ${tool.name}`}
+                  type="number"
+                  min={1}
+                  max={100}
+                  step={1}
+                  disabled={!printPick[tool.id]}
+                  value={printCopies[tool.id] ?? 1}
+                  onChange={(event) => setPrintCopies((p) => ({ ...p, [tool.id]: Math.min(100, Math.max(1, Math.trunc(Number(event.target.value) || 1))) }))}
+                  className="h-8 w-16 rounded-md border border-line bg-paper px-2 text-center text-xs text-ink disabled:opacity-40"
+                />
+              </div>
             ))}
           </div>
         </div>
@@ -3315,13 +3322,15 @@ export function Outils({
 
       {/* Modal Import Tableur Excel / CSV */}
       {importOpen && (
-        <ExcelImportModal
-          type="tools"
-          onClose={() => setImportOpen(false)}
-          onSuccess={() => {
-            refresh();
-          }}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-charcoal/70"><Spinner /></div>}>
+          <ExcelImportModal
+            type="tools"
+            onClose={() => setImportOpen(false)}
+            onSuccess={() => {
+              refresh();
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Modal Affectation / Transfert Groupé (Interchanger magasins & Affecter brouillons) */}

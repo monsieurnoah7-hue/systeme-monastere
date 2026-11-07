@@ -353,6 +353,12 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 4mm;
   }
+  .label-grid {
+    display: grid;
+    justify-content: start;
+    align-content: start;
+    grid-auto-rows: max-content;
+  }
   .badge-grid {
     display: grid;
     grid-template-columns: repeat(2, 85.6mm);
@@ -373,15 +379,14 @@
     overflow: hidden;
   }
   .tool-label-card {
-    width: 100%;
-    min-height: 38mm;
-    border: 1.2px solid #374151;
-    border-radius: 2mm;
-    padding: 2.5mm;
     box-sizing: border-box;
     break-inside: avoid;
     background: #ffffff;
     color: #111827;
+  }
+  .label-sheet {
+    box-sizing: border-box;
+    break-after: auto;
   }
   .receipt-page {
     width: 105mm;

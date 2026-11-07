@@ -87,7 +87,12 @@ export function DataTable<TData extends RowData>({
   return (
     <div className={cn('overflow-hidden rounded-card border border-line bg-surface', className)}>
       {caption ? <p className="sr-only">{caption}</p> : null}
-      <div className={cn('overflow-x-auto scroll-thin', renderCard && 'hidden md:block')}>
+      <div
+        className={cn('overflow-x-auto scroll-thin focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber', renderCard && 'hidden md:block')}
+        tabIndex={renderCard ? undefined : 0}
+        role={renderCard ? undefined : 'region'}
+        aria-label={renderCard ? undefined : caption ?? 'Tableau de données, faites défiler horizontalement pour voir toutes les colonnes'}
+      >
         <Table className={cn('text-left', minWidth)}>
           <TableHeader className="border-b border-line bg-surface-2 [&_tr]:border-0">
             {table.getHeaderGroups().map((headerGroup) => (

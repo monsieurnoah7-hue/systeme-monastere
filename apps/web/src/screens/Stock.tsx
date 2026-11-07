@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type Employee, type Magasin, type ScanResult, type StockMovement, type StockRef, type User } from '../lib/api';
 import { QR_PREFIX, qrDataUrl } from '../lib/qr';
 import { MOVE_LABEL, MOVE_TONE, formatDateTime } from '../lib/labels';
@@ -63,8 +63,9 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { usePrintSheet } from '../lib/print';
 import { ImagePickerModal } from '../components/ImagePickerModal';
-import { ExcelImportModal } from '../components/ExcelImportModal';
 import { formatCurrency } from '../lib/accounting';
+
+const ExcelImportModal = lazy(() => import('../components/ExcelImportModal').then((module) => ({ default: module.ExcelImportModal })));
 
 type RefForm = {
   name: string;
@@ -1076,19 +1077,21 @@ export function Stock({
         <div className="grid w-full grid-cols-3 gap-1 rounded-xl border border-line bg-paper-2 p-1">
           <button
             type="button"
+            aria-label={`Afficher tout le stock (${refs.length})`}
+            aria-pressed={scopeFilter === 'all'}
             onClick={() => {
               setScopeFilter('all');
               setSelectedRefIds(new Set());
             }}
             className={cx(
-              'flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-center text-xs font-semibold leading-tight transition-all',
+              'flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center text-xs font-semibold leading-tight transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber',
               scopeFilter === 'all'
                 ? 'bg-amber text-white shadow-xs'
                 : 'text-ink hover:bg-paper',
             )}
           >
             <Layers size={14} />
-            <span>Tout le Stock</span>
+            <span className="truncate">Tout</span>
             <span
               className={cx(
                 'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
@@ -1101,19 +1104,21 @@ export function Stock({
 
           <button
             type="button"
+            aria-label={`Afficher les articles en magasins (${activeRefs.length})`}
+            aria-pressed={scopeFilter === 'active'}
             onClick={() => {
               setScopeFilter('active');
               setSelectedRefIds(new Set());
             }}
             className={cx(
-              'flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-center text-xs font-semibold leading-tight transition-all',
+              'flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center text-xs font-semibold leading-tight transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber',
               scopeFilter === 'active'
                 ? 'bg-amber text-white shadow-xs'
                 : 'text-ink hover:bg-paper',
             )}
           >
             <IconBox size={14} />
-            <span>Articles en Magasins</span>
+            <span className="truncate">Magasins</span>
             <span
               className={cx(
                 'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
@@ -1126,19 +1131,21 @@ export function Stock({
 
           <button
             type="button"
+            aria-label={`Afficher les brouillons et articles non affectés (${draftRefs.length})`}
+            aria-pressed={scopeFilter === 'drafts'}
             onClick={() => {
               setScopeFilter('drafts');
               setSelectedRefIds(new Set());
             }}
             className={cx(
-              'flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-center text-xs font-semibold leading-tight transition-all',
+              'flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center text-xs font-semibold leading-tight transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber',
               scopeFilter === 'drafts'
                 ? 'bg-amber text-white shadow-xs'
                 : 'text-ink hover:bg-paper',
             )}
           >
             <FolderArchive size={14} />
-            <span>Brouillons &amp; Non affectés</span>
+            <span className="truncate">À affecter</span>
             <span
               className={cx(
                 'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
@@ -2682,13 +2689,15 @@ export function Stock({
 
       {/* Modal Import Tableur Excel / CSV */}
       {importOpen && (
-        <ExcelImportModal
-          type="stock"
-          onClose={() => setImportOpen(false)}
-          onSuccess={() => {
-            refresh();
-          }}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-charcoal/70"><Spinner /></div>}>
+          <ExcelImportModal
+            type="stock"
+            onClose={() => setImportOpen(false)}
+            onSuccess={() => {
+              refresh();
+            }}
+          />
+        </Suspense>
       )}
 
       {portal}

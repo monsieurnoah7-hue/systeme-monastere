@@ -752,9 +752,9 @@ export function Magasins({
       <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
         <div className="flex flex-col gap-2">
           {/* Row 1: Categories + Search + Actions + Overflow Menu */}
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             {/* Left: Quick Category Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 py-0.5 md:flex-1">
               {LOCATION_CATEGORIES.map((cat) => {
                 const count = categoryCounts[cat.id] ?? 0;
                 if (cat.id !== 'all' && count === 0) return null;
@@ -765,7 +765,7 @@ export function Magasins({
                     type="button"
                     onClick={() => setActiveCategory(cat.id)}
                     className={cx(
-                      'flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 border shadow-2xs',
+                      'flex min-h-10 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-semibold transition-all shadow-2xs',
                       isSelected
                         ? 'bg-amber text-white border-amber shadow-xs'
                         : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
@@ -806,7 +806,7 @@ export function Magasins({
             </div>
 
             {/* Right: Actions & Options */}
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex w-full items-center justify-between gap-1.5 md:w-auto md:shrink-0 md:justify-start">
               <Button
                 size="sm"
                 variant="secondary"
@@ -838,7 +838,7 @@ export function Magasins({
                   type="button"
                   onClick={() => setViewMode('grid')}
                   className={cx(
-                    'px-2 py-0.5 text-[10px] font-semibold rounded transition-colors flex items-center gap-1',
+                    'grid min-h-10 min-w-10 place-items-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
                     viewMode === 'grid' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
                   )}
                   title="Affichage en Grille Bento"
@@ -850,7 +850,7 @@ export function Magasins({
                   type="button"
                   onClick={() => setViewMode('list')}
                   className={cx(
-                    'px-2 py-0.5 text-[10px] font-semibold rounded transition-colors flex items-center gap-1',
+                    'grid min-h-10 min-w-10 place-items-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
                     viewMode === 'list' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
                   )}
                   title="Affichage en Liste"
@@ -904,7 +904,7 @@ export function Magasins({
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Rechercher un magasin, atelier, responsable…"
-                className="h-7 w-full rounded-md border border-line bg-surface/90 pl-6 pr-6 text-[11px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
+                className="h-11 w-full rounded-md border border-line bg-surface/90 pl-9 pr-10 text-base text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
               />
               {q && (
                 <button

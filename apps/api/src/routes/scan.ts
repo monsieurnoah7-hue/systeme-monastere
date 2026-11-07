@@ -32,10 +32,11 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
   let badgeToken = stripPrefix(rawCode, 'montfebe:badge:');
   let stockId = stripPrefix(rawCode, 'montfebe:stock:');
   let kitId = stripPrefix(rawCode, 'montfebe:kit:');
+  const kitItemCode = stripPrefix(rawCode, 'montfebe:kit-item:') ?? stripPrefix(rawCode, 'cftm:tool:');
   if (stripPrefix(rawCode, 'montfebe:punch:')) {
     return c.json({ kind: 'ignored', reason: 'QR de pointage : utilisez la borne.' });
   }
-  if (!toolId && !badgeToken && !stockId && !kitId && upper.startsWith('MONTFEBE')) {
+  if (!toolId && !badgeToken && !stockId && !kitId && !kitItemCode && upper.startsWith('MONTFEBE')) {
     return c.json({ kind: 'unknown', code: rawCode });
   }
 
@@ -158,15 +159,13 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
 
   // Direct kit item match by tool_code
   const kitItem = await db.one(`
-    SELECT i.*, k.code AS kit_code, k.location AS etabli_location, k.source_magasin_id,
-           e.full_name AS employee_name, e.job_title AS employee_job, e.photo_path AS employee_photo
+    SELECT i.*, k.code AS kit_code, k.etabli_number, k.location AS etabli_location, k.source_magasin_id
       FROM etabli_kit_items i
       JOIN etabli_kits k ON k.id = i.kit_id
-      JOIN employees e ON e.id = k.employee_id
      WHERE i.tool_code = $1
-  `, [upper]);
+  `, [kitItemCode ?? upper]);
   if (kitItem && userId && await canAccessStore(userId, kitItem.source_magasin_id, 'can_scan')) {
-    if (!await canRead('employees.view')) return forbidden();
+    if (!await canRead('tools.view')) return forbidden();
     return c.json({ kind: 'etabli_kit_item', item: kitItem, code: rawCode });
   }
 

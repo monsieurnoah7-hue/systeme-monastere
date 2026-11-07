@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, type Dashboard as DashboardType, type StockRef, type Tool, type EtabliKit, type EtabliKitItem, fetchFleetSummary, type FleetSummary } from '../lib/api';
 import {
   MOVE_LABEL,
@@ -41,7 +41,9 @@ import {
   Eye,
   Briefcase,
 } from 'lucide-react';
-import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+
+const ToolsDonut = lazy(() => import('../components/DashboardCharts').then((module) => ({ default: module.ToolsDonut })));
+const DailyMovesChart = lazy(() => import('../components/DashboardCharts').then((module) => ({ default: module.DailyMovesChart })));
 
 type DrawerKind =
   | { kind: 'tools'; status: string; title: string }
@@ -54,130 +56,48 @@ type DrawerKind =
   | { kind: 'absent' }
   | { kind: 'conge' };
 
-const STATUS_ORDER = ['disponible', 'en_pret', 'maintenance', 'manquant', 'reforme'] as const;
-type ToolStatusKey = (typeof STATUS_ORDER)[number];
+function DeferredChart({ children, height }: { children: ReactNode; height: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
 
-const STATUS_COLOR: Record<ToolStatusKey, string> = {
-  disponible: '#10b981',
-  en_pret: '#ff5500',
-  maintenance: '#f59e0b',
-  manquant: '#ef4444',
-  reforme: '#71717a',
-};
+  useEffect(() => {
+    if (shouldLoad || !containerRef.current) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setShouldLoad(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) {
+        setShouldLoad(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '160px' });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [shouldLoad]);
 
-function ChartTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: { value?: number; name?: string; color?: string }[];
-  label?: string;
-}) {
-  if (!active || !payload || !payload.length) return null;
-  const item = payload[0];
-  if (!item) return null;
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs shadow-xl">
-      <p className="font-semibold text-slate-300">{label ?? item.name}</p>
-      <p className="mt-0.5 font-mono text-sm font-bold text-white">
-        {item.value} <span className="text-xs font-normal text-slate-400">mouvements</span>
-      </p>
+    <div ref={containerRef} className={cx('w-full', height)}>
+      {shouldLoad ? (
+        <Suspense fallback={<div className="grid h-full place-items-center" aria-label="Chargement du graphique"><Spinner /></div>}>
+          {children}
+        </Suspense>
+      ) : (
+        <div className="h-full animate-pulse rounded-xl bg-surface-2/60" aria-hidden="true" />
+      )}
     </div>
   );
 }
 
-function DonutTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: { value?: number; name?: string }[];
-}) {
-  if (!active || !payload || !payload.length) return null;
-  const item = payload[0];
-  if (!item) return null;
-  return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs shadow-xl">
-      <p className="font-semibold text-slate-300 capitalize">{item.name}</p>
-      <p className="mt-0.5 font-mono text-sm font-bold text-white">
-        {item.value} <span className="text-xs font-normal text-slate-400">outils</span>
-      </p>
-    </div>
-  );
+function LiveClock({ active }: { active: boolean }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, [active]);
+  return <span className="font-mono text-xs font-bold text-amber tabular-nums bg-amber-wash border border-amber/20 px-2.5 py-0.5 rounded-md shadow-2xs">{now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>;
 }
-
-
-
-function ToolsDonut({
-  das01,
-  onPick,
-}: {
-  das01: DashboardType['das01'];
-  onPick: (status: ToolStatusKey) => void;
-}) {
-  const data = STATUS_ORDER.filter((status) => das01[status] > 0).map((status) => ({
-    status,
-    name: STATUS_LABEL[status],
-    value: das01[status],
-  }));
-  return (
-    <div className="flex flex-col items-center gap-5 sm:flex-row touch-pan-y">
-      <div className="relative h-[170px] w-[170px] shrink-0 touch-pan-y">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={55}
-              outerRadius={80}
-              paddingAngle={3}
-              startAngle={90}
-              endAngle={-270}
-              stroke="none"
-              isAnimationActive={false}
-            >
-              {data.map((slice) => (
-                <Cell
-                  key={slice.status}
-                  fill={STATUS_COLOR[slice.status]}
-                  onClick={() => onPick(slice.status)}
-                  className="cursor-pointer"
-                />
-              ))}
-            </Pie>
-            <Tooltip cursor={false} content={<DonutTooltip />} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <div className="text-center">
-            <p className="font-mono text-2xl font-bold leading-none text-ink tabular-nums">{das01.total}</p>
-            <p className="mt-1 text-[10px] uppercase font-semibold tracking-wider text-ink-faint">outils</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid w-full gap-1.5">
-        {STATUS_ORDER.map((status) => (
-          <button
-            key={status}
-            onClick={() => onPick(status)}
-            className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2 text-xs transition-colors hover:border-amber hover:bg-amber-wash/30"
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: STATUS_COLOR[status] }} />
-              <span className="truncate font-medium text-ink">{STATUS_LABEL[status]}</span>
-            </span>
-            <span className="font-mono font-bold text-ink tabular-nums">{das01[status]}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-
 
 /**
  * Ruban de Contrôle « Pouls de l'Atelier » (Workshop Pulse Ribbon)
@@ -1670,7 +1590,7 @@ function KitInspectionModal({
   );
 }
 
-export function Dashboard() {
+export function Dashboard({ active = true }: { active?: boolean }) {
   const toast = useToast();
   const [data, setData] = useState<DashboardType | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1704,19 +1624,26 @@ export function Dashboard() {
   const [fleetSummary, setFleetSummary] = useState<FleetSummary | null>(null);
 
   useEffect(() => {
-    fetchFleetSummary().then(setFleetSummary).catch(() => {});
-  }, [data]);
+    if (!active) return;
+    let cancelled = false;
+    const refreshFleet = () => {
+      fetchFleetSummary().then((summary) => {
+        if (!cancelled) setFleetSummary(summary);
+      }).catch(() => {});
+    };
+    refreshFleet();
+    const interval = window.setInterval(refreshFleet, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [active]);
 
-  // Horloge en direct pour l'en-tête de contrôle unifié
-  const [liveTime, setLiveTime] = useState(new Date());
-
+  const wasActive = useRef(active);
   useEffect(() => {
-    const timer = setInterval(() => setLiveTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const liveTimeStr = liveTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const liveDateStr = liveTime.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (active && !wasActive.current) setReload((value) => value + 1);
+    wasActive.current = active;
+  }, [active]);
 
   // Navigation Mobile Tactile (Onglets rapides ou vue complète empilée sans carrousel)
   const [mobileTab, setMobileTab] = useState<'presence' | 'alerts' | 'tools' | 'activity' | 'all'>('presence');
@@ -1761,6 +1688,7 @@ export function Dashboard() {
   }, [reload]);
 
   useEffect(() => {
+    if (!active) return;
     // Polling d'actualisation toutes les 15 secondes pour les flux atelier en temps réel
     const interval = setInterval(() => {
       setReload((v) => v + 1);
@@ -1778,7 +1706,7 @@ export function Dashboard() {
       window.removeEventListener('focus', handleSync);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, []);
+  }, [active]);
 
   const openTools = useCallback((status: string, title: string) => {
     setTools(null);
@@ -1940,7 +1868,9 @@ export function Dashboard() {
           </h2>
           <p className="text-[11px] text-ink-faint">Filtrer par statut</p>
         </div>
-        <ToolsDonut das01={das01} onPick={(status) => openTools(status, `Outils — ${STATUS_LABEL[status]}`)} />
+        <DeferredChart height="min-h-[290px]">
+          <ToolsDonut das01={das01} onPick={(status) => openTools(status, `Outils — ${STATUS_LABEL[status]}`)} />
+        </DeferredChart>
       </div>
 
       <div className="pt-3 mt-4 border-t border-line/60 flex items-center justify-between text-[11px] text-ink-faint">
@@ -1971,76 +1901,52 @@ export function Dashboard() {
 
         {/* Flux KPI Pills */}
         <div className="grid grid-cols-3 gap-3 mb-4">
-          <div
+          <button
+            type="button"
             onClick={() => setDrawer({ kind: 'movements' })}
-            className="flex flex-col items-center justify-center p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 cursor-pointer hover:bg-emerald-500/15 transition-all shadow-xs"
+            className="flex min-h-20 min-w-0 flex-col items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-center transition-colors hover:bg-emerald-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 shadow-xs"
             title="Entrées au stock"
+            aria-label={`Voir le journal des entrées, ${das03.entries}`}
           >
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-300">
               <ArrowDownRight size={14} />
               <span>Entrées</span>
-            </div>
-            <span className="font-mono text-xl font-bold text-emerald-700 dark:text-emerald-300 mt-1">{das03.entries}</span>
-          </div>
+            </span>
+            <span className="mt-1 font-mono text-xl font-bold text-emerald-200">{das03.entries}</span>
+          </button>
 
-          <div
+          <button
+            type="button"
             onClick={() => setDrawer({ kind: 'movements' })}
-            className="flex flex-col items-center justify-center p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-all shadow-xs"
+            className="flex min-h-20 min-w-0 flex-col items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 p-2.5 text-center transition-colors hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber shadow-xs"
             title="Sorties (consommables & prêts)"
+            aria-label={`Voir le journal des sorties, ${das03.exits}`}
           >
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-200">
               <ArrowUpRight size={14} />
               <span>Sorties</span>
-            </div>
-            <span className="font-mono text-xl font-bold text-amber-700 dark:text-amber-300 mt-1">{das03.exits}</span>
-          </div>
+            </span>
+            <span className="mt-1 font-mono text-xl font-bold text-amber-100">{das03.exits}</span>
+          </button>
 
-          <div
+          <button
+            type="button"
             onClick={() => setDrawer({ kind: 'movements' })}
-            className="flex flex-col items-center justify-center p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 cursor-pointer hover:bg-blue-500/15 transition-all shadow-xs"
+            className="flex min-h-20 min-w-0 flex-col items-center justify-center rounded-xl border border-sky-500/20 bg-sky-500/10 p-2.5 text-center transition-colors hover:bg-sky-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 shadow-xs"
             title="Retours d'outillage"
+            aria-label={`Voir le journal des retours, ${das03.returns}`}
           >
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-sky-200">
               <RotateCcw size={14} />
               <span>Retours</span>
-            </div>
-            <span className="font-mono text-xl font-bold text-blue-700 dark:text-blue-300 mt-1">{das03.returns}</span>
-          </div>
+            </span>
+            <span className="mt-1 font-mono text-xl font-bold text-sky-100">{das03.returns}</span>
+          </button>
         </div>
 
-        <div className="h-44 w-full touch-pan-y">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-            <BarChart data={dailyMoves} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
-              <XAxis
-                dataKey="name"
-                axisLine={false}
-                tickLine={false}
-                interval={0}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                allowDecimals={false}
-                tick={{ fontSize: 11, fill: '#6b7280' }}
-              />
-              <Tooltip
-                cursor={{ fill: 'rgba(0,0,0,0.04)' }}
-                content={<ChartTooltip />}
-              />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48} isAnimationActive={false}>
-                {dailyMoves.map((bar) => (
-                  <Cell
-                    key={bar.name}
-                    fill={bar.color}
-                    onClick={() => setDrawer({ kind: 'movements' })}
-                    className="cursor-pointer"
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <DeferredChart height="h-44">
+          <DailyMovesChart moves={dailyMoves} onSelect={() => setDrawer({ kind: 'movements' })} />
+        </DeferredChart>
       </div>
 
       <div className="pt-3 mt-4 border-t border-line/60 flex items-center justify-between text-[11px] text-ink-faint">
@@ -2164,15 +2070,13 @@ export function Dashboard() {
               <span>En direct</span>
             </span>
             <span className="text-line-strong">·</span>
-            <span className="capitalize text-ink-soft font-medium">{liveDateStr}</span>
+            <span className="capitalize text-ink-soft font-medium">{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
           </div>
           <div className="flex items-baseline gap-3 mt-1">
             <h1 className="text-2xl font-extrabold tracking-tight text-ink font-heading">
               Vue d'ensemble
             </h1>
-            <span className="font-mono text-xs font-bold text-amber tabular-nums bg-amber-wash border border-amber/20 px-2.5 py-0.5 rounded-md shadow-2xs">
-              {liveTimeStr}
-            </span>
+            <LiveClock active={active} />
           </div>
         </div>
 
