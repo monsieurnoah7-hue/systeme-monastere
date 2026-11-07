@@ -393,3 +393,28 @@
     margin: 0 auto;
   }
 }
+
+/* Établi cards adapt to their actual panel width (employee drawer, tablet and desktop). */
+.etabli-kit-container {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+@container (min-width: 25rem) {
+  .etabli-kit-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 25rem) {
+  .etabli-kit-actions[data-actions="3"],
+  .etabli-kit-actions[data-actions="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 36rem) {
+  .etabli-kit-actions[data-actions="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

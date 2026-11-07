@@ -229,71 +229,68 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
   }, [items, searchQuery, filterState]);
 
   return (
-    <div className="space-y-4">
+    <div className="etabli-kit-container w-full min-w-0 space-y-4">
       {/* =========================================================================
           1. CARTE MAÎTRESSE ÉTABLI (Design Apple iOS Card — Zéro chevauchement)
       ========================================================================= */}
-      <div className="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 p-4 shadow-xl">
+      <div className="etabli-kit-main min-w-0 rounded-2xl border border-line bg-surface p-3 shadow-card sm:p-4">
         {/* Identité Établi */}
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-start gap-3">
           <div className="relative flex-shrink-0">
             {kit.employee_photo ? (
               <img
                 src={kit.employee_photo}
                 alt={kit.employee_name}
-                className="h-12 w-12 rounded-xl border border-emerald-500/30 object-cover shadow"
+                className="h-12 w-12 rounded-xl border border-line-strong object-cover shadow-sm"
               />
             ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-400">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-surface-2 text-ink-soft">
                 <User className="h-6 w-6" />
               </div>
             )}
-            <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-black text-slate-950 shadow">
+            <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-surface bg-green px-1 text-[9px] font-bold text-white shadow-sm">
               #{kit.etabli_number}
             </span>
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h3 className="truncate text-base font-bold text-slate-100">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <h3 className="min-w-0 text-base font-bold leading-tight text-ink">
                 Établi N°{kit.etabli_number}
               </h3>
-              <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400 border border-emerald-500/20">
+              <span className="max-w-full break-all rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-soft">
                 {kit.code}
               </span>
             </div>
-            <p className="truncate text-xs text-slate-400 mt-0.5">
+            <p className="mt-1 break-words text-sm font-medium text-ink-soft">
               {kit.employee_name}
             </p>
-            <p className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5 truncate">
-              <Building className="h-3 w-3 text-slate-400 flex-shrink-0" />
-              <span className="truncate">{kit.source_magasin_name}</span>
-              <span>•</span>
-              <MapPin className="h-3 w-3 text-slate-400 flex-shrink-0" />
-              <span className="truncate">{kit.location}</span>
-            </p>
+            <div className="mt-1.5 grid min-w-0 gap-1 text-xs text-ink-soft sm:grid-cols-2">
+              <p className="flex min-w-0 items-start gap-1.5"><Building className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" /><span className="break-words">{kit.source_magasin_name}</span></p>
+              <p className="flex min-w-0 items-start gap-1.5"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" /><span className="break-words">{kit.location}</span></p>
+            </div>
           </div>
         </div>
 
         {/* 2 Blocs Métriques Aérés (50% / 50% — Aucun texte écrasé) */}
-        <div className="mt-4 grid grid-cols-2 gap-2.5">
+        <div className="etabli-kit-metrics mt-3 grid min-w-0 grid-cols-1 gap-2 sm:mt-4">
           {/* Bloc 1 : Santé du Kit */}
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <div className="min-w-0 rounded-xl border border-line bg-surface-2/70 p-3">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
               Complétude
             </span>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className={`text-xl font-black ${percentage === 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+              <span className={`text-xl font-bold tabular-nums ${percentage === 100 ? 'text-green' : 'text-amber'}`}>
                 {percentage}%
               </span>
-              <span className="text-[11px] text-slate-400 font-medium">
+              <span className="text-xs text-ink-soft">
                 ({present}/{total})
               </span>
             </div>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-paper">
               <div
                 className={`h-full rounded-full transition-all duration-300 ${
-                  percentage === 100 ? 'bg-emerald-500' : percentage >= 80 ? 'bg-amber-500' : 'bg-rose-500'
+                  percentage === 100 ? 'bg-green' : percentage >= 80 ? 'bg-amber' : 'bg-red'
                 }`}
                 style={{ width: `${percentage}%` }}
               />
@@ -301,17 +298,19 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
           </div>
 
           {/* Bloc 2 : Dernier Audit */}
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <div className="min-w-0 rounded-xl border border-line bg-surface-2/70 p-3">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
               Dernier Audit
             </span>
             <div className="mt-1">
               <span
                 className={`inline-flex items-center gap-1 text-xs font-semibold ${
-                  anomalies === 0 ? 'text-emerald-400' : 'text-amber-400'
+                  !kit.last_audited_at ? 'text-ink-faint' : anomalies === 0 ? 'text-green' : 'text-amber'
                 }`}
               >
-                {anomalies === 0 ? (
+                {!kit.last_audited_at ? (
+                  <>À contrôler</>
+                ) : anomalies === 0 ? (
                   <>
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     Conforme
@@ -324,46 +323,44 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                 )}
               </span>
             </div>
-            <div className="mt-1 text-[11px] text-slate-400 truncate">
+            <div className="mt-1 truncate text-[11px] text-ink-soft">
               {kit.last_audited_at
                 ? new Date(kit.last_audited_at).toLocaleDateString('fr-FR', {
                     day: 'numeric',
                     month: 'short',
                   })
-                : 'Initialisé'}
+                : 'Aucun contrôle enregistré'}
               {kit.last_audited_by ? ` • ${kit.last_audited_by.split(' ')[0]}` : ''}
             </div>
           </div>
         </div>
 
         {/* 2 Boutons d'Action Ergonomiques Apple */}
-        <div className="mt-3 grid grid-cols-2 gap-2" style={{ gridTemplateColumns: canManage && canAddItems ? 'repeat(3, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))' }}>
+        <div className="etabli-kit-actions mt-3 grid min-w-0 grid-cols-1 gap-2" data-actions={Number(canManage) + 1 + Number(canAddItems)}>
           {canManage && (
             <button
               type="button"
               onClick={openAudit}
-              className="flex h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-emerald-500 active:scale-[0.98]"
+              className="flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl bg-green px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-green-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue active:scale-[0.99]"
             >
               <ShieldCheck className="h-4 w-4" />
-              <span>Contrôle Flash</span>
+              <span>Contrôle flash</span>
             </button>
           )}
 
           <button
             type="button"
             onClick={openPrintModal}
-            className={`flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-xs font-bold text-slate-200 transition-all hover:bg-slate-700 active:scale-[0.98] ${
-              !canManage && !canAddItems ? 'col-span-2' : ''
-            }`}
+            className="flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface-2 px-3 py-2 text-sm font-semibold text-ink transition-colors hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue active:scale-[0.99]"
           >
-            <Printer className="h-4 w-4 text-slate-400" />
-            <span>QR Codes Planche</span>
+            <Printer className="h-4 w-4 shrink-0 text-ink-soft" />
+            <span>Imprimer les QR codes</span>
           </button>
           {canAddItems && (
             <button
               type="button"
               onClick={() => setShowAddItemModal(true)}
-              className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-3 text-xs font-bold text-slate-200 transition-colors hover:bg-slate-700"
+              className="flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border border-line-strong bg-surface-2 px-3 py-2 text-sm font-semibold text-ink transition-colors hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue"
             >
               <Plus className="h-4 w-4" />
               <span>Ajouter un outil</span>
@@ -376,8 +373,8 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
           2. LISTE DES OUTILS DU KIT (Apple Grouped Rows — Zéro coupure de texte)
       ========================================================================= */}
       <div className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
             Boîte à Outils ({total} pièces)
           </span>
 
@@ -385,7 +382,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
             <button
               type="button"
               onClick={() => setFilterState('all')}
-              className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-all ${
+              className={`min-h-9 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all focus-visible:outline-2 focus-visible:outline-blue ${
                 filterState === 'all'
                   ? 'bg-slate-700 text-white'
                   : 'text-slate-400 hover:text-slate-200'
@@ -397,7 +394,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
               <button
                 type="button"
                 onClick={() => setFilterState('alert')}
-                className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold transition-all ${
+                className={`min-h-9 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all focus-visible:outline-2 focus-visible:outline-blue ${
                   filterState === 'alert'
                     ? 'bg-amber-500 text-slate-950 font-bold'
                     : 'text-amber-400 hover:underline'
@@ -417,7 +414,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Filtrer un outil (marteau, ciseau, équerre...)"
-            className="h-9 w-full rounded-xl border border-slate-800 bg-slate-900/80 pl-9 pr-3 text-xs text-slate-200 placeholder-slate-400 focus:border-emerald-500 focus:outline-none"
+            className="min-h-11 w-full rounded-xl border border-line bg-surface px-3 pl-9 text-sm text-ink placeholder:text-ink-faint focus:border-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-blue/50"
           />
         </div>
 
@@ -434,11 +431,11 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                 <div
                   key={item.id}
                   onClick={() => canManage && setSelectedItemForEdit(item)}
-                  className={`group flex items-center justify-between gap-3 p-3 transition-colors ${
+                  className={`group flex min-w-0 flex-wrap items-center justify-between gap-2 p-3 transition-colors sm:flex-nowrap ${
                     canManage ? 'cursor-pointer hover:bg-slate-800/60 active:bg-slate-800' : ''
                   } ${!isOk ? 'bg-amber-500/5' : ''}`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-800 font-mono text-xs font-bold text-slate-300">
                       {String(item.item_num).padStart(2, '0')}
                     </span>
@@ -455,7 +452,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:ml-auto">
                     <span
                       className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
                         isOk

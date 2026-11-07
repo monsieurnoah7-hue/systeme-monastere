@@ -830,21 +830,21 @@ function EtabliCarouselTrack({
               {/* Card Actions */}
               <div className="mt-3.5 flex items-center gap-1.5 pt-2.5 border-t border-line/60">
                 <Button
-                  size="sm"
+                  size="md"
                   variant="primary"
                   icon={<ShieldCheck size={13} className="text-white" />}
                   onClick={() => onOpenAudit(kit)}
-                  className="flex-1 bg-green hover:bg-green-2 text-white font-bold text-[11px] h-8 shadow-xs"
+                  className="min-w-0 flex-1 bg-green px-2 text-white font-semibold text-xs shadow-xs"
                   title="Lancer le contrôle inopiné flash de cet établi"
                 >
-                  Contrôle Flash
+                  Contrôler
                 </Button>
                 <Button
-                  size="sm"
+                  size="md"
                   variant="ghost"
                   icon={<Eye size={13} />}
                   onClick={() => onOpenDetails(kit)}
-                  className="border border-line text-ink-soft hover:text-ink text-[11px] h-8 px-2.5"
+                  className="min-w-0 border border-line px-2 text-ink-soft hover:text-ink text-xs"
                   title="Voir les 22 outils de l'établi"
                 >
                   Détails
