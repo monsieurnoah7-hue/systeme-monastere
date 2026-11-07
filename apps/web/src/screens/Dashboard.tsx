@@ -50,6 +50,7 @@ type DrawerKind =
   | { kind: 'stock' }
   | { kind: 'movements' }
   | { kind: 'attendance' }
+  | { kind: 'attendanceEmployee'; employeeId: string; fullName: string }
   | { kind: 'overdue' }
   | { kind: 'missingTools' }
   | { kind: 'missingOut' }
@@ -2427,6 +2428,7 @@ export function Dashboard({ active = true }: { active?: boolean }) {
           refs={refs}
           loans={loans}
           loansLoading={loansLoading}
+          onOpenAttendanceEmployee={(employeeId, fullName) => setDrawer({ kind: 'attendanceEmployee', employeeId, fullName })}
         />
       </Drawer>
 
@@ -2448,6 +2450,132 @@ export function Dashboard({ active = true }: { active?: boolean }) {
   );
 }
 
+type AttendanceEmployeeRecord = {
+  employee: { id: string; full_name: string; job_title: string; photo_path: string | null };
+  date: string;
+  events: {
+    id: string;
+    punchType: 'in' | 'out' | 'break_in' | 'break_out';
+    serverAt: string;
+    terminalId: string;
+    terminalName: string | null;
+    idMode: 'manual' | 'badge';
+    selfieAvailable: boolean;
+    selfieUrl: string | null;
+    lateMinutes: number;
+    reason: string | null;
+    status: string;
+  }[];
+};
+
+function AttendanceEmployeeDetail({ employeeId, date }: { employeeId: string; date: string }) {
+  const [record, setRecord] = useState<AttendanceEmployeeRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    api<AttendanceEmployeeRecord>(`/api/attendance/employee/${encodeURIComponent(employeeId)}/${date}`, { bypassCache: true })
+      .then((result) => { if (!cancelled) setRecord(result); })
+      .catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Impossible de charger le pointage.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [employeeId, date]);
+
+  if (loading) return <div className="flex items-center justify-center gap-2 py-16 text-sm text-ink-soft"><Spinner /> Chargement du pointage…</div>;
+  if (error) return <Banner tone="error">{error}</Banner>;
+  if (!record) return <EmptyState title="Pointage introuvable" />;
+
+  const arrival = record.events.find((event) => event.punchType === 'in');
+  const typeLabel: Record<AttendanceEmployeeRecord['events'][number]['punchType'], string> = {
+    in: 'Arrivée',
+    out: 'Départ',
+    break_in: 'Début de pause',
+    break_out: 'Fin de pause',
+  };
+  const timeLabel = (value: string) => {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleTimeString('fr-FR', {
+      timeZone: 'Africa/Douala',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  return (
+    <div className="space-y-5">
+      <section className="flex items-center gap-3 rounded-xl border border-line bg-surface p-3">
+        <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full border border-line bg-paper-2 text-sm font-bold text-ink-soft">
+          {record.employee.photo_path ? <img src={record.employee.photo_path} alt={`Photo de profil de ${record.employee.full_name}`} className="h-full w-full object-cover" /> : initials(record.employee.full_name)}
+        </div>
+        <div className="min-w-0">
+          <h3 className="truncate font-semibold text-ink">{record.employee.full_name}</h3>
+          <p className="truncate text-sm text-ink-soft">{record.employee.job_title}</p>
+          <p className="text-xs text-ink-faint">{record.employee.id} · {formatDate(record.date)}</p>
+        </div>
+      </section>
+
+      {arrival?.selfieUrl ? (
+        <section className="overflow-hidden rounded-xl border border-line bg-surface">
+          <div className="border-b border-line px-3 py-2.5">
+            <h3 className="text-sm font-semibold text-ink">Selfie de l’arrivée</h3>
+            <p className="text-xs text-ink-soft">Preuve photo enregistrée à {timeLabel(arrival.serverAt)}</p>
+          </div>
+          <div className="bg-black/5 p-2">
+            <img
+              src={arrival.selfieUrl}
+              alt={`Selfie de pointage de ${record.employee.full_name} à ${timeLabel(arrival.serverAt)}`}
+              className="mx-auto max-h-[55vh] w-full rounded-lg object-contain"
+              onError={(event) => {
+                (event.currentTarget as HTMLImageElement).style.display = 'none';
+                const fallback = event.currentTarget.parentElement?.querySelector('[data-selfie-fallback]');
+                fallback?.classList.remove('hidden');
+              }}
+            />
+            <p data-selfie-fallback className="hidden py-8 text-center text-sm text-ink-soft" role="status">
+              La preuve photo est référencée, mais le fichier n’est pas disponible sur le serveur. Signalez cette anomalie à l’administrateur.
+            </p>
+          </div>
+        </section>
+      ) : (
+        <Banner tone="error" title="Selfie d’arrivée indisponible">
+          Aucun selfie n’est associé à ce pointage. La borne doit enregistrer la photo avec l’événement d’arrivée.
+        </Banner>
+      )}
+
+      <section>
+        <h3 className="mb-2 text-sm font-semibold text-ink">Événements du jour</h3>
+        {record.events.length === 0 ? (
+          <EmptyState title="Aucun pointage enregistré ce jour-là" />
+        ) : (
+          <ol className="divide-y divide-line rounded-xl border border-line bg-surface">
+            {record.events.map((event) => (
+              <li key={event.id} className="flex items-start justify-between gap-3 px-3 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-ink">{typeLabel[event.punchType]}</p>
+                  <p className="mt-0.5 text-xs text-ink-soft">
+                    {event.terminalName ?? event.terminalId} · {event.idMode === 'badge' ? 'Badge' : 'Saisie manuelle'}
+                  </p>
+                  {event.reason && <p className="mt-1 text-xs text-ink-faint">Motif : {event.reason}</p>}
+                  {event.selfieUrl && event.punchType !== 'in' && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs font-medium text-amber">Voir la photo de {typeLabel[event.punchType].toLowerCase()}</summary>
+                      <img src={event.selfieUrl} alt={`Selfie ${typeLabel[event.punchType].toLowerCase()} de ${record.employee.full_name}`} className="mt-2 max-h-64 rounded-lg object-contain" />
+                    </details>
+                  )}
+                </div>
+                <time className="shrink-0 font-mono text-sm font-semibold tabular-nums text-ink">{timeLabel(event.serverAt)}</time>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function drawerTitle(drawer: DrawerKind | null): string {
   if (!drawer) return '';
   switch (drawer.kind) {
@@ -2459,6 +2587,8 @@ function drawerTitle(drawer: DrawerKind | null): string {
       return 'Mouvements du jour';
     case 'attendance':
       return 'Pointage & Présences';
+    case 'attendanceEmployee':
+      return drawer.fullName;
     case 'overdue':
       return 'Prêts en retard';
     case 'missingTools':
@@ -2479,6 +2609,7 @@ function drawerSubtitle(drawer: DrawerKind | null, data: DashboardType): string 
   if (drawer.kind === 'missingTools') return `${data.das05.missingTools} outil(s) déclaré(s) manquant(s)`;
   if (drawer.kind === 'missingOut') return `${data.das05.missingOut} départ(s) non pointé(s)`;
   if (drawer.kind === 'attendance') return 'Relevés serveurs en direct';
+  if (drawer.kind === 'attendanceEmployee') return `Fiche de pointage · ${formatDate(data.date)}`;
   return formatDate(data.generatedAt);
 }
 
@@ -2489,6 +2620,7 @@ function DrawerContentDetail({
   refs: _refs,
   loans: _loans,
   loansLoading: _loansLoading,
+  onOpenAttendanceEmployee,
 }: {
   drawer: DrawerKind | null;
   data: DashboardType;
@@ -2496,6 +2628,7 @@ function DrawerContentDetail({
   refs: StockRef[] | null;
   loans: { id: number; tool_id: string; tool_name: string; employee_name: string; out_at: string }[];
   loansLoading: boolean;
+  onOpenAttendanceEmployee?: (employeeId: string, fullName: string) => void;
 }) {
   if (!drawer) return null;
 
@@ -2620,10 +2753,19 @@ function DrawerContentDetail({
                 className={cx(
                   'transition-colors',
                   idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
-                  'hover:bg-amber-wash/20',
+                  row.inAt ? 'hover:bg-amber-wash/20' : '',
                 )}
               >
-                <td className="px-3 py-2.5 font-medium text-ink col-lead">{row.fullName}</td>
+                <td className="px-3 py-2.5 font-medium text-ink col-lead">
+                  {row.inAt ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenAttendanceEmployee?.(row.id, row.fullName)}
+                      className="min-h-10 rounded-md text-left font-semibold text-ink underline-offset-2 hover:text-amber hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                      aria-label={`Voir le pointage et le selfie de ${row.fullName}`}
+                    >{row.fullName}</button>
+                  ) : row.fullName}
+                </td>
                 <td className="px-3 py-2.5 font-mono tabular-nums">{row.inAt ?? '—'}</td>
                 <td className="px-3 py-2.5 font-mono tabular-nums">{row.outAt ?? 'En poste'}</td>
                 <td className="px-3 py-2.5 text-right">
@@ -2637,6 +2779,10 @@ function DrawerContentDetail({
         </table>
       </div>
     );
+  }
+
+  if (drawer.kind === 'attendanceEmployee') {
+    return <AttendanceEmployeeDetail employeeId={drawer.employeeId} date={data.date} />;
   }
 
   if (drawer.kind === 'overdue') {

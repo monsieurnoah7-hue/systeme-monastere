@@ -1,11 +1,8 @@
 import { serve } from '@hono/node-server';
-import { serveStatic } from '@hono/node-server/serve-static';
 import { app } from './app.js';
 import { env } from './env.js';
 import { migrate } from './db/migrate.js';
 import { ensureBootstrapAdmin } from './routes/auth.js';
-
-app.use('/files/*', serveStatic({ root: './', rewriteRequestPath: (p) => p.replace(/^\/files/, env.dataDir) }));
 
 async function main() {
   await migrate();

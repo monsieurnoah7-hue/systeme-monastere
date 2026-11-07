@@ -72,7 +72,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
        LEFT JOIN attendance a ON a.employee_id = e.id AND a.punch_date = $1
       WHERE e.active = true
       GROUP BY e.id, e.full_name, e.job_title, e.photo_path
-      ORDER BY e.full_name`,
+      ORDER BY min(CASE WHEN a.punch_type = 'in' THEN a.server_at END) NULLS LAST, e.full_name`,
     [today],
   );
 

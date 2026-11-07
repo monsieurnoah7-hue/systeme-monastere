@@ -6,6 +6,7 @@ import { loadSettings } from '../lib/settings.js';
 import { actorId, actorName, requireAuth } from '../middleware/auth.js';
 import { requirePerm } from '../middleware/permissions.js';
 import { localDate, parseHm } from '../lib/time.js';
+import { getSelfie } from '../lib/selfie-store.js';
 
 export const attendanceRoutes = new Hono();
 attendanceRoutes.use('*', requireAuth);
@@ -34,7 +35,7 @@ attendanceRoutes.get('/', requirePerm('attendance.view'), async (c) => {
        LEFT JOIN attendance a ON a.employee_id = e.id AND a.punch_date = $1
       WHERE e.active = true
       GROUP BY e.id, e.full_name, e.job_title, e.photo_path
-      ORDER BY e.full_name`,
+      ORDER BY min(CASE WHEN a.punch_type = 'in' THEN a.server_at END) NULLS LAST, e.full_name`,
     [date],
   );
   const detail = rows.map((row) => ({
@@ -52,6 +53,84 @@ attendanceRoutes.get('/', requirePerm('attendance.view'), async (c) => {
         : row.declared_kind === 'permission' ? 'permission' : 'absent',
   }));
   return c.json({ date, detail });
+});
+
+attendanceRoutes.get('/employee/:employeeId/:date', requirePerm('attendance.view'), async (c) => {
+  const employeeId = c.req.param('employeeId') ?? '';
+  const date = c.req.param('date') ?? '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return c.json({ error: 'Date invalide.' }, 400);
+  const db = getDb();
+  const employee = await db.one<{
+    id: string;
+    full_name: string;
+    job_title: string;
+    photo_path: string | null;
+  }>(
+    'SELECT id, full_name, job_title, photo_path FROM employees WHERE id = $1',
+    [employeeId],
+  );
+  if (!employee) return c.json({ error: 'Travailleur introuvable.' }, 404);
+
+  const rows = await db.query<{
+    id: string;
+    punch_type: 'in' | 'out' | 'break_in' | 'break_out';
+    server_at: string;
+    terminal_id: string;
+    terminal_name: string | null;
+    id_mode: 'manual' | 'badge';
+    photo_path: string;
+    late_minutes: number;
+    reason: string | null;
+    status: string;
+  }>(
+    `SELECT a.id::text AS id, a.punch_type, a.server_at::text AS server_at,
+            a.terminal_id, t.name AS terminal_name, a.id_mode, a.photo_path,
+            a.late_minutes, a.reason, a.status
+       FROM attendance a
+       LEFT JOIN terminals t ON t.id = a.terminal_id
+      WHERE a.employee_id = $1 AND a.punch_date = $2
+      ORDER BY a.server_at ASC, a.id ASC`,
+    [employeeId, date],
+  );
+
+  return c.json({
+    employee,
+    date,
+    events: rows.map((row) => ({
+      id: row.id,
+      punchType: row.punch_type,
+      serverAt: row.server_at,
+      terminalId: row.terminal_id,
+      terminalName: row.terminal_name,
+      idMode: row.id_mode,
+      selfieAvailable: row.photo_path.includes('/') && row.photo_path.endsWith('.jpg'),
+      selfieUrl: row.photo_path.includes('/') && row.photo_path.endsWith('.jpg')
+        ? `/api/attendance/selfie/${row.id}`
+        : null,
+      lateMinutes: Number(row.late_minutes),
+      reason: row.reason,
+      status: row.status,
+    })),
+  });
+});
+
+attendanceRoutes.get('/selfie/:attendanceId', requirePerm('attendance.view'), async (c) => {
+  const attendanceId = c.req.param('attendanceId') ?? '';
+  if (!/^\d+$/.test(attendanceId)) return c.notFound();
+  const row = await getDb().one<{ photo_path: string }>(
+    'SELECT photo_path FROM attendance WHERE id = $1',
+    [attendanceId],
+  );
+  if (!row || !row.photo_path.includes('/') || !row.photo_path.endsWith('.jpg')) return c.notFound();
+  const fileName = row.photo_path.split('/').pop() ?? '';
+  if (!/^[A-Za-z0-9_\-]+\.jpg$/.test(fileName)) return c.notFound();
+  const selfie = await getSelfie(fileName);
+  if (!selfie) return c.notFound();
+  return c.body(new Uint8Array(selfie.data), 200, {
+    'Content-Type': selfie.contentType,
+    'Cache-Control': 'private, max-age=300',
+    'X-Content-Type-Options': 'nosniff',
+  });
 });
 
 const correctionBody = z.object({

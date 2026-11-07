@@ -683,14 +683,27 @@ export function Pointage({
   }
 
   function lockKiosk() {
+    setStage('identify');
+    setCode('');
+    setPin('');
+    setIdentified(null);
+    setSelfie(null);
+    setResult(null);
+    setError(null);
+    setPinError(null);
+    setScanning(false);
     setIsKioskLocked(true);
     sessionStorage.setItem('mf_kiosk_locked', 'true');
     setActiveMainTab('kiosk');
   }
 
   async function handleUnlockKiosk() {
+    if (!terminalId) {
+      setUnlockError('Aucune borne n’est sélectionnée. Contactez la Direction.');
+      return;
+    }
     if (!unlockPassword.trim()) {
-      setUnlockError('Saisissez le mot de passe Direction.');
+      setUnlockError('Saisissez le mot de passe de votre compte.');
       return;
     }
     setUnlockBusy(true);
@@ -698,7 +711,7 @@ export function Pointage({
     try {
       await api('/api/kiosk/unlock', {
         method: 'POST',
-        body: JSON.stringify({ password: unlockPassword.trim() }),
+        body: JSON.stringify({ password: unlockPassword, terminalId }),
       });
       setIsKioskLocked(false);
       sessionStorage.removeItem('mf_kiosk_locked');
@@ -1207,6 +1220,42 @@ export function Pointage({
               'fixed inset-0 z-50 overflow-y-auto bg-paper p-4 sm:p-6 backdrop-blur-xl',
           )}
         >
+          {isKioskLocked ? (
+            <div className="mx-auto flex min-h-[calc(100dvh-3rem)] w-full max-w-md items-center justify-center py-6">
+              <Card className="w-full space-y-5 p-5 text-center shadow-pop sm:p-7">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-amber/25 bg-amber-wash text-amber">
+                  <Lock size={25} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-faint">Mode sécurisé</p>
+                  <h2 className="mt-1 text-xl font-bold text-ink">Borne verrouillée</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+                    Le pointage est suspendu. Une personne autorisée doit confirmer son identité pour réactiver cette borne.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-line bg-surface-2 px-3 py-2 text-left">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">Compte connecté</p>
+                  <p className="mt-0.5 truncate text-sm font-semibold text-ink">{user?.display_name ?? 'Compte autorisé'}</p>
+                  <p className="mt-1 font-mono text-[11px] text-ink-soft">{terminalId ?? 'Aucune borne sélectionnée'}</p>
+                </div>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  block
+                  disabled={!terminalId}
+                  onClick={() => {
+                    setUnlockPassword('');
+                    setUnlockError(null);
+                    setUnlockModalOpen(true);
+                  }}
+                >
+                  Déverrouiller avec mon compte
+                </Button>
+                <p className="text-[11px] text-ink-faint">Votre mot de passe n’est pas affiché ni conservé.</p>
+              </Card>
+            </div>
+          ) : (
+          <>
           {/* Actions Borne Kiosque Minimaliste */}
           {stage === 'identify' && !isKioskLocked ? (
             <div className="mx-auto mb-2 flex max-w-xl items-center justify-between text-xs">
@@ -1835,19 +1884,22 @@ export function Pointage({
             </div>
           ) : null}
 
-          {/* Modal Déverrouillage Borne Kiosque (Direction / Superviseur) */}
+          </>
+          )}
+
+          {/* Déverrouillage par le compte autorisé actuellement connecté */}
           <Modal
             open={unlockModalOpen}
-            title="Déverrouillage de la Borne d'Atelier"
-            onClose={() => setUnlockModalOpen(false)}
+            title="Déverrouiller la borne"
+            onClose={() => { if (!unlockBusy) setUnlockModalOpen(false); }}
             footer={
               <>
-                <Button variant="ghost" onClick={() => setUnlockModalOpen(false)}>
+                <Button variant="ghost" disabled={unlockBusy} onClick={() => setUnlockModalOpen(false)}>
                   Annuler
                 </Button>
                 <Button
                   variant="primary"
-                  disabled={unlockBusy || !unlockPassword.trim()}
+                  disabled={unlockBusy || !unlockPassword.trim() || !terminalId}
                   onClick={() => void handleUnlockKiosk()}
                 >
                   {unlockBusy ? <Spinner /> : 'Déverrouiller'}
@@ -1856,15 +1908,17 @@ export function Pointage({
             }
           >
             <div className="space-y-4">
-              <p className="text-xs text-ink-soft">
-                La borne est en mode exclusif imperméable. Saisissez le mot de passe de la Direction pour déverrouiller et revenir au menu principal.
+              <p className="text-sm text-ink-soft">
+                Confirmez le mot de passe de votre compte pour autoriser le déverrouillage de <span className="font-mono font-semibold text-ink">{terminalId ?? 'la borne'}</span>.
               </p>
               {unlockError ? <Banner tone="error">{unlockError}</Banner> : null}
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-ink-soft">Mot de passe Direction</label>
+                <label className="mb-1.5 block text-sm font-medium text-ink-soft" htmlFor="kiosk-unlock-password">Mot de passe de votre compte</label>
                 <PasswordInput
+                  id="kiosk-unlock-password"
                   value={unlockPassword}
-                  placeholder="Mot de passe superviseur…"
+                  autoComplete="current-password"
+                  placeholder="Saisissez votre mot de passe"
                   onChange={(e) => setUnlockPassword(e.target.value)}
                   className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
                   onKeyDown={(e) => {

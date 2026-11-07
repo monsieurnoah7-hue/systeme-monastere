@@ -9,6 +9,7 @@ import { isSuperAdmin } from '../lib/permissions.js';
 import { requireAuth } from '../middleware/auth.js';
 import { hasPermission, requirePerm } from '../middleware/permissions.js';
 import { formatHm, localDate, minutesOfDay, parseHm } from '../lib/time.js';
+import { writeAudit } from '../lib/audit.js';
 
 type LockState = { fails: number; lockedUntil: number };
 const locks = new Map<string, LockState>();
@@ -529,19 +530,27 @@ kioskRoutes.post('/punch', requirePerm('terminals.access'), async (c) => {
 });
 
 kioskRoutes.post('/unlock', requirePerm('terminals.access'), async (c) => {
-  const body = z.object({ password: z.string().min(1) }).safeParse(await c.req.json().catch(() => ({})));
-  if (!body.success) return c.json({ error: 'Mot de passe requis pour déverrouiller la borne.' }, 400);
-
-  const db = getDb();
-  const adminUsers = await db.query<{ id: number; login: string; password_hash: string }>(
-    `SELECT id, login, password_hash FROM users WHERE role = 'direction' AND active = true`,
-  );
-
-  const isMatched = adminUsers.some((u) => verifyPassword(body.data.password, u.password_hash));
-  if (!isMatched) {
-    return c.json({ error: 'Code superviseur ou mot de passe Direction invalide. Déverrouillage refusé.' }, 403);
+  const body = z.object({ password: z.string().min(1), terminalId: z.string().trim().min(1).max(80) }).safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: 'Saisissez votre mot de passe et choisissez une borne.' }, 400);
+  const user = c.get('auth').user;
+  if (!await canUseTerminal(user.id, user.role, body.data.terminalId)) {
+    return c.json({ error: 'Votre compte n’est pas autorisé à déverrouiller cette borne.' }, 403);
   }
-
+  const db = getDb();
+  const account = await db.one<{ password_hash: string }>(
+    'SELECT password_hash FROM users WHERE id = $1 AND active = true', [user.id],
+  );
+  if (!account || !verifyPassword(body.data.password, account.password_hash)) {
+    return c.json({ error: 'Mot de passe incorrect. Vérifiez le mot de passe de votre compte.' }, 403);
+  }
+  await writeAudit(db, {
+    action: 'kiosk.unlock',
+    entity: 'terminal',
+    entityId: body.data.terminalId,
+    after: { terminalId: body.data.terminalId },
+    actorId: user.id,
+    actorName: user.display_name,
+  });
   return c.json({ ok: true });
 });
 

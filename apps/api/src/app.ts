@@ -25,6 +25,9 @@ import { usersRoutes } from './routes/users.js';
 import { kitsRoutes } from './routes/kits.js';
 import { fleetRoutes } from './routes/fleet.js';
 import { projectsRoutes } from './routes/projects.js';
+import { getSelfie } from './lib/selfie-store.js';
+import { requireAuth } from './middleware/auth.js';
+import { requirePerm } from './middleware/permissions.js';
 
 export const app = new Hono();
 
@@ -43,6 +46,18 @@ app.use('/api/*', compress());
 app.use('/api/*', etag());
 
 app.get('/api/health', (c) => c.json({ ok: true, time: new Date().toISOString() }));
+
+app.get('/files/selfies/:name', requireAuth, requirePerm('attendance.view'), async (c) => {
+  const name = c.req.param('name') ?? '';
+  if (!/^[A-Za-z0-9_\-]+\.jpg$/.test(name)) return c.notFound();
+  const file = await getSelfie(name);
+  if (!file) return c.notFound();
+  return c.body(new Uint8Array(file.data), 200, {
+    'Content-Type': file.contentType,
+    'Cache-Control': 'private, max-age=300',
+    'X-Content-Type-Options': 'nosniff',
+  });
+});
 
 app.route('/api/auth', authRoutes);
 app.route('/api/images', imagesRoutes);

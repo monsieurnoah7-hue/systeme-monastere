@@ -1486,6 +1486,9 @@ export function Employees({
   const [badgeFor, setBadgeFor] = useState<Employee | null>(null);
   const [badgeCopies, setBadgeCopies] = useState(1);
   const [badgePaper, setBadgePaper] = useState<'A4' | 'Letter'>('A4');
+  const [batchBadgeOpen, setBatchBadgeOpen] = useState(false);
+  const [batchBadgeQuery, setBatchBadgeQuery] = useState('');
+  const [batchBadgeCopies, setBatchBadgeCopies] = useState<Record<string, number>>({});
   const [deleteEmployeeFor, setDeleteEmployeeFor] = useState<Employee | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -1652,6 +1655,31 @@ export function Employees({
       );
     });
   }, [employees, q, showInactive, statusFilter, statusMap]);
+
+  const batchBadgeCandidates = useMemo(() => {
+    const needle = batchBadgeQuery.trim().toLocaleLowerCase('fr');
+    return employees.filter((employee) => {
+      if (!employee.badge_token || (!showInactive && !employee.active)) return false;
+      if (!needle) return true;
+      return employee.full_name.toLocaleLowerCase('fr').includes(needle)
+        || employee.job_title.toLocaleLowerCase('fr').includes(needle)
+        || employee.id.toLocaleLowerCase('fr').includes(needle);
+    });
+  }, [employees, batchBadgeQuery, showInactive]);
+
+  const selectedBatchBadges = useMemo(
+    () => employees.filter((employee) => (batchBadgeCopies[employee.id] ?? 0) > 0 && !!employee.badge_token),
+    [employees, batchBadgeCopies],
+  );
+  const batchBadgePrintCount = selectedBatchBadges.reduce((total, employee) => total + (batchBadgeCopies[employee.id] ?? 0), 0);
+
+  function setBatchBadgeSelection(employeeIds: string[], selected: boolean) {
+    setBatchBadgeCopies((current) => {
+      const next = { ...current };
+      for (const id of employeeIds) next[id] = selected ? Math.max(1, next[id] ?? 1) : 0;
+      return next;
+    });
+  }
 
   function dayChip(employee: Employee) {
     const s = statusMap.get(employee.id);
@@ -2149,6 +2177,24 @@ export function Employees({
                   >
                     <span className="hidden sm:inline">Nouveau travailleur</span>
                     <span className="sm:hidden">Nouveau</span>
+                  </Button>
+                )}
+
+                {activeTab === 'people' && canPrintBadge && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Printer size={14} />}
+                    onClick={() => {
+                      setBatchBadgeQuery('');
+                      setBatchBadgeCopies({});
+                      setBatchBadgeOpen(true);
+                    }}
+                    className="h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-2.5 text-xs"
+                    aria-label="Imprimer plusieurs badges travailleurs"
+                    title="Imprimer plusieurs badges"
+                  >
+                    <span className="hidden sm:inline">Badges</span>
                   </Button>
                 )}
 
@@ -3509,6 +3555,117 @@ export function Employees({
         </div>
       </Modal>
 
+      {/* Impression groupée des badges travailleurs */}
+      <Modal
+        open={batchBadgeOpen}
+        title="Imprimer plusieurs badges"
+        onClose={() => setBatchBadgeOpen(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setBatchBadgeOpen(false)}>Annuler</Button>
+            <Button
+              variant="primary"
+              icon={<Printer size={15} />}
+              disabled={batchBadgePrintCount === 0 || batchBadgePrintCount > 500}
+              onClick={() => {
+                const copies = selectedBatchBadges.flatMap((employee) =>
+                  Array.from({ length: Math.min(100, Math.max(0, batchBadgeCopies[employee.id] ?? 0)) }, () => employee),
+                );
+                print(<BadgeSheet employees={copies} paper={badgePaper} />);
+                setBatchBadgeOpen(false);
+              }}
+            >
+              Imprimer {batchBadgePrintCount > 0 ? `(${batchBadgePrintCount})` : 'la sélection'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-ink-soft">
+            Cochez les travailleurs et indiquez le nombre de cartes à imprimer pour chacun.
+          </p>
+          <label className="block text-sm font-medium text-ink">
+            Rechercher un travailleur
+            <input
+              autoFocus
+              value={batchBadgeQuery}
+              onChange={(event) => setBatchBadgeQuery(event.target.value)}
+              placeholder="Nom, métier ou matricule…"
+              className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink placeholder:text-ink-faint"
+            />
+          </label>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
+            <span className="text-xs text-ink-soft">
+              {selectedBatchBadges.length} personne(s) · {batchBadgePrintCount} carte(s)
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setBatchBadgeSelection(batchBadgeCandidates.map((employee) => employee.id), true)}
+                className="text-xs font-semibold text-amber hover:underline"
+              >Tout sélectionner</button>
+              <button
+                type="button"
+                onClick={() => setBatchBadgeSelection(batchBadgeCandidates.map((employee) => employee.id), false)}
+                className="text-xs font-semibold text-ink-soft hover:text-ink hover:underline"
+              >Effacer</button>
+            </div>
+          </div>
+          {batchBadgePrintCount > 500 && (
+            <Banner tone="warning">Limite de 500 cartes par planche. Réduisez les quantités pour imprimer.</Banner>
+          )}
+          <div className="max-h-[min(48vh,420px)] space-y-1 overflow-y-auto pr-1">
+            {batchBadgeCandidates.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-line p-5 text-center text-sm text-ink-soft">
+                Aucun travailleur avec un badge disponible ne correspond à cette recherche.
+                {!showInactive && employees.some((employee) => !employee.active && employee.badge_token) && (
+                  <span className="mt-1 block">Pour inclure les inactifs, activez « Afficher les Inactifs » dans Options.</span>
+                )}
+              </p>
+            ) : batchBadgeCandidates.map((employee) => (
+              <div key={employee.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2">
+                <input
+                  id={`batch-badge-${employee.id}`}
+                  type="checkbox"
+                  checked={(batchBadgeCopies[employee.id] ?? 0) > 0}
+                  onChange={(event) => setBatchBadgeSelection([employee.id], event.target.checked)}
+                  className="h-4 w-4 shrink-0 accent-amber"
+                />
+                <label htmlFor={`batch-badge-${employee.id}`} className="min-w-0 flex-1 cursor-pointer">
+                  <span className="block truncate text-sm font-semibold text-ink">{employee.full_name}</span>
+                  <span className="block truncate text-xs text-ink-soft">{employee.job_title} · {employee.id}</span>
+                </label>
+                <label className="shrink-0 text-[11px] text-ink-soft">
+                  Qté
+                  <input
+                    aria-label={`Nombre de badges pour ${employee.full_name}`}
+                    type="number"
+                    min={1}
+                    max={100}
+                    step={1}
+                    disabled={(batchBadgeCopies[employee.id] ?? 0) === 0}
+                    value={batchBadgeCopies[employee.id] || 1}
+                    onChange={(event) => {
+                      const value = Math.min(100, Math.max(1, Math.trunc(Number(event.target.value) || 1)));
+                      setBatchBadgeCopies((current) => ({ ...current, [employee.id]: value }));
+                    }}
+                    className="ml-1 h-9 w-16 rounded-md border border-line bg-paper px-2 text-center text-sm text-ink disabled:opacity-40"
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+          <label className="block text-sm font-medium text-ink">
+            Format du papier
+            <select value={badgePaper} onChange={(event) => setBadgePaper(event.target.value as 'A4' | 'Letter')} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 text-ink">
+              <option value="A4">A4</option>
+              <option value="Letter">Letter</option>
+            </select>
+          </label>
+          <p className="text-xs text-ink-faint">Les badges sont disposés automatiquement en cartes format portefeuille. Chaque QR reste associé au travailleur indiqué.</p>
+        </div>
+      </Modal>
+
       {/* Badge QR Modal */}
       <Modal
         open={!!badgeFor}
@@ -4079,8 +4236,8 @@ function BadgeSheet({ employees, paper = 'A4' }: { employees: Employee[]; paper?
         <img src="/emblem.png" alt="" style={{ height: '9mm', width: '9mm', objectFit: 'contain' }} />
       </div>
       <div className="badge-grid">
-        {employees.map((employee) => (
-          <BadgeCard key={employee.id} employee={employee} />
+        {employees.map((employee, index) => (
+          <BadgeCard key={`${employee.id}-${index}`} employee={employee} />
         ))}
       </div>
     </div>
