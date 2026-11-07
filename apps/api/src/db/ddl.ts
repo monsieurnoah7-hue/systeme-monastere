@@ -418,9 +418,15 @@ CREATE TABLE IF NOT EXISTS etabli_kit_audits (
   items_present_count int NOT NULL,
   items_total_count int NOT NULL,
   anomalies_note text,
-  audited_at timestamptz NOT NULL DEFAULT now()
+  audited_at timestamptz NOT NULL DEFAULT now(),
+  audit_type text NOT NULL DEFAULT 'flash',
+  audit_date date
 );
+ALTER TABLE etabli_kit_audits ADD COLUMN IF NOT EXISTS audit_type text NOT NULL DEFAULT 'flash';
+ALTER TABLE etabli_kit_audits ADD COLUMN IF NOT EXISTS audit_date date;
 CREATE INDEX IF NOT EXISTS etabli_kit_audits_kit_idx ON etabli_kit_audits(kit_id, audited_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS etabli_kit_daily_audit_unique_idx
+  ON etabli_kit_audits(kit_id, audit_date) WHERE audit_type = 'daily' AND audit_date IS NOT NULL;
 
 -- Table des Fêtes Légales & Décrets Présidentiels Exceptionnels (Cameroun)
 CREATE TABLE IF NOT EXISTS holidays (

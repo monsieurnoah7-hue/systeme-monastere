@@ -541,6 +541,16 @@ export type Dashboard = {
     completenessRate: number;
     overdueAuditCount: number;
     anomaliesCount: number;
+    dailyCompliance: {
+      date: string;
+      dueAt: string;
+      requiredCount: number;
+      completedCount: number;
+      pendingCount: number;
+      overdueCount: number;
+      exemptCount: number;
+      items: { kitId: string; code: string; employeeId: string; employeeName: string; etabliNumber: number; status: 'done' | 'pending' | 'overdue' | 'exempt'; reason: string | null; auditedAt: string | null; auditStatus: string | null }[];
+    };
     lastAudit: {
       kitCode: string;
       etabliNumber: number;
@@ -599,6 +609,20 @@ export type Dashboard = {
       overtime_hours: number;
     }[];
   } | null;
+};
+
+export type MyEtabli = {
+  employee: { id: string; full_name: string; active: boolean };
+  kit: { id: string; code: string; etabli_number: number; location: string; status: string } | null;
+  items: EtabliKitItem[];
+  daily: {
+    date: string;
+    isRequired: boolean;
+    reason: string | null;
+    status: 'done' | 'pending' | 'overdue' | 'exempt';
+    dueAt?: string;
+    audit: EtabliKitAudit | null;
+  };
 };
 
 export type KioskSettings = {

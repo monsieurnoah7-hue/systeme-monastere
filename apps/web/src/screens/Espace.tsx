@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { api, ApiError, type Catalog, type MyOverview, type ScanResult, type User, requestWorkerPermission } from '../lib/api';
+import { api, ApiError, type Catalog, type MyEtabli, type MyOverview, type ScanResult, type User, requestWorkerPermission } from '../lib/api';
 import type { ViewId } from '../components/Shell';
 import {
   Banner,
@@ -74,7 +74,12 @@ export function Espace({
   const [error, setError] = useState<string | null>(null);
 
   // Workers tabs
-  const [tab, setTab] = useState<'presences' | 'retards' | 'conges' | 'outillage' | 'catalogue' | 'profil'>('presences');
+  const [tab, setTab] = useState<'presences' | 'retards' | 'conges' | 'outillage' | 'etabli' | 'catalogue' | 'profil'>('presences');
+  const [myEtabli, setMyEtabli] = useState<MyEtabli | null>(null);
+  const [auditChoices, setAuditChoices] = useState<Record<number, MyEtabli['items'][number]['condition']>>({});
+  const [auditNote, setAuditNote] = useState('');
+  const [auditBusy, setAuditBusy] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
   const [magasinFilter, setMagasinFilter] = useState<string>('all');
 
   // Profile Form (Direction & Authorized Users)
@@ -161,12 +166,15 @@ export function Espace({
     setLoading(true);
     setError(null);
     try {
-      const [ov, cat] = await Promise.all([
+      const [ov, cat, kit] = await Promise.all([
         api<MyOverview>('/api/me/overview').catch(() => null),
         api<Catalog>('/api/me/catalog').catch(() => null),
+        api<MyEtabli>('/api/me/kit').catch(() => null),
       ]);
       setOverview(ov);
       setCatalog(cat);
+      setMyEtabli(kit);
+      setAuditChoices({});
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Erreur de chargement');
     } finally {
@@ -764,6 +772,29 @@ export function Espace({
   const retardsRows = historyRows.filter((h) => h.late_minutes > 0);
   const tools = catalog?.tools.filter((t) => magasinFilter === 'all' || t.magasin_id === magasinFilter) ?? [];
   const availableTools = tools.filter((t) => t.status === 'disponible');
+  const submitDailyAudit = async () => {
+    if (!myEtabli?.kit || auditBusy) return;
+    if (myEtabli.items.some((item) => !auditChoices[item.id])) {
+      setAuditError('Vérifiez chaque élément de la liste avant de terminer le contrôle.');
+      return;
+    }
+    setAuditBusy(true);
+    setAuditError(null);
+    try {
+      await api('/api/me/kit/audit', {
+        method: 'POST',
+        body: JSON.stringify({ items_status: myEtabli.items.map((item) => ({ id: item.id, condition: auditChoices[item.id] })), anomalies_note: auditNote }),
+      });
+      toast('Contrôle quotidien enregistré avec l’heure du serveur.', 'success');
+      setAuditNote('');
+      await load();
+      setTab('etabli');
+    } catch (err) {
+      setAuditError(err instanceof Error ? err.message : 'Le contrôle n’a pas pu être enregistré.');
+    } finally {
+      setAuditBusy(false);
+    }
+  };
   const situationTone = situation === 'present' ? 'border-green/25 bg-green-wash text-green'
     : situation === 'late' ? 'border-amber/30 bg-amber/10 text-amber'
       : situation === 'conge' || situation === 'permission' ? 'border-blue/25 bg-blue-wash text-blue'
@@ -830,6 +861,7 @@ export function Espace({
           { value: 'retards' as const, label: 'Retards', count: retardsRows.length, icon: <AlertTriangle size={15} /> },
           { value: 'conges' as const, label: 'Congés', count: leaves.length, icon: <FileCheck2 size={15} /> },
           { value: 'outillage' as const, label: 'Mes outils', count: loansHistory.length, icon: <IconWrench size={15} /> },
+          ...(myEtabli?.kit ? [{ value: 'etabli' as const, label: 'Mon établi', count: myEtabli.daily.status === 'pending' || myEtabli.daily.status === 'overdue' ? 'À faire' : undefined, icon: <IconBox size={15} /> }] : []),
           { value: 'catalogue' as const, label: 'Disponibles', icon: <IconBox size={15} /> },
           { value: 'profil' as const, label: 'Mon compte', icon: <KeyRound size={15} /> },
         ].map((item) => (
@@ -851,6 +883,52 @@ export function Espace({
           </button>
         ))}
       </nav>
+
+      {myEtabli?.kit && (myEtabli.daily.status === 'pending' || myEtabli.daily.status === 'overdue') && (
+        <button type="button" onClick={() => setTab('etabli')} className="flex w-full items-start gap-3 rounded-xl border border-amber/35 bg-amber-wash/30 p-3 text-left focus-visible:outline-2 focus-visible:outline-blue">
+          <span className="mt-0.5 text-amber"><IconAlert size={18} /></span>
+          <span className="min-w-0"><span className="block text-sm font-semibold text-ink">Contrôle de l’établi à effectuer aujourd’hui</span><span className="mt-0.5 block text-xs text-ink-soft">À terminer avant {myEtabli.daily.dueAt ?? 'la fin de votre journée'} · {myEtabli.kit.code}</span></span>
+          <ChevronRight size={17} className="ml-auto mt-0.5 shrink-0 text-ink-faint" />
+        </button>
+      )}
+
+      {tab === 'etabli' && myEtabli?.kit && (
+        <Card className="space-y-4 p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
+            <div><h2 className="text-base font-bold text-ink">Mon établi · n° {myEtabli.kit.etabli_number}</h2><p className="mt-1 text-xs text-ink-soft">{myEtabli.kit.location} · {myEtabli.kit.code}</p></div>
+            <Chip tone={myEtabli.daily.status === 'done' ? 'green' : myEtabli.daily.status === 'overdue' ? 'red' : myEtabli.daily.status === 'exempt' ? 'grey' : 'amber'}>
+              {myEtabli.daily.status === 'done' ? 'Contrôle terminé' : myEtabli.daily.status === 'overdue' ? 'Contrôle en retard' : myEtabli.daily.status === 'exempt' ? 'Aucun contrôle requis' : 'À contrôler aujourd’hui'}
+            </Chip>
+          </div>
+          {myEtabli.daily.status === 'done' && myEtabli.daily.audit ? (
+            <div className="rounded-xl border border-green/25 bg-green-wash/40 p-4 text-sm text-ink">
+              <p className="font-semibold">Contrôle enregistré · {new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Douala', hour: '2-digit', minute: '2-digit' }).format(new Date(myEtabli.daily.audit.audited_at))}</p>
+              <p className="mt-1 text-xs text-ink-soft">{myEtabli.daily.audit.items_present_count}/{myEtabli.daily.audit.items_total_count} éléments présents · {myEtabli.daily.audit.status === 'conforme' ? 'Tout est en bon état' : 'Un écart a été signalé'}</p>
+            </div>
+          ) : myEtabli.daily.status === 'exempt' ? (
+            <p className="rounded-xl border border-line bg-surface-2 p-3 text-sm text-ink-soft">{myEtabli.daily.reason}</p>
+          ) : (
+            <>
+              <p className="text-sm text-ink-soft">Contrôlez physiquement chaque outil puis indiquez son état. L’enregistrement est horodaté par le serveur et ne peut être effectué qu’une fois par jour.</p>
+              {myEtabli.items.length === 0 ? <EmptyState icon={<IconWrench size={22} />} title="Aucun outil n’est encore ajouté à cet établi" /> : (
+                <div className="divide-y divide-line rounded-xl border border-line">
+                  {myEtabli.items.map((item) => (
+                    <div key={item.id} className="grid gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(180px,auto)] sm:items-center">
+                      <div className="min-w-0"><p className="text-sm font-semibold text-ink">{item.name}{item.qty > 1 ? ` · ${item.qty} ${item.unit}` : ''}</p><p className="mt-0.5 text-[11px] text-ink-faint">{item.tool_code}</p></div>
+                      <select aria-label={`État : ${item.name}`} value={auditChoices[item.id] ?? ''} onChange={(event) => setAuditChoices((current) => ({ ...current, [item.id]: event.target.value as MyEtabli['items'][number]['condition'] }))} className="min-h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-blue sm:w-48">
+                        <option value="" disabled>Choisir l’état…</option><option value="bon">Présent · bon état</option><option value="a_affuter">À affûter</option><option value="a_reparer">À réparer</option><option value="manquant">Manquant</option><option value="reforme">À réformer</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="block text-xs font-medium text-ink-soft">Note si un élément est abîmé ou manquant<textarea value={auditNote} onChange={(event) => setAuditNote(event.target.value)} rows={2} maxLength={1000} className="mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink" placeholder="Précisez le problème (facultatif)" /></label>
+              {auditError && <Banner tone="error">{auditError}</Banner>}
+              <Button variant="primary" block loading={auditBusy} disabled={!myEtabli.items.length || myEtabli.items.some((item) => !auditChoices[item.id])} onClick={submitDailyAudit}>Terminer le contrôle du jour</Button>
+            </>
+          )}
+        </Card>
+      )}
 
       {/* ONGLET 1 : PRÉSENCES & PAUSES */}
       {tab === 'presences' && (

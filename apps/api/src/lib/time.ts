@@ -5,6 +5,28 @@ export function localDate(d = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+export function businessDate(d = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Douala',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const part = (type: string) => parts.find((value) => value.type === type)?.value ?? '00';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+export function businessMinutes(d = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Douala',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const part = (type: string) => Number(parts.find((value) => value.type === type)?.value ?? 0);
+  return part('hour') * 60 + part('minute');
+}
+
 export function minutesOfDay(d = new Date()): number {
   return d.getHours() * 60 + d.getMinutes();
 }

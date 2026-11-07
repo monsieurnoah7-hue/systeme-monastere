@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { getDb } from '../db/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import { hasPermission, requirePerm } from '../middleware/permissions.js';
-import { localDate } from '../lib/time.js';
+import { businessDate, businessMinutes, parseHm } from '../lib/time.js';
+import { loadSettings } from '../lib/settings.js';
 
 export const dashboardRoutes = new Hono();
 
@@ -11,7 +12,7 @@ dashboardRoutes.use('*', requireAuth);
 dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
   const role = c.get('auth').user.role;
   const db = getDb();
-  const today = localDate();
+  const today = businessDate();
   const canViewProjects = await hasPermission(role, 'projects.view');
   const canViewProjectFinancials = canViewProjects && await hasPermission(role, 'financial.view');
 
@@ -207,6 +208,43 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
      ORDER BY k.etabli_number ASC
   `).catch(() => [] as EtabliRow[]);
 
+  const [kitSchedule, dailyAudits, holidayToday, settings] = await Promise.all([
+    db.query<{ id: string; employee_id: string; workdays: unknown; employee_active: boolean }>(
+      `SELECT k.id, e.id AS employee_id, e.workdays, e.active AS employee_active FROM etabli_kits k JOIN employees e ON e.id = k.employee_id WHERE k.status != 'cloture'`,
+    ).catch(() => []),
+    db.query<{ kit_id: string; audited_at: string; status: string }>(
+      `SELECT kit_id, audited_at::timestamptz::text AS audited_at, status FROM etabli_kit_audits WHERE audit_type = 'daily' AND audit_date = $1`, [today],
+    ).catch(() => []),
+    db.one<{ name: string }>('SELECT name FROM holidays WHERE holiday_date = $1 AND is_chome = true', [today]).catch(() => null),
+    loadSettings(),
+  ]);
+  const scheduleByKit = new Map(kitSchedule.map((row) => [row.id, row]));
+  const auditByKit = new Map(dailyAudits.map((row) => [row.kit_id, row]));
+  const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+  const dailyItems = kitsData.filter((kit) => kit.status !== 'cloture').map((kit) => {
+    const schedule = scheduleByKit.get(kit.id);
+    const parsedDays: unknown = Array.isArray(schedule?.workdays) ? schedule.workdays : typeof schedule?.workdays === 'string' ? JSON.parse(schedule.workdays) as unknown : null;
+    const rawDays: number[] = Array.isArray(parsedDays) ? parsedDays.map(Number) : [1, 2, 3, 4, 5, 6];
+    const absence = declared.find((entry) => entry.id === kit.employee_id);
+    const audit = auditByKit.get(kit.id);
+    let reason: string | null = null;
+    if (!schedule?.employee_active) reason = 'Travailleur inactif';
+    else if (holidayToday) reason = `Jour férié chômé : ${holidayToday.name}`;
+    else if (absence) reason = `Absence approuvée (${absence.kind})`;
+    else if (!rawDays.includes(weekday)) reason = 'Jour non ouvré pour ce travailleur';
+    const status = reason ? 'exempt' : audit ? 'done' : businessMinutes() >= parseHm(settings.closing_time) ? 'overdue' : 'pending';
+    return { kitId: kit.id, code: kit.code, employeeId: kit.employee_id, employeeName: kit.employee_name, etabliNumber: kit.etabli_number, status, reason, auditedAt: audit?.audited_at ?? null, auditStatus: audit?.status ?? null };
+  });
+  const dailyCompliance = {
+    date: today, dueAt: settings.closing_time,
+    requiredCount: dailyItems.filter((item) => item.status !== 'exempt').length,
+    completedCount: dailyItems.filter((item) => item.status === 'done').length,
+    pendingCount: dailyItems.filter((item) => item.status === 'pending').length,
+    overdueCount: dailyItems.filter((item) => item.status === 'overdue').length,
+    exemptCount: dailyItems.filter((item) => item.status === 'exempt').length,
+    items: dailyItems,
+  };
+
   const totalKits = kitsData.length;
   const totalItems = kitsData.reduce((acc, k) => acc + (k.items_total || 0), 0);
   const intactItems = kitsData.reduce((acc, k) => acc + (k.items_present || 0), 0);
@@ -235,6 +273,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
     completenessRate,
     overdueAuditCount: kitsNeedingAudit.length,
     anomaliesCount: kitsWithAnomalies.length,
+    dailyCompliance,
     lastAudit: lastAuditedKit ? {
       kitCode: lastAuditedKit.code,
       etabliNumber: lastAuditedKit.etabli_number,

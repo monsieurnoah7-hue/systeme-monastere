@@ -1044,6 +1044,32 @@ function EtablisTourDeControle({
         </div>
       </div>
 
+      <Card className="p-0 overflow-hidden" padded={false}>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+          <div><h3 className="text-sm font-semibold text-ink">Contrôles quotidiens des établis</h3><p className="mt-0.5 text-xs text-ink-soft">Échéance {etablis.dailyCompliance.dueAt} · {formatDate(etablis.dailyCompliance.date)}</p></div>
+          <span className="text-xs font-medium text-ink-soft">{etablis.dailyCompliance.completedCount}/{etablis.dailyCompliance.requiredCount} terminés</span>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-line border-b border-line text-center">
+          <div className="px-2 py-2"><p className="text-lg font-semibold tabular-nums text-green">{etablis.dailyCompliance.completedCount}</p><p className="text-[10px] text-ink-faint">Terminés</p></div>
+          <div className="px-2 py-2"><p className="text-lg font-semibold tabular-nums text-amber">{etablis.dailyCompliance.pendingCount}</p><p className="text-[10px] text-ink-faint">À faire</p></div>
+          <div className="px-2 py-2"><p className="text-lg font-semibold tabular-nums text-red">{etablis.dailyCompliance.overdueCount}</p><p className="text-[10px] text-ink-faint">En retard</p></div>
+        </div>
+        <div className="max-h-72 divide-y divide-line overflow-y-auto">
+          {etablis.dailyCompliance.items.map((item) => (
+            <div key={item.kitId} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <div className="min-w-0"><p className="truncate text-xs font-medium text-ink">{item.employeeName}</p><p className="truncate text-[10px] text-ink-faint">Établi n° {item.etabliNumber} · {item.code}</p></div>
+              <div className="shrink-0 text-right">
+                <Chip dot={false} tone={item.status === 'done' ? 'green' : item.status === 'overdue' ? 'red' : item.status === 'exempt' ? 'grey' : 'amber'}>
+                  {item.status === 'done' ? 'Terminé' : item.status === 'overdue' ? 'En retard' : item.status === 'exempt' ? 'Exempté' : 'À faire'}
+                </Chip>
+                <p className="mt-0.5 text-[10px] text-ink-faint">{item.auditedAt ? new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Douala', hour: '2-digit', minute: '2-digit' }).format(new Date(item.auditedAt)) : item.reason ?? ''}</p>
+              </div>
+            </div>
+          ))}
+          {etablis.dailyCompliance.items.length === 0 && <p className="p-4 text-xs text-ink-faint">Aucun établi actif à suivre.</p>}
+        </div>
+      </Card>
+
       {/* Toolbar: Search & Segmented Filter Tabs */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-1">
         {/* Filter Pills */}
