@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { getDb } from '../db/index.js';
 import { hashPassword, randomToken, sha256, verifyPassword } from '../lib/crypto.js';
+import { writeAudit } from '../lib/audit.js';
 import { requireAuth, SESSION_COOKIE } from '../middleware/auth.js';
 import { hasPermission } from '../middleware/permissions.js';
 import type { UserRow } from '../types.js';
@@ -139,6 +140,7 @@ const profileSchema = z.object({
   display_name: z.string().min(2).max(100).optional(),
   current_password: z.string().optional(),
   new_password: z.string().min(6).max(100).optional(),
+  pin: z.string().regex(/^\d{4,10}$/, 'Le code PIN doit comporter entre 4 et 10 chiffres.').optional(),
   photo_path: z.string().nullable().optional(),
 });
 
@@ -179,8 +181,16 @@ authRoutes.patch('/profile', requireAuth, async (c) => {
     }
   }
 
-  if (body.data.new_password) {
-    if (!body.data.current_password || !verifyPassword(body.data.current_password, current.password_hash)) {
+  if (body.data.new_password || body.data.pin) {
+    const hasCurrentPass = body.data.current_password ? verifyPassword(body.data.current_password, current.password_hash) : false;
+    let hasCurrentPin = false;
+    if (current.employee_id && body.data.current_password) {
+      const emp = await db.one<{ pin_hash: string | null }>('SELECT pin_hash FROM employees WHERE id = $1', [current.employee_id]);
+      if (emp?.pin_hash && verifyPassword(body.data.current_password, emp.pin_hash)) {
+        hasCurrentPin = true;
+      }
+    }
+    if (!hasCurrentPass && !hasCurrentPin) {
       return c.json({ error: 'Le mot de passe actuel est incorrect.' }, 400);
     }
   }
@@ -199,13 +209,25 @@ authRoutes.patch('/profile', requireAuth, async (c) => {
     [newLogin ?? null, newName ?? null, newHash ?? null, newPhoto !== undefined ? (newPhoto || '') : null, userId],
   );
 
-  // Si l'utilisateur est lié à une fiche travailleur, synchroniser la photo et le nom complet
+  // Si l'utilisateur est lié à une fiche travailleur, synchroniser la photo, le nom complet et le PIN de pointage
   if (current.employee_id) {
     if (newPhoto !== undefined) {
       await db.query('UPDATE employees SET photo_path = $1 WHERE id = $2', [newPhoto, current.employee_id]);
     }
     if (newName !== undefined) {
       await db.query('UPDATE employees SET full_name = $1 WHERE id = $2', [newName, current.employee_id]);
+    }
+    if (body.data.pin) {
+      const pinHash = hashPassword(body.data.pin.trim());
+      await db.query('UPDATE employees SET pin_hash = $1 WHERE id = $2', [pinHash, current.employee_id]);
+      await writeAudit(db, {
+        entity: 'employee',
+        entityId: current.employee_id,
+        action: 'pin_update',
+        actorId: userId,
+        actorName: current.login,
+        reason: 'Code PIN personnel de pointage modifié depuis Mon Compte',
+      });
     }
   }
 

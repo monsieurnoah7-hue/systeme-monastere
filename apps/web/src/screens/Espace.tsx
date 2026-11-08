@@ -89,6 +89,8 @@ export function Espace({
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -236,6 +238,27 @@ export function Espace({
         payload.new_password = newPassword.trim();
       }
 
+      if (newPin.trim()) {
+        const pinClean = newPin.trim();
+        if (!/^\d{4,6}$/.test(pinClean)) {
+          setProfileError('Le code PIN de pointage doit comporter entre 4 et 6 chiffres.');
+          setProfileSaving(false);
+          return;
+        }
+        if (pinClean !== confirmPin.trim()) {
+          setProfileError('La confirmation du code PIN ne correspond pas au nouveau code saisi.');
+          setProfileSaving(false);
+          return;
+        }
+        if (!currentPassword) {
+          setProfileError('Veuillez renseigner votre mot de passe actuel pour valider la modification du code PIN.');
+          setProfileSaving(false);
+          return;
+        }
+        payload.current_password = currentPassword;
+        payload.pin = pinClean;
+      }
+
       if (Object.keys(payload).length === 0) {
         setProfileError('Aucune modification détectée.');
         return;
@@ -250,6 +273,8 @@ export function Espace({
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setNewPin('');
+      setConfirmPin('');
       if (res.user) {
         if (res.user.display_name) setDisplayName(res.user.display_name);
         if (res.user.login) setLogin(res.user.login);
@@ -561,6 +586,44 @@ export function Espace({
                     />
                   </div>
                 </div>
+
+                {user?.employee_id && (
+                  <div className="pt-2 border-t border-line/60 space-y-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <KeyRound size={12} className="text-amber" />
+                      <p className="text-xs font-semibold text-ink">Code secret PIN de pointage borne</p>
+                      <span className="text-[10px] text-ink-faint font-normal">(4 à 6 chiffres)</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <Field
+                        label="Nouveau code PIN"
+                        name="profile_new_pin"
+                        id="profile_new_pin"
+                        type="password"
+                        autoComplete="off"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={newPin}
+                        onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                        placeholder="ex. 2332 (4 chiffres)"
+                        hint="Code secret à saisir sur la borne de pointage"
+                      />
+                      <Field
+                        label="Confirmer le code PIN"
+                        name="profile_confirm_pin"
+                        id="profile_confirm_pin"
+                        type="password"
+                        autoComplete="off"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={confirmPin}
+                        onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                        placeholder="Répétez le code PIN"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {profileError && (
                   <div className="rounded-lg bg-red-wash/60 border border-red/20 p-2 text-xs font-medium text-red animate-in fade-in">
@@ -1411,6 +1474,44 @@ export function Espace({
                   />
                 </div>
               </div>
+
+              {user?.employee_id && (
+                <div className="border-t border-line/60 pt-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <KeyRound size={13} className="text-amber" />
+                    <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
+                      Code secret PIN de pointage (optionnel)
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Field
+                      label="Nouveau code PIN"
+                      name="collaborator_new_pin"
+                      id="collaborator_new_pin"
+                      type="password"
+                      autoComplete="off"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={newPin}
+                      onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                      placeholder="ex. 2332 (4 chiffres)"
+                      hint="Code utilisé sur la borne de pointage d’atelier"
+                    />
+                    <Field
+                      label="Confirmer le code PIN"
+                      name="collaborator_confirm_pin"
+                      id="collaborator_confirm_pin"
+                      type="password"
+                      autoComplete="off"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={confirmPin}
+                      onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Répétez le code PIN"
+                    />
+                  </div>
+                </div>
+              )}
 
               {profileError && (
                 <div className="rounded-lg bg-red-wash/60 border border-red/20 p-2.5 text-xs font-medium text-red">

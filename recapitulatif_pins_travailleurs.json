@@ -1,0 +1,206 @@
+{
+  "date": "2026-11-08T08:27:48.503Z",
+  "pinTemporaire": "2332",
+  "totalTravailleurs": 22,
+  "travailleursMisAJour": 21,
+  "directionProtegee": "EMP-001 (Père Elie TEKAM TAGHUEN) - 100% Intact",
+  "resultats": [
+    {
+      "id": "EMP-002",
+      "nom": "Frère François MEKELI, OSB",
+      "metier": "Secrétariat général · pointage",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "mekeli",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-055",
+      "nom": "M. ABDOULAYE NJARAYAM",
+      "metier": "Vigile · pointage",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "abdoulaye.njarayam",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-016",
+      "nom": "M. AHANGA EMARAM Sylvain",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "ouvrier",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-017",
+      "nom": "M. BAHETEN Jean Marcel",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "bmarcel",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-018",
+      "nom": "M. EVA Michel",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "emichel",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-056",
+      "nom": "M. KAMGA Innocent",
+      "metier": "Directeur Projets",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "m.kamga.innocent",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-003",
+      "nom": "M. KOUOMOU Désiré",
+      "metier": "Direction formation · magasins autorisés",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "kouomou",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-006",
+      "nom": "M. LAWSON ADODO François",
+      "metier": "Contrôleur en chef · ateliers et magasins dédiés",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "chef",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-008",
+      "nom": "M. MINKOUMBA ABONDO Clément",
+      "metier": "Responsable des livraisons · gestion du parc",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "magasinier",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-007",
+      "nom": "M. MVOGO Médard",
+      "metier": "Contrôleur adjoint · scan ateliers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "mvogo",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-019",
+      "nom": "M. MVOMO Frédéric",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "mfrederic",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-020",
+      "nom": "M. NDOE ATEBA Pierre Désiré",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "ndesire",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-022",
+      "nom": "M. NLEND Dagobert",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "ndagobert",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-023",
+      "nom": "M. NTSAMA FOUDA Paul Olivier",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "nolivier",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-024",
+      "nom": "M. NYA NJONWE Douglas",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "ndouglas",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-025",
+      "nom": "M. OBIONDA Claude François",
+      "metier": "Scanner atelier · Obionda",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "ofrancois",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-026",
+      "nom": "M. OLAMA TSALA Philippe",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "ophilippe",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-027",
+      "nom": "M. TASSIE Patrice",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "tpatrice",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-028",
+      "nom": "M. TIEMBOMBA Mohammed",
+      "metier": "Scanner atelier · Tiembomba",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "tmohammed",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-029",
+      "nom": "M. TOUNA ONGUENE Adolphe",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "tadolphe",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-021",
+      "nom": "Mme NGO NDOGO Juliette",
+      "metier": "Menuisier/Menuisière Ateliers/Chantiers",
+      "statut": "Code PIN temporaire défini à 2332",
+      "login": "njuliette",
+      "pin": "2332",
+      "verifieBorne": true
+    },
+    {
+      "id": "EMP-001",
+      "nom": "Père Elie TEKAM TAGHUEN, OSB",
+      "metier": "Direction (Super-Admin)",
+      "statut": "Direction (Non soumis au pointage)",
+      "pin": "---",
+      "verifie": true
+    }
+  ]
+}
