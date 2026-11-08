@@ -209,18 +209,21 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
      ORDER BY k.etabli_number ASC
   `).catch(() => [] as EtabliRow[]);
 
+  type KitScheduleRow = { id: string; employee_id: string; workdays: unknown; employee_active: boolean };
+  type DailyAuditRow = { kit_id: string; audited_at: string; status: string };
+
   const [kitSchedule, dailyAudits, holidayToday, settings] = await Promise.all([
-    db.query<{ id: string; employee_id: string; workdays: unknown; employee_active: boolean }>(
+    db.query<KitScheduleRow>(
       `SELECT k.id, e.id AS employee_id, e.workdays, e.active AS employee_active FROM etabli_kits k JOIN employees e ON e.id = k.employee_id WHERE k.status != 'cloture' AND EXISTS (SELECT 1 FROM etabli_kit_items i WHERE i.kit_id = k.id)`,
-    ).catch(() => []),
-    db.query<{ kit_id: string; audited_at: string; status: string }>(
+    ).catch((): KitScheduleRow[] => []),
+    db.query<DailyAuditRow>(
       `SELECT kit_id, audited_at::timestamptz::text AS audited_at, status FROM etabli_kit_audits WHERE audit_type = 'daily' AND audit_date = $1`, [today],
-    ).catch(() => []),
+    ).catch((): DailyAuditRow[] => []),
     db.one<{ name: string }>('SELECT name FROM holidays WHERE holiday_date = $1 AND is_chome = true', [today]).catch(() => null),
     loadSettings(),
   ]);
-  const scheduleByKit = new Map(kitSchedule.map((row) => [row.id, row]));
-  const auditByKit = new Map(dailyAudits.map((row) => [row.kit_id, row]));
+  const scheduleByKit = new Map<string, KitScheduleRow>(kitSchedule.map((row) => [row.id, row]));
+  const auditByKit = new Map<string, DailyAuditRow>(dailyAudits.map((row) => [row.kit_id, row]));
   const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
   const dailyItems = kitsData.filter((kit) => kit.status !== 'cloture').map((kit) => {
     const schedule = scheduleByKit.get(kit.id);
