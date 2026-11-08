@@ -21,7 +21,7 @@ async function getDailyKitState(employeeId: string) {
   );
   if (!employee) return null;
   const kit = await db.one<{ id: string; code: string; etabli_number: number; location: string; status: string }>(
-    'SELECT id, code, etabli_number, location, status FROM etabli_kits WHERE employee_id = $1 ORDER BY created_at DESC LIMIT 1', [employeeId],
+    'SELECT id, code, etabli_number, location, status FROM etabli_kits WHERE employee_id = $1 AND EXISTS (SELECT 1 FROM etabli_kit_items i WHERE i.kit_id = etabli_kits.id) ORDER BY created_at DESC LIMIT 1', [employeeId],
   );
   if (!kit) return { employee, kit: null, items: [], daily: { date, status: 'exempt', isRequired: false, reason: 'Aucun établi ne vous est attribué.', audit: null } };
 

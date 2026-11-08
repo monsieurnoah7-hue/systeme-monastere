@@ -205,12 +205,13 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
       JOIN magasins m ON m.id = k.source_magasin_id
       LEFT JOIN etabli_kit_items i ON i.kit_id = k.id
      GROUP BY k.id, e.id, e.full_name, e.job_title, e.photo_path, m.id, m.name, m.code
+    HAVING COUNT(i.id) > 0
      ORDER BY k.etabli_number ASC
   `).catch(() => [] as EtabliRow[]);
 
   const [kitSchedule, dailyAudits, holidayToday, settings] = await Promise.all([
     db.query<{ id: string; employee_id: string; workdays: unknown; employee_active: boolean }>(
-      `SELECT k.id, e.id AS employee_id, e.workdays, e.active AS employee_active FROM etabli_kits k JOIN employees e ON e.id = k.employee_id WHERE k.status != 'cloture'`,
+      `SELECT k.id, e.id AS employee_id, e.workdays, e.active AS employee_active FROM etabli_kits k JOIN employees e ON e.id = k.employee_id WHERE k.status != 'cloture' AND EXISTS (SELECT 1 FROM etabli_kit_items i WHERE i.kit_id = k.id)`,
     ).catch(() => []),
     db.query<{ kit_id: string; audited_at: string; status: string }>(
       `SELECT kit_id, audited_at::timestamptz::text AS audited_at, status FROM etabli_kit_audits WHERE audit_type = 'daily' AND audit_date = $1`, [today],

@@ -50,7 +50,8 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
         FROM etabli_kits k
         JOIN employees e ON e.id = k.employee_id
         JOIN magasins m ON m.id = k.source_magasin_id
-       WHERE k.id = $1 OR k.code = $1
+       WHERE (k.id = $1 OR k.code = $1)
+         AND EXISTS (SELECT 1 FROM etabli_kit_items i WHERE i.kit_id = k.id)
     `, [kitId.toUpperCase()]);
     if (kit && userId && await canAccessStore(userId, kit.source_magasin_id, 'can_scan')) {
       const items = await db.query(`SELECT * FROM etabli_kit_items WHERE kit_id = $1 ORDER BY item_num ASC`, [kit.id]);
@@ -149,7 +150,8 @@ scanRoutes.get('/', requirePerm('scanner.use'), async (c) => {
       FROM etabli_kits k
       JOIN employees e ON e.id = k.employee_id
       JOIN magasins m ON m.id = k.source_magasin_id
-     WHERE k.id = $1 OR k.code = $1
+     WHERE (k.id = $1 OR k.code = $1)
+       AND EXISTS (SELECT 1 FROM etabli_kit_items i WHERE i.kit_id = k.id)
   `, [upper]);
   if (directKit && userId && await canAccessStore(userId, directKit.source_magasin_id, 'can_scan')) {
     if (!await canRead('employees.view')) return forbidden();

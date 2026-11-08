@@ -64,6 +64,7 @@ kitsRoutes.get('/', requirePerm('employees.view'), async (c) => {
       JOIN magasins m ON m.id = k.source_magasin_id
       LEFT JOIN etabli_kit_items i ON i.kit_id = k.id
      GROUP BY k.id, e.full_name, e.job_title, e.photo_path, m.name, m.code
+    HAVING COUNT(i.id) > 0
      ORDER BY k.etabli_number ASC
   `);
   return c.json({ kits: rows });
@@ -88,8 +89,9 @@ kitsRoutes.get('/:id', requirePerm('employees.view'), async (c) => {
       JOIN employees e ON e.id = k.employee_id
       JOIN magasins m ON m.id = k.source_magasin_id
       LEFT JOIN etabli_kit_items i ON i.kit_id = k.id
-     WHERE k.id = $1 OR k.code = $1 OR k.employee_id = $1
+     WHERE (k.id = $1 OR k.code = $1 OR k.employee_id = $1)
      GROUP BY k.id, e.full_name, e.job_title, e.photo_path, m.name, m.code
+    HAVING COUNT(i.id) > 0
   `, [param]);
 
   if (!kit) return c.json({ error: 'Kit introuvable.' }, 404);
@@ -131,6 +133,7 @@ kitsRoutes.get('/by-employee/:employeeId', requirePerm('employees.view'), async 
       LEFT JOIN etabli_kit_items i ON i.kit_id = k.id
      WHERE k.employee_id = $1
      GROUP BY k.id, e.full_name, e.job_title, e.photo_path, m.name, m.code
+    HAVING COUNT(i.id) > 0
   `, [employeeId]);
 
   if (!kit) return c.json({ kit: null, items: [] });
@@ -251,6 +254,10 @@ kitsRoutes.delete('/items/:id', requirePerm('tools.delete'), async (c) => {
       [id],
     );
     if (!current) return null;
+    const kit = await tx.one<{ id: string; employee_id: string; code: string; etabli_number: number }>(
+      'SELECT id, employee_id, code, etabli_number FROM etabli_kits WHERE id = $1 FOR UPDATE',
+      [current.kit_id],
+    );
     await tx.query('DELETE FROM etabli_kit_items WHERE id = $1', [id]);
     await writeAudit(tx, {
       action: 'etabli_kit.item_delete',
@@ -261,10 +268,27 @@ kitsRoutes.delete('/items/:id', requirePerm('tools.delete'), async (c) => {
       actorId: actorId(c),
       actorName: actorName(c),
     });
-    return current;
+    const remaining = await tx.one<{ count: number }>(
+      'SELECT COUNT(*)::int AS count FROM etabli_kit_items WHERE kit_id = $1',
+      [current.kit_id],
+    );
+    const kitRemoved = Boolean(kit && (remaining?.count ?? 0) === 0);
+    if (kitRemoved && kit) {
+      await writeAudit(tx, {
+        action: 'etabli_kit.delete_empty',
+        entity: 'etabli_kit',
+        entityId: kit.id,
+        before: kit,
+        after: null,
+        actorId: actorId(c),
+        actorName: actorName(c),
+      });
+      await tx.query('DELETE FROM etabli_kits WHERE id = $1', [kit.id]);
+    }
+    return { item: current, kitRemoved };
   });
   if (!deleted) return c.json({ error: 'Outil introuvable dans cet établi.' }, 404);
-  return c.json({ ok: true, item: deleted });
+  return c.json({ ok: true, item: deleted.item, kitRemoved: deleted.kitRemoved });
 });
 
 // 5. Exécuter un "Contrôle Inopiné / Flash Audit" de l'établi

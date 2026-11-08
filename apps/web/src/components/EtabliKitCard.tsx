@@ -220,8 +220,10 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
     if (!confirmDeleteItem) return;
     setDeleteItemBusy(true);
     try {
-      await api<{ ok: boolean }>(`/api/kits/items/${confirmDeleteItem.id}`, { method: 'DELETE' });
-      toast(`« ${confirmDeleteItem.name} » retiré de l’établi ${kit.etabli_number}.`, 'success');
+      const result = await api<{ ok: boolean; kitRemoved?: boolean }>(`/api/kits/items/${confirmDeleteItem.id}`, { method: 'DELETE' });
+      toast(result.kitRemoved
+        ? `« ${confirmDeleteItem.name} » retiré. L’établi ${kit.etabli_number} a été supprimé car il ne contient plus d’outil.`
+        : `« ${confirmDeleteItem.name} » retiré de l’établi ${kit.etabli_number}.`, 'success');
       setConfirmDeleteItem(null);
       setSelectedItemForEdit(null);
       onRefresh?.();
@@ -902,7 +904,10 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
         footer={<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="ghost" disabled={deleteItemBusy} onClick={() => setConfirmDeleteItem(null)}>Annuler</Button><Button variant="danger" disabled={deleteItemBusy} onClick={() => void handleDeleteItem()}>{deleteItemBusy ? 'Suppression…' : 'Retirer définitivement'}</Button></div>}
       >
         <p className="text-sm leading-relaxed text-ink-soft">
-          « <strong className="text-ink">{confirmDeleteItem?.name}</strong> » sera supprimé de la dotation de l’établi N°{kit.etabli_number}. Cette action ne supprime pas les autres outils de l’établi.
+          « <strong className="text-ink">{confirmDeleteItem?.name}</strong> » sera retiré de l’établi N°{kit.etabli_number}.
+          {items.length === 1
+            ? ' Comme c’est le dernier outil, l’établi et son attribution au travailleur seront également supprimés.'
+            : ' Les autres outils de l’établi resteront en place.'}
         </p>
       </Modal>
       {portal}
