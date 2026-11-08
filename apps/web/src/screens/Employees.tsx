@@ -20,6 +20,7 @@ import { QR_PREFIX } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { formatDate, initials } from '../lib/labels';
 import { EtabliKitCard } from '../components/EtabliKitCard';
+import { CreateEtabliKitModal } from '../components/CreateEtabliKitModal';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { useUndo } from '../components/UndoToast';
 import {
@@ -1502,6 +1503,7 @@ export function Employees({
   const [detail, setDetail] = useState<EmployeeDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [employeeKit, setEmployeeKit] = useState<{ kit: EtabliKit | null; items: EtabliKitItem[] } | null>(null);
+  const [createEtabliFor, setCreateEtabliFor] = useState<Employee | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<'fiche' | 'pointages' | 'etabli'>('fiche');
   const { print, portal } = usePrintSheet();
   const { registerUndo } = useUndo();
@@ -3211,11 +3213,20 @@ export function Employees({
                     }}
                   />
                 ) : (
-                  <div className="rounded-xl border border-dashed border-line p-6 text-center text-xs text-ink-soft">
-                    <p className="font-semibold text-ink">Aucun kit d'établi nominatif affecté.</p>
-                    <p className="mt-1">
-                      Les kits d'établis fixes sont réservés aux artisans et postes dotés selon l'inventaire officiel du CFTM.
+                  <div className="rounded-xl border border-line bg-surface p-4 sm:p-5">
+                    <p className="text-sm font-semibold text-ink">Aucun établi attribué</p>
+                    <p className="mt-1 max-w-prose text-sm leading-relaxed text-ink-soft">
+                      L’établi est créé au moment où son premier outil est attribué. Il apparaîtra ensuite dans le tableau de bord, les contrôles et les impressions QR.
                     </p>
+                    {hasPerm('tools.create') && hasPerm('magasins.view') ? (
+                      <Button className="mt-4" variant="primary" icon={<Plus size={16} />} onClick={() => setCreateEtabliFor(detailFor)}>
+                        Créer l’établi et ajouter un outil
+                      </Button>
+                    ) : !hasPerm('magasins.view') && hasPerm('tools.create') ? (
+                      <p className="mt-3 rounded-lg border border-amber/25 bg-amber-wash px-3 py-2 text-xs text-amber">
+                        Votre rôle doit aussi pouvoir consulter les magasins pour choisir le rattachement de l’établi.
+                      </p>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -3305,6 +3316,20 @@ export function Employees({
           <Banner tone="error">Fiche introuvable.</Banner>
         )}
       </Drawer>
+
+      <CreateEtabliKitModal
+        open={Boolean(createEtabliFor)}
+        employeeId={createEtabliFor?.id ?? ''}
+        employeeName={createEtabliFor?.full_name ?? ''}
+        onClose={() => setCreateEtabliFor(null)}
+        onCreated={() => {
+          const employeeId = createEtabliFor?.id;
+          if (!employeeId) return;
+          api<{ kit: EtabliKit | null; items: EtabliKitItem[] }>(`/api/kits/by-employee/${employeeId}`, { bypassCache: true })
+            .then((res) => setEmployeeKit(res))
+            .catch(() => {});
+        }}
+      />
 
       {/* =========================================================================
           MODALS

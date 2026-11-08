@@ -394,6 +394,7 @@ CREATE TABLE IF NOT EXISTS etabli_kits (
 );
 CREATE INDEX IF NOT EXISTS etabli_kits_emp_idx ON etabli_kits(employee_id);
 CREATE INDEX IF NOT EXISTS etabli_kits_source_idx ON etabli_kits(source_magasin_id);
+CREATE SEQUENCE IF NOT EXISTS etabli_number_seq START WITH 18;
 
 CREATE TABLE IF NOT EXISTS etabli_kit_items (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

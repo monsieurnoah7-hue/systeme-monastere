@@ -127,6 +127,12 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     } else if (path.includes('/projects')) {
       clearApiCache('/api/projects');
       clearApiCache('/api/dashboard');
+    } else if (path.includes('/kits')) {
+      clearApiCache('/api/kits');
+      clearApiCache('/api/dashboard');
+      clearApiCache('/api/employees');
+      clearApiCache('/api/me');
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('mf-refresh-data'));
     } else if (path.includes('/users') || path.includes('/permissions')) {
       clearApiCache('/api/users');
       clearApiCache('/api/permissions');

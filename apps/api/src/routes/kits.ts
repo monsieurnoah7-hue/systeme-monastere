@@ -4,6 +4,7 @@ import { getDb } from '../db/index.js';
 import { requireAuth, actorName, actorId } from '../middleware/auth.js';
 import { requirePerm } from '../middleware/permissions.js';
 import { writeAudit } from '../lib/audit.js';
+import { canAccessStore } from '../lib/store-access.js';
 
 export const kitsRoutes = new Hono();
 
@@ -152,6 +153,82 @@ const createKitItemSchema = z.object({
   qty: z.number().int().min(1).max(1000).default(1),
   unit: z.string().trim().min(1).max(24).default('pièce'),
   notes: z.string().trim().max(500).optional(),
+});
+
+const createFirstKitItemSchema = createKitItemSchema.extend({
+  source_magasin_id: z.string().trim().min(1).max(40),
+  location: z.string().trim().max(120).optional(),
+});
+
+// Créer la dotation initiale d'un travailleur : le premier outil et l'établi
+// sont enregistrés ensemble, avec numéro et QR uniques.
+kitsRoutes.post('/by-employee/:employeeId/items', requirePerm('tools.create'), async (c) => {
+  const employeeId = c.req.param('employeeId');
+  const parsed = createFirstKitItemSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: 'Renseignez l’outil et son magasin de rattachement.' }, 400);
+  const body = parsed.data;
+  const db = getDb();
+  const auth = c.get('auth');
+  if (!await canAccessStore(auth.user.id, body.source_magasin_id, 'can_view')) {
+    return c.json({ error: 'Vous n’êtes pas autorisé à affecter un établi à ce magasin.' }, 403);
+  }
+
+  const result = await db.transaction(async (tx) => {
+    const employee = await tx.one<{ id: string; full_name: string; active: boolean }>(
+      'SELECT id, full_name, active FROM employees WHERE id = $1 FOR UPDATE',
+      [employeeId],
+    );
+    if (!employee) return { error: 'Travailleur introuvable.' as const };
+    if (!employee.active) return { error: 'Impossible de créer un établi pour un travailleur inactif.' as const };
+
+    const store = await tx.one<{ id: string; name: string; active: boolean }>(
+      'SELECT id, name, active FROM magasins WHERE id = $1',
+      [body.source_magasin_id],
+    );
+    if (!store || !store.active) return { error: 'Magasin introuvable ou inactif.' as const };
+
+    const existingKit = await tx.one<{ id: string }>(
+      `SELECT k.id FROM etabli_kits k
+        WHERE k.employee_id = $1
+          AND EXISTS (SELECT 1 FROM etabli_kit_items i WHERE i.kit_id = k.id)
+        ORDER BY k.created_at DESC LIMIT 1 FOR UPDATE`,
+      [employeeId],
+    );
+    if (existingKit) return { error: 'Ce travailleur possède déjà un établi. Actualisez sa fiche avant d’ajouter l’outil.' as const };
+
+    const numberRow = await tx.one<{ number: number }>("SELECT nextval('etabli_number_seq')::int AS number");
+    const number = numberRow?.number;
+    if (!number) throw new Error('Numéro d’établi indisponible.');
+    const numberLabel = String(number).padStart(3, '0');
+    const code = `ETB-${numberLabel}`;
+    const kitId = `KIT-${code}`;
+    const location = body.location?.trim() || `${store.name} — Établi N° ${number}`;
+
+    const kit = await tx.one<{ id: string; employee_id: string; etabli_number: number; code: string; location: string; source_magasin_id: string; status: string }>(`
+      INSERT INTO etabli_kits (id, employee_id, etabli_number, code, location, source_magasin_id, status, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, 'actif', $7)
+      RETURNING id, employee_id, etabli_number, code, location, source_magasin_id, status
+    `, [kitId, employee.id, number, code, location, store.id, `Établi créé lors de l’ajout du premier outil pour ${employee.full_name}.`]);
+
+    const item = await tx.one<EtabliKitItemRow>(`
+      INSERT INTO etabli_kit_items (kit_id, item_num, name, qty, unit, tool_code, condition, is_present, notes)
+      VALUES ($1, 1, $2, $3, $4, $5, 'bon', true, $6)
+      RETURNING *
+    `, [kitId, body.name, body.qty, body.unit, `CFTM-${code}-IT-001`, body.notes ?? null]);
+
+    await writeAudit(tx, {
+      action: 'etabli_kit.create_with_first_item',
+      entity: 'etabli_kit',
+      entityId: kitId,
+      after: { kit, item },
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+    return { kit, item };
+  });
+
+  if ('error' in result) return c.json({ error: result.error }, result.error === 'Travailleur introuvable.' ? 404 : 409);
+  return c.json(result, 201);
 });
 
 // Ajouter une dotation physique à un seul établi. Le code QR est stable et propre au kit.
