@@ -11,6 +11,10 @@ function parseApiJson(text: string, status: number): Record<string, unknown> | n
   try {
     return JSON.parse(text) as Record<string, unknown>;
   } catch {
+    const trimmed = text.trim();
+    if (trimmed && trimmed.length < 250 && !trimmed.startsWith('<')) {
+      throw new ApiError(status, `${trimmed} (HTTP ${status})`);
+    }
     throw new ApiError(status, `Réponse serveur illisible (HTTP ${status}). Réessayez ou contactez l’administrateur si le problème persiste.`);
   }
 }

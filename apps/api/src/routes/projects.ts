@@ -266,13 +266,15 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
 // -------------------------------------------------------------------------
 // CRUD Routes
 // -------------------------------------------------------------------------
+const emptyToNull = (val: unknown) => (typeof val === 'string' && val.trim() === '' ? null : val);
+
 const projectBody = z.object({
   code: z.string().trim().max(40).nullable().optional(),
-  title: z.string().trim().max(240).nullable().optional(),
-  client_name: z.string().trim().max(160).nullable().optional(),
-  site_location: z.string().trim().max(240).nullable().optional(),
-  category: z.string().trim().max(120).nullable().optional(),
-  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  title: z.preprocess(emptyToNull, z.string().trim().max(240).nullable().optional()),
+  client_name: z.preprocess(emptyToNull, z.string().trim().max(160).nullable().optional()),
+  site_location: z.preprocess(emptyToNull, z.string().trim().max(240).nullable().optional()),
+  category: z.preprocess(emptyToNull, z.string().trim().max(120).nullable().optional()),
+  start_date: z.preprocess(emptyToNull, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format date requis: AAAA-MM-JJ').nullable().optional()),
   work_plan: z.array(z.object({ employee_id: z.string().min(2), weekday: z.number().int().min(0).max(6), planned_hours: z.number().positive().max(24) })).optional(),
   assigned_worker_ids: z.array(z.string()).default([]),
   assigned_worker_names: z.array(z.string()).default([]),
@@ -281,15 +283,15 @@ const projectBody = z.object({
   hourly_rate_fcfa: z.number().min(0).default(0),
   penalty_rate_daily_fcfa: z.number().min(0).nullable().optional(),
   ratio_value: z.number().min(0).nullable().optional(),
-  ratio_unit: z.string().trim().max(80).nullable().optional(),
-  ratio_basis: z.string().trim().max(160).nullable().optional(),
+  ratio_unit: z.preprocess(emptyToNull, z.string().trim().max(80).nullable().optional()),
+  ratio_basis: z.preprocess(emptyToNull, z.string().trim().max(160).nullable().optional()),
   ratio_quantity: z.number().positive().nullable().optional(),
-  ratio_deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-  delivery_deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format date requis: AAAA-MM-JJ').nullable().optional(),
-  installation_start_date: z.string().nullable().optional(),
+  ratio_deadline: z.preprocess(emptyToNull, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional()),
+  delivery_deadline: z.preprocess(emptyToNull, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format date requis: AAAA-MM-JJ').nullable().optional()),
+  installation_start_date: z.preprocess(emptyToNull, z.string().nullable().optional()),
   installation_days: z.number().min(0).default(0),
   status: z.enum(['planifie', 'en_fabrication', 'en_pose', 'termine', 'en_retard', 'litige']).default('planifie'),
-  notes: z.string().nullable().optional(),
+  notes: z.preprocess(emptyToNull, z.string().nullable().optional()),
 });
 
 async function validateWorkPlan(projectId: string | null, assignedIds: string[], plan: WorkPlanEntry[]) {
@@ -345,7 +347,7 @@ projectsRoutes.get('/', requireAuth, requirePerm('projects.view'), async (c) => 
            installation_days, status, notes,
            created_at::text AS created_at, updated_at::text AS updated_at
     FROM projects
-    ORDER BY delivery_deadline ASC
+    ORDER BY delivery_deadline ASC NULLS LAST, created_at DESC
   `);
 
   const context = await loadProjectMetricContext(rows);
@@ -396,10 +398,11 @@ projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) 
         id, code, title, client_name, site_location, category,
         start_date, work_plan, assigned_worker_ids, assigned_worker_names, budget_hours, spent_hours,
         hourly_rate_fcfa, penalty_rate_daily_fcfa, delivery_deadline,
+        installation_start_date, installation_days,
         status, notes
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8::jsonb,
-        $9, $10, $11, $12, $13, $14, $15, $16, $17
+        $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
       )
       RETURNING id, code, title, client_name, site_location, category,
                 start_date::text AS start_date, work_plan, assigned_worker_ids, assigned_worker_names,
@@ -412,8 +415,10 @@ projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) 
                 created_at::text AS created_at, updated_at::text AS updated_at
     `, [
       id, normalizedCode, d.title?.trim() || null, d.client_name?.trim() || null, d.site_location?.trim() || null, d.category?.trim() || null,
-      d.start_date || null, JSON.stringify(plan), d.assigned_worker_ids, d.assigned_worker_names,
-      d.budget_hours ?? 0, 0, 0, d.penalty_rate_daily_fcfa ?? null, d.delivery_deadline || null, d.status, d.notes || null,
+      d.start_date || null, JSON.stringify(plan), d.assigned_worker_ids ?? [], d.assigned_worker_names ?? [],
+      d.budget_hours ?? 0, 0, d.hourly_rate_fcfa ?? 0, d.penalty_rate_daily_fcfa ?? null, d.delivery_deadline || null,
+      d.installation_start_date || null, d.installation_days ?? 0,
+      d.status, d.notes || null,
     ]);
     if (!created) throw new Error('La commande n’a pas pu être enregistrée.');
 
@@ -453,15 +458,20 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
   if (planError) return c.json({ error: planError }, 400);
   const row = await db.one<ProjectRow>(`
     UPDATE projects SET
-      code = COALESCE($2, code), title = COALESCE($3, title), client_name = COALESCE($4, client_name),
-      site_location = COALESCE($5, site_location),
+      code = COALESCE($2, code),
+      title = CASE WHEN $22::boolean THEN $3::text ELSE title END,
+      client_name = CASE WHEN $23::boolean THEN $4::text ELSE client_name END,
+      site_location = CASE WHEN $24::boolean THEN $5::text ELSE site_location END,
       category = CASE WHEN $6::boolean THEN $7::text ELSE category END,
-      assigned_worker_ids = COALESCE($8, assigned_worker_ids), assigned_worker_names = COALESCE($9, assigned_worker_names),
+      assigned_worker_ids = COALESCE($8, assigned_worker_ids),
+      assigned_worker_names = COALESCE($9, assigned_worker_names),
       budget_hours = CASE WHEN $20::boolean THEN COALESCE($10, 0) ELSE budget_hours END,
       penalty_rate_daily_fcfa = CASE WHEN $21::boolean THEN $11 ELSE penalty_rate_daily_fcfa END,
-      delivery_deadline = COALESCE($12::date, delivery_deadline), start_date = COALESCE($13::date, start_date),
+      delivery_deadline = CASE WHEN $25::boolean THEN $12::date ELSE delivery_deadline END,
+      start_date = CASE WHEN $26::boolean THEN $13::date ELSE start_date END,
       work_plan = CASE WHEN $14::boolean THEN $15::jsonb ELSE work_plan END,
-      status = COALESCE($16, status), notes = CASE WHEN $17::boolean THEN $18::text ELSE notes END,
+      status = COALESCE($16, status),
+      notes = CASE WHEN $17::boolean THEN $18::text ELSE notes END,
       ratio_value = CASE WHEN $19::boolean THEN NULL ELSE ratio_value END,
       ratio_unit = CASE WHEN $19::boolean THEN NULL ELSE ratio_unit END,
       ratio_basis = CASE WHEN $19::boolean THEN NULL ELSE ratio_basis END,
@@ -480,13 +490,34 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
               installation_start_date::text AS installation_start_date,
               installation_days, status, notes,
               created_at::text AS created_at, updated_at::text AS updated_at
-  `, [id, d.code?.trim().toUpperCase() || null, d.title?.trim() || null, d.client_name?.trim() || null,
-    d.site_location?.trim() || null, hasField('category'), d.category ?? null, d.assigned_worker_ids ?? null,
-    d.assigned_worker_names ?? null, d.budget_hours ?? null, d.penalty_rate_daily_fcfa ?? null,
-    d.delivery_deadline ?? null, d.start_date ?? null, hasField('work_plan') || hasField('assigned_worker_ids'), JSON.stringify(nextPlan),
-    d.status ?? null, hasField('notes'), d.notes ?? null,
+  `, [
+    id,
+    d.code?.trim().toUpperCase() || null,
+    d.title?.trim() || null,
+    d.client_name?.trim() || null,
+    d.site_location?.trim() || null,
+    hasField('category'),
+    d.category ?? null,
+    d.assigned_worker_ids ?? null,
+    d.assigned_worker_names ?? null,
+    d.budget_hours ?? null,
+    d.penalty_rate_daily_fcfa ?? null,
+    d.delivery_deadline ?? null,
+    d.start_date ?? null,
+    hasField('work_plan') || hasField('assigned_worker_ids'),
+    JSON.stringify(nextPlan),
+    d.status ?? null,
+    hasField('notes'),
+    d.notes ?? null,
     hasField('budget_hours') || hasField('work_plan') || hasField('assigned_worker_ids'),
-    hasField('budget_hours'), hasField('penalty_rate_daily_fcfa')]);
+    hasField('budget_hours'),
+    hasField('penalty_rate_daily_fcfa'),
+    hasField('title'),
+    hasField('client_name'),
+    hasField('site_location'),
+    hasField('delivery_deadline'),
+    hasField('start_date'),
+  ]);
 
   await writeAudit(db, {
     entity: 'project',

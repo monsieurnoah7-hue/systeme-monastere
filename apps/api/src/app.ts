@@ -82,4 +82,10 @@ app.route('/api/kits', kitsRoutes);
 app.route('/api/fleet', fleetRoutes);
 app.route('/api/projects', projectsRoutes);
 
+app.onError((err, c) => {
+  console.error('[api error]', err);
+  const message = err instanceof Error ? err.message : 'Erreur interne du serveur.';
+  return c.json({ error: message }, 500);
+});
+
 app.notFound((c) => c.json({ error: 'Route introuvable.' }, 404));

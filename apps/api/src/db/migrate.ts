@@ -221,6 +221,28 @@ export async function migrate(): Promise<void> {
   `);
 
   await provisionRequestedAccess();
+
+  const PROJECT_REVISION = '021_project_optional_fields_defaults_v2';
+  if (!(await getDb().one('SELECT name FROM _migrations WHERE name = $1', [PROJECT_REVISION]))) {
+    await runSql(`
+      ALTER TABLE projects ALTER COLUMN installation_days SET DEFAULT 0;
+      ALTER TABLE projects ALTER COLUMN installation_days DROP NOT NULL;
+      ALTER TABLE projects ALTER COLUMN budget_hours SET DEFAULT 0;
+      ALTER TABLE projects ALTER COLUMN budget_hours DROP NOT NULL;
+      ALTER TABLE projects ALTER COLUMN hourly_rate_fcfa SET DEFAULT 0;
+      ALTER TABLE projects ALTER COLUMN hourly_rate_fcfa DROP NOT NULL;
+      ALTER TABLE projects ALTER COLUMN start_date DROP NOT NULL;
+      ALTER TABLE projects ALTER COLUMN start_date SET DEFAULT CURRENT_DATE;
+      ALTER TABLE projects ALTER COLUMN delivery_deadline DROP NOT NULL;
+      ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa DROP NOT NULL;
+      ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa SET DEFAULT 10000;
+      ALTER TABLE projects ALTER COLUMN title DROP NOT NULL;
+      ALTER TABLE projects ALTER COLUMN client_name DROP NOT NULL;
+      ALTER TABLE projects ALTER COLUMN site_location DROP NOT NULL;
+      ALTER TABLE projects ALTER COLUMN category DROP NOT NULL;
+    `);
+    await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [PROJECT_REVISION]);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {

@@ -516,19 +516,19 @@ CREATE INDEX IF NOT EXISTS generators_name_code_idx ON generators(name_code);
 CREATE TABLE IF NOT EXISTS projects (
   id text PRIMARY KEY,
   code text NOT NULL UNIQUE,
-  title text NOT NULL,
-  client_name text NOT NULL,
-  site_location text NOT NULL,
+  title text,
+  client_name text,
+  site_location text,
   category text,
-  start_date date NOT NULL DEFAULT CURRENT_DATE,
+  start_date date DEFAULT CURRENT_DATE,
   assigned_worker_ids text[] NOT NULL DEFAULT '{}',
   assigned_worker_names text[] NOT NULL DEFAULT '{}',
 
   -- Ratios horaires & Suivi financier (PDF Pt 1)
-  budget_hours numeric NOT NULL DEFAULT 0,
+  budget_hours numeric DEFAULT 0,
   spent_hours numeric NOT NULL DEFAULT 0,
-  hourly_rate_fcfa numeric NOT NULL DEFAULT 0,
-  penalty_rate_daily_fcfa numeric NOT NULL DEFAULT 10000,
+  hourly_rate_fcfa numeric DEFAULT 0,
+  penalty_rate_daily_fcfa numeric DEFAULT 10000,
   ratio_value numeric,
   ratio_unit text,
   ratio_basis text,
@@ -536,9 +536,9 @@ CREATE TABLE IF NOT EXISTS projects (
   work_plan jsonb NOT NULL DEFAULT '[]'::jsonb,
 
   -- Planification Livraisons & Pose sur Chantier (PDF Pt 2)
-  delivery_deadline date NOT NULL,
+  delivery_deadline date,
   installation_start_date date,
-  installation_days numeric NOT NULL DEFAULT 0,
+  installation_days numeric DEFAULT 0,
 
   status text NOT NULL DEFAULT 'planifie' CHECK (status IN ('planifie', 'en_fabrication', 'en_pose', 'termine', 'en_retard', 'litige')),
   notes text,
@@ -572,32 +572,32 @@ CREATE TABLE IF NOT EXISTS project_incidents (
 );
 CREATE INDEX IF NOT EXISTS project_incidents_project_idx ON project_incidents(project_id, event_date);
 
--- Migrations 016/017: projets configurables et quantité pour calculer le budget par ratio.
+-- Migrations: projets configurables avec champs facultatifs et valeurs par défaut robustes
 ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_category_check;
 ALTER TABLE projects ALTER COLUMN category DROP DEFAULT;
 ALTER TABLE projects ALTER COLUMN category DROP NOT NULL;
 ALTER TABLE projects ALTER COLUMN site_location DROP DEFAULT;
-ALTER TABLE projects ALTER COLUMN budget_hours DROP DEFAULT;
-ALTER TABLE projects ALTER COLUMN hourly_rate_fcfa DROP DEFAULT;
-ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa DROP DEFAULT;
-ALTER TABLE projects ALTER COLUMN installation_days DROP DEFAULT;
+ALTER TABLE projects ALTER COLUMN site_location DROP NOT NULL;
+ALTER TABLE projects ALTER COLUMN budget_hours SET DEFAULT 0;
+ALTER TABLE projects ALTER COLUMN budget_hours DROP NOT NULL;
+ALTER TABLE projects ALTER COLUMN hourly_rate_fcfa SET DEFAULT 0;
+ALTER TABLE projects ALTER COLUMN hourly_rate_fcfa DROP NOT NULL;
+ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa SET DEFAULT 10000;
+ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa DROP NOT NULL;
+ALTER TABLE projects ALTER COLUMN installation_days SET DEFAULT 0;
+ALTER TABLE projects ALTER COLUMN installation_days DROP NOT NULL;
 ALTER TABLE projects ALTER COLUMN status SET DEFAULT 'planifie';
 ALTER TABLE projects ALTER COLUMN title DROP NOT NULL;
 ALTER TABLE projects ALTER COLUMN client_name DROP NOT NULL;
-ALTER TABLE projects ALTER COLUMN site_location DROP NOT NULL;
 ALTER TABLE projects ALTER COLUMN start_date DROP NOT NULL;
-ALTER TABLE projects ALTER COLUMN start_date DROP DEFAULT;
+ALTER TABLE projects ALTER COLUMN start_date SET DEFAULT CURRENT_DATE;
 ALTER TABLE projects ALTER COLUMN delivery_deadline DROP NOT NULL;
-ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa DROP NOT NULL;
-ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa DROP DEFAULT;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_value numeric;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_unit text;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_basis text;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_quantity numeric;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_deadline date;
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS start_date date NOT NULL DEFAULT CURRENT_DATE;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS work_plan jsonb NOT NULL DEFAULT '[]'::jsonb;
-ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa SET DEFAULT 10000;
 `;
 
-export const MIGRATION_NAME = '020_project_work_planning_v1';
+export const MIGRATION_NAME = '021_project_optional_fields_defaults_v2';
