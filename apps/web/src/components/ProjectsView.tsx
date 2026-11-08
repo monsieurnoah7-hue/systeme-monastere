@@ -106,7 +106,13 @@ export function ProjectsView({
 
   function openEdit(p: Project) {
     setEditingProject(p);
-    setForm({ ...p });
+    setForm({
+      ...p,
+      // PostgreSQL numeric values may arrive as strings; normalize them before
+      // they are ever submitted to the number-validated API.
+      budget_hours: p.budget_hours == null ? undefined : Number(p.budget_hours),
+      penalty_rate_daily_fcfa: p.penalty_rate_daily_fcfa == null ? undefined : Number(p.penalty_rate_daily_fcfa),
+    });
     setError(null);
     setModalOpen(true);
   }
@@ -115,8 +121,12 @@ export function ProjectsView({
     setBusy(true);
     setError(null);
     try {
+      const optionalNumber = (value: unknown): number | null => {
+        if (value == null || value === '') return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
       const projectForm = {
-        ...form,
         code: form.code?.trim() || null,
         title: form.title?.trim() || null,
         client_name: form.client_name?.trim() || null,
@@ -124,15 +134,13 @@ export function ProjectsView({
         category: form.category?.trim() || null,
         start_date: form.start_date || null,
         delivery_deadline: form.delivery_deadline || null,
-        budget_hours: form.budget_hours ?? null,
-        penalty_rate_daily_fcfa: form.penalty_rate_daily_fcfa ?? null,
+        budget_hours: optionalNumber(form.budget_hours),
+        penalty_rate_daily_fcfa: optionalNumber(form.penalty_rate_daily_fcfa),
         assigned_worker_ids: form.assigned_worker_ids ?? [],
         assigned_worker_names: form.assigned_worker_names ?? [],
-        // Le cumul est géré par les feuilles de temps : ne jamais réécrire
-        // une ancienne valeur du formulaire lors d'une modification du projet.
-        spent_hours: undefined,
-        ratio_value: null, ratio_unit: null, ratio_basis: null, ratio_quantity: null, ratio_deadline: null,
-        installation_start_date: null, installation_days: 0,
+        work_plan: form.work_plan ?? [],
+        status: form.status ?? 'planifie',
+        notes: form.notes ?? null,
       };
       if (editingProject) {
         await updateProject(editingProject.id, projectForm);

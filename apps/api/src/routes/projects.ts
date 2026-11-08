@@ -276,7 +276,7 @@ const projectBody = z.object({
   work_plan: z.array(z.object({ employee_id: z.string().min(2), weekday: z.number().int().min(0).max(6), planned_hours: z.number().positive().max(24) })).optional(),
   assigned_worker_ids: z.array(z.string()).default([]),
   assigned_worker_names: z.array(z.string()).default([]),
-  budget_hours: z.number().min(0).optional(),
+  budget_hours: z.number().min(0).nullable().optional(),
   spent_hours: z.number().min(0).default(0),
   hourly_rate_fcfa: z.number().min(0).default(0),
   penalty_rate_daily_fcfa: z.number().min(0).nullable().optional(),
@@ -457,7 +457,8 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
       site_location = COALESCE($5, site_location),
       category = CASE WHEN $6::boolean THEN $7::text ELSE category END,
       assigned_worker_ids = COALESCE($8, assigned_worker_ids), assigned_worker_names = COALESCE($9, assigned_worker_names),
-      budget_hours = COALESCE($10, budget_hours), penalty_rate_daily_fcfa = COALESCE($11, penalty_rate_daily_fcfa),
+      budget_hours = CASE WHEN $20::boolean THEN COALESCE($10, 0) ELSE budget_hours END,
+      penalty_rate_daily_fcfa = CASE WHEN $21::boolean THEN $11 ELSE penalty_rate_daily_fcfa END,
       delivery_deadline = COALESCE($12::date, delivery_deadline), start_date = COALESCE($13::date, start_date),
       work_plan = CASE WHEN $14::boolean THEN $15::jsonb ELSE work_plan END,
       status = COALESCE($16, status), notes = CASE WHEN $17::boolean THEN $18::text ELSE notes END,
@@ -483,7 +484,9 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
     d.site_location?.trim() || null, hasField('category'), d.category ?? null, d.assigned_worker_ids ?? null,
     d.assigned_worker_names ?? null, d.budget_hours ?? null, d.penalty_rate_daily_fcfa ?? null,
     d.delivery_deadline ?? null, d.start_date ?? null, hasField('work_plan') || hasField('assigned_worker_ids'), JSON.stringify(nextPlan),
-    d.status ?? null, hasField('notes'), d.notes ?? null, hasField('budget_hours') || hasField('work_plan') || hasField('assigned_worker_ids')]);
+    d.status ?? null, hasField('notes'), d.notes ?? null,
+    hasField('budget_hours') || hasField('work_plan') || hasField('assigned_worker_ids'),
+    hasField('budget_hours'), hasField('penalty_rate_daily_fcfa')]);
 
   await writeAudit(db, {
     entity: 'project',

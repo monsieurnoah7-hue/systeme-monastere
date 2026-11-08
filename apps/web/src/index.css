@@ -367,10 +367,17 @@
 @media print {
   html.printing body > #root {
     display: none !important;
+    visibility: hidden !important;
   }
   html.printing #print-root {
     display: block !important;
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
+  html.printing #print-root > * { padding: 0 !important; }
   .no-print {
     display: none !important;
   }
@@ -380,6 +387,7 @@
     height: auto;
   }
   .a4-page {
+    box-sizing: border-box;
     width: 190mm;
     margin: 0 auto;
     padding: 5mm 0;
@@ -400,8 +408,12 @@
   .badge-grid {
     display: grid;
     grid-template-columns: repeat(2, 85.6mm);
+    grid-auto-rows: 54mm;
+    grid-auto-flow: row;
     justify-content: center;
     gap: 6mm 8mm;
+    break-inside: auto;
+    page-break-inside: auto;
   }
   .badge-card {
     width: 85.6mm;

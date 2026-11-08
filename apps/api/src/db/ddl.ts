@@ -376,6 +376,7 @@ ALTER TABLE magasins ADD COLUMN IF NOT EXISTS can_receive_in boolean NOT NULL DE
 ALTER TABLE magasins ADD COLUMN IF NOT EXISTS can_deliver_out boolean NOT NULL DEFAULT true;
 ALTER TABLE magasins ADD COLUMN IF NOT EXISTS can_transfer boolean NOT NULL DEFAULT true;
 ALTER TABLE magasins ADD COLUMN IF NOT EXISTS manager_name text;
+ALTER TABLE magasins ADD COLUMN IF NOT EXISTS photo_path text;
 
 -- Migration 011: Kits d'établis & boîtes à outils intelligentes avec traçabilité par QR code
 CREATE TABLE IF NOT EXISTS etabli_kits (

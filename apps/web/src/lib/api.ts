@@ -6,6 +6,15 @@ export class ApiError extends Error {
   }
 }
 
+function parseApiJson(text: string, status: number): Record<string, unknown> | null {
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new ApiError(status, `Réponse serveur illisible (HTTP ${status}). Réessayez ou contactez l’administrateur si le problème persiste.`);
+  }
+}
+
 export type ApiOptions = RequestInit & {
   bypassCache?: boolean;
   cacheTtlMs?: number;
@@ -97,7 +106,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       },
     });
     const text = await res.text();
-    const data = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+    const data = parseApiJson(text, res.status);
     if (!res.ok) {
       throw new ApiError(res.status, (data?.error as string) ?? `Erreur ${res.status}`);
     }
@@ -191,7 +200,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       }
 
       const text = await res.text();
-      const data = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+      const data = parseApiJson(text, res.status);
 
       if (!res.ok) {
         if (res.status >= 500 && cached) {
@@ -289,6 +298,7 @@ export type Magasin = {
   can_deliver_out?: boolean;
   can_transfer?: boolean;
   manager_name?: string | null;
+  photo_path?: string | null;
   created_at: string;
   tools_count?: number;
   stock_count?: number;

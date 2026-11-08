@@ -17,7 +17,9 @@ export function usePrintSheet() {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void (async () => {
-        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        // Allow Safari/iOS to commit the print-only DOM and styles before the
+        // native dialog snapshots the page.
+        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
         const root = document.getElementById('print-root');
         const images = Array.from(root?.querySelectorAll('img') ?? []);
         await Promise.all(images.map(async (image) => {
@@ -33,6 +35,8 @@ export function usePrintSheet() {
             window.setTimeout(finish, 5000);
           });
         }));
+        if (document.fonts?.ready) await document.fonts.ready.catch(() => undefined);
+        root?.getBoundingClientRect();
         if (!cancelled) window.print();
       })();
     }, 0);

@@ -49,6 +49,7 @@ import {
   RefreshCw,
   Search,
   Pencil,
+  ImagePlus,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -62,6 +63,8 @@ import { formatCurrency } from '../lib/accounting';
 import { usePrintSheet } from '../lib/print';
 import { QR_PREFIX, qrDataUrl } from '../lib/qr';
 import { InventoryEditModal, type InventoryEditTarget } from '../components/InventoryEditModal';
+import { ImagePickerModal } from '../components/ImagePickerModal';
+import { GroupedQrLabelsModal } from '../components/GroupedQrLabelsModal';
 
 type MagasinTool = Pick<
   Tool,
@@ -219,6 +222,8 @@ export function Magasins({
   const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
 
   const canManage = hasPerm('magasins.manage') || (!permissions && (user.role === 'magasinier' || user.role === 'direction'));
+  const canViewTools = hasPerm('tools.view') || (!permissions && ['direction', 'magasinier', 'chef_atelier'].includes(user.role));
+  const canViewStock = hasPerm('stock.view') || (!permissions && ['direction', 'magasinier', 'chef_atelier'].includes(user.role));
   const canEditTools = hasPerm('tools.edit') || (!permissions && user.role === 'magasinier');
   const canEditStock = hasPerm('stock.edit_ref') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
   const canViewFinancial = hasPerm('financial.view') || (!permissions && user.role === 'direction');
@@ -254,7 +259,9 @@ export function Magasins({
     can_receive_in: true,
     can_deliver_out: true,
     can_transfer: true,
+    photo_path: null as string | null,
   });
+  const [magasinPhotoOpen, setMagasinPhotoOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -402,6 +409,7 @@ export function Magasins({
       can_receive_in: true,
       can_deliver_out: true,
       can_transfer: true,
+      photo_path: null,
     });
     setFormError(null);
     setFormOpen(true);
@@ -418,6 +426,7 @@ export function Magasins({
       can_receive_in: m.can_receive_in ?? true,
       can_deliver_out: m.can_deliver_out ?? true,
       can_transfer: m.can_transfer ?? true,
+      photo_path: m.photo_path ?? null,
     });
     setFormError(null);
     setFormOpen(true);
@@ -1058,64 +1067,20 @@ export function Magasins({
                 }}
                 className="group w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
               >
-                <div className="flex min-h-[132px] flex-col justify-between gap-3 rounded-xl border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-paper-2/40">
-                  {/* Ligne 1 : Squircle Icon + Info Titre & Code */}
-                  <div className="flex items-start justify-between gap-2.5">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div
-                        className={cx(
-                          'grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-paper-2 text-ink-soft transition-colors group-hover:text-ink',
-                        )}
-                      >
-                        <IconComponent size={20} strokeWidth={1.75} />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="text-[14px] font-semibold text-ink tracking-tight truncate group-hover:text-ink-soft transition-colors">
-                            {m.name}
-                          </h3>
-                          <span className="font-mono text-[10px] font-semibold text-ink-faint bg-paper px-1.5 py-0.2 rounded border border-line/50 shrink-0">
-                            {m.code}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-ink-soft">
-                          <span className={cx('w-1.5 h-1.5 rounded-full shrink-0', visuals.dotColor)} />
-                          <span className="text-[11px] font-medium truncate">{visuals.categoryLabel}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-                      {!m.active && <Chip tone="red">Inactif</Chip>}
-                      <ChevronRight
-                        size={15}
-                        className="text-ink-faint group-hover:text-ink group-hover:translate-x-0.5 transition-all"
-                      />
-                    </div>
+                <div className="overflow-hidden rounded-xl border border-line bg-surface transition-colors hover:border-line-strong hover:bg-paper-2/40">
+                  <div className="relative h-36 sm:h-40 bg-paper-2">
+                    {m.photo_path ? <img src={m.photo_path} alt={`Vue de ${m.name}`} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" /> : <div className="grid h-full w-full place-items-center bg-paper-2 text-ink-faint"><div className="flex items-center gap-3"><IconComponent size={30} strokeWidth={1.5} /><span className="text-xs font-medium">Photo de l’emplacement à ajouter</span></div></div>}
+                    <span className="absolute left-3 top-3 rounded-md bg-black/65 px-2 py-1 font-mono text-[10px] font-semibold text-white backdrop-blur-sm">{m.code}</span>
+                    {!m.active && <span className="absolute right-3 top-3 rounded-md bg-red px-2 py-1 text-[10px] font-semibold text-white">Inactif</span>}
                   </div>
-
-                  {/* Ligne 2 : Responsable si assigné */}
-                  {m.manager_name && (
-                    <p className="text-xs text-ink-soft flex items-center gap-1.5 font-medium truncate">
-                      <UserCheck size={12} className="text-ink-faint shrink-0" />
-                      <span className="truncate">{m.manager_name}</span>
-                    </p>
-                  )}
-
-                  {/* Ligne 3 : Métriques sobres */}
-                  <div className="flex items-center justify-between gap-2 border-t border-line pt-2 text-xs text-ink-soft">
-                    <div className="flex items-center gap-2.5 font-medium">
-                      <span>
-                        <strong className="text-ink font-semibold tabular-nums">{m.tools_count ?? 0}</strong> machine{(m.tools_count ?? 0) > 1 ? 's' : ''}
-                      </span>
-                      <span className="text-ink-faint">•</span>
-                      <span>
-                        <strong className="text-ink font-semibold tabular-nums">{m.stock_count ?? 0}</strong> matière{(m.stock_count ?? 0) > 1 ? 's' : ''}
-                      </span>
+                  <div className="space-y-2.5 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0"><h3 className="truncate text-[15px] font-semibold tracking-tight text-ink group-hover:text-ink-soft">{m.name}</h3><p className="mt-0.5 text-xs text-ink-soft">{visuals.categoryLabel}{m.manager_name ? ` · ${m.manager_name}` : ''}</p></div>
+                      <ChevronRight size={16} className="mt-1 shrink-0 text-ink-faint group-hover:translate-x-0.5 group-hover:text-ink transition-all" />
                     </div>
-                    <span className="shrink-0 text-[11px] font-medium text-ink-faint">
-                      {m.can_lend === false ? 'Consultation' : 'Prêt actif'}
-                    </span>
+                    <div className="flex items-center gap-2 border-t border-line pt-2 text-xs text-ink-soft">
+                      <span><strong className="text-ink tabular-nums">{m.tools_count ?? 0}</strong> matériel</span><span aria-hidden="true">·</span><span><strong className="text-ink tabular-nums">{m.stock_count ?? 0}</strong> références de stock</span>
+                    </div>
                   </div>
                 </div>
               </button>
@@ -1317,10 +1282,15 @@ export function Magasins({
                   </Button>
                 )}
               </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line/60 pt-3">
+                <p className="text-xs text-ink-soft">Étiquettes des articles de ce magasin</p>
+                <GroupedQrLabelsModal canViewTools={canViewTools} canViewStock={canViewStock} storeScope={detail.magasin.name} />
+              </div>
             </div>
           );
         })()}
 
+            <div className="sticky top-0 z-20 -mx-1 space-y-2 border-b border-line bg-paper/95 px-1 pb-2 pt-1 backdrop-blur-sm">
             {/* Navigation Sub-Tabs dans le magasin (Responsive Grouped Segment) */}
             <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 p-1 rounded-2xl bg-paper-2 border border-line">
               <button
@@ -1431,6 +1401,7 @@ export function Magasins({
                 )}
               </div>
             )}
+            </div>
 
             {/* TAB 1 : MATÉRIEL & MACHINES */}
             {drawerTab === 'tools' && (
@@ -1442,14 +1413,11 @@ export function Magasins({
                 ) : (
                   <div className="divide-y divide-line rounded-2xl border border-line bg-surface overflow-hidden">
                     {filteredTools.map((t) => (
-                      <div
-                        key={t.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 hover:bg-paper-2/40 transition-colors"
-                      >
+                      <div key={t.id} className="flex flex-col gap-3 p-3.5 hover:bg-paper-2/40 transition-colors">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-[11px] font-bold text-amber">{t.id}</span>
-                            <p className="text-xs font-bold text-ink">{t.name}</p>
+                            <span className="whitespace-nowrap font-mono text-[11px] font-bold text-amber">{t.id}</span>
+                            <p className="min-w-0 break-words text-xs font-bold text-ink">{t.name}</p>
                             {t.brand && (
                               <span className="rounded-md bg-paper px-1.5 py-0.2 text-[10px] font-semibold text-ink-soft border border-line">
                                 {t.brand}
@@ -1457,8 +1425,8 @@ export function Magasins({
                             )}
                             <Chip tone={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</Chip>
                           </div>
-                          <p className="text-[11px] text-ink-faint mt-0.5">
-                            Catégorie : {t.category} · État : <strong>{t.condition}</strong>
+                          <p className="mt-1 text-[11px] text-ink-faint">
+                            {t.category} · État : <strong>{t.condition}</strong>
                             {t.loan_employee_name ? (
                               <span className="text-amber ml-2 font-medium">
                                 Emprunté par : {t.loan_employee_name} ({formatDateTime(t.loan_out_at ?? '')})
@@ -1468,7 +1436,7 @@ export function Magasins({
                           {t.status_reason && <p className="text-[11px] text-red mt-0.5">{t.status_reason}</p>}
                         </div>
 
-                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                        <div className="flex w-full flex-wrap items-center justify-start gap-1.5 border-t border-line/70 pt-2">
                           {t.status === 'disponible' && detail.magasin.can_lend !== false && canLendGlobal && (
                             <button
                               type="button"
@@ -1579,14 +1547,11 @@ export function Magasins({
                 ) : (
                   <div className="divide-y divide-line rounded-2xl border border-line bg-surface overflow-hidden">
                     {filteredStock.map((s) => (
-                      <div
-                        key={s.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 hover:bg-paper-2/40 transition-colors"
-                      >
+                      <div key={s.id} className="flex flex-col gap-3 p-3.5 hover:bg-paper-2/40 transition-colors">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-[11px] font-bold text-sky-400">REF-{s.id}</span>
-                            <p className="text-xs font-bold text-ink">{s.name}</p>
+                            <span className="whitespace-nowrap font-mono text-[11px] font-bold text-sky-400">REF-{s.id}</span>
+                            <p className="min-w-0 break-words text-xs font-bold text-ink">{s.name}</p>
                             {s.brand && (
                               <span className="rounded-md bg-paper px-1.5 py-0.2 text-[10px] font-semibold text-ink-soft border border-line">
                                 {s.brand}
@@ -1603,7 +1568,7 @@ export function Magasins({
                           </p>
                         </div>
 
-                        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+                        <div className="flex w-full flex-wrap items-center justify-between gap-3 border-t border-line/70 pt-2">
                           <div className="text-right">
                             <span className="block text-xs font-bold font-mono text-ink tabular-nums">
                               {s.qty} {s.unit}
@@ -1867,6 +1832,11 @@ export function Magasins({
       >
         <div className="space-y-3.5">
           {formError && <div className="rounded-xl bg-red-wash px-3 py-2 text-xs text-red font-medium">{formError}</div>}
+          <button type="button" onClick={() => setMagasinPhotoOpen(true)} className="group relative block h-40 w-full overflow-hidden rounded-lg border border-line bg-paper-2 text-left focus-visible:outline-2 focus-visible:outline-amber">
+            {form.photo_path ? <img src={form.photo_path} alt="Aperçu du magasin" className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-sm text-ink-soft"><span className="flex items-center gap-2"><ImagePlus size={18} /> Ajouter une photo du lieu</span></span>}
+            {form.photo_path && <span className="absolute bottom-2 right-2 rounded-md bg-black/70 px-2.5 py-1.5 text-xs font-semibold text-white">Changer la photo</span>}
+          </button>
+          {form.photo_path && <button type="button" onClick={() => setForm((f) => ({ ...f, photo_path: null }))} className="text-xs font-medium text-ink-soft underline underline-offset-2">Retirer la photo</button>}
           <Field
             label="Nom du magasin ou atelier"
             value={form.name}
@@ -1942,6 +1912,16 @@ export function Magasins({
           </div>
         </div>
       </Modal>
+
+      <ImagePickerModal
+        open={magasinPhotoOpen}
+        title={form.name ? `Photo : ${form.name}` : 'Photo du magasin ou atelier'}
+        currentImage={form.photo_path}
+        category="stock"
+        defaultFacingMode="environment"
+        onClose={() => setMagasinPhotoOpen(false)}
+        onSelect={(url) => { setForm((current) => ({ ...current, photo_path: url })); setMagasinPhotoOpen(false); }}
+      />
 
       {/* Modal Prêt Rapide depuis ce Magasin */}
       <Modal
