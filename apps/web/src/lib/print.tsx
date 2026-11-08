@@ -14,8 +14,30 @@ export function usePrintSheet() {
     document.documentElement.classList.add('printing');
     const after = () => setContent(null);
     window.addEventListener('afterprint', after);
-    const timer = window.setTimeout(() => window.print(), 280);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const root = document.getElementById('print-root');
+        const images = Array.from(root?.querySelectorAll('img') ?? []);
+        await Promise.all(images.map(async (image) => {
+          if (typeof image.decode === 'function') {
+            await image.decode().catch(() => undefined);
+            return;
+          }
+          if (image.complete) return;
+          await new Promise<void>((resolve) => {
+            const finish = () => resolve();
+            image.addEventListener('load', finish, { once: true });
+            image.addEventListener('error', finish, { once: true });
+            window.setTimeout(finish, 5000);
+          });
+        }));
+        if (!cancelled) window.print();
+      })();
+    }, 0);
     return () => {
+      cancelled = true;
       window.clearTimeout(timer);
       window.removeEventListener('afterprint', after);
       document.documentElement.classList.remove('printing');

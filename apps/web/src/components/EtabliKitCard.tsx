@@ -7,6 +7,7 @@ import {
 } from '../lib/api';
 import { QR_PREFIX, qrDataUrl } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
+import { PrintPreviewModal } from './PrintPreviewModal';
 import {
   Button,
   Modal,
@@ -114,6 +115,9 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
   const [newItemUnit, setNewItemUnit] = useState('pièce');
   const [addItemBusy, setAddItemBusy] = useState(false);
   const [printBusy, setPrintBusy] = useState(false);
+  const [kitPreviewOpen, setKitPreviewOpen] = useState(false);
+  const [kitPreviewContent, setKitPreviewContent] = useState<React.ReactNode>(null);
+  const [kitPreviewCount, setKitPreviewCount] = useState(0);
   const [labelFormat, setLabelFormat] = useState<KitLabelFormat>('compact');
   const [paperFormat, setPaperFormat] = useState<KitPaperFormat>('A4');
   const [labelCopies, setLabelCopies] = useState<Record<number, number>>({});
@@ -677,7 +681,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
             <Button
               variant="primary"
               size="sm"
-              disabled={printBusy || printLabelCount > 500 || !items.some((item) => (labelCopies[item.id] ?? 0) > 0)}
+              disabled={printBusy || printLabelCount > 500}
               onClick={async () => {
                 const labels = items.flatMap((item) => Array.from({ length: Math.min(100, Math.max(0, labelCopies[item.id] ?? 0)) }, () => item));
                 try {
@@ -686,7 +690,9 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                     generateKitQrCodes(labels),
                     qrDataUrl(`${QR_PREFIX.kit}${kit.id}`, 240),
                   ]);
-                  print(<EtabliLabelsSheet kit={kit} labels={labels} codes={codes} kitQr={kitQr} format={labelFormat} paper={paperFormat} />);
+                  setKitPreviewContent(<EtabliLabelsSheet kit={kit} labels={labels} codes={codes} kitQr={kitQr} format={labelFormat} paper={paperFormat} />);
+                  setKitPreviewCount(labels.length + 1);
+                  setKitPreviewOpen(true);
                   setShowPrintModal(false);
                 } catch {
                   toast('Impossible de préparer les QR de cet établi.', 'error');
@@ -697,7 +703,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
               className="gap-2 bg-emerald-600 text-white"
             >
               <Printer className="h-4 w-4" />
-              <span>{printBusy ? 'Préparation…' : 'Imprimer la planche'}</span>
+              <span>{printBusy ? 'Préparation…' : `Imprimer la planche (${printLabelCount})`}</span>
             </Button>
           </div>
         }
@@ -749,6 +755,16 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
           </div>
         </div>
       </Modal>
+
+      <PrintPreviewModal
+        open={kitPreviewOpen}
+        title={`Aperçu · établi ${kit.etabli_number}`}
+        paper={paperFormat}
+        copiesLabel={`${kitPreviewCount} étiquette(s), QR de l’établi inclus`}
+        content={kitPreviewContent}
+        onClose={() => { setKitPreviewOpen(false); setShowPrintModal(true); }}
+        onPrint={() => { if (kitPreviewContent) print(kitPreviewContent); setKitPreviewOpen(false); }}
+      />
 
       <Modal
         open={showAddItemModal}

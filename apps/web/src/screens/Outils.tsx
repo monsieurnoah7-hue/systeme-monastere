@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   api,
   type Employee,
@@ -78,6 +78,8 @@ import {
 } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { ImagePickerModal } from '../components/ImagePickerModal';
+import { GroupedQrLabelsModal } from '../components/GroupedQrLabelsModal';
+import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { FleetView } from '../components/FleetView';
 import { computePortfolioAudit, computeToolAccounting, formatCurrency } from '../lib/accounting';
 import { fetchFleetSummary, type FleetSummary } from '../lib/api';
@@ -266,6 +268,9 @@ export function Outils({
   const [labelFormat, setLabelFormat] = useState<LabelFormat>('compact');
   const [paperFormat, setPaperFormat] = useState<PaperFormat>('A4');
   const [printPreparing, setPrintPreparing] = useState(false);
+  const [toolPreviewOpen, setToolPreviewOpen] = useState(false);
+  const [toolPreviewContent, setToolPreviewContent] = useState<ReactNode>(null);
+  const [toolPreviewCount, setToolPreviewCount] = useState(0);
   const { print, portal } = usePrintSheet();
   const [busy, setBusy] = useState(false);
 
@@ -950,6 +955,7 @@ export function Outils({
 
               {/* Right: Actions */}
               <div className="shrink-0 flex items-center gap-1.5 sm:gap-2">
+                <GroupedQrLabelsModal canViewTools={canViewTools} canViewStock={hasPerm('stock.view')} />
                 <Button
                   variant="ghost"
                   size="sm"
@@ -3229,7 +3235,9 @@ export function Outils({
                 try {
                   setPrintPreparing(true);
                   const codes = await makeToolQrSheet(labels);
-                  print(<A4Sheet tools={labels} codes={codes} format={labelFormat} paper={paperFormat} />);
+                  setToolPreviewContent(<A4Sheet tools={labels} codes={codes} format={labelFormat} paper={paperFormat} />);
+                  setToolPreviewCount(labels.length);
+                  setToolPreviewOpen(true);
                   setPrintOpen(false);
                 } catch {
                   toast('Impossible de préparer les QR pour l’impression.', 'error');
@@ -3308,6 +3316,16 @@ export function Outils({
           </div>
         </div>
       </Modal>
+
+      <PrintPreviewModal
+        open={toolPreviewOpen}
+        title="Aperçu de la planche d’outils"
+        paper={paperFormat}
+        copiesLabel={`${toolPreviewCount} étiquette(s)`}
+        content={toolPreviewContent}
+        onClose={() => { setToolPreviewOpen(false); setPrintOpen(true); }}
+        onPrint={() => { if (toolPreviewContent) print(toolPreviewContent); setToolPreviewOpen(false); }}
+      />
 
       {/* Image Picker Modal (Caméra / Galerie / Lot) */}
       <ImagePickerModal

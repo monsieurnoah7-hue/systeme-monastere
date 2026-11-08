@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   api,
   type Employee,
@@ -20,6 +20,7 @@ import { QR_PREFIX } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { formatDate, initials } from '../lib/labels';
 import { EtabliKitCard } from '../components/EtabliKitCard';
+import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { useUndo } from '../components/UndoToast';
 import {
   Banner,
@@ -1487,6 +1488,10 @@ export function Employees({
   const [badgeCopies, setBadgeCopies] = useState(1);
   const [badgePaper, setBadgePaper] = useState<'A4' | 'Letter'>('A4');
   const [batchBadgeOpen, setBatchBadgeOpen] = useState(false);
+  const [badgePreviewOpen, setBadgePreviewOpen] = useState(false);
+  const [badgePreviewContent, setBadgePreviewContent] = useState<ReactNode>(null);
+  const [badgePreviewSource, setBadgePreviewSource] = useState<'batch' | 'single'>('batch');
+  const [badgePreviewEmployee, setBadgePreviewEmployee] = useState<Employee | null>(null);
   const [batchBadgeQuery, setBatchBadgeQuery] = useState('');
   const [batchBadgeCopies, setBatchBadgeCopies] = useState<Record<string, number>>({});
   const [deleteEmployeeFor, setDeleteEmployeeFor] = useState<Employee | null>(null);
@@ -3571,7 +3576,9 @@ export function Employees({
                 const copies = selectedBatchBadges.flatMap((employee) =>
                   Array.from({ length: Math.min(100, Math.max(0, batchBadgeCopies[employee.id] ?? 0)) }, () => employee),
                 );
-                print(<BadgeSheet employees={copies} paper={badgePaper} />);
+                setBadgePreviewContent(<BadgeSheet employees={copies} paper={badgePaper} />);
+                setBadgePreviewSource('batch');
+                setBadgePreviewOpen(true);
                 setBatchBadgeOpen(false);
               }}
             >
@@ -3679,7 +3686,12 @@ export function Employees({
               icon={<Printer size={15} />}
               disabled={!badgeFor?.badge_token}
               onClick={() => {
-                if (badgeFor) print(<BadgeSheet employees={Array.from({ length: badgeCopies }, () => badgeFor)} paper={badgePaper} />);
+                if (badgeFor) {
+                  setBadgePreviewEmployee(badgeFor);
+                  setBadgePreviewContent(<BadgeSheet employees={Array.from({ length: badgeCopies }, () => badgeFor)} paper={badgePaper} />);
+                  setBadgePreviewSource('single');
+                  setBadgePreviewOpen(true);
+                }
                 setBadgeFor(null);
               }}
             >
@@ -3728,6 +3740,20 @@ export function Employees({
           </Button>
         </div>
       </Modal>
+
+      <PrintPreviewModal
+        open={badgePreviewOpen}
+        title="Aperçu des badges travailleurs"
+        paper={badgePaper}
+        copiesLabel={`${badgePreviewSource === 'batch' ? batchBadgePrintCount : badgeCopies} badge(s)`}
+        content={badgePreviewContent}
+        onClose={() => {
+          setBadgePreviewOpen(false);
+          if (badgePreviewSource === 'batch') setBatchBadgeOpen(true);
+          else if (badgePreviewEmployee) setBadgeFor(badgePreviewEmployee);
+        }}
+        onPrint={() => { if (badgePreviewContent) print(badgePreviewContent); setBadgePreviewOpen(false); }}
+      />
 
       {/* Modal: Poser un congé ou accorder une permission (Direction / Ayant-droit) */}
       <Modal

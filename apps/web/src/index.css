@@ -328,6 +328,41 @@
   display: none;
 }
 
+.print-preview-page {
+  box-sizing: border-box;
+  overflow: visible;
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.28);
+}
+
+.print-preview-page .a4-page {
+  width: 190mm;
+  margin: 0 auto;
+  padding: 5mm 0;
+}
+
+.print-preview-page .label-grid {
+  display: grid;
+  justify-content: start;
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+
+.print-preview-page .badge-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 85.6mm);
+  justify-content: center;
+  gap: 6mm 8mm;
+}
+
+.print-preview-page .tool-label-card,
+.print-preview-page .badge-card {
+  break-inside: avoid;
+  background: #ffffff;
+  color: #111827;
+}
+
 @media print {
   html.printing body > #root {
     display: none !important;
@@ -358,6 +393,8 @@
     justify-content: start;
     align-content: start;
     grid-auto-rows: max-content;
+    break-inside: auto;
+    page-break-inside: auto;
   }
   .badge-grid {
     display: grid;
@@ -381,8 +418,11 @@
   .tool-label-card {
     box-sizing: border-box;
     break-inside: avoid;
+    page-break-inside: avoid;
     background: #ffffff;
     color: #111827;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
   .label-sheet {
     box-sizing: border-box;

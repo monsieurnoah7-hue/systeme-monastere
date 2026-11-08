@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, type Employee, type Magasin, type ScanResult, type StockMovement, type StockRef, type User } from '../lib/api';
 import { QR_PREFIX, qrDataUrl } from '../lib/qr';
 import { MOVE_LABEL, MOVE_TONE, formatDateTime } from '../lib/labels';
@@ -63,6 +63,8 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { usePrintSheet } from '../lib/print';
 import { ImagePickerModal } from '../components/ImagePickerModal';
+import { GroupedQrLabelsModal } from '../components/GroupedQrLabelsModal';
+import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { formatCurrency } from '../lib/accounting';
 
 const ExcelImportModal = lazy(() => import('../components/ExcelImportModal').then((module) => ({ default: module.ExcelImportModal })));
@@ -280,6 +282,8 @@ export function Stock({
   const [deleteSingleRef, setDeleteSingleRef] = useState<StockRef | null>(null);
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
+  const [stockLabelPreviewOpen, setStockLabelPreviewOpen] = useState(false);
+  const [stockLabelPreviewContent, setStockLabelPreviewContent] = useState<ReactNode>(null);
 
   const { print, portal } = usePrintSheet();
 
@@ -801,6 +805,7 @@ export function Stock({
 
               {/* Right: Actions & Options */}
               <div className="flex w-full flex-wrap items-center gap-1.5 md:w-auto md:justify-end">
+                <GroupedQrLabelsModal canViewTools={hasPerm('tools.view')} canViewStock={hasPerm('stock.view')} />
                 <Button
                   size="sm"
                   variant="secondary"
@@ -1926,7 +1931,8 @@ export function Stock({
                   size="sm"
                   icon={<IconPrinter size={16} />}
                   onClick={() => {
-                    print(<StockBinLabel refItem={selected} />);
+                    setStockLabelPreviewContent(<StockBinLabel refItem={selected} />);
+                    setStockLabelPreviewOpen(true);
                   }}
                 >
                   Étiquette
@@ -2700,6 +2706,15 @@ export function Stock({
         </Suspense>
       )}
 
+      <PrintPreviewModal
+        open={stockLabelPreviewOpen}
+        title="Aperçu de l’étiquette de stock"
+        paper="A4"
+        copiesLabel="1 étiquette"
+        content={stockLabelPreviewContent}
+        onClose={() => setStockLabelPreviewOpen(false)}
+        onPrint={() => { if (stockLabelPreviewContent) print(stockLabelPreviewContent); setStockLabelPreviewOpen(false); }}
+      />
       {portal}
     </div>
   );
