@@ -2117,10 +2117,15 @@ export function Dashboard({ active = true }: { active?: boolean }) {
           <Button
             variant="ghost"
             size="sm"
-            icon={<RefreshCw size={15} />}
-            onClick={() => setReload((value) => value + 1)}
+            disabled={loading}
+            icon={<RefreshCw size={15} className={loading ? 'animate-spin' : ''} />}
+            onClick={() => {
+              setLoading(true);
+              setReload((value) => value + 1);
+            }}
+            aria-label={loading ? 'Actualisation du tableau de bord en cours' : 'Actualiser le tableau de bord'}
           >
-            Actualiser
+            {loading ? 'Actualisation…' : 'Actualiser'}
           </Button>
           <button
             type="button"

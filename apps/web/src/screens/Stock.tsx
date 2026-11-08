@@ -320,7 +320,10 @@ export function Stock({
     };
   }, [reload, journalType, journalFrom, journalTo, journalQ, refs.length]);
 
-  const refresh = useCallback(() => setReload((value) => value + 1), []);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    setReload((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     const handleSync = () => refresh();
@@ -809,12 +812,13 @@ export function Stock({
                 <Button
                   size="sm"
                   variant="secondary"
-                  icon={<RefreshCw size={13} className={busy ? 'animate-spin' : ''} />}
+                  disabled={loading}
+                  icon={<RefreshCw size={13} className={loading ? 'animate-spin' : ''} />}
                   onClick={refresh}
                   className="h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
-                  title="Actualiser les données"
+                  title={loading ? 'Actualisation en cours' : 'Actualiser les données'}
                 >
-                  <span className="hidden sm:inline">Actualiser</span>
+                  <span>{loading ? 'Actualisation…' : 'Actualiser'}</span>
                 </Button>
 
                 {canMove && (

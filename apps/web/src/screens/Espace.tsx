@@ -37,6 +37,7 @@ import {
   Clock,
   User as UserIcon,
   Compass,
+  RefreshCw,
 } from 'lucide-react';
 
 const SITUATION_LABEL: Record<string, string> = {
@@ -751,7 +752,15 @@ export function Espace({
         icon={<IconAlert size={28} />}
         title="Fiche travailleur introuvable"
         hint="Votre compte n'est pas encore rattaché à une fiche travailleur active dans le système."
-        action={<Button onClick={load}>Actualiser</Button>}
+        action={
+          <Button
+            onClick={load}
+            loading={loading}
+            icon={<RefreshCw size={14} className={loading ? 'animate-spin' : ''} />}
+          >
+            {loading ? 'Actualisation…' : 'Actualiser'}
+          </Button>
+        }
       />
     );
   }

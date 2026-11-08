@@ -1605,9 +1605,9 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                 onClick={() => setReload((value) => value + 1)}
                 className="h-11 w-11 justify-center p-0 sm:h-8 sm:w-auto sm:px-2.5 sm:py-0 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
                 title="Actualiser les données"
-                aria-label="Actualiser les données"
+                aria-label={isRefreshing ? 'Actualisation des paramètres en cours' : 'Actualiser les paramètres'}
               >
-                <span className="hidden xl:inline">{isRefreshing ? 'Actualisation…' : 'Actualiser'}</span>
+                <span className="hidden xl:inline" aria-live="polite">{isRefreshing ? 'Actualisation…' : 'Actualiser'}</span>
               </Button>
 
               {/* Contextual Primary Action CTA (Row 1) */}

@@ -2170,7 +2170,10 @@ export function Employees({
                   size="sm"
                   disabled={loading}
                   icon={<RefreshCw size={13} className={cx(loading && 'animate-spin text-amber')} />}
-                  onClick={() => setReload((value) => value + 1)}
+                  onClick={() => {
+                    setLoading(true);
+                    setReload((value) => value + 1);
+                  }}
                   className="h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
                   title="Actualiser les données"
                 >

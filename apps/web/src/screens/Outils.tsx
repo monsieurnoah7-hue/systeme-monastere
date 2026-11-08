@@ -348,7 +348,10 @@ export function Outils({
       .catch(() => setMagasins([]));
   }, []);
 
-  const refresh = useCallback(() => setReload((value) => value + 1), []);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    setReload((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     const handleSync = () => {
@@ -965,7 +968,7 @@ export function Outils({
                   className="h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
                   title="Actualiser les données"
                 >
-                  <span className="hidden xl:inline">{loading ? 'Actualisation…' : 'Actualiser'}</span>
+                  <span>{loading ? 'Actualisation…' : 'Actualiser'}</span>
                 </Button>
 
                 {activeTab === 'tools' && canManage && (

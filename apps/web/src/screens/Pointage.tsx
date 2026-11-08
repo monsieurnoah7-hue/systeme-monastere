@@ -924,8 +924,15 @@ export function Pointage({
                 </button>
               </div>
 
-              <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} onClick={loadTimesheets}>
-                Actualiser
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={tsLoading}
+                icon={<RefreshCw size={13} className={tsLoading ? 'animate-spin' : ''} />}
+                onClick={loadTimesheets}
+                aria-label={tsLoading ? 'Actualisation des présences en cours' : 'Actualiser les présences'}
+              >
+                {tsLoading ? 'Actualisation…' : 'Actualiser'}
               </Button>
 
               {canExportReports && (

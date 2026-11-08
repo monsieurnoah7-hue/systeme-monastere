@@ -225,6 +225,7 @@ export function Magasins({
   const [magasins, setMagasins] = useState<Magasin[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [q, setQ] = useState('');
@@ -298,14 +299,24 @@ export function Magasins({
       ]);
       setMagasins(magRes.magasins);
       setEmployees(empRes.employees.filter((e) => e.active));
+      return true;
     } catch (e) {
       if (magasins.length === 0) {
         setError(e instanceof ApiError ? e.message : 'Erreur de chargement');
       }
+      return false;
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [magasins.length]);
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    const refreshed = await load();
+    toast(refreshed ? 'Les dépôts sont à jour.' : 'Impossible d’actualiser les dépôts.', refreshed ? 'success' : 'error');
+  };
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
@@ -766,19 +777,14 @@ export function Magasins({
                     onClick={() => setActiveCategory(cat.id)}
                     aria-pressed={isSelected}
                     className={cx(
-                      'flex min-h-10 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-semibold transition-all shadow-2xs',
+                      'flex min-h-10 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
                       isSelected
-                        ? 'bg-amber text-white border-amber shadow-xs'
-                        : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                        ? 'bg-amber-wash text-amber border-amber/40'
+                        : 'bg-transparent text-ink-soft border-transparent hover:border-line hover:bg-surface hover:text-ink',
                     )}
                   >
                     <span>{cat.shortLabel}</span>
-                    <span
-                      className={cx(
-                        'text-[10px] font-mono tabular-nums px-1.5 py-0.2 rounded-full',
-                        isSelected ? 'bg-white/20 text-white font-bold' : 'bg-paper text-ink-faint',
-                      )}
-                    >
+                    <span className="text-xs tabular-nums text-ink-faint">
                       {count}
                     </span>
                   </button>
@@ -827,12 +833,14 @@ export function Magasins({
               <Button
                 size="sm"
                 variant="secondary"
-                icon={<RefreshCw size={13} className={loading ? 'animate-spin' : ''} />}
-                onClick={() => setReloadKey((k) => k + 1)}
-                className="h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
+                disabled={refreshing}
+                icon={<RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />}
+                onClick={() => void handleRefresh()}
+                className="h-10 rounded-lg px-3 text-sm"
                 title="Actualiser les dépôts"
+                aria-label={refreshing ? 'Actualisation des dépôts en cours' : 'Actualiser les dépôts'}
               >
-                <span className="hidden sm:inline">Actualiser</span>
+                <span aria-live="polite">{refreshing ? 'Actualisation…' : 'Actualiser'}</span>
               </Button>
 
               {canManage && (
@@ -841,7 +849,7 @@ export function Magasins({
                   variant="primary"
                   icon={<IconPlus size={14} />}
                   onClick={openNew}
-                  className="h-8 px-2 sm:px-3 text-xs shadow-2xs font-bold"
+                  className="h-10 rounded-lg px-3 text-sm font-semibold"
                   title="Créer un nouvel atelier ou magasin"
                 >
                   <span className="hidden sm:inline">Nouveau magasin</span>
@@ -850,14 +858,14 @@ export function Magasins({
               )}
 
               {/* View mode toggle button */}
-              <div className="flex items-center rounded-lg border border-line bg-surface p-0.5 shadow-2xs">
+              <div className="flex items-center rounded-lg border border-line bg-surface p-0.5">
                 <button
                   type="button"
                   onClick={() => setViewMode('grid')}
                   aria-pressed={viewMode === 'grid'}
                   className={cx(
-                    'inline-flex min-h-10 min-w-10 items-center justify-center gap-1.5 rounded px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
-                    viewMode === 'grid' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
+                    'inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-md px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
+                    viewMode === 'grid' ? 'bg-paper-2 text-ink' : 'text-ink-soft hover:text-ink'
                   )}
                   title="Affichage en Grille Bento"
                 >
@@ -869,8 +877,8 @@ export function Magasins({
                   onClick={() => setViewMode('list')}
                   aria-pressed={viewMode === 'list'}
                   className={cx(
-                    'inline-flex min-h-10 min-w-10 items-center justify-center gap-1.5 rounded px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
-                    viewMode === 'list' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
+                    'inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-md px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
+                    viewMode === 'list' ? 'bg-paper-2 text-ink' : 'text-ink-soft hover:text-ink'
                   )}
                   title="Affichage en Liste"
                 >
@@ -886,7 +894,7 @@ export function Magasins({
                     size="sm"
                     variant="secondary"
                     icon={<Menu size={14} />}
-                    className="h-8 px-2 text-xs shadow-2xs"
+                    className="h-10 rounded-lg px-3 text-sm"
                     title="Options & Exports"
                   >
                     <span className="hidden sm:inline">Options</span>
@@ -968,7 +976,7 @@ export function Magasins({
         />
       ) : viewMode === 'list' ? (
         /* VUE LISTE APPLE (Grouped Table / 100% Mobile-First) */
-        <div className="rounded-2xl border border-line/70 dark:border-white/[0.08] bg-surface dark:bg-[#151922] divide-y divide-line/60 dark:divide-white/[0.06] overflow-hidden shadow-2xs">
+        <div className="overflow-hidden rounded-xl border border-line bg-surface divide-y divide-line">
           {filtered.map((m) => {
             const visuals = getLocationVisuals(m);
             const IconComponent = visuals.Icon;
@@ -984,9 +992,7 @@ export function Magasins({
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className={cx(
-                      'grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-transform group-hover:scale-105',
-                      visuals.iconBg,
-                      visuals.iconText,
+                      'grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-paper-2 text-ink-soft transition-colors group-hover:text-ink',
                     )}
                   >
                     <IconComponent size={20} strokeWidth={1.75} />
@@ -1045,17 +1051,15 @@ export function Magasins({
                   setSelectedId(m.id);
                   setDrawerTab('tools');
                 }}
-                className="w-full text-left group active:scale-[0.99] transition-transform duration-150"
+                className="group w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
               >
-                <div className="rounded-2xl border border-line/70 dark:border-white/[0.08] bg-surface dark:bg-[#151922] p-4 sm:p-4.5 hover:border-slate-400 dark:hover:border-white/20 hover:shadow-xs transition-all duration-150 flex flex-col justify-between gap-3 min-h-[135px]">
+                <div className="flex min-h-[132px] flex-col justify-between gap-3 rounded-xl border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-paper-2/40">
                   {/* Ligne 1 : Squircle Icon + Info Titre & Code */}
                   <div className="flex items-start justify-between gap-2.5">
                     <div className="flex items-start gap-3 min-w-0">
                       <div
                         className={cx(
-                          'grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-transform group-hover:scale-105',
-                          visuals.iconBg,
-                          visuals.iconText,
+                          'grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-paper-2 text-ink-soft transition-colors group-hover:text-ink',
                         )}
                       >
                         <IconComponent size={20} strokeWidth={1.75} />
@@ -1094,7 +1098,7 @@ export function Magasins({
                   )}
 
                   {/* Ligne 3 : Métriques sobres */}
-                  <div className="pt-2 border-t border-line/50 flex items-center justify-between text-xs text-ink-soft">
+                  <div className="flex items-center justify-between gap-2 border-t border-line pt-2 text-xs text-ink-soft">
                     <div className="flex items-center gap-2.5 font-medium">
                       <span>
                         <strong className="text-ink font-semibold tabular-nums">{m.tools_count ?? 0}</strong> machine{(m.tools_count ?? 0) > 1 ? 's' : ''}
@@ -1104,7 +1108,7 @@ export function Magasins({
                         <strong className="text-ink font-semibold tabular-nums">{m.stock_count ?? 0}</strong> matière{(m.stock_count ?? 0) > 1 ? 's' : ''}
                       </span>
                     </div>
-                    <span className="text-[11px] font-medium text-ink-faint">
+                    <span className="shrink-0 text-[11px] font-medium text-ink-faint">
                       {m.can_lend === false ? 'Consultation' : 'Prêt actif'}
                     </span>
                   </div>
