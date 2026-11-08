@@ -860,10 +860,10 @@ export function Outils({
         <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
           <div className="flex flex-col gap-2">
             {/* Row 1: Tabs, Search & Priority Actions */}
-            <div className="flex items-center justify-between gap-2 sm:gap-3 min-w-0">
+            <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
               {/* Left: Radix Navigation Tabs with Live Badges */}
               <div className="min-w-0 flex-1">
-                <TabsList variant="line" className={cx('grid w-full gap-1 bg-transparent p-0 sm:flex sm:w-max sm:gap-2.5', canViewTools ? (canViewLoans ? 'grid-cols-3' : 'grid-cols-2') : 'grid-cols-1')}>
+                <TabsList variant="line" className={cx('grid w-full min-w-0 gap-1 bg-transparent p-0 sm:flex sm:w-auto sm:gap-2.5', canViewTools ? (canViewLoans ? 'grid-cols-3' : 'grid-cols-2') : 'grid-cols-1')}>
                   {canViewTools && <TabsTrigger
                     value="tools"
                     className="min-w-0 gap-1 px-1 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
@@ -912,7 +912,7 @@ export function Outils({
 
               {/* Center: Real-time search on Desktop */}
               {activeTab === 'tools' && (
-                <div className="hidden md:flex items-center flex-1 max-w-xs relative min-w-[180px]">
+                <div className="relative hidden min-w-0 items-center md:col-start-1 md:row-start-2 md:flex">
                   <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
                   <input
                     value={filters.q}
@@ -933,7 +933,7 @@ export function Outils({
               )}
 
               {activeTab === 'loans' && (
-                <div className="hidden md:flex items-center flex-1 max-w-xs relative min-w-[180px]">
+                <div className="relative hidden min-w-0 items-center md:col-start-1 md:row-start-2 md:flex">
                   <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
                   <input
                     value={loansSearch}
@@ -954,7 +954,7 @@ export function Outils({
               )}
 
               {/* Right: Actions */}
-              <div className="shrink-0 flex items-center gap-1.5 sm:gap-2">
+              <div className="order-3 col-span-full flex w-full min-w-0 flex-wrap items-center justify-end gap-1.5 md:order-none md:col-span-1 md:col-start-2 md:row-start-2 md:w-auto md:flex-nowrap sm:gap-2">
                 <GroupedQrLabelsModal canViewTools={canViewTools} canViewStock={hasPerm('stock.view')} />
                 <Button
                   variant="ghost"

@@ -447,7 +447,7 @@ export function Shell({
           </Drawer>
 
           {/* Main Scrollable Content with Antigravity Top Bar */}
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-thin flex flex-col">
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-thin flex flex-col">
             {/* Desktop Topbar Header - macOS / Apple Design */}
             <div className="no-print hidden lg:flex shrink-0 h-11 items-center justify-between px-6 border-b border-line/60 bg-surface sticky top-0 z-20 text-xs">
               {/* Breadcrumb section */}
@@ -484,7 +484,7 @@ export function Shell({
 
             <div
               className={cx(
-                'w-full px-3 py-3 sm:px-6 lg:px-8 lg:py-6 lg:pb-12 flex-1',
+                'w-full min-w-0 px-3 py-3 sm:px-6 lg:px-8 lg:py-6 lg:pb-12 flex-1',
                 view === 'pointage' ? 'pb-18' : 'pb-24',
               )}
             >

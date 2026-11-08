@@ -750,11 +750,11 @@ export function Magasins({
 
       {/* Sticky Unified Navigation Bar */}
       <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
-        <div className="flex flex-col gap-2">
+        <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
           {/* Row 1: Categories + Search + Actions + Overflow Menu */}
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="contents">
             {/* Left: Quick Category Pills */}
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5 py-0.5 md:flex-1">
+            <div className="col-span-full hidden min-w-0 flex-wrap items-center gap-1.5 py-0.5 md:flex">
               {LOCATION_CATEGORIES.map((cat) => {
                 const count = categoryCounts[cat.id] ?? 0;
                 if (cat.id !== 'all' && count === 0) return null;
@@ -764,6 +764,7 @@ export function Magasins({
                     key={cat.id}
                     type="button"
                     onClick={() => setActiveCategory(cat.id)}
+                    aria-pressed={isSelected}
                     className={cx(
                       'flex min-h-10 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-semibold transition-all shadow-2xs',
                       isSelected
@@ -785,14 +786,30 @@ export function Magasins({
               })}
             </div>
 
+            <label className="col-span-full flex min-w-0 items-center gap-2 md:hidden">
+              <span className="shrink-0 text-xs font-medium text-ink-soft">Catégorie</span>
+              <select
+                value={activeCategory}
+                onChange={(event) => setActiveCategory(event.target.value as LocationCategory)}
+                className="h-10 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none focus:ring-2 focus:ring-amber/20"
+                aria-label="Filtrer les emplacements par catégorie"
+              >
+                {LOCATION_CATEGORIES.map((cat) => {
+                  const count = categoryCounts[cat.id] ?? 0;
+                  if (cat.id !== 'all' && count === 0) return null;
+                  return <option key={cat.id} value={cat.id}>{cat.shortLabel} ({count})</option>;
+                })}
+              </select>
+            </label>
+
             {/* Center: Real-Time Search Bar (Desktop / Tablet) */}
-            <div className="hidden md:flex flex-1 max-w-sm mx-2 items-center relative">
+            <div className="relative hidden min-w-0 items-center md:col-start-1 md:row-start-2 md:flex">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Rechercher magasin, atelier, responsable…"
-                className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                className="h-10 w-full min-w-0 rounded-lg border border-line bg-surface/90 pl-9 pr-8 text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
               />
               {q && (
                 <button
@@ -806,7 +823,7 @@ export function Magasins({
             </div>
 
             {/* Right: Actions & Options */}
-            <div className="flex w-full items-center justify-between gap-1.5 md:w-auto md:shrink-0 md:justify-start">
+            <div className="order-3 col-span-full flex w-full min-w-0 flex-wrap items-center justify-between gap-2 md:order-none md:col-span-1 md:col-start-2 md:row-start-2 md:w-auto md:flex-nowrap md:justify-start">
               <Button
                 size="sm"
                 variant="secondary"
@@ -827,8 +844,8 @@ export function Magasins({
                   className="h-8 px-2 sm:px-3 text-xs shadow-2xs font-bold"
                   title="Créer un nouvel atelier ou magasin"
                 >
-                  <span className="hidden sm:inline">+ Nouveau magasin</span>
-                  <span className="sm:hidden">+ Magasin</span>
+                  <span className="hidden sm:inline">Nouveau magasin</span>
+                  <span className="sm:hidden">Magasin</span>
                 </Button>
               )}
 
@@ -837,8 +854,9 @@ export function Magasins({
                 <button
                   type="button"
                   onClick={() => setViewMode('grid')}
+                  aria-pressed={viewMode === 'grid'}
                   className={cx(
-                    'grid min-h-10 min-w-10 place-items-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
+                    'inline-flex min-h-10 min-w-10 items-center justify-center gap-1.5 rounded px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
                     viewMode === 'grid' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
                   )}
                   title="Affichage en Grille Bento"
@@ -849,8 +867,9 @@ export function Magasins({
                 <button
                   type="button"
                   onClick={() => setViewMode('list')}
+                  aria-pressed={viewMode === 'list'}
                   className={cx(
-                    'grid min-h-10 min-w-10 place-items-center rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
+                    'inline-flex min-h-10 min-w-10 items-center justify-center gap-1.5 rounded px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
                     viewMode === 'list' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
                   )}
                   title="Affichage en Liste"
@@ -897,7 +916,7 @@ export function Magasins({
           </div>
 
           {/* Sub-row: Mobile Search (Visible on small screens) */}
-          <div className="md:hidden flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+          <div className="order-2 col-span-full flex min-w-0 items-center justify-between gap-2 border-t border-line/40 pt-2 text-xs md:hidden">
             <div className="flex items-center relative flex-1">
               <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
               <input
@@ -924,7 +943,7 @@ export function Magasins({
       </div>
 
       {loading ? (
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-36 rounded-2xl" />
           ))}
@@ -1015,7 +1034,7 @@ export function Magasins({
         </div>
       ) : (
         /* VUE GRILLE BENTO APPLE (Aérée, épurée, sans superposition parasitaire) */
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2 2xl:grid-cols-3">
           {filtered.map((m) => {
             const visuals = getLocationVisuals(m);
             const IconComponent = visuals.Icon;

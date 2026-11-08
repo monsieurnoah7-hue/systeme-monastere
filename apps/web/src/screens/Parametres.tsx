@@ -1533,13 +1533,13 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
         {/* Navigation et action visibles ; les filtres restent dans le flux mobile. */}
         <div className="sticky top-0 lg:top-11 z-30 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2.5 bg-paper border-b border-line shadow-xs mb-3 sm:mb-6">
           {/* Row 1: Master Navigation Tabs + Grouped Master Actions */}
-          <div className="flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 min-w-0">
+          <div className="grid min-w-0 grid-cols-1 items-center gap-2 2xl:grid-cols-[minmax(0,1fr)_auto]">
             {/* All primary sections stay visible on narrow screens; desktop keeps a compact row. */}
             <div className="min-w-0 flex-1">
-              <TabsList variant="line" className="grid w-full grid-cols-3 gap-1 bg-transparent p-0 lg:flex lg:w-max lg:gap-2">
+              <TabsList variant="line" className="grid w-full min-w-0 grid-cols-2 gap-1 bg-transparent p-0 sm:grid-cols-3 xl:grid-cols-5 xl:gap-1.5">
                 {canViewUsers && <TabsTrigger
                   value="comptes"
-                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal lg:shrink-0 lg:whitespace-nowrap lg:gap-1.5 lg:px-3 lg:text-sm"
+                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal xl:gap-1.5 xl:px-2 xl:text-sm 2xl:whitespace-nowrap"
                 >
                   <Users size={14} className="text-amber" />
                   <span>Comptes</span>
@@ -1550,7 +1550,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
                 {canManagePermissions && <TabsTrigger
                   value="permissions"
-                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal lg:shrink-0 lg:whitespace-nowrap lg:gap-1.5 lg:px-3 lg:text-sm"
+                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal xl:gap-1.5 xl:px-2 xl:text-sm 2xl:whitespace-nowrap"
                 >
                   <ShieldCheck size={14} className="text-amber" />
                   <span className="hidden xl:inline">Rôles &amp; Permissions</span>
@@ -1562,7 +1562,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
                 {canViewKiosk && <TabsTrigger
                   value="kiosk"
-                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal lg:shrink-0 lg:whitespace-nowrap lg:gap-1.5 lg:px-3 lg:text-sm"
+                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal xl:gap-1.5 xl:px-2 xl:text-sm 2xl:whitespace-nowrap"
                 >
                   <Clock size={14} className="text-amber" />
                   <span className="hidden xl:inline">Pointage &amp; Kiosque</span>
@@ -1574,7 +1574,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
                 <TabsTrigger
                   value="securite"
-                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal lg:shrink-0 lg:whitespace-nowrap lg:gap-1.5 lg:px-3 lg:text-sm"
+                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal xl:gap-1.5 xl:px-2 xl:text-sm 2xl:whitespace-nowrap"
                 >
                   <KeyRound size={14} className="text-amber" />
                   <span className="hidden xl:inline">Sécurité &amp; Profil</span>
@@ -1583,7 +1583,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
                 {canUseBackups && <TabsTrigger
                   value="sauvegardes"
-                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal lg:shrink-0 lg:whitespace-nowrap lg:gap-1.5 lg:px-3 lg:text-sm"
+                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal xl:gap-1.5 xl:px-2 xl:text-sm 2xl:whitespace-nowrap"
                 >
                   <HardDrive size={14} className="text-amber" />
                   <span className="hidden xl:inline">Sauvegardes &amp; Système</span>
@@ -1596,7 +1596,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
             </div>
 
             {/* Global Utilities & Master CTAs */}
-            <div className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:shrink-0 sm:gap-2">
+            <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-1.5 2xl:w-auto 2xl:shrink-0 2xl:gap-2">
               <Button
                 variant="ghost"
                 size="sm"
