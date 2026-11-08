@@ -359,6 +359,7 @@
 .print-preview-page .tool-label-card,
 .print-preview-page .badge-card {
   break-inside: avoid;
+  border-radius: 0 !important;
   background: #ffffff;
   color: #111827;
 }
@@ -406,7 +407,7 @@
     width: 85.6mm;
     height: 54mm;
     border: 1px solid #d3cabd;
-    border-radius: 2.5mm;
+    border-radius: 0 !important;
     padding: 3mm;
     box-sizing: border-box;
     break-inside: avoid;
@@ -417,6 +418,7 @@
   }
   .tool-label-card {
     box-sizing: border-box;
+    border-radius: 0 !important;
     break-inside: avoid;
     page-break-inside: avoid;
     background: #ffffff;
