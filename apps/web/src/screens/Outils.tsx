@@ -81,6 +81,7 @@ import { ImagePickerModal } from '../components/ImagePickerModal';
 import { GroupedQrLabelsModal } from '../components/GroupedQrLabelsModal';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { FleetView } from '../components/FleetView';
+import { InventoryEditModal, type InventoryEditTarget } from '../components/InventoryEditModal';
 import { computePortfolioAudit, computeToolAccounting, formatCurrency } from '../lib/accounting';
 import { fetchFleetSummary, type FleetSummary } from '../lib/api';
 
@@ -177,6 +178,7 @@ export function Outils({
   const [employees, setEmployees] = useState<Employee[]>([]);
 
   const [newOpen, setNewOpen] = useState(false);
+  const [inventoryEditTarget, setInventoryEditTarget] = useState<InventoryEditTarget | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'tools' | 'loans' | 'fleet'>(initialTab);
   const [fleetSummary, setFleetSummary] = useState<FleetSummary | null>(null);
@@ -1886,6 +1888,17 @@ export function Outils({
                         {/* Actions Rapides */}
                         <td className="px-3 py-2 text-right">
                           <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => setInventoryEditTarget({ kind: 'tool', item: tool })}
+                                className="inline-flex min-h-8 items-center gap-1 rounded-md border border-line bg-paper px-2 text-[11px] font-medium text-ink-soft transition-colors hover:bg-paper-2 hover:text-ink"
+                                title="Modifier la fiche complète"
+                              >
+                                <Edit3 size={12} />
+                                Modifier
+                              </button>
+                            )}
                             {canManage && (
                               <button
                                 onClick={() => {
@@ -2070,6 +2083,17 @@ export function Outils({
                       )}
                     </div>
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => setInventoryEditTarget({ kind: 'tool', item: tool })}
+                          className="inline-flex min-h-9 items-center gap-1 rounded-md border border-line bg-paper px-2 text-[11px] font-medium text-ink-soft"
+                          title="Modifier la fiche complète"
+                        >
+                          <Edit3 size={12} />
+                          Modifier
+                        </button>
+                      )}
                       {canManage && (
                         <button
                           onClick={() => {
@@ -2378,6 +2402,15 @@ export function Outils({
 
             {(canLoan || canReturn || canEditStatus || canEdit || canDelete || canManage) ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {canEdit ? (
+                  <Button
+                    variant="secondary"
+                    icon={<Edit3 size={14} />}
+                    onClick={() => setInventoryEditTarget({ kind: 'tool', item: detail.tool })}
+                  >
+                    Modifier la fiche
+                  </Button>
+                ) : null}
                 {canManage ? (
                   <Button
                     variant="secondary"
@@ -2511,6 +2544,11 @@ export function Outils({
           </div>
         )}
       </Drawer>
+
+      <InventoryEditModal
+        target={inventoryEditTarget}
+        onClose={() => setInventoryEditTarget(null)}
+      />
 
       {/* Modal Nouvel Outil */}
       <Modal

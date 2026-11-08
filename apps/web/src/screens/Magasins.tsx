@@ -48,6 +48,7 @@ import {
   Menu,
   RefreshCw,
   Search,
+  Pencil,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -60,10 +61,11 @@ import { exportToExcel, exportToPdf } from '../lib/export';
 import { formatCurrency } from '../lib/accounting';
 import { usePrintSheet } from '../lib/print';
 import { QR_PREFIX, qrDataUrl } from '../lib/qr';
+import { InventoryEditModal, type InventoryEditTarget } from '../components/InventoryEditModal';
 
 type MagasinTool = Pick<
   Tool,
-  'id' | 'name' | 'category' | 'status' | 'condition' | 'status_reason'
+  'id' | 'name' | 'category' | 'location' | 'observations' | 'status' | 'condition' | 'status_reason'
 > & {
   brand?: string | null;
   model?: string | null;
@@ -217,6 +219,8 @@ export function Magasins({
   const hasPerm = (p: string) => isSuper || (permissions ? !!permissions[p] : false);
 
   const canManage = hasPerm('magasins.manage') || (!permissions && (user.role === 'magasinier' || user.role === 'direction'));
+  const canEditTools = hasPerm('tools.edit') || (!permissions && user.role === 'magasinier');
+  const canEditStock = hasPerm('stock.edit_ref') || (!permissions && (user.role === 'direction' || user.role === 'magasinier'));
   const canViewFinancial = hasPerm('financial.view') || (!permissions && user.role === 'direction');
   const canExport = hasPerm('reports.export') || (!permissions && user.role === 'direction');
   const canLendGlobal = hasPerm('loans.create') || (!permissions && ['magasinier', 'direction', 'chef_atelier'].includes(user.role));
@@ -232,6 +236,7 @@ export function Magasins({
   const [activeCategory, setActiveCategory] = useState<LocationCategory>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [inventoryEditTarget, setInventoryEditTarget] = useState<InventoryEditTarget | null>(null);
   const [detail, setDetail] = useState<MagasinDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [drawerFilter, setDrawerFilter] = useState('');
@@ -1463,7 +1468,7 @@ export function Magasins({
                           {t.status_reason && <p className="text-[11px] text-red mt-0.5">{t.status_reason}</p>}
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                           {t.status === 'disponible' && detail.magasin.can_lend !== false && canLendGlobal && (
                             <button
                               type="button"
@@ -1505,6 +1510,30 @@ export function Magasins({
                             >
                               <ArrowDownLeft size={12} />
                               <span>Retourner</span>
+                            </button>
+                          )}
+
+                          {canEditTools && (
+                            <button
+                              type="button"
+                              onClick={() => setInventoryEditTarget({
+                                kind: 'tool',
+                                item: {
+                                  id: t.id,
+                                  name: t.name,
+                                  category: t.category,
+                                  location: t.location,
+                                  brand: t.brand,
+                                  model: t.model,
+                                  serial_number: t.serial_number,
+                                  observations: t.observations,
+                                },
+                              })}
+                              className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-[11px] font-medium text-ink-soft transition-colors hover:bg-paper-2 hover:text-ink"
+                              title="Modifier la fiche de cet équipement"
+                            >
+                              <Pencil size={12} />
+                              <span>Modifier</span>
                             </button>
                           )}
 
@@ -1574,7 +1603,7 @@ export function Magasins({
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
                           <div className="text-right">
                             <span className="block text-xs font-bold font-mono text-ink tabular-nums">
                               {s.qty} {s.unit}
@@ -1584,7 +1613,30 @@ export function Magasins({
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            {canEditStock && (
+                              <button
+                                type="button"
+                                onClick={() => setInventoryEditTarget({
+                                  kind: 'stock',
+                                  item: {
+                                    id: s.id,
+                                    name: s.name,
+                                    category: s.category,
+                                    unit: s.unit,
+                                    location: s.location || detail.magasin.name,
+                                    min_qty: s.min_qty,
+                                    brand: s.brand,
+                                    supplier: s.supplier,
+                                  },
+                                })}
+                                className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-line bg-surface px-2 text-xs font-medium text-ink-soft transition-colors hover:bg-paper-2 hover:text-ink"
+                                title="Modifier la fiche de cette référence"
+                              >
+                                <Pencil size={12} />
+                                <span>Modifier</span>
+                              </button>
+                            )}
                             {detail.magasin.can_receive_in !== false && canMoveStockGlobal && (
                               <button
                                 type="button"
@@ -1791,6 +1843,11 @@ export function Magasins({
       {/* =========================================================================
           MODALS D'ACTIONS OPÉRATIONNELLES (Prêt, Retour, Mouvement, Transfert)
       ========================================================================= */}
+
+      <InventoryEditModal
+        target={inventoryEditTarget}
+        onClose={() => setInventoryEditTarget(null)}
+      />
 
       {/* Modal Créer / Modifier Magasin */}
       <Modal

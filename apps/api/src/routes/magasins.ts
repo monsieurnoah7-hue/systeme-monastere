@@ -244,7 +244,7 @@ magasinsRoutes.get('/:id', requirePerm('magasins.view'), async (c) => {
   if (!await canAccessStore(c.get('auth').user.id, id, 'can_view')) return c.json({ error: 'Ce magasin ne vous est pas attribué.' }, 403);
   const [tools, stock, loans] = await Promise.all([
     db.query(
-      `SELECT t.id, t.name, t.category, t.status, t.condition, t.status_reason,
+      `SELECT t.id, t.name, t.category, t.location, t.observations, t.status, t.condition, t.status_reason,
               t.brand, t.model, t.serial_number, t.photo_path, t.acquisition_cost, t.total_qty,
               l.id AS loan_id, l.employee_id AS loan_employee_id, e.full_name AS loan_employee_name,
               l.qty AS loan_qty, l.out_at AS loan_out_at
