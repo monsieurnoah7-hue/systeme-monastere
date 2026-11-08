@@ -35,14 +35,14 @@ const STANDARD_ITEMS = [
   { item_num: 12, name: 'Mèches de perçage (Ø 5, 6, 8, 10, 12 mm)', qty: 5, unit: 'pièces', code: 'MEC' },
   { item_num: 13, name: 'Rabot à bois CFTM', qty: 1, unit: 'pièce', code: 'RAB' },
   { item_num: 14, name: 'Scie égoïne', qty: 1, unit: 'pièce', code: 'SCI-EGO' },
-  { item_num: 15, name: 'Scie à dos', qty: 1, unit: 'pièce', code: 'SCI-DOS' },
-  { item_num: 16, name: 'Chasse-pointe', qty: 1, unit: 'pièce', code: 'CHA' },
-  { item_num: 17, name: 'Jeu de 6 tournevis EMTOP', qty: 1, unit: 'jeu', code: 'TOU' },
-  { item_num: 18, name: 'Crayons de menuisier', qty: 5, unit: 'pièces', code: 'CRA' },
-  { item_num: 19, name: 'Mètre ruban / Mètre pliant', qty: 1, unit: 'pièce', code: 'MET' },
-  { item_num: 20, name: "Gants de protection d'atelier", qty: 2, unit: 'paires', code: 'GAN' },
-  { item_num: 21, name: 'Casque anti-bruit', qty: 1, unit: 'pièce', code: 'CAS' },
-  { item_num: 22, name: 'Masque respiratoire', qty: 1, unit: 'pièce', code: 'MAS' },
+  { item_num: 15, name: 'Jeu de 6 tournevis EMTOP', qty: 1, unit: 'jeu', code: 'TOU' },
+  { item_num: 16, name: 'Crayons de menuisier', qty: 5, unit: 'pièces', code: 'CRA' },
+  { item_num: 17, name: 'Mètre ruban / Mètre pliant', qty: 1, unit: 'pièce', code: 'MET' },
+  { item_num: 18, name: "Gants de protection d'atelier", qty: 2, unit: 'paires', code: 'GAN' },
+  { item_num: 19, name: 'Casque anti-bruit', qty: 1, unit: 'pièce', code: 'CAS' },
+  { item_num: 20, name: 'Masque respiratoire', qty: 1, unit: 'pièce', code: 'MAS' },
+  { item_num: 21, name: 'Caisse bleue pour vis, mèches et embouts', qty: 1, unit: 'pièce', code: 'CAI-VIS' },
+  { item_num: 22, name: 'Gants pour parc à bois', qty: 1, unit: 'paire', code: 'GAN-BOIS' },
 ];
 
 const FINITION_ITEMS = [
@@ -57,13 +57,13 @@ const FINITION_ITEMS = [
   { item_num: 9, name: 'Lunettes de sécurité', qty: 1, unit: 'pièce', code: 'LUN' },
   { item_num: 10, name: 'Racloir d’ébéniste', qty: 1, unit: 'pièce', code: 'RAC' },
   { item_num: 11, name: 'Scie égoïne', qty: 1, unit: 'pièce', code: 'SCI-EGO' },
-  { item_num: 12, name: 'Scie à dos', qty: 1, unit: 'pièce', code: 'SCI-DOS' },
-  { item_num: 13, name: 'Chasse-pointe', qty: 1, unit: 'pièce', code: 'CHA' },
-  { item_num: 14, name: 'Crayons de menuisier', qty: 5, unit: 'pièces', code: 'CRA' },
-  { item_num: 15, name: 'Mètre ruban / Mètre pliant', qty: 1, unit: 'pièce', code: 'MET' },
-  { item_num: 16, name: "Gants de protection d'atelier", qty: 2, unit: 'paires', code: 'GAN' },
-  { item_num: 17, name: 'Casque anti-bruit', qty: 1, unit: 'pièce', code: 'CAS' },
-  { item_num: 18, name: 'Masque respiratoire', qty: 1, unit: 'pièce', code: 'MAS' },
+  { item_num: 12, name: 'Crayons de menuisier', qty: 5, unit: 'pièces', code: 'CRA' },
+  { item_num: 13, name: 'Mètre ruban / Mètre pliant', qty: 1, unit: 'pièce', code: 'MET' },
+  { item_num: 14, name: "Gants de protection d'atelier", qty: 2, unit: 'paires', code: 'GAN' },
+  { item_num: 15, name: 'Casque anti-bruit', qty: 1, unit: 'pièce', code: 'CAS' },
+  { item_num: 16, name: 'Masque respiratoire', qty: 1, unit: 'pièce', code: 'MAS' },
+  { item_num: 17, name: 'Caisse bleue pour vis, mèches et embouts', qty: 1, unit: 'pièce', code: 'CAI-VIS' },
+  { item_num: 18, name: 'Gants pour parc à bois', qty: 1, unit: 'paire', code: 'GAN-BOIS' },
 ];
 
 function buildItems(code: string, num: number, isFinition: boolean) {
@@ -243,38 +243,5 @@ export const CFTM_KITS: CftmKitDef[] = [
     items: buildItems('OCF', 14, true),
   },
 
-  // 3 Encadrants Techniques & Formation
-  {
-    emp_id: 'EMP-006',
-    name: 'M. LAWSON ADODO François',
-    job: 'Chef Contrôleur des Travaux',
-    etabli_num: 15,
-    code: 'LAF',
-    location: 'Bureau Contrôleur des Travaux / Atelier',
-    source_mag: 'MAG-019',
-    type: 'standard',
-    items: buildItems('LAF', 15, false),
-  },
-  {
-    emp_id: 'EMP-007',
-    name: 'M. MVOGO Médard',
-    job: 'Adj. Contrôleur des Travaux',
-    etabli_num: 16,
-    code: 'MM',
-    location: 'Bureau Contrôleur des Travaux / Atelier',
-    source_mag: 'MAG-019',
-    type: 'standard',
-    items: buildItems('MM', 16, false),
-  },
-  {
-    emp_id: 'EMP-003',
-    name: 'M. KOUOMOU Désiré',
-    job: 'Directeur de Formation & Informaticien',
-    etabli_num: 17,
-    code: 'KD',
-    location: 'Atelier de Formation',
-    source_mag: 'MAG-019',
-    type: 'standard',
-    items: buildItems('KD', 17, false),
-  },
+  // Les postes de supervision 15–17 ne reçoivent plus de kit nominatif.
 ];

@@ -160,6 +160,48 @@ export async function migrate(): Promise<void> {
     await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [SEED_LOCK]);
   }
 
+  // Révision demandée des dotations nominatives : retirer les établis de
+  // supervision 15–17, supprimer deux outils et ajouter les deux nouvelles
+  // dotations aux établis restants. Le marqueur et les écritures sont atomiques.
+  const KIT_REVISION = '020_worker_kit_inventory_revision';
+  await getDb().transaction(async (tx) => {
+    const claimed = await tx.query<{ name: string }>(
+      'INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING RETURNING name',
+      [KIT_REVISION],
+    );
+    if (!claimed.length) return;
+
+    await tx.query(
+      'DELETE FROM etabli_kits WHERE id = ANY($1::text[])',
+      [['KIT-LAF-15', 'KIT-MM-16', 'KIT-KD-17']],
+    );
+    await tx.query(
+      `DELETE FROM etabli_kit_items
+        WHERE lower(trim(name)) = ANY($1::text[])`,
+      [['scie à dos', 'chasse-pointe']],
+    );
+    await tx.query(`
+      INSERT INTO etabli_kit_items (kit_id, item_num, name, qty, unit, tool_code, condition, is_present)
+      SELECT k.id, COALESCE(MAX(i.item_num), 0)::int + 1,
+             'Caisse bleue pour vis, mèches et embouts', 1, 'pièce',
+             'CFTM-' || k.code || '-CAI-VIS-' || LPAD(k.etabli_number::text, 2, '0'), 'bon', true
+        FROM etabli_kits k
+        LEFT JOIN etabli_kit_items i ON i.kit_id = k.id
+       GROUP BY k.id
+      ON CONFLICT (tool_code) DO NOTHING
+    `);
+    await tx.query(`
+      INSERT INTO etabli_kit_items (kit_id, item_num, name, qty, unit, tool_code, condition, is_present)
+      SELECT k.id, COALESCE(MAX(i.item_num), 0)::int + 1,
+             'Gants pour parc à bois', 1, 'paire',
+             'CFTM-' || k.code || '-GAN-BOIS-' || LPAD(k.etabli_number::text, 2, '0'), 'bon', true
+        FROM etabli_kits k
+        LEFT JOIN etabli_kit_items i ON i.kit_id = k.id
+      GROUP BY k.id
+      ON CONFLICT (tool_code) DO NOTHING
+    `);
+  });
+
   // Chaque établi reçoit son propre sac de chantier, y compris sur les bases déjà initialisées.
   await getDb().query(`
     INSERT INTO etabli_kit_items (kit_id, item_num, name, qty, unit, tool_code, condition, is_present)
