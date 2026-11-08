@@ -663,62 +663,59 @@ export function ProjectsView({
       >
         <div className="space-y-3.5 text-xs">
           {error && <Banner tone="error">{error}</Banner>}
-          <p className="rounded-lg border border-line bg-paper-2/50 px-3 py-2 text-xs text-ink-soft">
-            Tous les champs sont facultatifs. Vous pourrez compléter ou modifier cette configuration plus tard.
-          </p>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block font-semibold text-ink">Code commande <span className="font-normal text-ink-faint">(facultatif)</span></label>
+              <label className="mb-1 block font-semibold text-ink">Code commande</label>
               <input
                 type="text"
                 value={form.code || ''}
                 onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
-                placeholder="Généré automatiquement si laissé vide"
+                placeholder="Auto si vide"
                 className="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono font-bold text-xs text-ink focus:border-amber focus:outline-none"
               />
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-ink">Type de projet (optionnel)</label>
+              <label className="mb-1 block font-semibold text-ink">Type de projet</label>
               <input
                 type="text"
                 value={form.category || ''}
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value || null }))}
-                placeholder="Ex. mobilier liturgique, restauration, agencement…"
+                placeholder="Ex. mobilier"
                 className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block font-semibold text-ink">Intitulé de la commande <span className="font-normal text-ink-faint">(facultatif)</span></label>
+            <label className="mb-1 block font-semibold text-ink">Intitulé de la commande</label>
             <input
               type="text"
               value={form.title || ''}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="Ex : Fabrication et pose de 14 blocs-portes en Iroko"
+              placeholder="Ex. 12 portes en iroko"
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
             />
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block font-semibold text-ink">Nom du client <span className="font-normal text-ink-faint">(facultatif)</span></label>
+              <label className="mb-1 block font-semibold text-ink">Nom du client</label>
               <input
                 type="text"
                 value={form.client_name || ''}
                 onChange={(e) => setForm((f) => ({ ...f, client_name: e.target.value }))}
-                placeholder="Ex : Villa Bastos / Paroisse..."
+                placeholder="Ex. Paroisse"
                 className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
               />
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-ink">Lieu du chantier <span className="font-normal text-ink-faint">(facultatif)</span></label>
+              <label className="mb-1 block font-semibold text-ink">Lieu du chantier</label>
               <input
                 type="text"
                 value={form.site_location || ''}
                 onChange={(e) => setForm((f) => ({ ...f, site_location: e.target.value }))}
-                placeholder="Ex : Bastos, Yaoundé"
+                placeholder="Ex. Yaoundé"
                 className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
               />
             </div>
@@ -727,23 +724,22 @@ export function ProjectsView({
           <div className="rounded-xl border border-line bg-surface-2/40 p-3 space-y-2.5">
             <p className="font-bold text-ink flex items-center gap-1.5"><Clock size={14} className="text-amber" />Budget et référence d’impact</p>
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-8">Budget global du projet (heures) · facultatif</span>
+              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-8">Budget prévu (heures)</span>
                 <input type="number" min="0.5" step="0.5" value={form.budget_hours && form.budget_hours > 0 ? form.budget_hours : ''} onChange={(e) => setForm((f) => ({ ...f, budget_hours: e.target.value === '' ? undefined : Number(e.target.value) }))} placeholder="Ex. 120" className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
               </label>
-              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-8">Impact par heure dépassée et jour ouvré (FCFA) · facultatif</span>
-                <input type="number" min="0" step="500" value={form.penalty_rate_daily_fcfa ?? ''} onChange={(e) => setForm((f) => ({ ...f, penalty_rate_daily_fcfa: e.target.value === '' ? undefined : Number(e.target.value) }))} placeholder="À définir plus tard" className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
+              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-8">Impact par heure dépassée (FCFA)</span>
+                <input type="number" min="0" step="500" value={form.penalty_rate_daily_fcfa ?? ''} onChange={(e) => setForm((f) => ({ ...f, penalty_rate_daily_fcfa: e.target.value === '' ? undefined : Number(e.target.value) }))} placeholder="Ex. 10 000" className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
               </label>
             </div>
-            <p className="text-[11px] text-ink-faint">Les heures réellement saisies mettent à jour le total. Le budget est global au projet; le planning répartit le travail entre les personnes et les jours.</p>
           </div>
 
           <div className="rounded-xl border border-line bg-surface-2/40 p-3">
             <p className="mb-3 font-bold text-ink flex items-center gap-1.5"><Calendar size={14} className="text-amber" />Dates du projet</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-5">Début prévu · facultatif</span>
+              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-5">Début prévu</span>
                 <input type="date" value={form.start_date || ''} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none" />
               </label>
-              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-5">Date limite de livraison · facultative</span>
+              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-5">Date limite de livraison</span>
                 <input type="date" value={form.delivery_deadline || ''} onChange={(e) => setForm((f) => ({ ...f, delivery_deadline: e.target.value }))} className="mt-1 h-10 w-full rounded-lg border border-amber/50 bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none" />
               </label>
             </div>
