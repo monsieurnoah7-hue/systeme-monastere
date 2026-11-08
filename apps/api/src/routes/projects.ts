@@ -4,6 +4,7 @@ import { getDb } from '../db/index.js';
 import { writeAudit } from '../lib/audit.js';
 import { actorId, actorName, requireAuth } from '../middleware/auth.js';
 import { requirePerm } from '../middleware/permissions.js';
+import { randomUUID } from 'node:crypto';
 
 type WorkPlanEntry = { employee_id: string; weekday: number; planned_hours: number };
 
@@ -12,24 +13,24 @@ export const projectsRoutes = new Hono();
 export type ProjectRow = {
   id: string;
   code: string;
-  title: string;
-  client_name: string;
-  site_location: string;
+  title: string | null;
+  client_name: string | null;
+  site_location: string | null;
   category: string | null;
-  start_date: string;
+  start_date: string | null;
   work_plan: WorkPlanEntry[];
   assigned_worker_ids: string[];
   assigned_worker_names: string[];
   budget_hours: number;
   spent_hours: number;
   hourly_rate_fcfa: number;
-  penalty_rate_daily_fcfa: number;
+  penalty_rate_daily_fcfa: number | null;
   ratio_value: number | null;
   ratio_unit: string | null;
   ratio_basis: string | null;
   ratio_quantity: number | null;
   ratio_deadline: string | null;
-  delivery_deadline: string;
+  delivery_deadline: string | null;
   installation_start_date?: string | null;
   installation_days: number;
   status: 'planifie' | 'en_fabrication' | 'en_pose' | 'termine' | 'en_retard' | 'litige';
@@ -39,7 +40,7 @@ export type ProjectRow = {
   // Computed metrics (PDF Pt 1 & 2)
   is_delayed?: boolean;
   delayed_days?: number;
-  days_to_deadline?: number;
+  days_to_deadline?: number | null;
   overtime_hours?: number;
   overtime_cost_fcfa?: number;
   penalties_cost_fcfa?: number;
@@ -159,20 +160,21 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const deadline = new Date(p.delivery_deadline);
-  deadline.setHours(0, 0, 0, 0);
-
   const todayIso = today.toISOString().slice(0, 10);
   const weekdays = projectWorkdays(p, context);
   const holidays = context?.holidays ?? new Set<string>();
-  const diffMs = deadline.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  p.days_to_deadline = diffDays >= 0
-    ? countProjectWorkdays(todayIso, p.delivery_deadline, weekdays, holidays, true)
-    : -countProjectWorkdays(p.delivery_deadline, todayIso, weekdays, holidays);
+  const deadline = p.delivery_deadline ? new Date(`${p.delivery_deadline}T00:00:00`) : null;
+  const diffDays = deadline ? Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
+  p.days_to_deadline = deadline && diffDays !== null
+    ? diffDays >= 0
+      ? countProjectWorkdays(todayIso, p.delivery_deadline!, weekdays, holidays, true)
+      : -countProjectWorkdays(p.delivery_deadline!, todayIso, weekdays, holidays)
+    : null;
 
   // Un retard ne commence qu’après un jour effectivement ouvré de dépassement.
-  const overdueWorkdays = diffDays < 0 ? countProjectWorkdays(p.delivery_deadline, todayIso, weekdays, holidays) : 0;
+  const overdueWorkdays = p.delivery_deadline && diffDays !== null && diffDays < 0
+    ? countProjectWorkdays(p.delivery_deadline, todayIso, weekdays, holidays)
+    : 0;
   const isOverdue = overdueWorkdays > 0 && p.status !== 'termine';
   p.is_delayed = isOverdue;
   p.delayed_days = isOverdue ? overdueWorkdays : 0;
@@ -183,7 +185,7 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
   const hourlyRate = Number(p.hourly_rate_fcfa) || 0;
   const dailyPenalty = Number(p.penalty_rate_daily_fcfa) || 0;
 
-  const overtime = Math.max(0, spent - budget);
+  const overtime = budget > 0 ? Math.max(0, spent - budget) : 0;
   p.overtime_hours = overtime;
   p.overtime_cost_fcfa = overtime * hourlyRate;
   const assignedIds = p.assigned_worker_ids ?? [];
@@ -194,7 +196,7 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
   if (context && assignedIds.length) {
     const logs = context.workLogsByProject.get(p.id) ?? [];
     const totalLogged = logs.reduce((sum, log) => sum + log.hours, 0);
-    const canAttribute = totalLogged >= spent - 0.01;
+    const canAttribute = budget > 0 && totalLogged >= spent - 0.01;
     let remainingBudget = budget;
     const overrunByEmployee = new Map<string, number>();
     if (canAttribute) for (const log of logs) {
@@ -225,9 +227,9 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
     }
     const completionDate = completion as string | null;
     p.planned_completion_date = completionDate;
-    p.schedule_at_risk = Boolean(completionDate && completionDate > p.delivery_deadline);
-    const target = completionDate && completionDate > p.delivery_deadline ? completionDate : p.delivery_deadline;
-    if (today > new Date(`${target}T23:59:59`)) {
+    p.schedule_at_risk = Boolean(completionDate && p.delivery_deadline && completionDate > p.delivery_deadline);
+    const target = completionDate && p.delivery_deadline && completionDate > p.delivery_deadline ? completionDate : p.delivery_deadline;
+    if (target && today > new Date(`${target}T23:59:59`)) {
       ratioDelayedWorkdays = countProjectWorkdays(target, todayIso, weekdays, context.holidays);
     }
     if (canAttribute) for (const [employeeId, workerOvertime] of overrunByEmployee) {
@@ -235,8 +237,8 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
       const workerDays = context.workdaysByEmployee.get(employeeId) ?? [1, 2, 3, 4, 5, 6];
       const incidents = context.excludedIncidentDays.get(p.id) ?? [];
       const excludedDays = incidents.reduce((sum, incident) => sum + (!incident.employeeIds.length || incident.employeeIds.includes(employeeId) ? incident.days : 0), 0);
-      const adjustedDeadline = addWorkdays(p.delivery_deadline, excludedDays, workerDays, context.holidays);
-      const workerDelay = todayIso > adjustedDeadline
+      const adjustedDeadline = p.delivery_deadline ? addWorkdays(p.delivery_deadline, excludedDays, workerDays, context.holidays) : null;
+      const workerDelay = adjustedDeadline && todayIso > adjustedDeadline
         ? countProjectWorkdays(adjustedDeadline, todayIso, new Set(workerDays), context.holidays)
         : 0;
       ratioDelayedWorkdays = Math.max(ratioDelayedWorkdays, workerDelay);
@@ -265,25 +267,25 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
 // CRUD Routes
 // -------------------------------------------------------------------------
 const projectBody = z.object({
-  code: z.string().min(2, 'Code de commande requis'),
-  title: z.string().min(3, 'Intitulé du projet requis'),
-  client_name: z.string().min(2, 'Nom du client requis'),
-  site_location: z.string().trim().min(1, 'Lieu du chantier requis'),
+  code: z.string().trim().max(40).nullable().optional(),
+  title: z.string().trim().max(240).nullable().optional(),
+  client_name: z.string().trim().max(160).nullable().optional(),
+  site_location: z.string().trim().max(240).nullable().optional(),
   category: z.string().trim().max(120).nullable().optional(),
-  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   work_plan: z.array(z.object({ employee_id: z.string().min(2), weekday: z.number().int().min(0).max(6), planned_hours: z.number().positive().max(24) })).optional(),
   assigned_worker_ids: z.array(z.string()).default([]),
   assigned_worker_names: z.array(z.string()).default([]),
-  budget_hours: z.number().min(0).default(0),
+  budget_hours: z.number().min(0).optional(),
   spent_hours: z.number().min(0).default(0),
   hourly_rate_fcfa: z.number().min(0).default(0),
-  penalty_rate_daily_fcfa: z.number().min(0).default(10000),
+  penalty_rate_daily_fcfa: z.number().min(0).nullable().optional(),
   ratio_value: z.number().min(0).nullable().optional(),
   ratio_unit: z.string().trim().max(80).nullable().optional(),
   ratio_basis: z.string().trim().max(160).nullable().optional(),
   ratio_quantity: z.number().positive().nullable().optional(),
   ratio_deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-  delivery_deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format date requis: AAAA-MM-JJ'),
+  delivery_deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format date requis: AAAA-MM-JJ').nullable().optional(),
   installation_start_date: z.string().nullable().optional(),
   installation_days: z.number().min(0).default(0),
   status: z.enum(['planifie', 'en_fabrication', 'en_pose', 'termine', 'en_retard', 'litige']).default('planifie'),
@@ -373,19 +375,19 @@ projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) 
   }
   const db = getDb();
   const d = body.data;
-  const id = `prj-${Date.now()}`;
-
-  const normalizedCode = d.code.trim().toUpperCase();
-  if (d.budget_hours <= 0) return c.json({ error: 'Indiquez le budget global d’heures du projet.' }, 400);
+  const id = `prj-${randomUUID()}`;
+  const generatedCode = !d.code?.trim();
+  let normalizedCode = d.code?.trim().toUpperCase() || `CMD-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`;
   const plan = d.work_plan ?? [];
   const planError = await validateWorkPlan(null, d.assigned_worker_ids, plan);
   if (planError) return c.json({ error: planError }, 400);
-  const duplicate = await db.one<{ id: string }>(
-    'SELECT id FROM projects WHERE upper(code) = $1 LIMIT 1',
-    [normalizedCode],
-  );
+  let duplicate = await db.one<{ id: string }>('SELECT id FROM projects WHERE upper(code) = $1 LIMIT 1', [normalizedCode]);
+  for (let attempt = 0; generatedCode && duplicate && attempt < 3; attempt += 1) {
+    normalizedCode = `CMD-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`;
+    duplicate = await db.one<{ id: string }>('SELECT id FROM projects WHERE upper(code) = $1 LIMIT 1', [normalizedCode]);
+  }
   if (duplicate) {
-    return c.json({ error: `Le code ${normalizedCode} est déjà utilisé. Choisissez un autre code.` }, 409);
+    return c.json({ error: generatedCode ? 'Impossible de générer un code unique. Réessayez.' : `Le code ${normalizedCode} est déjà utilisé. Choisissez un autre code.` }, 409);
   }
 
   const row = await db.transaction(async (tx) => {
@@ -409,9 +411,9 @@ projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) 
                 installation_days, status, notes,
                 created_at::text AS created_at, updated_at::text AS updated_at
     `, [
-      id, normalizedCode, d.title.trim(), d.client_name.trim(), d.site_location.trim(), d.category ?? null,
-      d.start_date || new Date().toISOString().slice(0, 10), JSON.stringify(plan), d.assigned_worker_ids, d.assigned_worker_names,
-      d.budget_hours, 0, 0, d.penalty_rate_daily_fcfa, d.delivery_deadline, d.status, d.notes || null,
+      id, normalizedCode, d.title?.trim() || null, d.client_name?.trim() || null, d.site_location?.trim() || null, d.category?.trim() || null,
+      d.start_date || null, JSON.stringify(plan), d.assigned_worker_ids, d.assigned_worker_names,
+      d.budget_hours ?? 0, 0, 0, d.penalty_rate_daily_fcfa ?? null, d.delivery_deadline || null, d.status, d.notes || null,
     ]);
     if (!created) throw new Error('La commande n’a pas pu être enregistrée.');
 
@@ -422,7 +424,7 @@ projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) 
       after: created,
       actorId: actorId(c),
       actorName: actorName(c) || 'Utilisateur',
-      reason: `Création commande projet ${normalizedCode} (${d.title.trim()})`,
+      reason: `Création commande projet ${normalizedCode}${d.title?.trim() ? ` (${d.title.trim()})` : ''}`,
     });
     return created;
   });
@@ -444,7 +446,6 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
 
   const d = body.data;
   const hasField = (field: string) => Object.prototype.hasOwnProperty.call(d, field);
-  if (d.budget_hours !== undefined && d.budget_hours <= 0) return c.json({ error: 'Le budget global doit être supérieur à zéro.' }, 400);
   const nextWorkers = d.assigned_worker_ids ?? existing.assigned_worker_ids;
   const currentPlan = d.work_plan ?? (Array.isArray(existing.work_plan) ? existing.work_plan : []);
   const nextPlan = currentPlan.filter((entry) => nextWorkers.includes(entry.employee_id));

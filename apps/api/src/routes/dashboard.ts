@@ -333,12 +333,12 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
           count(*)::int AS total_count,
           count(*) FILTER (WHERE status <> 'termine')::int AS active_count,
           count(*) FILTER (WHERE status <> 'termine' AND delivery_deadline < CURRENT_DATE)::int AS delayed_count,
-          COALESCE(sum(GREATEST(0, spent_hours - budget_hours)), 0)::float AS overtime_hours,
+          COALESCE(sum(CASE WHEN budget_hours > 0 THEN GREATEST(0, spent_hours - budget_hours) ELSE 0 END), 0)::float AS overtime_hours,
           COALESCE(sum(
-            GREATEST(0, spent_hours - budget_hours) * hourly_rate_fcfa
+            CASE WHEN budget_hours > 0 THEN GREATEST(0, spent_hours - budget_hours) ELSE 0 END * hourly_rate_fcfa
             + CASE
                 WHEN status <> 'termine' AND delivery_deadline < CURRENT_DATE
-                THEN (CURRENT_DATE - delivery_deadline) * penalty_rate_daily_fcfa
+                THEN (CURRENT_DATE - delivery_deadline) * COALESCE(penalty_rate_daily_fcfa, 0)
                 ELSE 0
               END
           ), 0)::float AS financial_damage_fcfa
@@ -354,10 +354,10 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
         SELECT code, title, category, status,
                delivery_deadline::text AS delivery_deadline,
                GREATEST(0, CURRENT_DATE - delivery_deadline)::int AS days_late,
-               GREATEST(0, spent_hours - budget_hours)::float AS overtime_hours
+               CASE WHEN budget_hours > 0 THEN GREATEST(0, spent_hours - budget_hours) ELSE 0 END::float AS overtime_hours
           FROM projects
          WHERE status <> 'termine'
-           AND (delivery_deadline < CURRENT_DATE OR spent_hours > budget_hours)
+           AND (delivery_deadline < CURRENT_DATE OR (budget_hours > 0 AND spent_hours > budget_hours))
          ORDER BY
            CASE WHEN delivery_deadline < CURRENT_DATE THEN 0 ELSE 1 END,
            delivery_deadline ASC,

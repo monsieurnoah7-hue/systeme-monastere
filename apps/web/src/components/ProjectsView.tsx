@@ -73,9 +73,9 @@ export function ProjectsView({
       const matchesSearch =
         !q ||
         p.code.toLowerCase().includes(q) ||
-        p.title.toLowerCase().includes(q) ||
-        p.client_name.toLowerCase().includes(q) ||
-        p.site_location.toLowerCase().includes(q);
+        (p.title ?? '').toLowerCase().includes(q) ||
+        (p.client_name ?? '').toLowerCase().includes(q) ||
+        (p.site_location ?? '').toLowerCase().includes(q);
 
       const matchesCat = filterCat === 'all' || p.category === filterCat;
       const matchesDelayed = !filterDelayedOnly || Boolean(p.is_delayed);
@@ -84,25 +84,18 @@ export function ProjectsView({
   }, [projects, search, filterCat, filterDelayedOnly]);
 
   function openCreate() {
-    const year = new Date().getFullYear();
-    const prefix = `CMD-${year}-`;
-    const nextNumber = projects.reduce((max, project) => {
-      if (!project.code.startsWith(prefix)) return max;
-      const suffix = Number(project.code.slice(prefix.length));
-      return Number.isInteger(suffix) ? Math.max(max, suffix) : max;
-    }, 0) + 1;
     setEditingProject(null);
     setForm({
-      code: `${prefix}${String(nextNumber).padStart(3, '0')}`,
+      code: '',
       title: '',
       client_name: '',
       site_location: '',
       category: null,
       assigned_worker_ids: [],
       assigned_worker_names: [],
-      penalty_rate_daily_fcfa: 10000,
+      penalty_rate_daily_fcfa: undefined,
       delivery_deadline: '',
-      start_date: new Date().toISOString().slice(0, 10),
+      start_date: '',
       budget_hours: undefined,
       work_plan: [],
       status: 'planifie',
@@ -119,19 +112,22 @@ export function ProjectsView({
   }
 
   async function handleSave() {
-    if (!form.code?.trim() || !form.title?.trim() || !form.client_name?.trim() || !form.site_location?.trim() || !form.delivery_deadline) {
-      setError('Code, intitulé, client, lieu et date limite de livraison sont obligatoires.');
-      return;
-    }
-    if (!form.budget_hours || form.budget_hours <= 0) {
-      setError('Indiquez le budget global d’heures du projet.');
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
       const projectForm = {
         ...form,
+        code: form.code?.trim() || null,
+        title: form.title?.trim() || null,
+        client_name: form.client_name?.trim() || null,
+        site_location: form.site_location?.trim() || null,
+        category: form.category?.trim() || null,
+        start_date: form.start_date || null,
+        delivery_deadline: form.delivery_deadline || null,
+        budget_hours: form.budget_hours ?? null,
+        penalty_rate_daily_fcfa: form.penalty_rate_daily_fcfa ?? null,
+        assigned_worker_ids: form.assigned_worker_ids ?? [],
+        assigned_worker_names: form.assigned_worker_names ?? [],
         // Le cumul est géré par les feuilles de temps : ne jamais réécrire
         // une ancienne valeur du formulaire lors d'une modification du projet.
         spent_hours: undefined,
@@ -153,7 +149,7 @@ export function ProjectsView({
   }
 
   async function handleDelete(p: Project) {
-    if (!confirm(`Supprimer définitivement la commande ${p.code} (${p.title}) ?`)) return;
+    if (!confirm(`Supprimer définitivement la commande ${p.code} (${p.title || 'sans intitulé'}) ?`)) return;
     try {
       await deleteProject(p.id);
       onRefresh();
@@ -395,6 +391,8 @@ export function ProjectsView({
               {filteredProjects.map((p) => {
                 const isOverdue = p.is_delayed;
                 const hasOvertime = (p.overtime_hours ?? 0) > 0;
+                const hasBudget = Number(p.budget_hours) > 0;
+                const needsConfiguration = !p.title?.trim() || !p.client_name?.trim() || !p.site_location?.trim() || !p.delivery_deadline || !hasBudget;
 
                 return (
                   <div
@@ -419,12 +417,12 @@ export function ProjectsView({
                             ) : null}
                           </div>
                           <h4 className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-ink">
-                            {p.title}
+                            {p.title || 'Projet à compléter'}
                           </h4>
                           <p className="mt-1 flex items-center gap-1 truncate text-xs text-ink-faint">
-                            <span>Client : <strong>{p.client_name}</strong></span>
+                            <span>Client : <strong>{p.client_name || 'à renseigner'}</strong></span>
                             <span>•</span>
-                            <span className="truncate">{p.site_location}</span>
+                            <span className="truncate">{p.site_location || 'Lieu à renseigner'}</span>
                           </p>
                         </div>
 
@@ -442,6 +440,8 @@ export function ProjectsView({
                         >
                           {p.status === 'termine'
                             ? 'Terminé'
+                            : needsConfiguration
+                            ? 'À compléter'
                             : p.status === 'en_pose'
                             ? 'Pose sur site'
                             : isOverdue
@@ -479,7 +479,9 @@ export function ProjectsView({
                       <div className="mt-4 space-y-2.5 text-xs">
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-ink-soft">
-                            Heures : <strong>{p.spent_hours} h</strong> / {p.budget_hours} h prévues
+                            {hasBudget
+                              ? <>Heures : <strong>{p.spent_hours} h</strong> / {p.budget_hours} h prévues</>
+                              : <>Heures saisies : <strong>{p.spent_hours} h</strong></>}
                           </span>
                           <span
                             className={cx(
@@ -487,12 +489,12 @@ export function ProjectsView({
                               hasOvertime ? 'text-red-600 dark:text-red-400' : 'text-emerald-600'
                             )}
                           >
-                            {hasOvertime ? `+${p.overtime_hours} h DÉPASSÉES` : `${Number(p.budget_hours) - Number(p.spent_hours)} h restantes`}
+                            {hasOvertime ? `+${p.overtime_hours} h DÉPASSÉES` : hasBudget ? `${Number(p.budget_hours) - Number(p.spent_hours)} h restantes` : 'Budget à définir'}
                           </span>
                         </div>
 
                         {/* Barre de progression des heures */}
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-paper-2">
+                        {hasBudget && <div className="h-1.5 w-full overflow-hidden rounded-full bg-paper-2">
                           <div
                             className={cx(
                               'h-full rounded-full transition-all',
@@ -500,7 +502,7 @@ export function ProjectsView({
                             )}
                             style={{ width: `${Math.min(100, p.hours_progress_pct || 0)}%` }}
                           />
-                        </div>
+                        </div>}
 
                         {/* Décompte Deadline de Livraison Contractuelle */}
                         <div className="flex items-center justify-between rounded-lg border border-line bg-paper-2/40 p-2.5 text-[11px]">
@@ -514,7 +516,9 @@ export function ProjectsView({
                               isOverdue ? 'text-red-600 dark:text-red-400' : 'text-ink'
                             )}
                           >
-                            {p.delivery_deadline} ({isOverdue ? `dépassé de ${p.delayed_days} j` : `${p.days_to_deadline} j restants`})
+                            {p.delivery_deadline
+                              ? `${p.delivery_deadline} (${isOverdue ? `dépassé de ${p.delayed_days} j` : `${p.days_to_deadline} j ouvrés restants`})`
+                              : 'À définir · aucun retard calculé'}
                           </span>
                         </div>
                         {p.planned_completion_date && <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-paper-2/40 p-2.5 text-[11px]">
@@ -604,7 +608,7 @@ export function ProjectsView({
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-mono text-xs font-semibold text-ink-soft">{p.code}</p>
-                      <h4 className="mt-1 font-semibold text-ink">{p.title}</h4>
+                      <h4 className="mt-1 font-semibold text-ink">{p.title || 'Projet à compléter'}</h4>
                       <p className="mt-1 text-xs text-ink-soft">{p.assigned_worker_names?.join(', ') || 'Aucun exécutant affecté'}</p>
                     </div>
                     {canEdit && <Button size="sm" variant="secondary" disabled={!p.assigned_worker_ids?.length} onClick={() => {
@@ -614,10 +618,10 @@ export function ProjectsView({
                     }}>Répartir les heures</Button>}
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                    <div><p className="text-xs text-ink-faint">Budget total</p><p className="mt-1 font-mono font-semibold text-ink">{p.budget_hours} h</p></div>
+                    <div><p className="text-xs text-ink-faint">Budget total</p><p className="mt-1 font-mono font-semibold text-ink">{Number(p.budget_hours) > 0 ? `${p.budget_hours} h` : 'À définir'}</p></div>
                     <div><p className="text-xs text-ink-faint">Prévu / semaine</p><p className="mt-1 font-mono font-semibold text-ink">{p.planned_weekly_hours ?? 0} h</p></div>
                     <div><p className="text-xs text-ink-faint">Fin estimée</p><p className="mt-1 font-mono font-semibold text-ink">{p.planned_completion_date || 'À planifier'}</p></div>
-                    <div><p className="text-xs text-ink-faint">Échéance</p><p className={cx('mt-1 font-mono font-semibold', p.schedule_at_risk ? 'text-red' : 'text-ink')}>{p.delivery_deadline}</p></div>
+                    <div><p className="text-xs text-ink-faint">Échéance</p><p className={cx('mt-1 font-mono font-semibold', p.schedule_at_risk ? 'text-red' : 'text-ink')}>{p.delivery_deadline || 'À définir'}</p></div>
                   </div>
                   {p.schedule_at_risk && <p className="mt-3 rounded-lg border border-amber/30 bg-amber-wash p-2 text-xs text-amber">Avec cette répartition, le budget serait terminé après la date de livraison.</p>}
                   {(!p.work_plan?.length) && <p className="mt-3 text-xs text-ink-faint">Aucune répartition hebdomadaire configurée.</p>}
@@ -644,22 +648,25 @@ export function ProjectsView({
               onClick={() => void handleSave()}
               className="!bg-ink !text-paper hover:!bg-surface-3 hover:!text-ink"
             >
-              {busy ? <Spinner /> : 'Enregistrer Projet'}
+              {busy ? <Spinner /> : 'Enregistrer le projet'}
             </Button>
           </>
         }
       >
         <div className="space-y-3.5 text-xs">
           {error && <Banner tone="error">{error}</Banner>}
+          <p className="rounded-lg border border-line bg-paper-2/50 px-3 py-2 text-xs text-ink-soft">
+            Tous les champs sont facultatifs. Vous pourrez compléter ou modifier cette configuration plus tard.
+          </p>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block font-semibold text-ink">Code Commande</label>
+              <label className="mb-1 block font-semibold text-ink">Code commande <span className="font-normal text-ink-faint">(facultatif)</span></label>
               <input
                 type="text"
                 value={form.code || ''}
                 onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
-                placeholder="Ex : CMD-2026-042"
+                placeholder="Généré automatiquement si laissé vide"
                 className="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono font-bold text-xs text-ink focus:border-amber focus:outline-none"
               />
             </div>
@@ -676,7 +683,7 @@ export function ProjectsView({
           </div>
 
           <div>
-            <label className="mb-1 block font-semibold text-ink">Intitulé de la commande</label>
+            <label className="mb-1 block font-semibold text-ink">Intitulé de la commande <span className="font-normal text-ink-faint">(facultatif)</span></label>
             <input
               type="text"
               value={form.title || ''}
@@ -688,7 +695,7 @@ export function ProjectsView({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block font-semibold text-ink">Nom du Client</label>
+              <label className="mb-1 block font-semibold text-ink">Nom du client <span className="font-normal text-ink-faint">(facultatif)</span></label>
               <input
                 type="text"
                 value={form.client_name || ''}
@@ -698,7 +705,7 @@ export function ProjectsView({
               />
             </div>
             <div>
-              <label className="mb-1 block font-semibold text-ink">Lieu du chantier *</label>
+              <label className="mb-1 block font-semibold text-ink">Lieu du chantier <span className="font-normal text-ink-faint">(facultatif)</span></label>
               <input
                 type="text"
                 value={form.site_location || ''}
@@ -712,11 +719,11 @@ export function ProjectsView({
           <div className="rounded-xl border border-line bg-surface-2/40 p-3 space-y-2.5">
             <p className="font-bold text-ink flex items-center gap-1.5"><Clock size={14} className="text-amber" />Budget et référence d’impact</p>
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <label className="text-[11px] font-medium text-ink-soft">Budget global du projet (heures)
-                <input type="number" min="0.5" step="0.5" value={form.budget_hours ?? ''} onChange={(e) => setForm((f) => ({ ...f, budget_hours: e.target.value === '' ? undefined : Number(e.target.value) }))} placeholder="Ex. 120" className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
+              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-8">Budget global du projet (heures) · facultatif</span>
+                <input type="number" min="0.5" step="0.5" value={form.budget_hours && form.budget_hours > 0 ? form.budget_hours : ''} onChange={(e) => setForm((f) => ({ ...f, budget_hours: e.target.value === '' ? undefined : Number(e.target.value) }))} placeholder="Ex. 120" className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
               </label>
-              <label className="text-[11px] font-medium text-ink-soft">Impact par heure dépassée et jour ouvré (FCFA)
-                <input type="number" min="0" step="500" value={form.penalty_rate_daily_fcfa ?? 10000} onChange={(e) => setForm((f) => ({ ...f, penalty_rate_daily_fcfa: Number(e.target.value) }))} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
+              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-8">Impact par heure dépassée et jour ouvré (FCFA) · facultatif</span>
+                <input type="number" min="0" step="500" value={form.penalty_rate_daily_fcfa ?? ''} onChange={(e) => setForm((f) => ({ ...f, penalty_rate_daily_fcfa: e.target.value === '' ? undefined : Number(e.target.value) }))} placeholder="À définir plus tard" className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
               </label>
             </div>
             <p className="text-[11px] text-ink-faint">Les heures réellement saisies mettent à jour le total. Le budget est global au projet; le planning répartit le travail entre les personnes et les jours.</p>
@@ -725,10 +732,10 @@ export function ProjectsView({
           <div className="rounded-xl border border-line bg-surface-2/40 p-3">
             <p className="mb-3 font-bold text-ink flex items-center gap-1.5"><Calendar size={14} className="text-amber" />Dates du projet</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-[11px] font-medium text-ink-soft">Début prévu
+              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-5">Début prévu · facultatif</span>
                 <input type="date" value={form.start_date || ''} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none" />
               </label>
-              <label className="text-[11px] font-semibold text-amber">Date limite de livraison
+              <label className="text-[11px] font-medium text-ink-soft"><span className="block min-h-5">Date limite de livraison · facultative</span>
                 <input type="date" value={form.delivery_deadline || ''} onChange={(e) => setForm((f) => ({ ...f, delivery_deadline: e.target.value }))} className="mt-1 h-10 w-full rounded-lg border border-amber/50 bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none" />
               </label>
             </div>

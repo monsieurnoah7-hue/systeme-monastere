@@ -608,10 +608,10 @@ export type Dashboard = {
     financialDamageFcfa: number | null;
     attention: {
       code: string;
-      title: string;
+      title: string | null;
       category: string | null;
       status: string;
-      delivery_deadline: string;
+      delivery_deadline: string | null;
       days_late: number;
       overtime_hours: number;
     }[];
@@ -985,24 +985,24 @@ export async function deleteGenerator(id: string): Promise<void> {
 export type Project = {
   id: string;
   code: string;
-  title: string;
-  client_name: string;
-  site_location: string;
+  title: string | null;
+  client_name: string | null;
+  site_location: string | null;
   category: string | null;
-  start_date?: string;
+  start_date?: string | null;
   work_plan?: ProjectWorkPlanAllocation[];
   assigned_worker_ids: string[];
   assigned_worker_names: string[];
   budget_hours: number;
   spent_hours: number;
   hourly_rate_fcfa: number;
-  penalty_rate_daily_fcfa: number;
+  penalty_rate_daily_fcfa: number | null;
   ratio_value: number | null;
   ratio_unit: string | null;
   ratio_basis: string | null;
   ratio_quantity: number | null;
   ratio_deadline: string | null;
-  delivery_deadline: string;
+  delivery_deadline: string | null;
   installation_start_date?: string | null;
   installation_days: number;
   status: 'planifie' | 'en_fabrication' | 'en_pose' | 'termine' | 'en_retard' | 'litige';
@@ -1012,7 +1012,7 @@ export type Project = {
   // Métriques de suivi & arbitrage Direction
   is_delayed?: boolean;
   delayed_days?: number;
-  days_to_deadline?: number;
+  days_to_deadline?: number | null;
   overtime_hours?: number;
   overtime_cost_fcfa?: number;
   penalties_cost_fcfa?: number;
@@ -1024,6 +1024,15 @@ export type Project = {
   schedule_at_risk?: boolean;
   attributable_overtime_hours?: number;
   accountability_data_complete?: boolean;
+};
+
+export type ProjectInput = Partial<Omit<Project, 'code' | 'title' | 'client_name' | 'site_location' | 'budget_hours' | 'delivery_deadline'>> & {
+  code?: string | null;
+  title?: string | null;
+  client_name?: string | null;
+  site_location?: string | null;
+  budget_hours?: number | null;
+  delivery_deadline?: string | null;
 };
 
 export type ProjectWorkPlanAllocation = {
@@ -1066,7 +1075,7 @@ export async function fetchProjects(): Promise<ProjectsResponse> {
   return api<ProjectsResponse>('/api/projects');
 }
 
-export async function createProject(data: Partial<Project>): Promise<Project> {
+export async function createProject(data: ProjectInput): Promise<Project> {
   const res = await api<{ project: Project }>('/api/projects', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -1074,7 +1083,7 @@ export async function createProject(data: Partial<Project>): Promise<Project> {
   return res.project;
 }
 
-export async function updateProject(id: string, data: Partial<Project>): Promise<Project> {
+export async function updateProject(id: string, data: ProjectInput): Promise<Project> {
   const res = await api<{ project: Project }>(`/api/projects/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(data),

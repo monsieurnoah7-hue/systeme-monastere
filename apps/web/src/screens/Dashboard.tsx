@@ -2076,7 +2076,7 @@ export function Dashboard({ active = true }: { active?: boolean }) {
                 className="flex w-full items-center justify-between gap-3 bg-surface px-3 py-2.5 text-left transition-colors hover:bg-paper-2"
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-xs font-semibold text-ink">{project.title}</span>
+                  <span className="block truncate text-xs font-semibold text-ink">{project.title || 'Projet à compléter'}</span>
                   <span className="mt-0.5 block font-mono text-[10px] text-ink-faint">{project.code}</span>
                 </span>
                 <span className={cx('shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold', project.days_late > 0 ? 'border-red-500/20 bg-red-500/10 text-red' : 'border-amber/20 bg-amber-wash text-amber')}>
