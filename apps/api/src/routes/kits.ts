@@ -239,6 +239,34 @@ kitsRoutes.patch('/items/:id', requirePerm('tools.edit_status'), async (c) => {
   return c.json({ item: updated });
 });
 
+// Retirer définitivement une dotation d'établi. Le droit tools.delete est
+// vérifié côté serveur et la suppression est inscrite dans le journal d'audit.
+kitsRoutes.delete('/items/:id', requirePerm('tools.delete'), async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isSafeInteger(id) || id <= 0) return c.json({ error: 'Identifiant d’outil invalide.' }, 400);
+  const db = getDb();
+  const deleted = await db.transaction(async (tx) => {
+    const current = await tx.one<EtabliKitItemRow>(
+      'SELECT * FROM etabli_kit_items WHERE id = $1 FOR UPDATE',
+      [id],
+    );
+    if (!current) return null;
+    await tx.query('DELETE FROM etabli_kit_items WHERE id = $1', [id]);
+    await writeAudit(tx, {
+      action: 'etabli_kit.item_delete',
+      entity: 'etabli_kit_item',
+      entityId: String(id),
+      before: current,
+      after: null,
+      actorId: actorId(c),
+      actorName: actorName(c),
+    });
+    return current;
+  });
+  if (!deleted) return c.json({ error: 'Outil introuvable dans cet établi.' }, 404);
+  return c.json({ ok: true, item: deleted });
+});
+
 // 5. Exécuter un "Contrôle Inopiné / Flash Audit" de l'établi
 const auditSchema = z.object({
   status: z.enum(['conforme', 'anomalie', 'incomplet']),

@@ -6,15 +6,13 @@ import {
   AlertTriangle,
   CheckCircle2,
   Users,
-  MapPin,
   Plus,
   Wrench,
-  Truck,
   Search,
   Edit2,
   Trash2,
 } from 'lucide-react';
-import type { Project, ProjectsResponse, Employee, ProjectIncident } from '../lib/api';
+import type { Project, ProjectsResponse, Employee, ProjectIncident, ProjectWorkPlanAllocation } from '../lib/api';
 import { createProject, updateProject, deleteProject, addProjectWorkLog, fetchProjectIncidents, addProjectIncident } from '../lib/api';
 import { Button, Card, Modal, Banner, Spinner, cx } from './ui';
 
@@ -50,11 +48,16 @@ export function ProjectsView({
   const [quickHoursValue, setQuickHoursValue] = useState<string>('');
   const [quickHoursEmployeeId, setQuickHoursEmployeeId] = useState('');
   const [quickHoursDate, setQuickHoursDate] = useState(new Date().toISOString().slice(0, 10));
+  const [quickHoursNote, setQuickHoursNote] = useState('');
   const [quickHoursBusy, setQuickHoursBusy] = useState(false);
   const [incidentProject, setIncidentProject] = useState<Project | null>(null);
   const [incidents, setIncidents] = useState<ProjectIncident[]>([]);
   const [incidentBusy, setIncidentBusy] = useState(false);
   const [incidentError, setIncidentError] = useState<string | null>(null);
+  const [scheduleProject, setScheduleProject] = useState<Project | null>(null);
+  const [scheduleRows, setScheduleRows] = useState<ProjectWorkPlanAllocation[]>([]);
+  const [scheduleBusy, setScheduleBusy] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [incidentForm, setIncidentForm] = useState({ kind: 'power_outage' as ProjectIncident['kind'], description: '', delay_days: '0', event_date: new Date().toISOString().slice(0, 10), employee_id: '' });
 
   const projects = data?.projects ?? [];
@@ -63,13 +66,6 @@ export function ProjectsView({
     () => Array.from(new Set(projects.map((project) => project.category?.trim()).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'fr')),
     [projects],
   );
-  const configuredRatios = useMemo(
-    () => projects.filter((project) => project.ratio_value !== null && project.ratio_value !== undefined && project.ratio_unit),
-    [projects],
-  );
-  const calculatedBudget = form.ratio_value != null && Boolean(form.ratio_unit?.trim()) && form.ratio_quantity != null && form.ratio_quantity > 0
-    ? form.ratio_value * form.ratio_quantity
-    : null;
 
   const filteredProjects = useMemo(() => {
     return projects.filter((p) => {
@@ -104,12 +100,11 @@ export function ProjectsView({
       category: null,
       assigned_worker_ids: [],
       assigned_worker_names: [],
-      ratio_basis: null,
-      ratio_quantity: null,
       penalty_rate_daily_fcfa: 10000,
       delivery_deadline: '',
-      ratio_deadline: '',
-      installation_start_date: '',
+      start_date: new Date().toISOString().slice(0, 10),
+      budget_hours: undefined,
+      work_plan: [],
       status: 'planifie',
     });
     setError(null);
@@ -124,20 +119,12 @@ export function ProjectsView({
   }
 
   async function handleSave() {
-    const ratioStarted = form.ratio_value != null || Boolean(form.ratio_unit?.trim()) || form.ratio_quantity != null;
-    const legacyRatioUnchanged = Boolean(
-      editingProject &&
-      editingProject.ratio_quantity == null &&
-      form.ratio_value === editingProject.ratio_value &&
-      form.ratio_unit === editingProject.ratio_unit &&
-      form.ratio_quantity == null
-    );
     if (!form.code?.trim() || !form.title?.trim() || !form.client_name?.trim() || !form.site_location?.trim() || !form.delivery_deadline) {
       setError('Code, intitulé, client, lieu et date limite de livraison sont obligatoires.');
       return;
     }
-    if (ratioStarted && !legacyRatioUnchanged && (form.ratio_value == null || !form.ratio_unit?.trim() || form.ratio_quantity == null || form.ratio_quantity <= 0)) {
-      setError('Pour calculer le budget, indiquez le temps pour une unité, le nom de l’unité et la quantité.');
+    if (!form.budget_hours || form.budget_hours <= 0) {
+      setError('Indiquez le budget global d’heures du projet.');
       return;
     }
     setBusy(true);
@@ -148,9 +135,8 @@ export function ProjectsView({
         // Le cumul est géré par les feuilles de temps : ne jamais réécrire
         // une ancienne valeur du formulaire lors d'une modification du projet.
         spent_hours: undefined,
-        ratio_deadline: form.ratio_deadline || form.delivery_deadline,
-        ...(calculatedBudget !== null ? { budget_hours: calculatedBudget } : {}),
-        ...(legacyRatioUnchanged ? { ratio_value: undefined, ratio_unit: undefined, ratio_quantity: undefined } : {}),
+        ratio_value: null, ratio_unit: null, ratio_basis: null, ratio_quantity: null, ratio_deadline: null,
+        installation_start_date: null, installation_days: 0,
       };
       if (editingProject) {
         await updateProject(editingProject.id, projectForm);
@@ -186,14 +172,30 @@ export function ProjectsView({
         employee_id: quickHoursEmployeeId,
         work_date: quickHoursDate,
         hours: added,
-        note: null,
+        note: quickHoursNote.trim() || null,
       });
       setQuickHoursProject(null);
+      setQuickHoursNote('');
       onRefresh();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Erreur');
     } finally {
       setQuickHoursBusy(false);
+    }
+  }
+
+  async function saveSchedule() {
+    if (!scheduleProject) return;
+    setScheduleBusy(true);
+    setScheduleError(null);
+    try {
+      await updateProject(scheduleProject.id, { work_plan: scheduleRows });
+      setScheduleProject(null);
+      onRefresh();
+    } catch (e) {
+      setScheduleError(e instanceof Error ? e.message : 'Impossible d’enregistrer la répartition.');
+    } finally {
+      setScheduleBusy(false);
     }
   }
 
@@ -280,24 +282,6 @@ export function ProjectsView({
         </div>
       </section>
 
-      {/* Ratios réellement configurés sur les projets existants */}
-      {configuredRatios.length > 0 && (
-        <section className="rounded-2xl border border-line bg-paper-2/40 p-4 text-xs" aria-label="Ratios configurés">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span className="font-bold text-ink">Ratios configurés par la Direction</span>
-            <span className="text-[11px] text-ink-faint">{configuredRatios.length} projet(s) documenté(s)</span>
-          </div>
-          <div className="mt-2 flex gap-2 overflow-x-auto pb-1 text-[11px] text-ink-soft">
-            {configuredRatios.map((project) => (
-              <span key={project.id} className="shrink-0 rounded-lg border border-line bg-surface px-2.5 py-1.5">
-                <strong className="text-ink">{project.category || project.title}</strong> · {project.ratio_value} h / {project.ratio_unit}
-                {project.ratio_quantity != null ? ` × ${project.ratio_quantity} = ${project.budget_hours} h` : ''}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* Commandes persistantes : onglets, action principale, recherche et filtres.
           Ces éléments restent des enfants directs de la page afin que le sticky
           soit borné par toute la zone de contenu, pas par ce seul bandeau. */}
@@ -329,7 +313,7 @@ export function ProjectsView({
             )}
           >
             <Calendar size={15} />
-            <span>Planification Livraisons &amp; Pose Chantier</span>
+            <span>Charge hebdomadaire</span>
           </button>
         </div>
 
@@ -491,13 +475,6 @@ export function ProjectsView({
                         )}
                       </div>
 
-                        {p.ratio_value !== null && p.ratio_value !== undefined && p.ratio_unit ? (
-                          <div className="rounded-lg border border-line bg-paper-2/40 px-3 py-2.5 text-xs text-ink-soft">
-                            <span className="font-semibold text-ink">Temps par unité :</span> {p.ratio_value} h / {p.ratio_unit}
-                            {p.ratio_quantity != null ? ` · ${p.ratio_quantity} ${p.ratio_unit} = ${p.budget_hours} h prévues` : ''}
-                          </div>
-                        ) : null}
-
                         {/* Budget configuré pour ce projet */}
                       <div className="mt-4 space-y-2.5 text-xs">
                         <div className="flex items-center justify-between text-[11px]">
@@ -540,11 +517,10 @@ export function ProjectsView({
                             {p.delivery_deadline} ({isOverdue ? `dépassé de ${p.delayed_days} j` : `${p.days_to_deadline} j restants`})
                           </span>
                         </div>
-
-                        <div className="flex items-center justify-between rounded-lg border border-line bg-paper-2/40 p-2.5 text-[11px]">
-                          <span className="text-ink-faint flex items-center gap-1"><Clock size={12} /> Échéance du ratio :</span>
-                          <span className="font-mono font-bold text-ink">{p.ratio_deadline || p.delivery_deadline} · {p.ratio_delayed_workdays || 0} jour(s) ouvré(s) de retard</span>
-                        </div>
+                        {p.planned_completion_date && <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-paper-2/40 p-2.5 text-[11px]">
+                          <span className="text-ink-faint flex items-center gap-1"><Clock size={12} />Fin estimée selon le planning :</span>
+                          <span className={cx('font-mono font-bold', p.schedule_at_risk ? 'text-red' : 'text-ink')}>{p.planned_completion_date}</span>
+                        </div>}
 
                         {/* Estimation du coût projet; aucune retenue sur salaire n’est effectuée. */}
                         {(hasOvertime || (p.ratio_delayed_workdays || 0) > 0) && (
@@ -569,7 +545,7 @@ export function ProjectsView({
                       {canEdit && <button
                         type="button"
                         disabled={!p.assigned_worker_ids?.length}
-                        title={!p.assigned_worker_ids?.length ? 'Affectez d’abord au moins un exécutant' : 'Saisir les heures par exécutant'}
+                        title={!p.assigned_worker_ids?.length ? 'Affectez d’abord au moins un exécutant' : 'Saisir les heures réellement travaillées'}
                         onClick={() => {
                           setQuickHoursProject(p);
                           setQuickHoursValue('');
@@ -615,135 +591,41 @@ export function ProjectsView({
         </div>
       )}
 
-      {/* =========================================================================
-          TAB 2 : PLANIFICATION DES LIVRAISONS ET INTERVENTIONS
-      ========================================================================= */}
       {activeTab === 'planning' && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-line bg-surface p-4 shadow-xs">
-            <h3 className="font-bold text-sm text-ink mb-1 flex items-center gap-2">
-              <Truck size={16} className="text-amber" />
-              Planning des Livraisons &amp; Pose sur Site
-            </h3>
-            <p className="text-xs text-ink-soft mb-4">
-              Coordination entre l'atelier central, le Responsable des Livraisons et les équipes de montage sur chantier.
-            </p>
-
-            <div className="hidden overflow-x-auto scroll-thin md:block">
-              <table className="w-full text-left border-collapse text-xs table-rhythm">
-                <thead>
-                  <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                    <th className="px-3 py-2.5 min-w-28 border-r border-line">N° Commande</th>
-                    <th className="px-3 py-2.5 min-w-44 border-r border-line">Ouvrage &amp; Chantier</th>
-                    <th className="px-3 py-2.5 min-w-32 border-r border-line">Lieu de Pose</th>
-                    <th className="px-3 py-2.5 min-w-32 border-r border-line">Début Intervention</th>
-                    <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">Durée (jours)</th>
-                    <th className="px-3 py-2.5 min-w-44 border-r border-line">Équipe Assignée</th>
-                    <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Statut</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {filteredProjects.map((p) => (
-                    <tr key={p.id} className="hover:bg-paper-2/40 transition-colors">
-                      <td className="px-3 py-2.5 font-mono font-bold text-ink border-r border-line">
-                        {p.code}
-                      </td>
-                      <td className="px-3 py-2.5 font-medium text-ink border-r border-line">
-                        <span className="font-semibold block">{p.title}</span>
-                        <span className="text-[10px] text-ink-faint">Client : {p.client_name}</span>
-                      </td>
-                      <td className="px-3 py-2.5 text-ink-soft border-r border-line">
-                        <span className="flex items-center gap-1">
-                          <MapPin size={11} className="text-amber shrink-0" />
-                          {p.site_location}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-ink border-r border-line">
-                        {p.installation_start_date || 'À planifier'}
-                      </td>
-                      <td className="px-3 py-2.5 text-center font-bold text-ink border-r border-line">
-                        {p.installation_days} j
-                      </td>
-                      <td className="px-3 py-2.5 text-ink-soft border-r border-line">
-                        {p.assigned_worker_names && p.assigned_worker_names.length > 0
-                          ? p.assigned_worker_names.join(', ')
-                          : 'Équipe non fixée'}
-                      </td>
-                      <td className="px-3 py-2.5 text-center border-r border-line">
-                        <span
-                          className={cx(
-                            'rounded-full px-2 py-0.5 text-[10px] font-bold border',
-                            p.status === 'termine'
-                              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                              : p.status === 'en_pose'
-                              ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
-                              : 'bg-surface-2 text-ink-soft border-line'
-                          )}
-                        >
-                          {p.status === 'termine'
-                            ? 'Réceptionné'
-                            : p.status === 'en_pose'
-                            ? 'En cours de pose'
-                            : 'En attente'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="space-y-2 md:hidden">
-              {filteredProjects.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-line p-4 text-center text-xs text-ink-soft">
-                  Aucun projet à planifier avec ces critères.
-                </p>
-              ) : filteredProjects.map((p) => (
-                <article key={p.id} className="rounded-xl border border-line bg-paper-2/50 p-3">
-                  <div className="flex items-start justify-between gap-3">
+        <section className="space-y-3" aria-label="Charge hebdomadaire des projets">
+          <div className="rounded-xl border border-line bg-surface p-4">
+            <h3 className="font-semibold text-ink">Répartition du budget par jour ouvré</h3>
+            <p className="mt-1 text-xs text-ink-soft">Définissez les heures prévues par personne et par jour. Les repos et jours fériés sont sautés automatiquement dans la date de fin estimée.</p>
+          </div>
+          {filteredProjects.length === 0 ? <p className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-ink-soft">Aucun projet correspondant.</p> : (
+            <div className="grid gap-3 xl:grid-cols-2">
+              {filteredProjects.map((p) => (
+                <article key={p.id} className="rounded-xl border border-line bg-surface p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-mono text-[11px] font-bold text-ink">{p.code}</p>
-                      <h4 className="mt-1 truncate font-semibold text-ink">{p.title}</h4>
-                      <p className="mt-0.5 text-[11px] text-ink-faint">{p.client_name}</p>
+                      <p className="font-mono text-xs font-semibold text-ink-soft">{p.code}</p>
+                      <h4 className="mt-1 font-semibold text-ink">{p.title}</h4>
+                      <p className="mt-1 text-xs text-ink-soft">{p.assigned_worker_names?.join(', ') || 'Aucun exécutant affecté'}</p>
                     </div>
-                    <span
-                      className={cx(
-                        'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold',
-                        p.status === 'termine'
-                          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600'
-                          : p.status === 'en_pose'
-                          ? 'border-blue-500/20 bg-blue-500/10 text-blue-600'
-                          : 'border-line bg-surface-2 text-ink-soft',
-                      )}
-                    >
-                      {p.status === 'termine' ? 'Réceptionné' : p.status === 'en_pose' ? 'En pose' : 'En attente'}
-                    </span>
+                    {canEdit && <Button size="sm" variant="secondary" disabled={!p.assigned_worker_ids?.length} onClick={() => {
+                      setScheduleProject(p);
+                      setScheduleRows(Array.isArray(p.work_plan) ? p.work_plan.map((row) => ({ ...row })) : []);
+                      setScheduleError(null);
+                    }}>Répartir les heures</Button>}
                   </div>
-                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
-                    <div>
-                      <dt className="text-ink-faint">Lieu</dt>
-                      <dd className="mt-0.5 flex items-center gap-1 text-ink-soft"><MapPin size={11} className="text-amber" />{p.site_location}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-ink-faint">Début</dt>
-                      <dd className="mt-0.5 font-mono text-ink-soft">{p.installation_start_date || 'À planifier'}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-ink-faint">Durée</dt>
-                      <dd className="mt-0.5 font-semibold text-ink-soft">{p.installation_days} jour(s)</dd>
-                    </div>
-                    <div>
-                      <dt className="text-ink-faint">Équipe</dt>
-                      <dd className="mt-0.5 truncate text-ink-soft">
-                        {p.assigned_worker_names?.length ? p.assigned_worker_names.join(', ') : 'Non affectée'}
-                      </dd>
-                    </div>
-                  </dl>
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                    <div><p className="text-xs text-ink-faint">Budget total</p><p className="mt-1 font-mono font-semibold text-ink">{p.budget_hours} h</p></div>
+                    <div><p className="text-xs text-ink-faint">Prévu / semaine</p><p className="mt-1 font-mono font-semibold text-ink">{p.planned_weekly_hours ?? 0} h</p></div>
+                    <div><p className="text-xs text-ink-faint">Fin estimée</p><p className="mt-1 font-mono font-semibold text-ink">{p.planned_completion_date || 'À planifier'}</p></div>
+                    <div><p className="text-xs text-ink-faint">Échéance</p><p className={cx('mt-1 font-mono font-semibold', p.schedule_at_risk ? 'text-red' : 'text-ink')}>{p.delivery_deadline}</p></div>
+                  </div>
+                  {p.schedule_at_risk && <p className="mt-3 rounded-lg border border-amber/30 bg-amber-wash p-2 text-xs text-amber">Avec cette répartition, le budget serait terminé après la date de livraison.</p>}
+                  {(!p.work_plan?.length) && <p className="mt-3 text-xs text-ink-faint">Aucune répartition hebdomadaire configurée.</p>}
                 </article>
               ))}
             </div>
-          </div>
-        </div>
+          )}
+        </section>
       )}
 
       {/* =========================================================================
@@ -827,130 +709,28 @@ export function ProjectsView({
             </div>
           </div>
 
-          {/* Ratios et paramètres financiers propres à ce projet */}
           <div className="rounded-xl border border-line bg-surface-2/40 p-3 space-y-2.5">
-            <p className="font-bold text-ink flex items-center gap-1.5">
-              <Clock size={14} className="text-amber" />
-              Budget, ratio et paramètres financiers
-            </p>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Budget prévu (heures)</label>
-                <input
-                  type="number"
-                  value={calculatedBudget ?? form.budget_hours ?? ''}
-                  readOnly={calculatedBudget !== null}
-                  onChange={(e) => setForm((f) => ({ ...f, budget_hours: e.target.value === '' ? undefined : Number(e.target.value) }))}
-                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
-                />
-                <p className="mt-1 text-[10px] text-ink-faint">
-                  {calculatedBudget !== null
-                    ? `${form.ratio_value} h × ${form.ratio_quantity} ${form.ratio_unit} = ${calculatedBudget} h`
-                    : 'Le total se calcule automatiquement si vous renseignez les unités ci-dessous.'}
-                </p>
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Heures cumulées par exécutant</label>
-                <input
-                  type="number"
-                  value={form.spent_hours ?? ''}
-                  readOnly
-                  aria-describedby="project-hours-help"
-                  className="h-9 w-full rounded-lg border border-line bg-paper-2 px-2.5 font-mono text-xs text-ink"
-                />
-                <p id="project-hours-help" className="mt-1 text-[10px] text-ink-faint">Mis à jour par les pointages individuels.</p>
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Coût horaire estimé (FCFA)</label>
-                <input
-                  type="number"
-                  value={form.hourly_rate_fcfa ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, hourly_rate_fcfa: e.target.value === '' ? undefined : Number(e.target.value) }))}
-                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Temps pour 1 unité (heures)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={form.ratio_value ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, ratio_value: e.target.value === '' ? null : Number(e.target.value) }))}
-                  placeholder="Ex. 2,5"
-                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Unité à produire</label>
-                <input
-                  type="text"
-                  value={form.ratio_unit || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, ratio_unit: e.target.value || null }))}
-                  placeholder="Carreau, porte, m²…"
-                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
-                />
-              </div>
-              <div className="sm:col-span-2 lg:col-span-1">
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Quantité</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={form.ratio_quantity ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, ratio_quantity: e.target.value === '' ? null : Number(e.target.value) }))}
-                  placeholder="Ex. 4"
-                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
-                />
-              </div>
+            <p className="font-bold text-ink flex items-center gap-1.5"><Clock size={14} className="text-amber" />Budget et référence d’impact</p>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <label className="text-[11px] font-medium text-ink-soft">Budget global du projet (heures)
+                <input type="number" min="0.5" step="0.5" value={form.budget_hours ?? ''} onChange={(e) => setForm((f) => ({ ...f, budget_hours: e.target.value === '' ? undefined : Number(e.target.value) }))} placeholder="Ex. 120" className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
+              </label>
+              <label className="text-[11px] font-medium text-ink-soft">Impact par heure dépassée et jour ouvré (FCFA)
+                <input type="number" min="0" step="500" value={form.penalty_rate_daily_fcfa ?? 10000} onChange={(e) => setForm((f) => ({ ...f, penalty_rate_daily_fcfa: Number(e.target.value) }))} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
+              </label>
             </div>
-            <p className="text-[10px] text-ink-faint">Exemple : 2,5 h par carreau × 4 carreaux = 10 h. Référence d’impact : 10 000 FCFA par heure dépassée et par jour ouvré imputable, sans retenue automatique sur salaire.</p>
+            <p className="text-[11px] text-ink-faint">Les heures réellement saisies mettent à jour le total. Le budget est global au projet; le planning répartit le travail entre les personnes et les jours.</p>
           </div>
 
-          {/* Planification et délais propres à ce projet */}
-          <div className="rounded-xl border border-line bg-surface-2/40 p-3 space-y-2.5">
-            <p className="font-bold text-ink flex items-center gap-1.5">
-              <Calendar size={14} className="text-amber" />
-              Délais et intervention sur site
-            </p>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <label className="mb-1 block text-[11px] font-bold text-amber">Date Limite Livraison</label>
-                <input
-                  type="date"
-                  value={form.delivery_deadline || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, delivery_deadline: e.target.value }))}
-                  className="h-9 w-full rounded-lg border border-amber/50 bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-semibold text-ink-soft">Échéance prévue du ratio</label>
-                <input
-                  type="date"
-                  value={form.ratio_deadline || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, ratio_deadline: e.target.value || null }))}
-                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
-                />
-                <p className="mt-1 text-[10px] text-ink-faint">Par défaut, la date limite de livraison.</p>
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Début Pose Chantier</label>
-                <input
-                  type="date"
-                  value={form.installation_start_date || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, installation_start_date: e.target.value }))}
-                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-ink-soft">Durée Pose (jours)</label>
-                <input
-                  type="number"
-                  value={form.installation_days ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, installation_days: e.target.value === '' ? undefined : Number(e.target.value) }))}
-                  className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
-                />
-              </div>
+          <div className="rounded-xl border border-line bg-surface-2/40 p-3">
+            <p className="mb-3 font-bold text-ink flex items-center gap-1.5"><Calendar size={14} className="text-amber" />Dates du projet</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-[11px] font-medium text-ink-soft">Début prévu
+                <input type="date" value={form.start_date || ''} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none" />
+              </label>
+              <label className="text-[11px] font-semibold text-amber">Date limite de livraison
+                <input type="date" value={form.delivery_deadline || ''} onChange={(e) => setForm((f) => ({ ...f, delivery_deadline: e.target.value }))} className="mt-1 h-10 w-full rounded-lg border border-amber/50 bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none" />
+              </label>
             </div>
           </div>
 
@@ -958,7 +738,7 @@ export function ProjectsView({
           <div>
             <label className="mb-1.5 block font-semibold text-ink">Artisans &amp; Menuisiers affectés au projet</label>
             <div className="max-h-36 overflow-y-auto scroll-thin rounded-xl border border-line p-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 bg-paper/60">
-              {employees.slice(0, 16).map((emp) => {
+              {employees.map((emp) => {
                 const isSelected = form.assigned_worker_ids?.includes(String(emp.id));
                 return (
                   <button
@@ -1003,7 +783,7 @@ export function ProjectsView({
       >
         <div className="space-y-3 text-xs">
           <p className="text-ink-soft">
-            Saisissez les heures réellement travaillées par un exécutant. Elles alimentent le cumul et permettent une estimation par personne.
+            Enregistrez le temps réellement travaillé sur ce projet. La capacité journalière est vérifiée sur l’ensemble des projets affectés à cette personne.
           </p>
           <div>
             <label className="mb-1 block font-semibold text-ink">Exécutant</label>
@@ -1026,6 +806,48 @@ export function ProjectsView({
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono font-bold text-xs text-ink focus:border-amber focus:outline-none"
             />
           </div>
+          <label className="block font-semibold text-ink">Motif (obligatoire un jour de repos ou férié)
+            <textarea value={quickHoursNote} onChange={(e) => setQuickHoursNote(e.target.value)} rows={2} maxLength={500} className="mt-1 w-full rounded-lg border border-line bg-surface p-3 text-sm text-ink" placeholder="Ex. intervention exceptionnelle autorisée" />
+          </label>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!scheduleProject}
+        title={`Répartition hebdomadaire · ${scheduleProject?.code ?? ''}`}
+        onClose={() => setScheduleProject(null)}
+        footer={<><Button variant="ghost" onClick={() => setScheduleProject(null)}>Annuler</Button><Button variant="primary" disabled={scheduleBusy} onClick={() => void saveSchedule()}>{scheduleBusy ? <Spinner /> : 'Enregistrer le planning'}</Button></>}
+      >
+        <div className="space-y-3 text-sm">
+          <p className="rounded-lg border border-line bg-paper-2/50 p-3 text-xs text-ink-soft">Attribuez les heures prévues par personne et par jour de semaine. Le total de tous les projets d’une personne ne peut pas dépasser sa capacité journalière définie dans sa fiche. Les jours fériés sont ignorés dans la prévision.</p>
+          {scheduleError && <Banner tone="error">{scheduleError}</Banner>}
+          {scheduleRows.map((row, index) => {
+            const worker = employees.find((employee) => String(employee.id) === row.employee_id);
+            const workdays = worker?.workdays?.length ? worker.workdays : [1, 2, 3, 4, 5, 6];
+            return <div key={index} className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 rounded-lg border border-line p-2 sm:grid-cols-[minmax(0,1fr)_minmax(6rem,0.7fr)_5rem_auto]">
+              <label className="col-span-2 min-w-0 text-[11px] text-ink-soft sm:col-span-1">Travailleur
+                <select value={row.employee_id} onChange={(e) => setScheduleRows((rows) => rows.map((item, i) => i === index ? { ...item, employee_id: e.target.value, weekday: employees.find((employee) => String(employee.id) === e.target.value)?.workdays?.[0] ?? 1 } : item))} className="mt-1 h-10 w-full min-w-0 rounded-lg border border-line bg-surface px-2 text-xs text-ink">
+                  {scheduleProject?.assigned_worker_ids.map((id, i) => <option key={id} value={id}>{scheduleProject.assigned_worker_names[i] || employees.find((employee) => String(employee.id) === id)?.full_name || id}</option>)}
+                </select>
+              </label>
+              <label className="text-[11px] text-ink-soft">Jour ouvré
+                <select value={row.weekday} onChange={(e) => setScheduleRows((rows) => rows.map((item, i) => i === index ? { ...item, weekday: Number(e.target.value) } : item))} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-2 text-xs text-ink">
+                  {workdays.map((day) => <option key={day} value={day}>{['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'][day]}</option>)}
+                </select>
+              </label>
+              <label className="text-[11px] text-ink-soft">Heures
+                <input type="number" min="0.5" max="24" step="0.5" value={row.planned_hours} onChange={(e) => setScheduleRows((rows) => rows.map((item, i) => i === index ? { ...item, planned_hours: Number(e.target.value) } : item))} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-2 font-mono text-sm text-ink" />
+              </label>
+              <button type="button" aria-label="Retirer cette ligne" onClick={() => setScheduleRows((rows) => rows.filter((_, i) => i !== index))} className="h-10 rounded-lg px-2 text-ink-faint hover:bg-red-wash hover:text-red">×</button>
+            </div>;
+          })}
+          {scheduleRows.length === 0 && <p className="rounded-lg border border-dashed border-line p-4 text-center text-xs text-ink-faint">Aucune heure planifiée pour le moment.</p>}
+          <Button variant="secondary" onClick={() => {
+            const id = scheduleProject?.assigned_worker_ids[0];
+            if (!id) return;
+            const worker = employees.find((employee) => String(employee.id) === id);
+            setScheduleRows((rows) => [...rows, { employee_id: id, weekday: worker?.workdays?.[0] ?? 1, planned_hours: Math.min(4, worker?.daily_work_hours ?? 8) }]);
+          }} disabled={!scheduleProject?.assigned_worker_ids.length}>Ajouter une répartition</Button>
         </div>
       </Modal>
 

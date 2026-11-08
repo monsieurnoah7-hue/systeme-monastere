@@ -18,6 +18,7 @@ const createBody = z.object({
   photo_path: z.string().nullable().optional(),
   pin: z.string().min(4).max(10).optional(),
   workdays: z.array(z.number().int().min(0).max(6)).optional(),
+  daily_work_hours: z.number().min(0.5).max(24).optional(),
   create_account: z.boolean().optional(),
   account_login: z.string().optional(),
   account_password: z.string().optional(),
@@ -31,6 +32,7 @@ const patchBody = z.object({
   photo_path: z.string().nullable().optional(),
   pin: z.string().min(4).max(10).optional(),
   workdays: z.array(z.number().int().min(0).max(6)).optional(),
+  daily_work_hours: z.number().min(0.5).max(24).optional(),
 });
 
 async function nextEmployeeId(): Promise<string> {
@@ -52,7 +54,7 @@ function newBadgeToken(): string {
 
 employeesRoutes.get('/', requirePerm('employees.view'), async (c) => {
   const employees = await getDb().query<EmployeeRow & { has_pin: boolean }>(
-    `SELECT e.id, e.full_name, coalesce(r.name, e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin, coalesce(e.workdays, '[1,2,3,4,5,6]'::jsonb) AS workdays
+    `SELECT e.id, e.full_name, coalesce(r.name, e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin, coalesce(e.workdays, '[1,2,3,4,5,6]'::jsonb) AS workdays, coalesce(e.daily_work_hours, 8)::float AS daily_work_hours
        FROM employees e
        LEFT JOIN users u ON u.employee_id = e.id
        LEFT JOIN roles r ON r.id = u.role
@@ -110,7 +112,7 @@ employeesRoutes.get('/today-status', requirePerm('employees.view'), async (c) =>
 employeesRoutes.get('/:id', requirePerm('employees.view'), async (c) => {
   const id = c.req.param('id') ?? '';
   const employee = await getDb().one<EmployeeRow & { has_pin: boolean }>(
-    `SELECT e.id, e.full_name, coalesce(r.name, e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin, coalesce(e.workdays, '[1,2,3,4,5,6]'::jsonb) AS workdays
+    `SELECT e.id, e.full_name, coalesce(r.name, e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin, coalesce(e.workdays, '[1,2,3,4,5,6]'::jsonb) AS workdays, coalesce(e.daily_work_hours, 8)::float AS daily_work_hours
        FROM employees e
        LEFT JOIN users u ON u.employee_id = e.id
        LEFT JOIN roles r ON r.id = u.role
@@ -125,7 +127,7 @@ employeesRoutes.get('/:id/detail', requirePerm('employees.view'), async (c) => {
   const id = c.req.param('id') ?? '';
   const db = getDb();
   const employee = await db.one<EmployeeRow & { has_pin: boolean }>(
-    `SELECT e.id, e.full_name, coalesce(r.name, e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin, coalesce(e.workdays, '[1,2,3,4,5,6]'::jsonb) AS workdays
+    `SELECT e.id, e.full_name, coalesce(r.name, e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin, coalesce(e.workdays, '[1,2,3,4,5,6]'::jsonb) AS workdays, coalesce(e.daily_work_hours, 8)::float AS daily_work_hours
        FROM employees e
        LEFT JOIN users u ON u.employee_id = e.id
        LEFT JOIN roles r ON r.id = u.role
@@ -245,10 +247,10 @@ employeesRoutes.post('/', requirePerm('employees.create'), async (c) => {
   const pinHash = body.data.pin ? hashPassword(body.data.pin.trim()) : null;
   const workdaysJson = body.data.workdays ? JSON.stringify(body.data.workdays) : '[1,2,3,4,5,6]';
   const employee = await db.one<EmployeeRow>(
-    `INSERT INTO employees (id, full_name, job_title, badge_token, pin_hash, photo_path, workdays)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
-     RETURNING id, full_name, job_title, photo_path, badge_token, active, workdays`,
-    [id, body.data.full_name.trim(), body.data.job_title.trim(), badge, pinHash, body.data.photo_path?.trim() || null, workdaysJson],
+    `INSERT INTO employees (id, full_name, job_title, badge_token, pin_hash, photo_path, workdays, daily_work_hours)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+     RETURNING id, full_name, job_title, photo_path, badge_token, active, workdays, daily_work_hours`,
+    [id, body.data.full_name.trim(), body.data.job_title.trim(), badge, pinHash, body.data.photo_path?.trim() || null, workdaysJson, body.data.daily_work_hours ?? 8],
   );
 
   await writeAudit(db, {
@@ -312,6 +314,25 @@ employeesRoutes.patch('/:id', requirePerm('employees.edit'), async (c) => {
   if (!before) return c.json({ error: 'Travailleur introuvable.' }, 404);
   const patch = body.data;
 
+  if (patch.daily_work_hours !== undefined || patch.workdays !== undefined) {
+    const nextCapacity = patch.daily_work_hours ?? Number(before.daily_work_hours ?? 8);
+    const nextWorkdays = patch.workdays ?? (Array.isArray(before.workdays) ? before.workdays : [1, 2, 3, 4, 5, 6]);
+    const activePlans = await db.query<{ code: string; work_plan: unknown }>(
+      `SELECT code, work_plan FROM projects WHERE status <> 'termine' AND $1 = ANY(assigned_worker_ids)`, [id]);
+    const scheduledByDay = new Map<number, number>();
+    for (const project of activePlans) {
+      const plan = Array.isArray(project.work_plan) ? project.work_plan as { employee_id: string; weekday: number; planned_hours: number }[] : [];
+      for (const entry of plan) if (entry.employee_id === id) {
+        scheduledByDay.set(entry.weekday, (scheduledByDay.get(entry.weekday) ?? 0) + Number(entry.planned_hours));
+      }
+    }
+    for (const [weekday, hours] of scheduledByDay) {
+      const dayName = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'][weekday];
+      if (!nextWorkdays.includes(weekday)) return c.json({ error: `Le planning du projet prévoit ${dayName}; modifiez d’abord cette répartition avant de retirer ce jour ouvré.` }, 409);
+      if (hours > nextCapacity + 0.001) return c.json({ error: `Les projets prévoient ${hours} h le ${dayName}, au-delà de la nouvelle capacité de ${nextCapacity} h. Ajustez les répartitions des projets d’abord.` }, 409);
+    }
+  }
+
   if (patch.active === false) {
     const openLoans = await getDb().one<{ count: string }>(
       `SELECT count(*)::text AS count FROM loans WHERE employee_id = $1 AND status = 'out'`,
@@ -324,6 +345,7 @@ employeesRoutes.patch('/:id', requirePerm('employees.edit'), async (c) => {
 
   const pinHash = patch.pin ? hashPassword(patch.pin.trim()) : undefined;
   const workdaysJson = patch.workdays !== undefined ? JSON.stringify(patch.workdays) : null;
+  const dailyWorkHours = patch.daily_work_hours ?? null;
 
   const updated = await db.one<EmployeeRow>(
     `UPDATE employees SET
@@ -332,9 +354,10 @@ employeesRoutes.patch('/:id', requirePerm('employees.edit'), async (c) => {
        active = coalesce($4, active),
        pin_hash = CASE WHEN $5::text IS NOT NULL THEN $5::text ELSE pin_hash END,
        photo_path = CASE WHEN $6::text IS NOT NULL THEN (CASE WHEN $6 = '' THEN NULL ELSE $6 END) ELSE photo_path END,
-       workdays = CASE WHEN $7::text IS NOT NULL THEN $7::jsonb ELSE workdays END
+       workdays = CASE WHEN $7::text IS NOT NULL THEN $7::jsonb ELSE workdays END,
+       daily_work_hours = coalesce($8, daily_work_hours)
       WHERE id = $1
-      RETURNING id, full_name, job_title, photo_path, badge_token, active, workdays`,
+      RETURNING id, full_name, job_title, photo_path, badge_token, active, workdays, daily_work_hours`,
     [
       id,
       patch.full_name?.trim() ?? null,
@@ -343,6 +366,7 @@ employeesRoutes.patch('/:id', requirePerm('employees.edit'), async (c) => {
       pinHash ?? null,
       patch.photo_path !== undefined ? (patch.photo_path ? patch.photo_path.trim() : null) : null,
       workdaysJson,
+      dailyWorkHours,
     ],
   );
   await writeAudit(db, {

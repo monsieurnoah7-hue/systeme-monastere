@@ -5,6 +5,8 @@ import { writeAudit } from '../lib/audit.js';
 import { actorId, actorName, requireAuth } from '../middleware/auth.js';
 import { requirePerm } from '../middleware/permissions.js';
 
+type WorkPlanEntry = { employee_id: string; weekday: number; planned_hours: number };
+
 export const projectsRoutes = new Hono();
 
 export type ProjectRow = {
@@ -14,6 +16,8 @@ export type ProjectRow = {
   client_name: string;
   site_location: string;
   category: string | null;
+  start_date: string;
+  work_plan: WorkPlanEntry[];
   assigned_worker_ids: string[];
   assigned_worker_names: string[];
   budget_hours: number;
@@ -42,19 +46,27 @@ export type ProjectRow = {
   financial_damage_fcfa?: number;
   hours_progress_pct?: number;
   ratio_delayed_workdays?: number;
+  planned_weekly_hours?: number;
+  planned_completion_date?: string | null;
+  schedule_at_risk?: boolean;
   attributable_overtime_hours?: number;
   accountability_data_complete?: boolean;
 };
 
 type ProjectMetricContext = {
   workdaysByEmployee: Map<string, number[]>;
+  dailyCapacityByEmployee: Map<string, number>;
   holidays: Set<string>;
   loggedHours: Map<string, Map<string, number>>;
+  workLogsByProject: Map<string, { employeeId: string; workDate: string; hours: number }[]>;
   excludedIncidentDays: Map<string, { days: number; employeeIds: string[] }[]>;
 };
 
 function parseWorkdays(value: unknown): number[] {
-  if (Array.isArray(value)) return value.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+  if (Array.isArray(value)) {
+    const days = value.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+    return days.length ? days : [1, 2, 3, 4, 5, 6];
+  }
   if (typeof value === 'string') {
     try { return parseWorkdays(JSON.parse(value)); } catch { return [1, 2, 3, 4, 5, 6]; }
   }
@@ -68,6 +80,28 @@ function eachDate(from: string, to: string, visit: (date: Date, iso: string) => 
     visit(cursor, `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`);
     cursor.setDate(cursor.getDate() + 1);
   }
+}
+
+function projectWorkdays(project: ProjectRow, context?: ProjectMetricContext): Set<number> {
+  const planned = Array.isArray(project.work_plan) ? project.work_plan.map((entry) => entry.weekday) : [];
+  if (planned.length) return new Set(planned);
+  const assignedDays = (project.assigned_worker_ids ?? []).flatMap((id) => context?.workdaysByEmployee.get(id) ?? [1, 2, 3, 4, 5, 6]);
+  return new Set(assignedDays.length ? assignedDays : [1, 2, 3, 4, 5, 6]);
+}
+
+function countProjectWorkdays(from: string, to: string, weekdays: Set<number>, holidays: Set<string>, includeStart = false): number {
+  if (from > to) return 0;
+  let count = 0;
+  eachDate(includeStart ? from : addCalendarDay(from, 1), to, (date, iso) => {
+    if (weekdays.has(date.getDay()) && !holidays.has(iso)) count += 1;
+  });
+  return count;
+}
+
+function addCalendarDay(dateIso: string, amount: number): string {
+  const date = new Date(`${dateIso}T12:00:00`);
+  date.setDate(date.getDate() + amount);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function addWorkdays(dateIso: string, days: number, workerDays: number[], holidays: Set<string>): string {
@@ -84,10 +118,10 @@ function addWorkdays(dateIso: string, days: number, workerDays: number[], holida
 async function loadProjectMetricContext(projects: ProjectRow[]): Promise<ProjectMetricContext> {
   const db = getDb();
   const [employees, holidays, logs, incidents] = await Promise.all([
-    db.query<{ id: string; workdays: unknown }>('SELECT id, workdays FROM employees'),
+    db.query<{ id: string; workdays: unknown; daily_work_hours: number }>('SELECT id, workdays, daily_work_hours FROM employees'),
     db.query<{ holiday_date: string }>("SELECT holiday_date::text AS holiday_date FROM holidays WHERE is_chome = true"),
-    projects.length ? db.query<{ project_id: string; employee_id: string; hours: string | number }>(
-      'SELECT project_id, employee_id, SUM(hours)::text AS hours FROM project_work_logs WHERE project_id = ANY($1::text[]) GROUP BY project_id, employee_id',
+    projects.length ? db.query<{ project_id: string; employee_id: string; work_date: string; hours: string | number }>(
+      'SELECT project_id, employee_id, work_date::text AS work_date, hours FROM project_work_logs WHERE project_id = ANY($1::text[]) ORDER BY work_date, id',
       [projects.map((project) => project.id)],
     ) : Promise.resolve([]),
     projects.length ? db.query<{ project_id: string; delay_days: string | number; employee_ids: string[]; excluded_from_accountability: boolean }>(
@@ -96,9 +130,14 @@ async function loadProjectMetricContext(projects: ProjectRow[]): Promise<Project
     ) : Promise.resolve([]),
   ]);
   const loggedHours = new Map<string, Map<string, number>>();
+  const workLogsByProject = new Map<string, { employeeId: string; workDate: string; hours: number }[]>();
   for (const row of logs) {
     if (!loggedHours.has(row.project_id)) loggedHours.set(row.project_id, new Map());
-    loggedHours.get(row.project_id)!.set(row.employee_id, Number(row.hours));
+    const employeeHours = loggedHours.get(row.project_id)!;
+    employeeHours.set(row.employee_id, (employeeHours.get(row.employee_id) ?? 0) + Number(row.hours));
+    const projectLogs = workLogsByProject.get(row.project_id) ?? [];
+    projectLogs.push({ employeeId: row.employee_id, workDate: row.work_date, hours: Number(row.hours) });
+    workLogsByProject.set(row.project_id, projectLogs);
   }
   const excludedIncidentDays = new Map<string, { days: number; employeeIds: string[] }[]>();
   for (const row of incidents) {
@@ -108,8 +147,10 @@ async function loadProjectMetricContext(projects: ProjectRow[]): Promise<Project
   }
   return {
     workdaysByEmployee: new Map(employees.map((employee) => [employee.id, parseWorkdays(employee.workdays)])),
+    dailyCapacityByEmployee: new Map(employees.map((employee) => [employee.id, Number(employee.daily_work_hours) || 8])),
     holidays: new Set(holidays.map((holiday) => holiday.holiday_date)),
     loggedHours,
+    workLogsByProject,
     excludedIncidentDays,
   };
 }
@@ -121,20 +162,26 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
   const deadline = new Date(p.delivery_deadline);
   deadline.setHours(0, 0, 0, 0);
 
+  const todayIso = today.toISOString().slice(0, 10);
+  const weekdays = projectWorkdays(p, context);
+  const holidays = context?.holidays ?? new Set<string>();
   const diffMs = deadline.getTime() - today.getTime();
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  p.days_to_deadline = diffDays;
+  p.days_to_deadline = diffDays >= 0
+    ? countProjectWorkdays(todayIso, p.delivery_deadline, weekdays, holidays, true)
+    : -countProjectWorkdays(p.delivery_deadline, todayIso, weekdays, holidays);
 
-  // Calcul du retard de livraison
-  const isOverdue = diffDays < 0 && p.status !== 'termine';
+  // Un retard ne commence qu’après un jour effectivement ouvré de dépassement.
+  const overdueWorkdays = diffDays < 0 ? countProjectWorkdays(p.delivery_deadline, todayIso, weekdays, holidays) : 0;
+  const isOverdue = overdueWorkdays > 0 && p.status !== 'termine';
   p.is_delayed = isOverdue;
-  p.delayed_days = isOverdue ? Math.abs(diffDays) : 0;
+  p.delayed_days = isOverdue ? overdueWorkdays : 0;
 
   // Décompte / compte à rebours des heures supplémentaires dès dépassement
   const budget = Number(p.budget_hours) || 0;
   const spent = Number(p.spent_hours) || 0;
   const hourlyRate = Number(p.hourly_rate_fcfa) || 0;
-  const dailyPenalty = 10000;
+  const dailyPenalty = Number(p.penalty_rate_daily_fcfa) || 0;
 
   const overtime = Math.max(0, spent - budget);
   p.overtime_hours = overtime;
@@ -144,24 +191,54 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
   let accountableOvertime = 0;
   let estimatedPenalty = 0;
   let ratioDelayedWorkdays = 0;
-  const baseRatioDeadline = p.ratio_deadline || p.delivery_deadline;
-  if (context && assignedIds.length > 0 && workerLogs && workerLogs.size > 0) {
-    const sharedBudget = budget / assignedIds.length;
-    for (const employeeId of assignedIds) {
-      const workerOvertime = Math.max(0, (workerLogs.get(employeeId) ?? 0) - sharedBudget);
+  if (context && assignedIds.length) {
+    const logs = context.workLogsByProject.get(p.id) ?? [];
+    const totalLogged = logs.reduce((sum, log) => sum + log.hours, 0);
+    const canAttribute = totalLogged >= spent - 0.01;
+    let remainingBudget = budget;
+    const overrunByEmployee = new Map<string, number>();
+    if (canAttribute) for (const log of logs) {
+      const countedWithinBudget = Math.min(remainingBudget, log.hours);
+      remainingBudget -= countedWithinBudget;
+      const excess = log.hours - countedWithinBudget;
+      if (excess > 0) overrunByEmployee.set(log.employeeId, (overrunByEmployee.get(log.employeeId) ?? 0) + excess);
+    }
+    let remaining = budget;
+    const from = p.start_date || new Date().toISOString().slice(0, 10);
+    const plan = Array.isArray(p.work_plan) ? p.work_plan : [];
+    const weeklyHours = plan.reduce((sum, entry) => sum + Number(entry.planned_hours || 0), 0);
+    p.planned_weekly_hours = weeklyHours;
+    let completion: string | null = null;
+    if (weeklyHours > 0 && remaining > 0) {
+      eachDate(from, addWorkdays(from, 1825, [0, 1, 2, 3, 4, 5, 6], context.holidays), (date, iso) => {
+        if (completion || iso < from || context!.holidays.has(iso)) return;
+        for (const entry of plan) {
+          if (date.getDay() !== entry.weekday || !context!.workdaysByEmployee.get(entry.employee_id)?.includes(entry.weekday)) continue;
+          const capacity = context!.dailyCapacityByEmployee.get(entry.employee_id) ?? 8;
+          const perProjectThatDay = plan.filter((item) => item.employee_id === entry.employee_id && item.weekday === entry.weekday)
+            .reduce((sum, item) => sum + Number(item.planned_hours), 0);
+          const hours = Math.min(Number(entry.planned_hours), capacity, perProjectThatDay);
+          remaining -= hours;
+          if (remaining <= 0) { completion = iso; break; }
+        }
+      });
+    }
+    const completionDate = completion as string | null;
+    p.planned_completion_date = completionDate;
+    p.schedule_at_risk = Boolean(completionDate && completionDate > p.delivery_deadline);
+    const target = completionDate && completionDate > p.delivery_deadline ? completionDate : p.delivery_deadline;
+    if (today > new Date(`${target}T23:59:59`)) {
+      ratioDelayedWorkdays = countProjectWorkdays(target, todayIso, weekdays, context.holidays);
+    }
+    if (canAttribute) for (const [employeeId, workerOvertime] of overrunByEmployee) {
       accountableOvertime += workerOvertime;
-      if (workerOvertime <= 0) continue;
       const workerDays = context.workdaysByEmployee.get(employeeId) ?? [1, 2, 3, 4, 5, 6];
       const incidents = context.excludedIncidentDays.get(p.id) ?? [];
-      const excludedDays = incidents.reduce((sum, incident) =>
-        sum + (!incident.employeeIds.length || incident.employeeIds.includes(employeeId) ? incident.days : 0), 0);
-      const adjustedDeadline = addWorkdays(baseRatioDeadline, excludedDays, workerDays, context.holidays);
-      let workerDelay = 0;
-      if (today > new Date(`${adjustedDeadline}T23:59:59`)) {
-        eachDate(adjustedDeadline, `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`, (date, iso) => {
-          if (iso !== adjustedDeadline && date < today && workerDays.includes(date.getDay()) && !context.holidays.has(iso)) workerDelay += 1;
-        });
-      }
+      const excludedDays = incidents.reduce((sum, incident) => sum + (!incident.employeeIds.length || incident.employeeIds.includes(employeeId) ? incident.days : 0), 0);
+      const adjustedDeadline = addWorkdays(p.delivery_deadline, excludedDays, workerDays, context.holidays);
+      const workerDelay = todayIso > adjustedDeadline
+        ? countProjectWorkdays(adjustedDeadline, todayIso, new Set(workerDays), context.holidays)
+        : 0;
       ratioDelayedWorkdays = Math.max(ratioDelayedWorkdays, workerDelay);
       estimatedPenalty += workerOvertime * dailyPenalty * workerDelay;
     }
@@ -193,6 +270,8 @@ const projectBody = z.object({
   client_name: z.string().min(2, 'Nom du client requis'),
   site_location: z.string().trim().min(1, 'Lieu du chantier requis'),
   category: z.string().trim().max(120).nullable().optional(),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  work_plan: z.array(z.object({ employee_id: z.string().min(2), weekday: z.number().int().min(0).max(6), planned_hours: z.number().positive().max(24) })).optional(),
   assigned_worker_ids: z.array(z.string()).default([]),
   assigned_worker_names: z.array(z.string()).default([]),
   budget_hours: z.number().min(0).default(0),
@@ -211,11 +290,51 @@ const projectBody = z.object({
   notes: z.string().nullable().optional(),
 });
 
+async function validateWorkPlan(projectId: string | null, assignedIds: string[], plan: WorkPlanEntry[]) {
+  const db = getDb();
+  const keys = new Set<string>();
+  for (const entry of plan) {
+    const key = `${entry.employee_id}:${entry.weekday}`;
+    if (keys.has(key)) return 'Une seule durée est attendue par travailleur et jour de semaine.';
+    keys.add(key);
+    if (!assignedIds.includes(entry.employee_id)) return 'Le planning contient un travailleur qui n’est pas affecté au projet.';
+  }
+  const workers = assignedIds.length
+    ? await db.query<{ id: string; full_name: string; workdays: unknown; daily_work_hours: number }>(
+        'SELECT id, full_name, workdays, daily_work_hours FROM employees WHERE id = ANY($1::text[])', [assignedIds])
+    : [];
+  const byId = new Map(workers.map((worker) => [worker.id, worker]));
+  const newSums = new Map<string, number>();
+  for (const entry of plan) {
+    const worker = byId.get(entry.employee_id);
+    if (!worker) return 'Un travailleur sélectionné est introuvable.';
+    if (!parseWorkdays(worker.workdays).includes(entry.weekday)) return 'Le planning inclut un jour non ouvré pour un travailleur.';
+    const key = `${entry.employee_id}:${entry.weekday}`;
+    newSums.set(key, (newSums.get(key) ?? 0) + entry.planned_hours);
+  }
+  const others = await db.query<{ id: string; work_plan: WorkPlanEntry[] }>(
+    `SELECT id, work_plan FROM projects WHERE ($1::text IS NULL OR id <> $1) AND status <> 'termine'`, [projectId]);
+  const existingSums = new Map<string, number>();
+  for (const project of others) for (const entry of (Array.isArray(project.work_plan) ? project.work_plan : [])) {
+    const key = `${entry.employee_id}:${entry.weekday}`;
+    existingSums.set(key, (existingSums.get(key) ?? 0) + Number(entry.planned_hours || 0));
+  }
+  for (const [key, hours] of newSums) {
+    const employeeId = key.split(':')[0]!;
+    const capacity = Number(byId.get(employeeId)?.daily_work_hours) || 8;
+    if (hours + (existingSums.get(key) ?? 0) > capacity + 0.001) {
+      const worker = byId.get(employeeId);
+      return `${worker?.full_name ?? 'Ce travailleur'} dépasse sa capacité de ${capacity} h ce jour-là, en cumulant ses projets.`;
+    }
+  }
+  return null;
+}
+
 projectsRoutes.get('/', requireAuth, requirePerm('projects.view'), async (c) => {
   const db = getDb();
   const rows = await db.query<ProjectRow>(`
     SELECT id, code, title, client_name, site_location, category,
-           assigned_worker_ids, assigned_worker_names,
+           start_date::text AS start_date, work_plan, assigned_worker_ids, assigned_worker_names,
            budget_hours, spent_hours, hourly_rate_fcfa, penalty_rate_daily_fcfa,
            ratio_value, ratio_unit, ratio_basis, ratio_quantity,
            ratio_deadline::text AS ratio_deadline,
@@ -257,11 +376,10 @@ projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) 
   const id = `prj-${Date.now()}`;
 
   const normalizedCode = d.code.trim().toUpperCase();
-  const ratioStarted = d.ratio_value != null || Boolean(d.ratio_unit?.trim()) || d.ratio_quantity != null;
-  if (ratioStarted && (d.ratio_value == null || !d.ratio_unit?.trim() || !d.ratio_quantity || d.ratio_quantity <= 0)) {
-    return c.json({ error: 'Pour calculer le budget, indiquez le temps par unité, le nom de l’unité et la quantité.' }, 400);
-  }
-  const budgetHours = ratioStarted ? d.ratio_value! * d.ratio_quantity! : d.budget_hours;
+  if (d.budget_hours <= 0) return c.json({ error: 'Indiquez le budget global d’heures du projet.' }, 400);
+  const plan = d.work_plan ?? [];
+  const planError = await validateWorkPlan(null, d.assigned_worker_ids, plan);
+  if (planError) return c.json({ error: planError }, 400);
   const duplicate = await db.one<{ id: string }>(
     'SELECT id FROM projects WHERE upper(code) = $1 LIMIT 1',
     [normalizedCode],
@@ -274,17 +392,15 @@ projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) 
     const created = await tx.one<ProjectRow>(`
       INSERT INTO projects (
         id, code, title, client_name, site_location, category,
-        assigned_worker_ids, assigned_worker_names, budget_hours, spent_hours,
-        hourly_rate_fcfa, penalty_rate_daily_fcfa, ratio_value, ratio_unit, ratio_basis, ratio_quantity, delivery_deadline,
-        installation_start_date, installation_days, status, notes, ratio_deadline
+        start_date, work_plan, assigned_worker_ids, assigned_worker_names, budget_hours, spent_hours,
+        hourly_rate_fcfa, penalty_rate_daily_fcfa, delivery_deadline,
+        status, notes
       ) VALUES (
-        $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10,
-        $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22
+        $1, $2, $3, $4, $5, $6, $7, $8::jsonb,
+        $9, $10, $11, $12, $13, $14, $15, $16, $17
       )
       RETURNING id, code, title, client_name, site_location, category,
-                assigned_worker_ids, assigned_worker_names,
+                start_date::text AS start_date, work_plan, assigned_worker_ids, assigned_worker_names,
                 budget_hours, spent_hours, hourly_rate_fcfa, penalty_rate_daily_fcfa,
                 ratio_value, ratio_unit, ratio_basis, ratio_quantity,
                 ratio_deadline::text AS ratio_deadline,
@@ -294,10 +410,8 @@ projectsRoutes.post('/', requireAuth, requirePerm('projects.create'), async (c) 
                 created_at::text AS created_at, updated_at::text AS updated_at
     `, [
       id, normalizedCode, d.title.trim(), d.client_name.trim(), d.site_location.trim(), d.category ?? null,
-      d.assigned_worker_ids, d.assigned_worker_names, budgetHours, d.spent_hours,
-      d.hourly_rate_fcfa, 10000, d.ratio_value ?? null, d.ratio_unit || null, d.ratio_basis || null,
-      d.ratio_quantity ?? null, d.delivery_deadline, d.installation_start_date || null, d.installation_days, d.status, d.notes || null,
-      d.ratio_deadline || d.delivery_deadline,
+      d.start_date || new Date().toISOString().slice(0, 10), JSON.stringify(plan), d.assigned_worker_ids, d.assigned_worker_names,
+      d.budget_hours, 0, 0, d.penalty_rate_daily_fcfa, d.delivery_deadline, d.status, d.notes || null,
     ]);
     if (!created) throw new Error('La commande n’a pas pu être enregistrée.');
 
@@ -330,44 +444,33 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
 
   const d = body.data;
   const hasField = (field: string) => Object.prototype.hasOwnProperty.call(d, field);
-  const ratioTouched = hasField('ratio_value') || hasField('ratio_unit') || hasField('ratio_quantity');
-  const nextRatioValue = hasField('ratio_value') ? d.ratio_value : existing.ratio_value;
-  const nextRatioUnit = hasField('ratio_unit') ? d.ratio_unit : existing.ratio_unit;
-  const nextRatioQuantity = hasField('ratio_quantity') ? d.ratio_quantity : existing.ratio_quantity;
-  const ratioStarted = nextRatioValue != null || Boolean(nextRatioUnit?.trim()) || nextRatioQuantity != null;
-  if (ratioTouched && ratioStarted && (nextRatioValue == null || !nextRatioUnit?.trim() || !nextRatioQuantity || nextRatioQuantity <= 0)) {
-    return c.json({ error: 'Pour calculer le budget, indiquez le temps par unité, le nom de l’unité et la quantité.' }, 400);
-  }
-  const calculatedBudget = ratioStarted && nextRatioValue != null && nextRatioUnit?.trim() && nextRatioQuantity
-    ? nextRatioValue * nextRatioQuantity
-    : null;
+  if (d.budget_hours !== undefined && d.budget_hours <= 0) return c.json({ error: 'Le budget global doit être supérieur à zéro.' }, 400);
+  const nextWorkers = d.assigned_worker_ids ?? existing.assigned_worker_ids;
+  const currentPlan = d.work_plan ?? (Array.isArray(existing.work_plan) ? existing.work_plan : []);
+  const nextPlan = currentPlan.filter((entry) => nextWorkers.includes(entry.employee_id));
+  const planError = await validateWorkPlan(id, nextWorkers, nextPlan);
+  if (planError) return c.json({ error: planError }, 400);
   const row = await db.one<ProjectRow>(`
     UPDATE projects SET
-      code = COALESCE($2, code),
-      title = COALESCE($3, title),
-      client_name = COALESCE($4, client_name),
+      code = COALESCE($2, code), title = COALESCE($3, title), client_name = COALESCE($4, client_name),
       site_location = COALESCE($5, site_location),
-      category = CASE WHEN $21::boolean THEN $6::text ELSE category END,
-      assigned_worker_ids = COALESCE($7, assigned_worker_ids),
-      assigned_worker_names = COALESCE($8, assigned_worker_names),
-      budget_hours = CASE WHEN $29::boolean THEN $30::numeric ELSE COALESCE($9, budget_hours) END,
-      spent_hours = COALESCE($10, spent_hours),
-      hourly_rate_fcfa = COALESCE($11, hourly_rate_fcfa),
-      penalty_rate_daily_fcfa = COALESCE($12, 10000),
-      ratio_value = CASE WHEN $22::boolean THEN $13::numeric ELSE ratio_value END,
-      ratio_unit = CASE WHEN $23::boolean THEN $14::text ELSE ratio_unit END,
-      ratio_basis = CASE WHEN $24::boolean THEN $15::text ELSE ratio_basis END,
-      ratio_quantity = CASE WHEN $27::boolean THEN $28::numeric ELSE ratio_quantity END,
-      ratio_deadline = CASE WHEN $31::boolean THEN $32::date ELSE ratio_deadline END,
-      delivery_deadline = CASE WHEN $16::date IS NOT NULL THEN $16::date ELSE delivery_deadline END,
-      installation_start_date = CASE WHEN $25::boolean THEN $17::date ELSE installation_start_date END,
-      installation_days = COALESCE($18, installation_days),
-      status = COALESCE($19, status),
-      notes = CASE WHEN $26::boolean THEN $20::text ELSE notes END,
+      category = CASE WHEN $6::boolean THEN $7::text ELSE category END,
+      assigned_worker_ids = COALESCE($8, assigned_worker_ids), assigned_worker_names = COALESCE($9, assigned_worker_names),
+      budget_hours = COALESCE($10, budget_hours), penalty_rate_daily_fcfa = COALESCE($11, penalty_rate_daily_fcfa),
+      delivery_deadline = COALESCE($12::date, delivery_deadline), start_date = COALESCE($13::date, start_date),
+      work_plan = CASE WHEN $14::boolean THEN $15::jsonb ELSE work_plan END,
+      status = COALESCE($16, status), notes = CASE WHEN $17::boolean THEN $18::text ELSE notes END,
+      ratio_value = CASE WHEN $19::boolean THEN NULL ELSE ratio_value END,
+      ratio_unit = CASE WHEN $19::boolean THEN NULL ELSE ratio_unit END,
+      ratio_basis = CASE WHEN $19::boolean THEN NULL ELSE ratio_basis END,
+      ratio_quantity = CASE WHEN $19::boolean THEN NULL ELSE ratio_quantity END,
+      ratio_deadline = CASE WHEN $19::boolean THEN NULL ELSE ratio_deadline END,
+      installation_start_date = CASE WHEN $19::boolean THEN NULL ELSE installation_start_date END,
+      installation_days = CASE WHEN $19::boolean THEN 0 ELSE installation_days END,
       updated_at = now()
     WHERE id = $1
     RETURNING id, code, title, client_name, site_location, category,
-              assigned_worker_ids, assigned_worker_names,
+              start_date::text AS start_date, work_plan, assigned_worker_ids, assigned_worker_names,
               budget_hours, spent_hours, hourly_rate_fcfa, penalty_rate_daily_fcfa,
               ratio_value, ratio_unit, ratio_basis, ratio_quantity,
               ratio_deadline::text AS ratio_deadline,
@@ -375,40 +478,11 @@ projectsRoutes.patch('/:id', requireAuth, requirePerm('projects.edit'), async (c
               installation_start_date::text AS installation_start_date,
               installation_days, status, notes,
               created_at::text AS created_at, updated_at::text AS updated_at
-  `, [
-    id,
-    d.code ? d.code.trim().toUpperCase() : null,
-    d.title?.trim() || null,
-    d.client_name?.trim() || null,
-    d.site_location?.trim() || null,
-    d.category || null,
-    d.assigned_worker_ids || null,
-    d.assigned_worker_names || null,
-    d.budget_hours,
-    d.spent_hours,
-    d.hourly_rate_fcfa,
-    10000,
-    d.ratio_value,
-    d.ratio_unit?.trim() || null,
-    d.ratio_basis?.trim() || null,
-    d.delivery_deadline || null,
-    d.installation_start_date || null,
-    d.installation_days,
-    d.status || null,
-    d.notes,
-    hasField('category'),
-    hasField('ratio_value'),
-    hasField('ratio_unit'),
-    hasField('ratio_basis'),
-    hasField('installation_start_date'),
-    hasField('notes'),
-    hasField('ratio_quantity'),
-    d.ratio_quantity,
-    calculatedBudget !== null,
-    calculatedBudget,
-    hasField('ratio_deadline'),
-    d.ratio_deadline ?? null,
-  ]);
+  `, [id, d.code?.trim().toUpperCase() || null, d.title?.trim() || null, d.client_name?.trim() || null,
+    d.site_location?.trim() || null, hasField('category'), d.category ?? null, d.assigned_worker_ids ?? null,
+    d.assigned_worker_names ?? null, d.budget_hours ?? null, d.penalty_rate_daily_fcfa ?? null,
+    d.delivery_deadline ?? null, d.start_date ?? null, hasField('work_plan') || hasField('assigned_worker_ids'), JSON.stringify(nextPlan),
+    d.status ?? null, hasField('notes'), d.notes ?? null, hasField('budget_hours') || hasField('work_plan') || hasField('assigned_worker_ids')]);
 
   await writeAudit(db, {
     entity: 'project',
@@ -454,6 +528,23 @@ projectsRoutes.post('/:id/work-logs', requireAuth, requirePerm('projects.edit'),
     'SELECT id, full_name, active FROM employees WHERE id = $1', [parsed.data.employee_id],
   );
   if (!employee?.active) return c.json({ error: 'Exécutant introuvable ou inactif.' }, 404);
+  const capacity = await db.one<{ workdays: unknown; daily_work_hours: number }>(
+    'SELECT workdays, daily_work_hours FROM employees WHERE id = $1', [employee.id]);
+  const workDate = new Date(`${parsed.data.work_date}T12:00:00`);
+  const isScheduledWorkday = parseWorkdays(capacity?.workdays).includes(workDate.getDay());
+  const holiday = await db.one<{ is_holiday: boolean }>(
+    'SELECT EXISTS (SELECT 1 FROM holidays WHERE holiday_date = $1::date AND is_chome = true) AS is_holiday', [parsed.data.work_date]);
+  const exceptionalDay = !isScheduledWorkday || Boolean(holiday?.is_holiday);
+  if (exceptionalDay && !parsed.data.note?.trim()) {
+    return c.json({ error: 'Ajoutez un motif pour enregistrer un travail effectué un jour de repos ou férié.' }, 400);
+  }
+  const alreadyLogged = await db.one<{ hours: string | number }>(
+    'SELECT coalesce(sum(hours), 0) AS hours FROM project_work_logs WHERE employee_id = $1 AND work_date = $2::date',
+    [employee.id, parsed.data.work_date]);
+  const dailyCapacity = Number(capacity?.daily_work_hours) || 8;
+  if (!exceptionalDay && Number(alreadyLogged?.hours ?? 0) + parsed.data.hours > dailyCapacity + 0.001) {
+    return c.json({ error: `Cette saisie dépasse la capacité journalière de ${dailyCapacity} h cumulée sur tous les projets.` }, 409);
+  }
   const result = await db.transaction(async (tx) => {
     const log = await tx.one(
       `INSERT INTO project_work_logs (project_id, employee_id, work_date, hours, note, created_by)

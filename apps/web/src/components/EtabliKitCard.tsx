@@ -35,6 +35,7 @@ interface EtabliKitCardProps {
   onRefresh?: () => void;
   canManage?: boolean;
   canAddItems?: boolean;
+  canDeleteItems?: boolean;
 }
 
 type KitLabelFormat = 'compact' | 'standard';
@@ -105,6 +106,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
   onRefresh,
   canManage = false,
   canAddItems = false,
+  canDeleteItems = false,
 }) => {
   const toast = useToast();
   const [showAuditModal, setShowAuditModal] = useState(false);
@@ -122,6 +124,8 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
   const [paperFormat, setPaperFormat] = useState<KitPaperFormat>('A4');
   const [labelCopies, setLabelCopies] = useState<Record<number, number>>({});
   const [selectedItemForEdit, setSelectedItemForEdit] = useState<EtabliKitItem | null>(null);
+  const [confirmDeleteItem, setConfirmDeleteItem] = useState<EtabliKitItem | null>(null);
+  const [deleteItemBusy, setDeleteItemBusy] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterState, setFilterState] = useState<'all' | 'alert'>('all');
@@ -209,6 +213,22 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
       onRefresh?.();
     } catch (err) {
       toast((err as Error).message, 'error');
+    }
+  };
+
+  const handleDeleteItem = async () => {
+    if (!confirmDeleteItem) return;
+    setDeleteItemBusy(true);
+    try {
+      await api<{ ok: boolean }>(`/api/kits/items/${confirmDeleteItem.id}`, { method: 'DELETE' });
+      toast(`« ${confirmDeleteItem.name} » retiré de l’établi ${kit.etabli_number}.`, 'success');
+      setConfirmDeleteItem(null);
+      setSelectedItemForEdit(null);
+      onRefresh?.();
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    } finally {
+      setDeleteItemBusy(false);
     }
   };
 
@@ -434,9 +454,9 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
               return (
                 <div
                   key={item.id}
-                  onClick={() => canManage && setSelectedItemForEdit(item)}
+                  onClick={() => (canManage || canDeleteItems) && setSelectedItemForEdit(item)}
                   className={`group flex min-w-0 flex-wrap items-center justify-between gap-2 p-3 transition-colors sm:flex-nowrap ${
-                    canManage ? 'cursor-pointer hover:bg-slate-800/60 active:bg-slate-800' : ''
+                    canManage || canDeleteItems ? 'cursor-pointer hover:bg-slate-800/60 active:bg-slate-800' : ''
                   } ${!isOk ? 'bg-amber-500/5' : ''}`}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -470,7 +490,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                     >
                       {!item.is_present ? 'Manquant' : item.condition.replace('_', ' ')}
                     </span>
-                    {canManage && (
+                    {(canManage || canDeleteItems) && (
                       <ChevronRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5" />
                     )}
                   </div>
@@ -808,7 +828,12 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
         title={selectedItemForEdit ? `Outil : ${selectedItemForEdit.name}` : ''}
         onClose={() => setSelectedItemForEdit(null)}
         footer={
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {canDeleteItems && selectedItemForEdit ? (
+              <Button variant="outline-danger" size="sm" onClick={() => setConfirmDeleteItem(selectedItemForEdit)}>
+                Retirer de l’établi
+              </Button>
+            ) : <span />}
             <Button variant="ghost" size="sm" onClick={() => setSelectedItemForEdit(null)}>
               Fermer
             </Button>
@@ -832,7 +857,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2">
+            {canManage && <div className="space-y-2">
               <span className="font-semibold text-slate-200">Modifier l'état :</span>
               <div className="grid grid-cols-2 gap-2">
                 <Button
@@ -865,9 +890,20 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
                   ✕ Manquant
                 </Button>
               </div>
-            </div>
+            </div>}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={!!confirmDeleteItem}
+        title="Retirer cet outil de l’établi ?"
+        onClose={() => !deleteItemBusy && setConfirmDeleteItem(null)}
+        footer={<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="ghost" disabled={deleteItemBusy} onClick={() => setConfirmDeleteItem(null)}>Annuler</Button><Button variant="danger" disabled={deleteItemBusy} onClick={() => void handleDeleteItem()}>{deleteItemBusy ? 'Suppression…' : 'Retirer définitivement'}</Button></div>}
+      >
+        <p className="text-sm leading-relaxed text-ink-soft">
+          « <strong className="text-ink">{confirmDeleteItem?.name}</strong> » sera supprimé de la dotation de l’établi N°{kit.etabli_number}. Cette action ne supprime pas les autres outils de l’établi.
+        </p>
       </Modal>
       {portal}
     </div>

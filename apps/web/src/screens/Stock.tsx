@@ -163,10 +163,10 @@ function StockBinLabel({ refItem }: { refItem: StockRef }) {
         {/* En-tête officiel Monastère */}
         <div className="flex items-center justify-between border-b-2 border-gray-900 pb-2">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Logo" className="h-8 object-contain" />
-            <div>
+            <img src="/emblem.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
+            <div className="min-w-0">
               <p className="text-[8.5pt] font-extrabold uppercase tracking-wider text-gray-950">
-                C.F.T. des Bénédictins du Mont Fébé
+                CFTM · Bénédictins du Mont Fébé
               </p>
               <p className="text-[6.5pt] font-bold text-[#ff5500] uppercase tracking-wider">
                 Magasin & Gestion des Stocks

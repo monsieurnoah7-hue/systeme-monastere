@@ -1463,6 +1463,7 @@ export function Employees({
     pin: '',
     photo_path: null as string | null,
     workdays: [1, 2, 3, 4, 5] as number[],
+    daily_work_hours: 8,
     create_account: false,
     account_login: '',
     account_password: '',
@@ -1711,6 +1712,7 @@ export function Employees({
       pin: '',
       photo_path: null,
       workdays: [1, 2, 3, 4, 5],
+      daily_work_hours: 8,
       create_account: false,
       account_login: '',
       account_password: '',
@@ -1731,6 +1733,7 @@ export function Employees({
       pin: '',
       photo_path: employee.photo_path,
       workdays: employee.workdays && employee.workdays.length > 0 ? employee.workdays : [1, 2, 3, 4, 5],
+      daily_work_hours: employee.daily_work_hours ?? 8,
       create_account: false,
       account_login: '',
       account_password: '',
@@ -1776,6 +1779,7 @@ export function Employees({
             pin: form.pin.trim() ? form.pin.trim() : undefined,
             photo_path: form.photo_path,
             workdays: form.workdays,
+            daily_work_hours: Number(form.daily_work_hours),
           }),
         });
         toast('Fiche travailleur mise à jour.', 'success');
@@ -1788,6 +1792,7 @@ export function Employees({
             pin: form.pin.trim() ? form.pin.trim() : undefined,
             photo_path: form.photo_path || undefined,
             workdays: form.workdays,
+            daily_work_hours: Number(form.daily_work_hours),
             create_account: form.create_account,
             account_login: form.create_account ? form.account_login : undefined,
             account_password: form.create_account ? form.account_password : undefined,
@@ -3193,6 +3198,7 @@ export function Employees({
                     items={employeeKit.items}
                     canManage={hasPerm('tools.edit_status')}
                     canAddItems={hasPerm('tools.create')}
+                    canDeleteItems={hasPerm('tools.delete')}
                     onRefresh={() => {
                       if (detailFor) {
                         api<{ kit: EtabliKit | null; items: EtabliKitItem[] }>(`/api/kits/by-employee/${detailFor.id}`)
@@ -3450,6 +3456,12 @@ export function Employees({
               Obligatoire pour valider le pointage sur la borne après scan du badge.
             </p>
           </div>
+
+          <label className="block text-xs font-medium text-ink-soft">
+            Heures prévues par jour ouvré
+            <input type="number" min="0.5" max="24" step="0.5" value={form.daily_work_hours} onChange={(e) => setForm((f) => ({ ...f, daily_work_hours: Number(e.target.value) }))} className="mt-1 h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono text-sm text-ink focus:border-amber focus:outline-none" />
+            <span className="mt-1 block text-[11px] text-ink-faint">Plafond utilisé pour répartir la charge entre plusieurs projets. Valeur initiale : 8 heures.</span>
+          </label>
 
           {/* Jours ouvrés personnalisés du travailleur */}
           <div>

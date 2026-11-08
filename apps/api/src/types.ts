@@ -35,6 +35,7 @@ export type EmployeeRow = {
   badge_token: string | null;
   active: boolean;
   workdays?: number[];
+  daily_work_hours?: number;
 };
 
 export type ToolRow = {

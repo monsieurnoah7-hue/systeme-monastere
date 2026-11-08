@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS employees (
   badge_token text UNIQUE,
   pin_hash text,
   workdays jsonb DEFAULT '[1,2,3,4,5,6]'::jsonb,
+  daily_work_hours numeric NOT NULL DEFAULT 8 CHECK (daily_work_hours > 0 AND daily_work_hours <= 24),
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -304,6 +305,7 @@ ALTER TABLE absences ADD COLUMN IF NOT EXISTS reviewed_by text;
 ALTER TABLE absences ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
 ALTER TABLE absences ADD COLUMN IF NOT EXISTS review_note text;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS workdays jsonb DEFAULT '[1,2,3,4,5,6]'::jsonb;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS daily_work_hours numeric NOT NULL DEFAULT 8;
 UPDATE users SET role = 'direction' WHERE role = 'admin';
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 CREATE TABLE IF NOT EXISTS roles (
@@ -516,6 +518,7 @@ CREATE TABLE IF NOT EXISTS projects (
   client_name text NOT NULL,
   site_location text NOT NULL,
   category text,
+  start_date date NOT NULL DEFAULT CURRENT_DATE,
   assigned_worker_ids text[] NOT NULL DEFAULT '{}',
   assigned_worker_names text[] NOT NULL DEFAULT '{}',
 
@@ -528,6 +531,7 @@ CREATE TABLE IF NOT EXISTS projects (
   ratio_unit text,
   ratio_basis text,
   ratio_quantity numeric,
+  work_plan jsonb NOT NULL DEFAULT '[]'::jsonb,
 
   -- Planification Livraisons & Pose sur Chantier (PDF Pt 2)
   delivery_deadline date NOT NULL,
@@ -581,7 +585,9 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_unit text;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_basis text;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_quantity numeric;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS ratio_deadline date;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS start_date date NOT NULL DEFAULT CURRENT_DATE;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS work_plan jsonb NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE projects ALTER COLUMN penalty_rate_daily_fcfa SET DEFAULT 10000;
 `;
 
-export const MIGRATION_NAME = '018_terminal_authorizations';
+export const MIGRATION_NAME = '020_project_work_planning_v1';

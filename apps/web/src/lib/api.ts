@@ -456,6 +456,7 @@ export type Employee = {
   active: boolean;
   has_pin?: boolean;
   workdays?: number[];
+  daily_work_hours?: number;
 };
 
 export type StockRef = {
@@ -982,6 +983,8 @@ export type Project = {
   client_name: string;
   site_location: string;
   category: string | null;
+  start_date?: string;
+  work_plan?: ProjectWorkPlanAllocation[];
   assigned_worker_ids: string[];
   assigned_worker_names: string[];
   budget_hours: number;
@@ -1010,8 +1013,17 @@ export type Project = {
   financial_damage_fcfa?: number;
   hours_progress_pct?: number;
   ratio_delayed_workdays?: number;
+  planned_weekly_hours?: number;
+  planned_completion_date?: string | null;
+  schedule_at_risk?: boolean;
   attributable_overtime_hours?: number;
   accountability_data_complete?: boolean;
+};
+
+export type ProjectWorkPlanAllocation = {
+  employee_id: string;
+  weekday: number;
+  planned_hours: number;
 };
 
 export type ProjectWorkLog = {
