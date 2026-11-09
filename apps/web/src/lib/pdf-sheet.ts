@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 
 export interface ExportSheetPdfOptions {
   filename?: string;
@@ -23,13 +23,11 @@ export interface ExportSheetPdfResult {
  * Exporte une planche d'impression (badges, étiquettes QR, étiquettes de stock, établis)
  * en un document PDF haute fidélité prêt à l'impression.
  *
- * Fonctionnalités clés :
- * - Rendu haute résolution (240~300 DPI) garantissant la lisibilité parfaite des codes QR par les scanners
- * - Gestion automatique multi-pages (classes .badge-page, .label-sheet-page, .a4-page)
- * - Découpage intelligent pour les conteneurs sans pagination explicite
- * - Attente de la stabilisation des images et codes QR (évite les zones blanches)
- * - Isolation DOM unclipped pour éviter tout rognage causé par des ascendants scrollables
- * - Téléchargement immédiat sur le disque et ouverture automatique dans le visualiseur de l'appareil
+ * Utilise html-to-image (moteur SVG vectoriel natif) combiné à jsPDF :
+ * - Prise en charge native de Tailwind CSS v4 (oklch, color-mix, variables modernes)
+ * - Rendu haute résolution (240~300 DPI) garantissant la lisibilité parfaite des codes QR
+ * - Gestion automatique multi-pages (.badge-page, .label-sheet-page, .a4-page)
+ * - Téléchargement immédiat sur le disque et ouverture automatique dans le visualiseur
  */
 export async function exportSheetToPdf(
   sourceElement: HTMLElement,
@@ -52,7 +50,7 @@ export async function exportSheetToPdf(
   });
 
   // 1. Attente de la génération complète des codes QR
-  const maxWaitMs = 4000;
+  const maxWaitMs = 3000;
   const startTime = Date.now();
   while (Date.now() - startTime < maxWaitMs) {
     const pending = sourceElement.querySelectorAll('[data-qr-pending="true"]');
@@ -65,76 +63,21 @@ export async function exportSheetToPdf(
     await document.fonts.ready.catch(() => undefined);
   }
 
-  // 3. Création d'une zone de préparation isolée et non rognée dans le DOM
-  const staging = document.createElement('div');
-  staging.setAttribute('data-pdf-staging', 'true');
-  staging.style.position = 'fixed';
-  staging.style.top = '0';
-  staging.style.left = '0';
-  staging.style.width = `${pageWidthMm}mm`;
-  staging.style.background = '#ffffff';
-  staging.style.color = '#0f172a';
-  staging.style.zIndex = '-9999';
-  staging.style.pointerEvents = 'none';
-  staging.style.overflow = 'visible';
-  staging.style.margin = '0';
-  staging.style.padding = '0';
+  // 3. Sauvegarde et réinitialisation temporaire de la transformation zoom du viewport
+  const prevTransform = sourceElement.style.transform;
+  const prevTransformOrigin = sourceElement.style.transformOrigin;
+  sourceElement.style.transform = 'none';
+  sourceElement.style.transformOrigin = 'top left';
 
   let doc: jsPDF | null = null;
 
   try {
-    // 4. Clonage en profondeur du contenu pour neutraliser les styles de zoom du viewport
-    const clone = sourceElement.cloneNode(true) as HTMLElement;
-    clone.style.transform = 'none';
-    clone.style.transformOrigin = 'top left';
-    clone.style.margin = '0';
-    clone.style.width = `${pageWidthMm}mm`;
-    staging.appendChild(clone);
-    document.body.appendChild(staging);
-
-    // Synchronisation des canvas s'il y en a dans la source
-    const srcCanvases = sourceElement.querySelectorAll('canvas');
-    const cloneCanvases = clone.querySelectorAll('canvas');
-    for (let i = 0; i < srcCanvases.length; i++) {
-      const srcCanvas = srcCanvases[i];
-      const cloneCanvas = cloneCanvases[i];
-      if (srcCanvas && cloneCanvas) {
-        cloneCanvas.width = srcCanvas.width;
-        cloneCanvas.height = srcCanvas.height;
-        const ctx = cloneCanvas.getContext('2d');
-        if (ctx) ctx.drawImage(srcCanvas, 0, 0);
-      }
-    }
-
-    // Décodage de toutes les images pour garantir le rendu complet
-    const images = Array.from(clone.querySelectorAll('img'));
-    await Promise.all(
-      images.map(async (img) => {
-        if (typeof img.decode === 'function') {
-          await img.decode().catch(() => undefined);
-        } else if (!img.complete) {
-          await new Promise<void>((resolve) => {
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-            setTimeout(resolve, 2000);
-          });
-        }
-      }),
-    );
-
-    // Pause courte pour permettre au moteur de rendu du navigateur d'appliquer le layout
-    await new Promise((r) => setTimeout(r, 60));
-
-    // 5. Détection des pages de la planche
+    // 4. Détection des pages de la planche
     const pageSelector = '.badge-page, .label-sheet-page, .a4-page, [data-print-page]';
-    let pages = Array.from(clone.querySelectorAll<HTMLElement>(pageSelector));
+    let pages = Array.from(sourceElement.querySelectorAll<HTMLElement>(pageSelector));
 
     if (pages.length === 0) {
-      if (clone.matches(pageSelector)) {
-        pages = [clone];
-      } else {
-        pages = [clone];
-      }
+      pages = [sourceElement];
     }
 
     doc = new jsPDF({
@@ -145,9 +88,9 @@ export async function exportSheetToPdf(
     });
 
     const totalPages = pages.length;
-    const renderScale = options.scale ?? 2.5;
+    const pixelRatio = options.scale ?? 2.5;
 
-    // 6. Rendu haute fidélité page par page
+    // 5. Rendu haute fidélité page par page
     for (let i = 0; i < totalPages; i++) {
       options.onProgress?.({
         current: i + 1,
@@ -158,91 +101,38 @@ export async function exportSheetToPdf(
       const pageEl = pages[i];
       if (!pageEl) continue;
 
-      const pageCanvas = await html2canvas(pageEl, {
-        scale: renderScale,
+      const imgData = await toPng(pageEl, {
+        pixelRatio,
         backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        imageTimeout: 10000,
-        windowWidth: Math.max(1200, Math.ceil(pageWidthMm * (96 / 25.4))),
+        imagePlaceholder:
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
       });
 
-      // Si le conteneur n'a qu'une seule page déclarée mais dépasse la hauteur de page standard
-      const pxPerMm = (96 / 25.4) * renderScale;
-      const expectedPageHeightPx = pageHeightMm * pxPerMm;
-
-      if (totalPages === 1 && pageCanvas.height > expectedPageHeightPx * 1.15) {
-        // Découpage automatique multi-pages pour les longues listes
-        let renderedY = 0;
-        let sliceIndex = 0;
-        const sliceHeightPx = Math.floor(expectedPageHeightPx * 0.95);
-
-        while (renderedY < pageCanvas.height) {
-          if (sliceIndex > 0) {
-            doc.addPage(paper === 'Letter' ? 'letter' : 'a4', orientation);
-          }
-
-          const currentSliceH = Math.min(sliceHeightPx, pageCanvas.height - renderedY);
-          const sliceCanvas = document.createElement('canvas');
-          sliceCanvas.width = pageCanvas.width;
-          sliceCanvas.height = currentSliceH;
-          const sliceCtx = sliceCanvas.getContext('2d');
-          if (sliceCtx) {
-            sliceCtx.fillStyle = '#ffffff';
-            sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-            sliceCtx.drawImage(
-              pageCanvas,
-              0, renderedY, pageCanvas.width, currentSliceH,
-              0, 0, pageCanvas.width, currentSliceH,
-            );
-          }
-
-          const sliceData = sliceCanvas.toDataURL('image/png');
-          const sliceHeightMm = (currentSliceH / pxPerMm);
-          const sliceWidthMm = (pageCanvas.width / pxPerMm);
-          const scaleFit = Math.min((pageWidthMm - 6) / sliceWidthMm, (pageHeightMm - 6) / sliceHeightMm, 1);
-          const finalW = sliceWidthMm * scaleFit;
-          const finalH = sliceHeightMm * scaleFit;
-          const posX = Math.max(0, (pageWidthMm - finalW) / 2);
-          const posY = Math.max(0, (pageHeightMm - finalH) / 2);
-
-          doc.addImage(sliceData, 'PNG', posX, posY, finalW, finalH, undefined, 'FAST');
-
-          renderedY += currentSliceH;
-          sliceIndex++;
-        }
-      } else {
-        if (i > 0) {
-          doc.addPage(paper === 'Letter' ? 'letter' : 'a4', orientation);
-        }
-
-        const imgData = pageCanvas.toDataURL('image/png');
-
-        // Calcul des dimensions métriques et centrage précis
-        const elemWidthPx = pageEl.offsetWidth || (pageCanvas.width / renderScale);
-        const elemHeightPx = pageEl.offsetHeight || (pageCanvas.height / renderScale);
-        const widthMm = elemWidthPx * (25.4 / 96);
-        const heightMm = elemHeightPx * (25.4 / 96);
-
-        // Marge de sécurité de 3mm
-        const maxAvailableW = pageWidthMm - 6;
-        const maxAvailableH = pageHeightMm - 6;
-        const scaleFit = Math.min(
-          maxAvailableW / Math.max(widthMm, 1),
-          maxAvailableH / Math.max(heightMm, 1),
-          1,
-        );
-
-        const finalWidthMm = widthMm * scaleFit;
-        const finalHeightMm = heightMm * scaleFit;
-        const offsetX = Math.max(0, (pageWidthMm - finalWidthMm) / 2);
-        // Si l'étiquette est petite (ex. étiquette unique), la centrer verticalement
-        const offsetY = finalHeightMm < pageHeightMm * 0.8
-          ? Math.max(0, (pageHeightMm - finalHeightMm) / 2)
-          : Math.max(0, (pageHeightMm - finalHeightMm) / 2);
-
-        doc.addImage(imgData, 'PNG', offsetX, offsetY, finalWidthMm, finalHeightMm, undefined, 'FAST');
+      if (i > 0) {
+        doc.addPage(paper === 'Letter' ? 'letter' : 'a4', orientation);
       }
+
+      // Calcul des dimensions métriques et centrage précis
+      const elemWidthPx = pageEl.offsetWidth;
+      const elemHeightPx = pageEl.offsetHeight;
+      const widthMm = elemWidthPx * (25.4 / 96);
+      const heightMm = elemHeightPx * (25.4 / 96);
+
+      // Marge de sécurité de 3mm
+      const maxAvailableW = pageWidthMm - 6;
+      const maxAvailableH = pageHeightMm - 6;
+      const scaleFit = Math.min(
+        maxAvailableW / Math.max(widthMm, 1),
+        maxAvailableH / Math.max(heightMm, 1),
+        1,
+      );
+
+      const finalWidthMm = widthMm * scaleFit;
+      const finalHeightMm = heightMm * scaleFit;
+      const offsetX = Math.max(0, (pageWidthMm - finalWidthMm) / 2);
+      const offsetY = Math.max(0, (pageHeightMm - finalHeightMm) / 2);
+
+      doc.addImage(imgData, 'PNG', offsetX, offsetY, finalWidthMm, finalHeightMm, undefined, 'FAST');
     }
 
     options.onProgress?.({
@@ -260,20 +150,20 @@ export async function exportSheetToPdf(
     const blob = doc.output('blob');
     const blobUrl = URL.createObjectURL(blob);
 
-    // 1. Ouvrir dans l'onglet/fenêtre cible si demandé
+    // 6. Ouvrir dans l'onglet/fenêtre cible si demandé
     if (options.openInNewTab) {
-      if (options.targetWindow && !options.targetWindow.closed) {
-        options.targetWindow.location.href = blobUrl;
-      } else {
-        try {
+      try {
+        if (options.targetWindow && !options.targetWindow.closed) {
+          options.targetWindow.location.href = blobUrl;
+        } else {
           window.open(blobUrl, '_blank');
-        } catch {
-          // Ignoré si bloqué par le navigateur
         }
+      } catch (popupErr) {
+        console.warn('Navigation de la fenêtre d’aperçu bloquée par le navigateur:', popupErr);
       }
     }
 
-    // 2. Déclencher le téléchargement effectif du fichier sur le disque
+    // 7. Déclencher le téléchargement direct sur le disque
     if (options.download !== false) {
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -291,9 +181,8 @@ export async function exportSheetToPdf(
       totalPages,
     };
   } finally {
-    // 7. Nettoyage garanti de la zone isolée
-    if (staging.parentNode) {
-      staging.parentNode.removeChild(staging);
-    }
+    // 8. Restauration garantie du zoom du viewport
+    sourceElement.style.transform = prevTransform;
+    sourceElement.style.transformOrigin = prevTransformOrigin;
   }
 }

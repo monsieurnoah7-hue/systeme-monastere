@@ -88,16 +88,20 @@ export function PrintPreviewModal({
     try {
       previewWindow = window.open('', '_blank');
       if (previewWindow) {
-        previewWindow.document.title = 'Génération de la planche PDF…';
-        previewWindow.document.body.innerHTML = `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: grid; place-items: center; min-height: 90vh; margin: 0; background: #0f172a; color: #f8fafc;">
-            <div style="text-align: center; padding: 32px; max-width: 480px; border-radius: 16px; background: #1e293b; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
-              <div style="font-size: 42px; margin-bottom: 16px;">📄</div>
-              <div style="font-weight: 700; font-size: 19px; margin-bottom: 8px; color: #ffffff;">Génération de votre planche PDF…</div>
-              <div style="font-size: 13px; color: #94a3b8; line-height: 1.6;">Le document PDF haute fidélité est en cours de compilation. Il va s'afficher automatiquement ici et être enregistré sur votre appareil.</div>
+        try {
+          previewWindow.document.title = 'Génération de la planche PDF…';
+          previewWindow.document.body.innerHTML = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: grid; place-items: center; min-height: 90vh; margin: 0; background: #0f172a; color: #f8fafc;">
+              <div style="text-align: center; padding: 32px; max-width: 480px; border-radius: 16px; background: #1e293b; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
+                <div style="font-size: 42px; margin-bottom: 16px;">📄</div>
+                <div style="font-weight: 700; font-size: 19px; margin-bottom: 8px; color: #ffffff;">Génération de votre planche PDF…</div>
+                <div style="font-size: 13px; color: #94a3b8; line-height: 1.6;">Le document PDF haute fidélité est en cours de compilation. Il va s'afficher automatiquement ici et être enregistré sur votre appareil.</div>
+              </div>
             </div>
-          </div>
-        `;
+          `;
+        } catch {
+          // Si le navigateur bloque l'accès au document de la popup
+        }
       }
     } catch {
       previewWindow = null;
@@ -139,14 +143,15 @@ export function PrintPreviewModal({
           'success',
         );
       }
-    } catch (err) {
+    } catch (err: unknown) {
       if (previewWindow && !previewWindow.closed) {
         try {
           previewWindow.close();
         } catch {}
       }
       console.error('Erreur export PDF planche:', err);
-      toast('Échec de la génération du document PDF.', 'error');
+      const detailMsg = err instanceof Error ? ` (${err.message})` : '';
+      toast(`Échec de la génération du document PDF${detailMsg}.`, 'error');
     } finally {
       setExporting(false);
       setExportProgress(null);
