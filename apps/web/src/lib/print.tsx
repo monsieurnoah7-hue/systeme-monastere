@@ -41,7 +41,8 @@ export function usePrintSheet() {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <base href="${window.location.origin}/">
-  <title>Planche à imprimer · CFTM</title>
+  <link rel="icon" type="image/png" href="/emblem.png">
+  <title>Planche à imprimer · C.F.T. des Bénédictins du Mont Fébé</title>
   <style>
     @page {
       margin: 6mm;
@@ -194,6 +195,9 @@ export function usePrintSheet() {
         }
 
         targetRoot.innerHTML = sourceRoot.innerHTML;
+        targetRoot.querySelectorAll('style').forEach((st) => {
+          head.appendChild(st.cloneNode(true));
+        });
 
         await Promise.all(stylesheets);
 

@@ -172,14 +172,44 @@ export function exportToPdf(
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
+  <base href="${window.location.origin}/" />
   <title>${title} · C.F.T. des Bénédictins du Mont Fébé</title>
   <style>
-    @page { size: A4 landscape; margin: 12mm 15mm; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 16px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    @page {
+      size: A4 landscape;
+      margin: 12mm 15mm;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      margin: 0;
+      padding: 16px;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    thead {
+      display: table-header-group;
+    }
+    tr {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
     @media print {
-      body { padding: 0; }
-      .no-print { display: none !important; }
+      body {
+        padding: 0;
+        background: #ffffff !important;
+      }
+      .no-print {
+        display: none !important;
+      }
     }
   </style>
 </head>
