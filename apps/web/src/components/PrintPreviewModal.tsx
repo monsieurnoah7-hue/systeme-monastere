@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Minus, Plus } from 'lucide-react';
-import { Button, Modal } from './ui';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Download, Minus, Plus, Printer } from 'lucide-react';
+import { Button, Modal, Spinner } from './ui';
+import { exportSheetToPdf } from '../lib/pdf-sheet';
 
 export type PrintPaper = 'A4' | 'Letter';
 
@@ -13,6 +14,8 @@ export function PrintPreviewModal({
   onClose,
   onPrint,
   printing = false,
+  pdfFilename,
+  onDownloadPdf,
 }: {
   open: boolean;
   title: string;
@@ -22,12 +25,17 @@ export function PrintPreviewModal({
   onClose: () => void;
   onPrint: () => void;
   printing?: boolean;
+  pdfFilename?: string;
+  onDownloadPdf?: () => Promise<void> | void;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const [fitScale, setFitScale] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [contentHeight, setContentHeight] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<string | null>(null);
+
   const pageWidthMm = paper === 'A4' ? 210 : 215.9;
   const pageHeightMm = paper === 'A4' ? 297 : 279.4;
   const pageWidthPx = pageWidthMm * (96 / 25.4);
@@ -53,13 +61,50 @@ export function PrintPreviewModal({
   }, [open, content, fitScale, zoom]);
 
   useEffect(() => {
-    if (open) setZoom(1);
+    if (open) {
+      setZoom(1);
+      setExporting(false);
+      setExportProgress(null);
+    }
   }, [open]);
 
   const scale = fitScale * zoom;
   const pageHeightPx = pageHeightMm * (96 / 25.4);
   const canvasHeight = Math.max(pageHeightPx, contentHeight) * scale;
   const zoomLabel = useMemo(() => `${Math.round(scale * 100)} %`, [scale]);
+
+  const handleDownloadPdf = useCallback(async () => {
+    if (!canvas.current || exporting || printing) return;
+    try {
+      setExporting(true);
+      setExportProgress('Initialisation de l’export PDF…');
+
+      if (onDownloadPdf) {
+        await onDownloadPdf();
+      } else {
+        const cleanSlug = title
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'planche-impression';
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const filename = pdfFilename || `${cleanSlug}-${paper.toLowerCase()}-${dateStr}.pdf`;
+
+        await exportSheetToPdf(canvas.current, {
+          paper,
+          filename,
+          onProgress: (p) => setExportProgress(p.message),
+        });
+      }
+    } catch (err) {
+      console.error('Erreur export PDF planche:', err);
+    } finally {
+      setExporting(false);
+      setExportProgress(null);
+    }
+  }, [exporting, printing, onDownloadPdf, title, paper, pdfFilename]);
 
   return (
     <Modal
@@ -69,10 +114,29 @@ export function PrintPreviewModal({
       wide
       footer={(
         <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <Button variant="ghost" onClick={onClose}>Retour aux réglages</Button>
-          <Button variant="primary" disabled={printing} onClick={onPrint}>
-            {printing ? 'Préparation…' : 'Imprimer cette planche'}
+          <Button variant="ghost" disabled={printing || exporting} onClick={onClose}>
+            Retour aux réglages
           </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              disabled={printing || exporting}
+              onClick={handleDownloadPdf}
+              icon={exporting ? <Spinner /> : <Download size={14} />}
+              title="Télécharger directement la planche au format PDF prêt à l’impression"
+            >
+              {exporting ? 'Export en cours…' : 'Télécharger le PDF'}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={printing || exporting}
+              onClick={onPrint}
+              icon={<Printer size={14} />}
+              title="Lancer l'impression directe de la planche"
+            >
+              {printing ? 'Préparation…' : 'Imprimer cette planche'}
+            </Button>
+          </div>
         </div>
       )}
     >
@@ -80,15 +144,35 @@ export function PrintPreviewModal({
         <div className="flex min-h-10 flex-wrap items-center justify-between gap-2 text-xs text-ink-soft">
           <span>{paper} · {copiesLabel}</span>
           <div className="flex items-center gap-1 rounded-lg border border-line bg-surface p-1" aria-label="Zoom de l’aperçu">
-            <button type="button" className="grid h-8 w-8 place-items-center rounded-md hover:bg-paper-2 disabled:opacity-40" aria-label="Réduire le zoom" disabled={zoom <= 0.75} onClick={() => setZoom((value) => Math.max(0.75, Math.round((value - 0.15) * 100) / 100))}>
+            <button
+              type="button"
+              className="grid h-8 w-8 place-items-center rounded-md hover:bg-paper-2 disabled:opacity-40"
+              aria-label="Réduire le zoom"
+              disabled={zoom <= 0.75}
+              onClick={() => setZoom((value) => Math.max(0.75, Math.round((value - 0.15) * 100) / 100))}
+            >
               <Minus size={14} />
             </button>
             <span className="min-w-12 text-center tabular-nums">{zoomLabel}</span>
-            <button type="button" className="grid h-8 w-8 place-items-center rounded-md hover:bg-paper-2 disabled:opacity-40" aria-label="Agrandir l’aperçu" disabled={zoom >= 1.8} onClick={() => setZoom((value) => Math.min(1.8, Math.round((value + 0.15) * 100) / 100))}>
+            <button
+              type="button"
+              className="grid h-8 w-8 place-items-center rounded-md hover:bg-paper-2 disabled:opacity-40"
+              aria-label="Agrandir l’aperçu"
+              disabled={zoom >= 1.8}
+              onClick={() => setZoom((value) => Math.min(1.8, Math.round((value + 0.15) * 100) / 100))}
+            >
               <Plus size={14} />
             </button>
           </div>
         </div>
+
+        {exporting && (
+          <div className="flex items-center gap-2.5 rounded-lg border border-amber/30 bg-amber/10 px-3 py-2 text-xs font-medium text-amber">
+            <Spinner />
+            <span>{exportProgress || 'Génération du PDF haute fidélité prêt à l’impression…'}</span>
+          </div>
+        )}
+
         <div ref={viewport} className="print-preview-viewport max-h-[62vh] max-h-[62dvh] overflow-auto rounded-xl border border-line bg-[#333] p-3">
           <div className="mx-auto" style={{ width: pageWidthPx * scale, height: canvasHeight }}>
             <div
@@ -105,7 +189,9 @@ export function PrintPreviewModal({
             </div>
           </div>
         </div>
-        <p className="text-[11px] text-ink-faint">Vérifiez les codes et la disposition. Le navigateur ouvrira ensuite ses paramètres d’impression.</p>
+        <p className="text-[11px] text-ink-faint">
+          Vérifiez les codes et la disposition. Vous pouvez télécharger directement la planche au format PDF haute fidélité prêt à l’impression ou lancer l’impression navigateur.
+        </p>
       </div>
     </Modal>
   );

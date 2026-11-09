@@ -1,13 +1,8 @@
-export function localDate(d = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+export const MONASTERY_TIMEZONE = 'Africa/Douala';
 
 export function businessDate(d = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Africa/Douala',
+    timeZone: MONASTERY_TIMEZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -16,9 +11,15 @@ export function businessDate(d = new Date()): string {
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
+export function localDate(d = new Date()): string {
+  // Aligné systématiquement sur le fuseau officiel de Mont Fébé (Africa/Douala)
+  // pour interdire tout décalage d'un jour ou d'une heure lors de l'exécution sur serveur cloud en UTC.
+  return businessDate(d);
+}
+
 export function businessMinutes(d = new Date()): number {
   const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Africa/Douala',
+    timeZone: MONASTERY_TIMEZONE,
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
@@ -28,7 +29,18 @@ export function businessMinutes(d = new Date()): number {
 }
 
 export function minutesOfDay(d = new Date()): number {
-  return d.getHours() * 60 + d.getMinutes();
+  // Aligné systématiquement sur le fuseau officiel de Mont Fébé (Africa/Douala)
+  return businessMinutes(d);
+}
+
+export function businessDayOfWeek(d = new Date()): number {
+  const dateStr = businessDate(d);
+  const [y, m, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y!, m! - 1, day!, 12, 0, 0)).getUTCDay();
+}
+
+export function businessTimeHm(d = new Date()): string {
+  return formatHm(businessMinutes(d));
 }
 
 export function parseHm(value: string): number {

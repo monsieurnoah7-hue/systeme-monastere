@@ -24,8 +24,8 @@ attendanceRoutes.get('/', requirePerm('attendance.view'), async (c) => {
     declared_kind: string | null;
   }>(
     `SELECT e.id, e.full_name, e.job_title, e.photo_path,
-            min(CASE WHEN a.punch_type = 'in' THEN to_char(a.server_at, 'HH24:MI') END) AS in_at,
-            max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at, 'HH24:MI') END) AS out_at,
+            min(CASE WHEN a.punch_type = 'in' THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS in_at,
+            max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS out_at,
             coalesce(max(a.late_minutes), 0) AS late_minutes,
             (SELECT ab.kind FROM absences ab
               WHERE ab.employee_id = e.id AND $1 BETWEEN ab.from_date AND ab.to_date AND ab.status = 'approved'
@@ -186,13 +186,13 @@ attendanceRoutes.patch('/correction', requirePerm('attendance.correct'), async (
               corrected_from,
               jsonb_build_object('server_at', server_at, 'late_minutes', late_minutes, 'reason', reason, 'status', status)
             ),
-            server_at = date_trunc('day', server_at) + ($4::time - time '00:00'),
+            server_at = ($2::date + $4::time) AT TIME ZONE 'Africa/Douala',
             late_minutes = $5,
             status = $6,
             correction_reason = $7
       WHERE employee_id = $1 AND punch_date = $2 AND punch_type = $3
       RETURNING id, employee_id, punch_type, punch_date::text AS punch_date,
-                to_char(server_at, 'HH24:MI') AS time, late_minutes, status, correction_reason`,
+                to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') AS time, late_minutes, status, correction_reason`,
     [input.employee_id, input.punch_date, input.punch_type, input.time, lateMinutes, status, input.reason],
   );
 

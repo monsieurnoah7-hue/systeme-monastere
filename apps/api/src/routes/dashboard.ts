@@ -64,8 +64,8 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
     status: string;
   }>(
     `SELECT e.id, e.full_name, e.job_title, e.photo_path,
-            min(CASE WHEN a.punch_type = 'in'  THEN to_char(a.server_at, 'HH24:MI') END) AS in_at,
-            max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at, 'HH24:MI') END) AS out_at,
+            min(CASE WHEN a.punch_type = 'in'  THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS in_at,
+            max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS out_at,
             coalesce(max(a.late_minutes), 0) AS late_minutes,
             coalesce(max(a.status), 'present') AS status
        FROM employees e
@@ -138,7 +138,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
   );
 
   const missingOut = await db.query<{ id: string; full_name: string; punch_date: string; in_at: string }>(
-    `SELECT a.employee_id AS id, e.full_name, to_char(a.punch_date, 'YYYY-MM-DD') AS punch_date, to_char(a.server_at, 'HH24:MI') AS in_at
+    `SELECT a.employee_id AS id, e.full_name, to_char(a.punch_date, 'YYYY-MM-DD') AS punch_date, to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') AS in_at
        FROM attendance a
        JOIN employees e ON e.id = a.employee_id
       WHERE a.punch_type = 'in'
@@ -150,7 +150,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
         )
         AND (
           a.punch_date < $1::date
-          OR (a.punch_date = $1::date AND to_char(now(), 'HH24:MI') > '16:30')
+          OR (a.punch_date = $1::date AND to_char(now() AT TIME ZONE 'Africa/Douala', 'HH24:MI') > '16:30')
         )
       ORDER BY a.punch_date DESC, a.server_at DESC LIMIT 50`,
     [today],

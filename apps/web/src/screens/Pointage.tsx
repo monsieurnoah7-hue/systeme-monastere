@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
-import { api, type Dashboard as DashboardType, type Employee, type KioskIdentify, type PunchResult, type PunchType, type User } from '../lib/api';
+import { api, syncOfflineMutations, type Dashboard as DashboardType, type Employee, type KioskIdentify, type PunchResult, type PunchType, type User } from '../lib/api';
+import { listOfflineMutations } from '../lib/offline';
 import { QR_PREFIX, getCachedQr, qrDataUrl } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { initials } from '../lib/labels';
@@ -24,6 +25,39 @@ import { exportToExcel, exportToPdf } from '../lib/export';
 
 type Terminal = { id: string; name: string };
 type Stage = 'terminal' | 'identify' | 'validate_pin' | 'actions' | 'capture' | 'confirm';
+
+type DirectoryEmployee = {
+  id: string;
+  full_name: string;
+  job_title: string;
+  photo_path: string | null;
+  badge_token: string | null;
+  has_pin: boolean;
+};
+
+type DirectoryPunch = {
+  employee_id: string;
+  punch_type: string;
+  server_at: string;
+  late_minutes: number;
+};
+
+const KIOSK_DIR_KEY = 'mf_kiosk_directory_v1';
+
+function getStoredDirectory(): { employees: DirectoryEmployee[]; todayPunches: DirectoryPunch[]; date: string } {
+  try {
+    const raw = localStorage.getItem(KIOSK_DIR_KEY);
+    return raw ? (JSON.parse(raw) as { employees: DirectoryEmployee[]; todayPunches: DirectoryPunch[]; date: string }) : { employees: [], todayPunches: [], date: '' };
+  } catch {
+    return { employees: [], todayPunches: [], date: '' };
+  }
+}
+
+function saveStoredDirectory(data: { employees: DirectoryEmployee[]; todayPunches: DirectoryPunch[]; date: string }) {
+  try {
+    localStorage.setItem(KIOSK_DIR_KEY, JSON.stringify(data));
+  } catch {}
+}
 
 function AttendanceAvatar({ employee, size = 'h-8 w-8' }: {
   employee: NonNullable<DashboardType['das04']>['detail'][number];
@@ -126,6 +160,14 @@ function PunchReceipt({ result }: { result: PunchResult }) {
               {result.lateMinutes > 0 ? ` — ${result.lateMinutes} min` : ''}
             </td>
           </tr>
+          {result.offlineQueued ? (
+            <tr>
+              <td style={{ color: '#d97706', padding: '1mm 0' }}>Mode</td>
+              <td style={{ color: '#d97706', fontWeight: 600, padding: '1mm 0' }}>
+                Hors-Ligne (en attente sync réseau)
+              </td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
       {src ? (
@@ -381,6 +423,12 @@ export function Pointage({
   // Kiosk state
   const { terminalId, save, clear } = useStoredTerminal();
   const [terminals, setTerminals] = useState<Terminal[]>([]);
+  const [cachedDirectory, setCachedDirectory] = useState<DirectoryEmployee[]>(() => getStoredDirectory().employees);
+  const [todayPunches, setTodayPunches] = useState<DirectoryPunch[]>(() => getStoredDirectory().todayPunches);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [syncingOffline, setSyncingOffline] = useState(false);
+
   const [stage, setStage] = useState<Stage>(() => (terminalId ? 'identify' : 'terminal'));
   const [code, setCode] = useState('');
   const [pin, setPin] = useState('');
@@ -431,7 +479,7 @@ export function Pointage({
   const captureActive = (stage === 'actions' || stage === 'capture') && (punchType === 'in' || punchType === 'out');
   const { videoRef, error: cameraError, ready } = useCamera(captureActive, 'user');
 
-  // Fetch data for Timesheets Tableur
+  // Fetch data for Timesheets Tableur & Kiosk Directory
   const loadTimesheets = useCallback(() => {
     setTsLoading(true);
     Promise.all([
@@ -444,14 +492,24 @@ export function Pointage({
       canAccessKiosk
         ? api<{ terminals: Terminal[] }>('/api/kiosk/terminals').catch(() => ({ terminals: [] }))
         : Promise.resolve({ terminals: [] as Terminal[] }),
+      canAccessKiosk
+        ? api<{ employees: DirectoryEmployee[]; todayPunches: DirectoryPunch[]; date: string }>('/api/kiosk/directory').catch(() => null)
+        : Promise.resolve(null),
     ])
-      .then(([attendanceRes, empRes, termRes]) => {
+      .then(([attendanceRes, empRes, termRes, dirRes]) => {
         if (attendanceRes) {
           setAttendanceDetail(attendanceRes.detail);
           setAttendanceDate(attendanceRes.date);
         }
         setEmployees(empRes.employees);
-        setTerminals(termRes.terminals);
+        if (termRes.terminals && termRes.terminals.length > 0) {
+          setTerminals(termRes.terminals);
+        }
+        if (dirRes && dirRes.employees) {
+          setCachedDirectory(dirRes.employees);
+          setTodayPunches(dirRes.todayPunches ?? []);
+          saveStoredDirectory(dirRes);
+        }
       })
       .finally(() => setTsLoading(false));
   }, [canAccessKiosk, canViewAttendance]);
@@ -503,12 +561,14 @@ export function Pointage({
       if (stage !== 'terminal') setStage('terminal');
       return;
     }
-    if (terminals.length === 0 || !terminals.some((terminal) => terminal.id === terminalId)) {
+    // Règle de haute disponibilité : ne JAMAIS effacer la borne enregistrée lors d'une simple panne réseau (terminals.length === 0).
+    // On ne contrôle l'autorisation que si la liste des bornes du serveur a été effectivement reçue (length > 0).
+    if (terminals.length > 0 && !terminals.some((terminal) => terminal.id === terminalId)) {
       clear();
       setIdentified(null);
       setStage('terminal');
       setError('Cette borne n’est pas autorisée pour votre compte. Choisissez une borne qui vous est affectée.');
-    } else if (stage === 'terminal') {
+    } else if (stage === 'terminal' && terminalId) {
       setStage('identify');
     }
   }, [canAccessKiosk, clear, stage, terminalId, terminals, tsLoading]);
@@ -559,6 +619,126 @@ export function Pointage({
     loadTimesheets();
   }
 
+  const recordLocalTodayPunch = useCallback((employeeId: string, punchType: string, timeStr: string, lateMin: number) => {
+    setTodayPunches((prev) => {
+      const updated = [...prev, { employee_id: employeeId, punch_type: punchType, server_at: timeStr, late_minutes: lateMin }];
+      const currentDir = getStoredDirectory();
+      saveStoredDirectory({ ...currentDir, todayPunches: updated });
+      return updated;
+    });
+  }, []);
+
+  const refreshPendingCount = useCallback(() => {
+    void listOfflineMutations().then((items) => {
+      const kioskMutations = items.filter((item) => item.path === '/api/kiosk/punch' && item.state === 'pending');
+      setPendingSyncCount(kioskMutations.length);
+    }).catch(() => setPendingSyncCount(0));
+  }, []);
+
+  const handleManualSync = useCallback(async () => {
+    if (!navigator.onLine || syncingOffline) return;
+    setSyncingOffline(true);
+    try {
+      await syncOfflineMutations(user?.id);
+      refreshPendingCount();
+      loadTimesheets();
+    } finally {
+      setSyncingOffline(false);
+    }
+  }, [loadTimesheets, refreshPendingCount, syncingOffline, user?.id]);
+
+  useEffect(() => {
+    refreshPendingCount();
+    const onOnline = () => {
+      setIsOnline(true);
+      void syncOfflineMutations(user?.id).then(() => {
+        refreshPendingCount();
+        loadTimesheets();
+      });
+    };
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('offline:outbox-updated', refreshPendingCount);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('offline:outbox-updated', refreshPendingCount);
+    };
+  }, [loadTimesheets, refreshPendingCount, user?.id]);
+
+  const findLocalEmployee = useCallback((raw: string): DirectoryEmployee | null => {
+    const target = raw.trim().toUpperCase();
+    if (!target) return null;
+    return cachedDirectory.find((e) => {
+      if (e.id.toUpperCase() === target) return true;
+      if (e.badge_token && e.badge_token.toUpperCase() === target) return true;
+      const num = target.replace(/^EMP-0*/i, '');
+      if (num && e.id.toUpperCase().endsWith(num.padStart(3, '0'))) return true;
+      return false;
+    }) ?? null;
+  }, [cachedDirectory]);
+
+  const buildLocalSituation = useCallback((employeeId: string) => {
+    const empPunches = todayPunches.filter((p) => p.employee_id === employeeId);
+    const hasIn = empPunches.some((p) => p.punch_type === 'in');
+    const hasOut = empPunches.some((p) => p.punch_type === 'out');
+    const hasBreakIn = empPunches.some((p) => p.punch_type === 'break_in');
+    const hasBreakOut = empPunches.some((p) => p.punch_type === 'break_out');
+    const onBreak = hasBreakIn && !hasBreakOut;
+
+    const localNow = new Date();
+    const currentMin = localNow.getHours() * 60 + localNow.getMinutes();
+    const openedMin = 7 * 60 + 30; // 07:30
+    const lateThresholdMin = 8 * 60; // 08:00
+    const breakStartMin = 12 * 60; // 12:00
+    const lateMinutes = hasIn
+      ? Number(empPunches.find((p) => p.punch_type === 'in')?.late_minutes ?? 0)
+      : Math.max(0, currentMin - openedMin);
+
+    return {
+      isWorkday: true,
+      hasIn,
+      hasOut,
+      hasBreakIn,
+      hasBreakOut,
+      onBreak,
+      canPunchIn: !hasIn,
+      canPunchOut: hasIn && !hasOut && !onBreak,
+      canBreakIn: hasIn && !hasBreakIn && !hasBreakOut && !onBreak && currentMin >= breakStartMin,
+      canBreakOut: onBreak,
+      lateMinutes,
+      isLate: !hasIn && (currentMin >= lateThresholdMin || lateMinutes > 10),
+      isTooEarlyForCheckin: !hasIn && currentMin < (7 * 60 + 25),
+      isMorningLocked: false,
+      isResumeLocked: false,
+      isDayClosed: currentMin >= (17 * 60),
+      isLateCriticalBlocked: false,
+      maxLateAllowed: 150,
+      isBreakTimeReached: currentMin >= breakStartMin,
+      breakStartTime: '12:00',
+      breakEndTime: '12:25',
+      resumeStartTime: '13:00',
+      resumeEndTime: '13:10',
+      resumeLockoutTime: '14:00',
+      mealScheduleMode: 'normal_12h' as const,
+      isMealDelayed: false,
+      afterClosing: currentMin >= (16 * 60 + 30),
+      earlyCheckinTime: '07:25',
+      openingTime: '07:30',
+      lateThresholdTime: '08:00',
+      morningLockoutTime: '10:00',
+      closingTime: '16:30',
+      closingEndTime: '16:40',
+      dayCutoffTime: '17:00',
+      toleranceMinutes: 10,
+      lateMotifs: ['Transport', 'Motif familial', 'Mission extérieure', 'Autorisé par la direction', 'Autre'],
+      cardDisplaySeconds: 8,
+      isExceptionalWorkday: false,
+      activeLeave: null,
+    };
+  }, [todayPunches]);
+
   useEffect(() => {
     if (stage !== 'validate_pin') return;
     const handleKey = (e: KeyboardEvent) => {
@@ -596,6 +776,36 @@ export function Pointage({
       // Étape 2 obligatoire : Validation par code secret personnel
       setStage('validate_pin');
     } catch (err) {
+      const isNetworkErr = !navigator.onLine || (err instanceof Error && (
+        err.message.includes('fetch') ||
+        err.message.includes('réseau') ||
+        err.message.includes('Network') ||
+        err.message.includes('Failed to fetch')
+      ));
+
+      if (isNetworkErr) {
+        const localEmp = findLocalEmployee(value);
+        if (localEmp) {
+          const localSit = buildLocalSituation(localEmp.id);
+          setIdentified({
+            employee: {
+              id: localEmp.id,
+              full_name: localEmp.full_name,
+              job_title: localEmp.job_title,
+              photo_path: localEmp.photo_path,
+              has_pin: localEmp.has_pin,
+            },
+            situation: localSit,
+            history: [],
+            month: { daysPresent: 0, lateCount: 0 },
+          });
+          setPin('');
+          setPinError(null);
+          setStage('validate_pin');
+          return;
+        }
+      }
+
       const message = err instanceof Error ? err.message : 'Identification impossible.';
       setError(message);
       if (message.toLowerCase().includes('verrouill')) setLocked(true);
@@ -642,9 +852,37 @@ export function Pointage({
       // Étape 3 obligatoire : Choix de l'action & Selfie horodaté
       setStage('actions');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Code secret personnel incorrect.';
-      setPinError(message);
-      setPin('');
+      const isNetworkErr = !navigator.onLine || (err instanceof Error && (
+        err.message.includes('fetch') ||
+        err.message.includes('réseau') ||
+        err.message.includes('Network') ||
+        err.message.includes('Failed to fetch')
+      ));
+
+      if (!isNetworkErr) {
+        const message = err instanceof Error ? err.message : 'Code secret personnel incorrect.';
+        setPinError(message);
+        setPin('');
+        return;
+      }
+
+      // Mode hors-ligne : validation PIN acceptée pour certification différée cryptographique
+      const sit = identified?.situation;
+      if (sit?.canBreakOut) {
+        setPunchType('break_out');
+      } else if (sit?.canPunchIn && !sit?.isLateCriticalBlocked) {
+        setPunchType('in');
+      } else if (sit?.canBreakIn && sit?.isBreakTimeReached) {
+        setPunchType('break_in');
+      } else if (sit?.canPunchOut && !sit?.onBreak) {
+        setPunchType('out');
+      } else {
+        setPunchType(sit?.onBreak ? 'break_out' : 'in');
+      }
+      setSelfie(null);
+      setMotif('');
+      setMotifNote('');
+      setStage('actions');
     } finally {
       setBusy(false);
     }
@@ -677,6 +915,8 @@ export function Pointage({
     }
     setBusy(true);
     setError(null);
+    const clientRecordedAt = new Date().toISOString();
+    const offlinePunchId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `punch_${Date.now()}`;
     try {
       const res = await api<PunchResult>('/api/kiosk/punch', {
         method: 'POST',
@@ -688,9 +928,36 @@ export function Pointage({
           selfie: finalSelfie || undefined,
           pin: pin.trim(),
           reason: motif && motif !== 'Autre' ? motif : motif === 'Autre' ? motifNote : undefined,
+          clientRecordedAt,
+          offlinePunchId,
         }),
       });
+
+      if ((res as any)?.queued) {
+        // Enregistré hors-ligne dans la file IndexedDB
+        const localNow = new Date();
+        const localHm = `${String(localNow.getHours()).padStart(2, '0')}:${String(localNow.getMinutes()).padStart(2, '0')}`;
+        const localLate = identified.situation?.lateMinutes ?? 0;
+        const queuedResult: PunchResult = {
+          ok: true,
+          employee: { id: identified.employee.id, full_name: identified.employee.full_name },
+          punchType,
+          serverAt: clientRecordedAt,
+          serverTime: localHm,
+          lateMinutes: localLate,
+          status: localLate > 0 ? 'late' : 'normal',
+          photoUrl: finalSelfie || '',
+          offlineQueued: true,
+        };
+        recordLocalTodayPunch(identified.employee.id, punchType, localHm, localLate);
+        refreshPendingCount();
+        setResult(queuedResult);
+        setStage('confirm');
+        return;
+      }
+
       setResult(res);
+      recordLocalTodayPunch(identified.employee.id, punchType, res.serverTime, res.lateMinutes);
       setStage('confirm');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Pointage refusé.');
@@ -1335,6 +1602,33 @@ export function Pointage({
 
           {stage === 'identify' ? (
             <div className="mx-auto max-w-lg space-y-3">
+              {(!isOnline || pendingSyncCount > 0) && (
+                <div className="rounded-xl border border-amber/40 bg-amber-500/10 p-3 text-xs text-amber flex items-center justify-between gap-2 shadow-xs">
+                  <div className="flex items-center gap-2 font-medium">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber" />
+                    </span>
+                    <span>
+                      {!isOnline
+                        ? `Mode Hors-Ligne Actif · Borne sécurisée (${pendingSyncCount} pointage${pendingSyncCount > 1 ? 's' : ''} en attente)`
+                        : `${pendingSyncCount} pointage${pendingSyncCount > 1 ? 's' : ''} enregistré${pendingSyncCount > 1 ? 's' : ''} hors-ligne en attente d'envoi`}
+                    </span>
+                  </div>
+                  {isOnline && pendingSyncCount > 0 && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="h-7 text-[11px] px-2.5"
+                      onClick={() => void handleManualSync()}
+                      disabled={syncingOffline}
+                    >
+                      {syncingOffline ? <Spinner /> : 'Synchroniser'}
+                    </Button>
+                  )}
+                </div>
+              )}
+
               {/* Horloge Kiosque Compacte & Précise */}
               <div className="rounded-2xl bg-charcoal px-4 py-3 sm:py-4 text-center text-white shadow-card border border-line">
                 <p className="font-mono text-3xl sm:text-4xl font-extrabold tracking-tight text-amber tabular-nums">
@@ -1868,8 +2162,15 @@ export function Pointage({
                   {result.serverTime}
                 </p>
 
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-1.5 px-2 text-[11px] text-emerald-400 font-medium">
-                  ✓ Pointage certifié · Fiche horodatée immuable
+                <div className={cx(
+                  'rounded-xl border py-1.5 px-2 text-[11px] font-medium',
+                  result.offlineQueued
+                    ? 'border-amber/40 bg-amber-500/10 text-amber'
+                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                )}>
+                  {result.offlineQueued
+                    ? '⚡ Pointage sécurisé hors-ligne · En attente de synchronisation réseau'
+                    : '✓ Pointage certifié · Fiche horodatée immuable'}
                 </div>
 
                 {/* Barre de progression fluide 6 secondes */}

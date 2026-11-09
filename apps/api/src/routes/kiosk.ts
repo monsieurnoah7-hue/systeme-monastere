@@ -8,7 +8,8 @@ import { saveSelfie } from '../lib/selfie-store.js';
 import { isSuperAdmin } from '../lib/permissions.js';
 import { requireAuth } from '../middleware/auth.js';
 import { hasPermission, requirePerm } from '../middleware/permissions.js';
-import { formatHm, localDate, minutesOfDay, parseHm } from '../lib/time.js';
+import { businessDate, businessDayOfWeek, businessMinutes, formatHm, parseHm } from '../lib/time.js';
+import { withOfflineIdempotency } from '../lib/offline-idempotency.js';
 import { writeAudit } from '../lib/audit.js';
 
 type LockState = { fails: number; lockedUntil: number };
@@ -62,6 +63,8 @@ const punchBody = z.object({
   pin: z.string().optional(),
   reason: z.string().optional(),
   reasonNote: z.string().optional(),
+  clientRecordedAt: z.string().optional(),
+  offlinePunchId: z.string().optional(),
 });
 
 export const kioskRoutes = new Hono();
@@ -86,6 +89,38 @@ kioskRoutes.get('/terminals', requirePerm('terminals.access'), async (c) => {
 kioskRoutes.get('/settings', async (c) => {
   const settings = await loadSettings();
   return c.json({ settings });
+});
+
+kioskRoutes.get('/directory', requirePerm('terminals.access'), async (c) => {
+  const db = getDb();
+  const today = businessDate();
+  const [employees, todayPunches] = await Promise.all([
+    db.query<{
+      id: string;
+      full_name: string;
+      job_title: string;
+      photo_path: string | null;
+      badge_token: string | null;
+      has_pin: boolean;
+    }>(
+      `SELECT id, full_name, job_title, photo_path, badge_token, (pin_hash IS NOT NULL) AS has_pin
+         FROM employees
+        WHERE active = true
+        ORDER BY full_name`,
+    ),
+    db.query<{
+      employee_id: string;
+      punch_type: string;
+      server_at: string;
+      late_minutes: number;
+    }>(
+      `SELECT employee_id, punch_type, to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') AS server_at, late_minutes
+         FROM attendance
+        WHERE punch_date = $1`,
+      [today],
+    ),
+  ]);
+  return c.json({ employees, todayPunches, date: today });
 });
 
 kioskRoutes.post('/identify', requirePerm('terminals.access'), async (c) => {
@@ -129,7 +164,7 @@ kioskRoutes.post('/identify', requirePerm('terminals.access'), async (c) => {
 
   locks.delete(body.data.terminalId);
   const settings = await loadSettings();
-  const today = localDate();
+  const today = businessDate();
 
   const todayRows = await db.query<{ punch_type: string; server_at: string; late_minutes: number }>(
     'SELECT punch_type, server_at, late_minutes FROM attendance WHERE employee_id = $1 AND punch_date = $2',
@@ -144,12 +179,12 @@ kioskRoutes.post('/identify', requirePerm('terminals.access'), async (c) => {
     status: string;
   }>(
     `SELECT punch_date::text AS punch_date,
-            min(CASE WHEN punch_type = 'in'  THEN to_char(server_at, 'HH24:MI') END) AS in_at,
-            max(CASE WHEN punch_type = 'out' THEN to_char(server_at, 'HH24:MI') END) AS out_at,
+            min(CASE WHEN punch_type = 'in'  THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS in_at,
+            max(CASE WHEN punch_type = 'out' THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS out_at,
             max(late_minutes) AS late_minutes,
             max(status) AS status
        FROM attendance
-      WHERE employee_id = $1 AND punch_date >= CURRENT_DATE - INTERVAL '30 days'
+      WHERE employee_id = $1 AND punch_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date - INTERVAL '30 days'
       GROUP BY punch_date
       ORDER BY punch_date DESC
       LIMIT 30`,
@@ -162,7 +197,7 @@ kioskRoutes.post('/identify', requirePerm('terminals.access'), async (c) => {
        FROM attendance
       WHERE employee_id = $1
         AND punch_type = 'in'
-        AND date_trunc('month', punch_date) = date_trunc('month', CURRENT_DATE)`,
+        AND date_trunc('month', punch_date) = date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date)`,
     [employee.id],
   );
 
@@ -183,8 +218,8 @@ kioskRoutes.post('/identify', requirePerm('terminals.access'), async (c) => {
   const closingEndMin = parseHm((settings as any).closing_end_time || '16:40');
   const dayCutoffMin = parseHm((settings as any).day_cutoff_time || '17:00');
 
-  const todayMin = minutesOfDay(now);
-  const isWorkday = settings.workdays.includes(now.getDay());
+  const todayMin = businessMinutes(now);
+  const isWorkday = settings.workdays.includes(businessDayOfWeek(now));
   const hasIn = todayRows.some((r) => r.punch_type === 'in');
   const hasOut = todayRows.some((r) => r.punch_type === 'out');
   const hasBreakIn = todayRows.some((r) => r.punch_type === 'break_in');
@@ -388,8 +423,20 @@ kioskRoutes.post('/punch', requirePerm('terminals.access'), async (c) => {
 
   const settings = await loadSettings();
   const now = new Date();
-  const today = localDate(now);
-  const todayMin = minutesOfDay(now);
+  let punchTime = now;
+  if (body.data.clientRecordedAt) {
+    const parsed = new Date(body.data.clientRecordedAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      const maxFuture = now.getTime() + 5 * 60 * 1000;
+      const maxPast = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+      if (parsed.getTime() <= maxFuture && parsed.getTime() >= maxPast) {
+        punchTime = parsed;
+      }
+    }
+  }
+
+  const today = businessDate(punchTime);
+  const todayMin = businessMinutes(punchTime);
   const openedMin = parseHm(settings.opening_time || '07:30');
   const earlyCheckinMin = parseHm((settings as any).early_checkin_time || '07:25');
   const lateThresholdMin = parseHm((settings as any).late_threshold_time || '08:00');
@@ -401,7 +448,7 @@ kioskRoutes.post('/punch', requirePerm('terminals.access'), async (c) => {
 
   const closedMin = parseHm(settings.closing_time || '16:30');
   const dayCutoffMin = parseHm((settings as any).day_cutoff_time || '17:00');
-  const isWorkday = settings.workdays.includes(now.getDay());
+  const isWorkday = settings.workdays.includes(businessDayOfWeek(punchTime));
 
   const existing = await db.query<{ punch_type: string }>(
     'SELECT punch_type FROM attendance WHERE employee_id = $1 AND punch_date = $2',
@@ -479,29 +526,47 @@ kioskRoutes.post('/punch', requirePerm('terminals.access'), async (c) => {
     );
   }
 
-  const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\..+$/, '');
+  const stamp = punchTime.toISOString().replace(/[-:]/g, '').replace(/\..+$/, '');
   let fileName = 'break_no_photo.svg';
   if (isSelfieRequired && body.data.selfie) {
     fileName = await saveSelfie(employee.id, body.data.punchType, stamp, body.data.selfie);
   }
 
   const status = lateMinutes > 0 ? 'late' : 'normal';
+  const idempotencyKey = c.req.header('Idempotency-Key') || c.req.header('idempotency-key') || body.data.offlinePunchId;
+  const auth = c.get('auth');
+
+  let outcome: { value: Record<string, unknown> };
   try {
-    await db.query(
-      `INSERT INTO attendance (employee_id, punch_type, punch_date, photo_path, terminal_id, id_mode, late_minutes, reason, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [
-        employee.id,
-        body.data.punchType,
-        today,
-        `selfies/${fileName}`,
-        body.data.terminalId,
-        body.data.idMode,
+    outcome = await withOfflineIdempotency(db, auth.user.id, idempotencyKey, async (tx) => {
+      await tx.query(
+        `INSERT INTO attendance (employee_id, punch_type, punch_date, server_at, photo_path, terminal_id, id_mode, late_minutes, reason, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          employee.id,
+          body.data.punchType,
+          today,
+          punchTime.toISOString(),
+          `selfies/${fileName}`,
+          body.data.terminalId,
+          body.data.idMode,
+          lateMinutes,
+          reason,
+          status,
+        ],
+      );
+
+      return {
+        ok: true,
+        employee: { id: employee.id, full_name: employee.full_name },
+        punchType: body.data.punchType,
+        serverAt: punchTime.toISOString(),
+        serverTime: formatHm(todayMin),
         lateMinutes,
-        reason,
         status,
-      ],
-    );
+        photoUrl: `/files/selfies/${fileName}`,
+      };
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : '';
     if (
@@ -517,16 +582,7 @@ kioskRoutes.post('/punch', requirePerm('terminals.access'), async (c) => {
     throw err;
   }
 
-  return c.json({
-    ok: true,
-    employee: { id: employee.id, full_name: employee.full_name },
-    punchType: body.data.punchType,
-    serverAt: now.toISOString(),
-    serverTime: formatHm(todayMin),
-    lateMinutes,
-    status,
-    photoUrl: `/files/selfies/${fileName}`,
-  });
+  return c.json(outcome.value);
 });
 
 kioskRoutes.post('/unlock', requirePerm('terminals.access'), async (c) => {

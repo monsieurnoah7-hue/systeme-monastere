@@ -33,7 +33,7 @@ terminalsRoutes.get('/', requirePerm('terminals.manage'), async (c) => {
   const terminals = await db.query<TerminalRow & { last_used: string | null; punches_today: string }>(
     `SELECT t.id, t.name, t.active, t.registered_at,
             max(a.server_at)::text AS last_used,
-            count(*) FILTER (WHERE a.punch_date = CURRENT_DATE)::text AS punches_today
+            count(*) FILTER (WHERE a.punch_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date)::text AS punches_today
        FROM terminals t
        LEFT JOIN attendance a ON a.terminal_id = t.id
       GROUP BY t.id, t.name, t.active, t.registered_at

@@ -3787,6 +3787,7 @@ export function Employees({
         paper={badgePaper}
         copiesLabel={`${badgePreviewSource === 'batch' ? batchBadgePrintCount : badgeCopies} badge(s)`}
         content={badgePreviewContent}
+        pdfFilename={`planche-badges-${badgePreviewSource === 'batch' ? `lot-${batchBadgePrintCount}` : (badgePreviewEmployee?.full_name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'artisan')}.pdf`}
         onClose={() => {
           setBadgePreviewOpen(false);
           if (badgePreviewSource === 'batch') setBatchBadgeOpen(true);

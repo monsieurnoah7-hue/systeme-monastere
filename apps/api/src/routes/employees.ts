@@ -67,19 +67,19 @@ employeesRoutes.get('/today-status', requirePerm('employees.view'), async (c) =>
   const db = getDb();
   const today = await db.query<{ id: string; full_name: string; job_title: string; photo_path: string | null; active: boolean; in_at: string | null; out_at: string | null; break_in: string | null; break_out: string | null; late_minutes: number; status: string; leave_kind: string | null }>(
     `SELECT e.id, e.full_name, coalesce(max(r.name), e.job_title) AS job_title, e.photo_path, e.active,
-            min(CASE WHEN a.punch_type = 'in'  THEN to_char(a.server_at, 'HH24:MI') END) AS in_at,
-            max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at, 'HH24:MI') END) AS out_at,
-            min(CASE WHEN a.punch_type = 'break_in'  THEN to_char(a.server_at, 'HH24:MI') END) AS break_in,
-            max(CASE WHEN a.punch_type = 'break_out' THEN to_char(a.server_at, 'HH24:MI') END) AS break_out,
+            min(CASE WHEN a.punch_type = 'in'  THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS in_at,
+            max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS out_at,
+            min(CASE WHEN a.punch_type = 'break_in'  THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS break_in,
+            max(CASE WHEN a.punch_type = 'break_out' THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS break_out,
             coalesce(max(a.late_minutes), 0) AS late_minutes,
             coalesce(max(a.status), '') AS status,
             (SELECT ab.kind FROM absences ab
-              WHERE ab.employee_id = e.id AND CURRENT_DATE BETWEEN ab.from_date AND ab.to_date AND ab.status = 'approved'
+              WHERE ab.employee_id = e.id AND (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date BETWEEN ab.from_date AND ab.to_date AND ab.status = 'approved'
               ORDER BY ab.created_at DESC LIMIT 1) AS leave_kind
        FROM employees e
        LEFT JOIN users u ON u.employee_id = e.id
        LEFT JOIN roles r ON r.id = u.role
-       LEFT JOIN attendance a ON a.employee_id = e.id AND a.punch_date = CURRENT_DATE
+       LEFT JOIN attendance a ON a.employee_id = e.id AND a.punch_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date
       WHERE e.active = true
       GROUP BY e.id, e.full_name, e.job_title, e.photo_path, e.active
       ORDER BY e.full_name`,
@@ -147,14 +147,14 @@ employeesRoutes.get('/:id/detail', requirePerm('employees.view'), async (c) => {
       status: string;
     }>(
       `SELECT punch_date::text AS punch_date,
-              min(CASE WHEN punch_type = 'in'  THEN to_char(server_at, 'HH24:MI') END) AS in_at,
-              max(CASE WHEN punch_type = 'out' THEN to_char(server_at, 'HH24:MI') END) AS out_at,
-              min(CASE WHEN punch_type = 'break_in'  THEN to_char(server_at, 'HH24:MI') END) AS break_in,
-              max(CASE WHEN punch_type = 'break_out' THEN to_char(server_at, 'HH24:MI') END) AS break_out,
+              min(CASE WHEN punch_type = 'in'  THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS in_at,
+              max(CASE WHEN punch_type = 'out' THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS out_at,
+              min(CASE WHEN punch_type = 'break_in'  THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS break_in,
+              max(CASE WHEN punch_type = 'break_out' THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS break_out,
               max(late_minutes) AS late_minutes,
               max(status) AS status
          FROM attendance
-        WHERE employee_id = $1 AND punch_date >= CURRENT_DATE - INTERVAL '30 days'
+        WHERE employee_id = $1 AND punch_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date - INTERVAL '30 days'
         GROUP BY punch_date
         ORDER BY punch_date DESC
         LIMIT 30`,
@@ -165,7 +165,7 @@ employeesRoutes.get('/:id/detail', requirePerm('employees.view'), async (c) => {
               count(DISTINCT punch_date) FILTER (WHERE punch_type = 'in')::text AS days,
               count(*) FILTER (WHERE punch_type = 'break_in')::text AS breaks
          FROM attendance
-        WHERE employee_id = $1 AND date_trunc('month', punch_date) = date_trunc('month', CURRENT_DATE)`,
+        WHERE employee_id = $1 AND date_trunc('month', punch_date) = date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date)`,
       [id],
     ),
     db.query(

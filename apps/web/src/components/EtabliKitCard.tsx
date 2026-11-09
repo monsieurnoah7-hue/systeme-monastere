@@ -920,6 +920,7 @@ export const EtabliKitCard: React.FC<EtabliKitCardProps> = ({
         paper={paperFormat}
         copiesLabel={`${kitPreviewCount} étiquette(s), QR de l’établi inclus`}
         content={kitPreviewContent}
+        pdfFilename={`planche-etabli-${kit.etabli_number}.pdf`}
         onClose={() => { setKitPreviewOpen(false); setShowPrintModal(true); }}
         onPrint={() => { if (kitPreviewContent) print(kitPreviewContent); setKitPreviewOpen(false); }}
       />

@@ -67,6 +67,7 @@ function isPersistable(path: string): boolean {
     path.startsWith('/api/projects') ||
     path.startsWith('/api/leaves') ||
     path.startsWith('/api/attendance') ||
+    path.startsWith('/api/kiosk') ||
     path.startsWith('/api/loans') ||
     path.startsWith('/api/kits') ||
     path.startsWith('/api/fleet') ||
@@ -294,7 +295,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   return fetchPromise;
 }
 
-export async function syncOfflineMutations(userId: number): Promise<void> {
+export async function syncOfflineMutations(userId?: number): Promise<void> {
   if (!navigator.onLine) return;
   for (const item of await listOfflineMutations(userId)) {
     if (item.state === 'failed') continue;
@@ -308,10 +309,12 @@ export async function syncOfflineMutations(userId: number): Promise<void> {
       const text = await response.text();
       const result = parseApiJson(text, response.status);
       if (response.ok) {
-        recordOfflineSync(userId, item);
+        recordOfflineSync(userId ?? item.userId, item);
         await removeOfflineMutation(item.id);
         clearApiCache(item.path.split('/').slice(0, 3).join('/'));
         clearApiCache('/api/dashboard');
+        clearApiCache('/api/attendance');
+        clearApiCache('/api/kiosk');
         window.dispatchEvent(new CustomEvent('mf-refresh-data'));
         window.dispatchEvent(new CustomEvent('offline:mutation-synced', { detail: item }));
       } else if (response.status === 401) {
@@ -332,6 +335,7 @@ function offlineQueuePermission(path: string, method: string, body: BodyInit | n
   if (method !== 'POST' || cacheUserId === null || typeof body !== 'string') return null;
   if (/^\/api\/projects\/[^/]+\/incidents$/.test(path)) return 'projects.report_incident';
   if (path === '/api/leaves/request-permission' && getOfflineUserHasEmployee()) return 'employee.permission_request';
+  if (path === '/api/kiosk/punch') return 'terminals.access';
   return null;
 }
 
@@ -339,6 +343,7 @@ async function tryQueueOfflineMutation(path: string, body: BodyInit | null | und
   if (!id || !permission || cacheUserId === null || typeof body !== 'string' || cause instanceof ApiError) return null;
   if (permission === 'projects.report_incident' && !getOfflinePermissions(cacheUserId)?.[permission]) return null;
   if (permission === 'employee.permission_request' && !getOfflineUserHasEmployee()) return null;
+  if (permission === 'terminals.access' && !getOfflinePermissions(cacheUserId)?.[permission]) return null;
 
   const item: OfflineMutation = {
     id,
@@ -869,6 +874,8 @@ export type PunchResult = {
   lateMinutes: number;
   status: string;
   photoUrl: string;
+  queued?: boolean;
+  offlineQueued?: boolean;
 };
 
 export type ScanResult =

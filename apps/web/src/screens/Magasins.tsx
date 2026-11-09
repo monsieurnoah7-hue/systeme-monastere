@@ -65,6 +65,7 @@ import { QR_PREFIX, getCachedQr, qrDataUrl } from '../lib/qr';
 import { InventoryEditModal, type InventoryEditTarget } from '../components/InventoryEditModal';
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { GroupedQrLabelsModal } from '../components/GroupedQrLabelsModal';
+import { PrintPreviewModal } from '../components/PrintPreviewModal';
 
 type MagasinTool = Pick<
   Tool,
@@ -274,6 +275,9 @@ export function Magasins({
   const [detailLoading, setDetailLoading] = useState(false);
   const [drawerFilter, setDrawerFilter] = useState('');
   const [drawerTab, setDrawerTab] = useState<'tools' | 'stock' | 'loans' | 'settings'>('tools');
+  const [doorLabelPreviewOpen, setDoorLabelPreviewOpen] = useState(false);
+  const [doorLabelContent, setDoorLabelContent] = useState<React.ReactNode>(null);
+  const [doorLabelMagasin, setDoorLabelMagasin] = useState<Magasin | null>(null);
 
   // Formulaire Création / Édition Magasin
   const [formOpen, setFormOpen] = useState(false);
@@ -1201,13 +1205,15 @@ export function Magasins({
                       variant="secondary"
                       icon={<IconPrinter size={14} />}
                       onClick={() => {
-                        print(
+                        setDoorLabelContent(
                           <MagasinDoorLabel
                             magasin={detail.magasin}
                             toolsCount={detail.tools.length}
                             stockCount={detail.stock.length}
                           />
                         );
+                        setDoorLabelMagasin(detail.magasin);
+                        setDoorLabelPreviewOpen(true);
                       }}
                       title="Imprimer l'étiquette QR officielle pour la porte du magasin"
                       className="w-full justify-center text-xs"
@@ -2345,6 +2351,21 @@ export function Magasins({
           </select>
         </div>
       </Modal>
+
+      <PrintPreviewModal
+        open={doorLabelPreviewOpen}
+        title={doorLabelMagasin ? `Aperçu · Étiquette de porte : ${doorLabelMagasin.name}` : 'Aperçu de l’étiquette de porte'}
+        paper="A4"
+        copiesLabel="1 étiquette de porte (A4)"
+        content={doorLabelContent}
+        pdfFilename={`etiquette-porte-${doorLabelMagasin?.code || 'magasin'}.pdf`}
+        onClose={() => setDoorLabelPreviewOpen(false)}
+        onPrint={() => {
+          if (doorLabelContent) print(doorLabelContent);
+          setDoorLabelPreviewOpen(false);
+        }}
+      />
+      {portal}
     </div>
   );
 }

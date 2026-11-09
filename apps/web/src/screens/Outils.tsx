@@ -3466,6 +3466,7 @@ export function Outils({
         paper={paperFormat}
         copiesLabel={`${toolPreviewCount} étiquette(s)`}
         content={toolPreviewContent}
+        pdfFilename={`planche-outils-qr-${toolPreviewCount}.pdf`}
         onClose={() => { setToolPreviewOpen(false); setPrintOpen(true); }}
         onPrint={() => { if (toolPreviewContent) print(toolPreviewContent); setToolPreviewOpen(false); }}
       />

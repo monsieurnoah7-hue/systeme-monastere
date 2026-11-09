@@ -124,19 +124,19 @@ meRoutes.get('/overview', async (c) => {
   if (!employee) return c.json({ error: 'Fiche travailleur introuvable.' }, 404);
 
   const today = await db.one<{ in_at: string | null; out_at: string | null; break_in: string | null; break_out: string | null; late_minutes: number; status: string }>(
-    `SELECT min(CASE WHEN punch_type = 'in'  THEN to_char(server_at, 'HH24:MI') END) AS in_at,
-            max(CASE WHEN punch_type = 'out' THEN to_char(server_at, 'HH24:MI') END) AS out_at,
-            min(CASE WHEN punch_type = 'break_in'  THEN to_char(server_at, 'HH24:MI') END) AS break_in,
-            max(CASE WHEN punch_type = 'break_out' THEN to_char(server_at, 'HH24:MI') END) AS break_out,
+    `SELECT min(CASE WHEN punch_type = 'in'  THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS in_at,
+            max(CASE WHEN punch_type = 'out' THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS out_at,
+            min(CASE WHEN punch_type = 'break_in'  THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS break_in,
+            max(CASE WHEN punch_type = 'break_out' THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS break_out,
             coalesce(max(late_minutes), 0) AS late_minutes,
             coalesce(max(status), 'absent') AS status
-       FROM attendance WHERE employee_id = $1 AND punch_date = CURRENT_DATE`,
+       FROM attendance WHERE employee_id = $1 AND punch_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date`,
     [employeeId],
   );
 
   const declaredToday = await db.one<{ kind: string; note: string | null }>(
     `SELECT kind, note FROM absences
-      WHERE employee_id = $1 AND CURRENT_DATE BETWEEN from_date AND to_date AND status = 'approved'
+      WHERE employee_id = $1 AND (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date BETWEEN from_date AND to_date AND status = 'approved'
       ORDER BY created_at DESC LIMIT 1`,
     [employeeId],
   );
@@ -144,15 +144,15 @@ meRoutes.get('/overview', async (c) => {
   const [history, monthRows, openLoans, loansHistory, leaves] = await Promise.all([
     db.query(
       `SELECT punch_date::text AS punch_date,
-              min(CASE WHEN punch_type = 'in'  THEN to_char(server_at, 'HH24:MI') END) AS in_at,
-              max(CASE WHEN punch_type = 'out' THEN to_char(server_at, 'HH24:MI') END) AS out_at,
-              min(CASE WHEN punch_type = 'break_in'  THEN to_char(server_at, 'HH24:MI') END) AS break_in,
-              max(CASE WHEN punch_type = 'break_out' THEN to_char(server_at, 'HH24:MI') END) AS break_out,
+              min(CASE WHEN punch_type = 'in'  THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS in_at,
+              max(CASE WHEN punch_type = 'out' THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS out_at,
+              min(CASE WHEN punch_type = 'break_in'  THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS break_in,
+              max(CASE WHEN punch_type = 'break_out' THEN to_char(server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS break_out,
               max(late_minutes) AS late_minutes,
               max(reason) AS late_reason,
               max(status) AS status
          FROM attendance
-        WHERE employee_id = $1 AND punch_date >= CURRENT_DATE - INTERVAL '30 days'
+        WHERE employee_id = $1 AND punch_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date - INTERVAL '30 days'
         GROUP BY punch_date ORDER BY punch_date DESC LIMIT 30`,
       [employeeId],
     ),
@@ -161,7 +161,7 @@ meRoutes.get('/overview', async (c) => {
               count(DISTINCT punch_date) FILTER (WHERE punch_type = 'in')::text AS days,
               count(*) FILTER (WHERE punch_type = 'break_in')::text AS breaks
          FROM attendance
-        WHERE employee_id = $1 AND date_trunc('month', punch_date) = date_trunc('month', CURRENT_DATE)`,
+        WHERE employee_id = $1 AND date_trunc('month', punch_date) = date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date)`,
       [employeeId],
     ),
     db.query(

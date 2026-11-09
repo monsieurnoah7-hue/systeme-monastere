@@ -2748,6 +2748,7 @@ export function Stock({
         paper="A4"
         copiesLabel="1 étiquette"
         content={stockLabelPreviewContent}
+        pdfFilename={`etiquette-stock-${selected ? `${selected.id}-${selected.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : 'ref'}.pdf`}
         onClose={() => setStockLabelPreviewOpen(false)}
         onPrint={() => { if (stockLabelPreviewContent) print(stockLabelPreviewContent); setStockLabelPreviewOpen(false); }}
       />

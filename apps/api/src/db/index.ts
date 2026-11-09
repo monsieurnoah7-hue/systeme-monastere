@@ -29,6 +29,9 @@ function fromPool(pool: pg.Pool): Sql {
   // Les ids bigint reviennent en string avec pg (contrairement à PGlite) :
   // on aligne pour que les types `id: number` du front restent vrais partout.
   pg.types.setTypeParser(20, (v) => Number(v));
+  pool.on('connect', (client) => {
+    void client.query("SET TIME ZONE 'Africa/Douala'");
+  });
   return makeSql(
     async (text, params) => (await pool.query(text, params as unknown[])).rows,
     async (fn) => {
@@ -77,6 +80,7 @@ export function getDb(): Sql {
   if (env.databaseUrl) {
     const pool = new pg.Pool({
       connectionString: env.databaseUrl,
+      options: '-c timezone=Africa/Douala',
       max: process.env.VERCEL ? 5 : 10,
       idleTimeoutMillis: process.env.VERCEL ? 30_000 : undefined,
       connectionTimeoutMillis: 15_000,
@@ -85,6 +89,7 @@ export function getDb(): Sql {
   } else {
     mkdirSync(env.dataDir, { recursive: true });
     const db = new PGlite(`${env.dataDir}/pglite`);
+    void db.query("SET TIME ZONE 'Africa/Douala'");
     instance = fromPglite(db);
   }
   return instance;

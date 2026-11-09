@@ -175,7 +175,16 @@ export function GroupedQrLabelsModal({ canViewTools, canViewStock, storeScope }:
         <div className="max-h-[min(48vh,440px)] space-y-1 overflow-y-auto rounded-lg border border-line p-1">{loading ? <div className="flex justify-center p-8"><Spinner/></div> : records.map((item) => <label key={item.key} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-paper-2"><input type="checkbox" checked={(selected[item.key] || 0) > 0} onChange={(e) => setSelected((current) => ({ ...current, [item.key]: e.target.checked ? 1 : 0 }))} className="h-4 w-4 accent-amber"/><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-ink">{item.name}</strong><span className="block truncate text-xs text-ink-soft">{item.detail} · {item.store}</span></span><input aria-label={`Quantité ${item.name}`} type="number" min={1} max={100} disabled={!selected[item.key]} value={selected[item.key] || 1} onChange={(e) => setSelected((current) => ({ ...current, [item.key]: Math.min(100, Math.max(1, Number(e.target.value) || 1)) }))} className="h-9 w-16 rounded-md border border-line bg-surface text-center text-sm text-ink disabled:opacity-40"/></label>)}{!loading && !records.length && <p className="p-6 text-center text-sm text-ink-soft">Aucun élément ne correspond à votre recherche.</p>}</div>
       </div>
     </Modal>
-    <PrintPreviewModal open={preview} title={`Aperçu · ${source === 'tools' ? 'Matériel & Machines' : 'Matières & Quincaillerie'}`} paper={paper} copiesLabel={`${selectedCount} étiquette(s)`} content={printContent} onClose={() => setPreview(false)} onPrint={() => { if (printContent) print(printContent); setPreview(false); }} />
+    <PrintPreviewModal
+      open={preview}
+      title={`Aperçu · ${source === 'tools' ? 'Matériel & Machines' : 'Matières & Quincaillerie'}`}
+      paper={paper}
+      copiesLabel={`${selectedCount} étiquette(s)`}
+      content={printContent}
+      pdfFilename={`planche-qr-${source}-${selectedCount}.pdf`}
+      onClose={() => setPreview(false)}
+      onPrint={() => { if (printContent) print(printContent); setPreview(false); }}
+    />
     {portal}
   </>;
 }
