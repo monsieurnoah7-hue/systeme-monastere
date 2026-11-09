@@ -1318,7 +1318,7 @@ export function Magasins({
           );
         })()}
 
-            <div className="sticky top-0 z-30 isolate -mx-1 min-w-0 space-y-2 border-b border-line bg-paper px-1 pb-2 pt-1 shadow-[0_6px_12px_-10px_rgba(0,0,0,0.9)]">
+            <div className="sticky top-0 z-30 isolate -mx-1 -mt-4 min-w-0 space-y-2 border-b border-line bg-paper px-1 pb-2 shadow-[0_6px_12px_-10px_rgba(0,0,0,0.9)]">
             {/* Navigation Sub-Tabs dans le magasin (Responsive Grouped Segment) */}
             <div className="grid min-w-0 grid-cols-3 gap-1 rounded-xl border border-line bg-paper-2 p-1 sm:flex sm:items-center sm:gap-1.5 sm:rounded-2xl">
               <button
