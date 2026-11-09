@@ -357,14 +357,21 @@
 }
 
 .print-preview-page .tool-label-card,
-.print-preview-page .badge-card {
+.print-preview-page .badge-card,
+.print-preview-page .stock-bin-label,
+.print-preview-page .door-label-card {
   break-inside: avoid;
+  page-break-inside: avoid;
   border-radius: 0 !important;
   background: #ffffff;
   color: #111827;
 }
 
 @media print {
+  @page {
+    margin: 6mm;
+    size: auto;
+  }
   html.printing body > #root {
     display: none !important;
     visibility: hidden !important;
@@ -377,20 +384,51 @@
     margin: 0 !important;
     padding: 0 !important;
   }
-  html.printing #print-root > * { padding: 0 !important; }
+  html.printing #print-root > * { padding: 0 !important; margin: 0 !important; }
   .no-print {
     display: none !important;
   }
   html,
   body {
-    background: #ffffff;
-    height: auto;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .a4-page {
     box-sizing: border-box;
     width: 190mm;
     margin: 0 auto;
-    padding: 5mm 0;
+    padding: 4mm 0;
+  }
+  .badge-page {
+    box-sizing: border-box;
+    width: 190mm;
+    margin: 0 auto;
+    padding: 4mm 0;
+    break-after: page;
+    page-break-after: always;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .badge-page:last-child {
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+  .label-sheet-page {
+    box-sizing: border-box;
+    width: 198mm;
+    margin: 0 auto;
+    padding: 3mm 0;
+    break-after: page;
+    page-break-after: always;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .label-sheet-page:last-child {
+    break-after: auto !important;
+    page-break-after: auto !important;
   }
   .a4-grid {
     display: grid;
@@ -418,25 +456,38 @@
   .badge-card {
     width: 85.6mm;
     height: 54mm;
-    border: 1px solid #d3cabd;
-    border-radius: 0 !important;
-    padding: 3mm;
+    border: 1px solid #cbd5e1;
+    border-radius: 2mm !important;
+    padding: 2.5mm;
     box-sizing: border-box;
-    break-inside: avoid;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
     background: #ffffff;
     color: #111827;
     position: relative;
     overflow: hidden;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .tool-label-card {
     box-sizing: border-box;
     border-radius: 0 !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
     background: #ffffff;
     color: #111827;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+  .stock-bin-label,
+  .door-label-card {
+    box-sizing: border-box;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    background: #ffffff;
+    color: #111827;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
   }
   .label-sheet {
     box-sizing: border-box;
@@ -445,6 +496,10 @@
   .receipt-page {
     width: 105mm;
     margin: 0 auto;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
   }
 }
 

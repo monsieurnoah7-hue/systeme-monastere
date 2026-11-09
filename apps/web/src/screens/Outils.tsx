@@ -101,34 +101,136 @@ async function makeToolQrSheet(tools: Tool[]) {
 
 function ToolLabelCard({ tool, qrSrc, format }: { tool: Tool; qrSrc?: string; format: LabelFormat }) {
   const compact = format === 'compact';
-  const qrSize = compact ? '17mm' : '29mm';
+  const qrSize = compact ? '17mm' : '28mm';
   return (
-    <div className="tool-label-card flex overflow-hidden border border-gray-500 bg-white text-gray-900" style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif', breakInside: 'avoid', width: compact ? '38mm' : '63.5mm', height: compact ? '21mm' : '38.1mm' }}>
-      <div className="flex shrink-0 items-center justify-center bg-white" style={{ boxSizing: 'border-box', width: qrSize, height: '100%', padding: compact ? '1mm' : '2mm' }}>
-        {qrSrc ? <img src={qrSrc} alt={`QR ${tool.id}`} className="h-full w-full object-contain" /> : <div className="h-full w-full bg-gray-100" />}
+    <div
+      className="tool-label-card flex overflow-hidden border border-gray-400 bg-white text-gray-900"
+      style={{
+        fontFamily: '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        breakInside: 'avoid',
+        pageBreakInside: 'avoid',
+        width: compact ? '38mm' : '63.5mm',
+        height: compact ? '21mm' : '38.1mm',
+        boxSizing: 'border-box',
+      }}
+    >
+      <div
+        className="flex shrink-0 items-center justify-center bg-white"
+        style={{
+          boxSizing: 'border-box',
+          width: qrSize,
+          height: '100%',
+          padding: compact ? '1mm' : '2mm',
+        }}
+      >
+        {qrSrc ? (
+          <img
+            src={qrSrc}
+            alt={`QR ${tool.id}`}
+            className="h-full w-full object-contain"
+            style={{ imageRendering: '-webkit-optimize-contrast' }}
+          />
+        ) : (
+          <div className="h-full w-full bg-gray-100" />
+        )}
       </div>
-      <div className={`flex min-w-0 flex-1 flex-col justify-center leading-tight ${compact ? 'py-[1mm] pr-[1mm]' : 'py-[2mm] pr-[2mm]'}`}>
-        <div className="mb-[1mm] flex items-center gap-1 border-b border-gray-200 pb-[0.8mm]">
-          <img src="/emblem.png" alt="" className={compact ? 'h-[3mm] w-[3mm] object-contain' : 'h-[4mm] w-[4mm] object-contain'} />
-          <span className={`font-bold tracking-wide text-gray-800 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>CFTM</span>
+      <div
+        className={`flex min-w-0 flex-1 flex-col justify-center leading-tight ${
+          compact ? 'py-[0.8mm] pr-[1mm]' : 'py-[2mm] pr-[2mm]'
+        }`}
+      >
+        <div className="mb-[0.6mm] flex items-center gap-1 border-b border-gray-200 pb-[0.4mm]">
+          <img
+            src="/emblem.png"
+            alt=""
+            className={compact ? 'h-[3mm] w-[3mm] object-contain' : 'h-[4mm] w-[4mm] object-contain'}
+          />
+          <span className={`font-bold tracking-wide text-gray-800 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>
+            CFTM
+          </span>
         </div>
-        <p className={`truncate font-mono font-bold tracking-tight text-gray-950 ${compact ? 'text-[7pt]' : 'text-[10pt]'}`}>{tool.id}</p>
-        <p className={`truncate font-semibold text-gray-800 ${compact ? 'text-[5.5pt]' : 'text-[7.5pt]'}`}>{tool.name}</p>
-        <p className={`truncate text-gray-600 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>{compact ? tool.location : `${tool.category} · ${tool.location}`}</p>
+        <p className={`truncate font-mono font-extrabold tracking-tight text-gray-950 ${compact ? 'text-[7pt]' : 'text-[9.5pt]'}`}>
+          {tool.id}
+        </p>
+        <p className={`truncate font-semibold text-gray-800 ${compact ? 'text-[5.5pt]' : 'text-[7.5pt]'}`}>
+          {tool.name}
+        </p>
+        <p className={`truncate text-gray-600 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>
+          {compact ? tool.location : `${tool.category} · ${tool.location}`}
+        </p>
       </div>
     </div>
   );
 }
 
-function A4Sheet({ tools, codes, format = 'compact', paper = 'A4' }: { tools: Tool[]; codes: Record<string, string>; format?: LabelFormat; paper?: PaperFormat }) {
+function A4Sheet({
+  tools,
+  codes,
+  format = 'compact',
+  paper = 'A4',
+}: {
+  tools: Tool[];
+  codes: Record<string, string>;
+  format?: LabelFormat;
+  paper?: PaperFormat;
+}) {
+  const compact = format === 'compact';
+  // 60 étiquettes (5 cols × 12 lignes) en compact, 21 étiquettes (3 cols × 7 lignes) en standard
+  const LABELS_PER_PAGE = compact ? 60 : 21;
+  const pages: Tool[][] = [];
+  for (let i = 0; i < tools.length; i += LABELS_PER_PAGE) {
+    pages.push(tools.slice(i, i + LABELS_PER_PAGE));
+  }
+  if (pages.length === 0) pages.push([]);
+
+  const pageWidth = paper === 'A4' ? '198mm' : '203mm';
+
   return (
-    <div className="label-sheet" style={{ fontFamily: '"IBM Plex Sans", sans-serif', width: paper === 'A4' ? '200mm' : '203.2mm', margin: '0 auto' }}>
+    <div style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif' }}>
       <style>{`@page { size: ${paper} portrait; margin: 5mm; }`}</style>
-      <div className="label-grid" style={{ gridTemplateColumns: `repeat(auto-fill, ${format === 'compact' ? '38mm' : '63.5mm'})`, gap: '2mm' }}>
-        {tools.map((tool) => (
-          <ToolLabelCard key={tool.id} tool={tool} qrSrc={codes[tool.id]} format={format} />
-        ))}
-      </div>
+      {pages.map((pageTools, pageIndex) => {
+        const isLast = pageIndex === pages.length - 1;
+        return (
+          <div
+            key={`tool-sheet-page-${pageIndex}`}
+            className="label-sheet-page"
+            style={{
+              width: pageWidth,
+              margin: '0 auto',
+              boxSizing: 'border-box',
+              breakAfter: isLast ? 'auto' : 'page',
+              pageBreakAfter: isLast ? 'auto' : 'always',
+            }}
+          >
+            {/* Si multi-pages ou en-tête d'atelier */}
+            {pages.length > 1 && (
+              <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 text-[7pt] text-gray-500">
+                <span>CFTM · Planche d'étiquettes {compact ? 'compactes (38 × 21 mm)' : 'standard (63,5 × 38,1 mm)'}</span>
+                <span>Page {pageIndex + 1} / {pages.length} · {tools.length} étiquettes au total</span>
+              </div>
+            )}
+            <div
+              className="label-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: compact ? 'repeat(5, 38mm)' : 'repeat(3, 63.5mm)',
+                gap: '2mm',
+                justifyContent: 'start',
+                alignContent: 'start',
+              }}
+            >
+              {pageTools.map((tool, index) => (
+                <ToolLabelCard
+                  key={`${tool.id}-${pageIndex}-${index}`}
+                  tool={tool}
+                  qrSrc={codes[tool.id]}
+                  format={format}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -2021,7 +2021,7 @@ export function Dashboard({ active = true }: { active?: boolean }) {
       );
     }
 
-    const needsAttention = projects.delayedCount > 0 || projects.overtimeHours > 0;
+    const needsAttention = projects.delayedCount > 0 || projects.overtimeHours > 0 || projects.pendingIncidentCount > 0;
     return (
       <Card className={cx('p-4 shadow-card', customClass ?? '')}>
         <div className="flex items-start justify-between gap-3">
@@ -2060,6 +2060,16 @@ export function Dashboard({ active = true }: { active?: boolean }) {
           </div>
         </div>
 
+        {projects.pendingIncidentCount > 0 && (
+          <button type="button" onClick={openProjects} className="mt-3 flex w-full items-center justify-between gap-3 rounded-lg border border-amber/30 bg-amber-wash px-3 py-2.5 text-left hover:bg-amber-wash/80">
+            <span className="min-w-0">
+              <span className="block text-xs font-semibold text-ink">Signalements à examiner</span>
+              <span className="mt-0.5 block text-[11px] text-ink-soft">Les délais ne changent qu’après votre décision.</span>
+            </span>
+            <span className="shrink-0 rounded-full bg-amber px-2 py-1 text-xs font-bold text-paper">{projects.pendingIncidentCount}</span>
+          </button>
+        )}
+
         {projects.financialDamageFcfa !== null && needsAttention ? (
           <p className="mt-3 text-xs text-ink-soft">
             Impact estimé : <span className="font-mono font-semibold text-ink">{projects.financialDamageFcfa.toLocaleString()} FCFA</span>
@@ -2086,7 +2096,7 @@ export function Dashboard({ active = true }: { active?: boolean }) {
             ))}
           </div>
         ) : (
-          <p className="mt-3 text-xs text-ink-soft">Aucune commande ne nécessite d’arbitrage.</p>
+          <p className="mt-3 text-xs text-ink-soft">Aucun retard, dépassement ou signalement en attente.</p>
         )}
       </Card>
     );

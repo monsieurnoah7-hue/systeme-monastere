@@ -61,7 +61,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { formatCurrency } from '../lib/accounting';
 import { usePrintSheet } from '../lib/print';
-import { QR_PREFIX, qrDataUrl } from '../lib/qr';
+import { QR_PREFIX, getCachedQr, qrDataUrl } from '../lib/qr';
 import { InventoryEditModal, type InventoryEditTarget } from '../components/InventoryEditModal';
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { GroupedQrLabelsModal } from '../components/GroupedQrLabelsModal';
@@ -114,22 +114,37 @@ type MagasinDetail = {
 };
 
 function MagasinQr({ id }: { id: string }) {
-  const [src, setSrc] = useState<string | null>(null);
+  const qrKey = `${QR_PREFIX.magasin}${id}`;
+  const [src, setSrc] = useState<string | null>(() => getCachedQr(qrKey, 220) ?? null);
   useEffect(() => {
     let cancelled = false;
-    void qrDataUrl(`${QR_PREFIX.magasin}${id}`, 220).then((value) => {
+    const cached = getCachedQr(qrKey, 220);
+    if (cached) {
+      setSrc(cached);
+      return;
+    }
+    void qrDataUrl(qrKey, 220).then((value) => {
       if (!cancelled) setSrc(value);
     });
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [qrKey]);
   return (
-    <span className="grid h-28 w-28 shrink-0 place-items-center rounded-2xl border border-line bg-white p-2 shadow-xs">
+    <span
+      data-qr-ready={src ? 'true' : 'false'}
+      data-qr-pending={src ? 'false' : 'true'}
+      className="grid h-28 w-28 shrink-0 place-items-center rounded-2xl border border-gray-300 bg-white p-2"
+    >
       {src ? (
-        <img src={src} alt={`QR ${id}`} className="h-full w-full object-contain" />
+        <img
+          src={src}
+          alt={`QR ${id}`}
+          className="h-full w-full object-contain"
+          style={{ imageRendering: '-webkit-optimize-contrast' }}
+        />
       ) : (
-        <Warehouse size={28} className="text-ink-faint" />
+        <Warehouse size={28} className="text-gray-400" />
       )}
     </span>
   );
@@ -145,10 +160,23 @@ function MagasinDoorLabel({
   stockCount: number;
 }) {
   return (
-    <div className="a4-page py-8" style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif' }}>
+    <div
+      className="a4-page py-8"
+      style={{
+        fontFamily: '"IBM Plex Sans", -apple-system, sans-serif',
+        breakInside: 'avoid',
+        pageBreakInside: 'avoid',
+      }}
+    >
       <div
-        className="mx-auto flex flex-col justify-between overflow-hidden rounded-[24px] border-4 border-gray-900 bg-white p-8 text-gray-900 shadow-xl"
-        style={{ width: '160mm', minHeight: '110mm', boxSizing: 'border-box' }}
+        className="door-label-card mx-auto flex flex-col justify-between overflow-hidden rounded-[20px] border-4 border-gray-900 bg-white p-8 text-gray-900"
+        style={{
+          width: '160mm',
+          minHeight: '110mm',
+          boxSizing: 'border-box',
+          breakInside: 'avoid',
+          pageBreakInside: 'avoid',
+        }}
       >
         {/* En-tête officiel Monastère */}
         <div className="flex items-center justify-between border-b-2 border-gray-900 pb-3">
@@ -1113,7 +1141,7 @@ export function Magasins({
             ))}
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             {/* Barre d'en-tête du magasin avec style iOS et actions globales */}
             {(() => {
               const drawerVisuals = getLocationVisuals(detail.magasin);
@@ -1290,14 +1318,14 @@ export function Magasins({
           );
         })()}
 
-            <div className="sticky top-0 z-20 -mx-1 space-y-2 border-b border-line bg-paper/95 px-1 pb-2 pt-1 backdrop-blur-sm">
+            <div className="sticky top-0 z-30 isolate -mx-1 min-w-0 space-y-2 border-b border-line bg-paper px-1 pb-2 pt-1 shadow-[0_6px_12px_-10px_rgba(0,0,0,0.9)]">
             {/* Navigation Sub-Tabs dans le magasin (Responsive Grouped Segment) */}
-            <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 p-1 rounded-2xl bg-paper-2 border border-line">
+            <div className="grid min-w-0 grid-cols-3 gap-1 rounded-xl border border-line bg-paper-2 p-1 sm:flex sm:items-center sm:gap-1.5 sm:rounded-2xl">
               <button
                 type="button"
                 onClick={() => setDrawerTab('tools')}
                 className={cx(
-                  'flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all',
+                  'flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-[11px] font-semibold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs sm:rounded-xl',
                   drawerTab === 'tools'
                     ? 'bg-amber text-white shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper'
@@ -1319,7 +1347,7 @@ export function Magasins({
                 type="button"
                 onClick={() => setDrawerTab('stock')}
                 className={cx(
-                  'flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all',
+                  'flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-[11px] font-semibold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs sm:rounded-xl',
                   drawerTab === 'stock'
                     ? 'bg-amber text-white shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper'
@@ -1341,7 +1369,7 @@ export function Magasins({
                 type="button"
                 onClick={() => setDrawerTab('loans')}
                 className={cx(
-                  'flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all',
+                  'flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-[11px] font-semibold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs sm:rounded-xl',
                   drawerTab === 'loans'
                     ? 'bg-amber text-white shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper'
@@ -1368,7 +1396,7 @@ export function Magasins({
                   type="button"
                   onClick={() => setDrawerTab('settings')}
                   className={cx(
-                    'flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all sm:ml-auto col-span-2 sm:col-span-1',
+                    'col-span-3 flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors sm:ml-auto sm:col-span-1 sm:rounded-xl',
                     drawerTab === 'settings'
                       ? 'bg-blue text-white shadow-xs'
                       : 'text-ink-soft hover:text-ink hover:bg-paper'

@@ -67,6 +67,7 @@ export function computeAllowedViews(
     }
     if (
       permissions['projects.view'] ||
+      permissions['projects.report_incident'] ||
       permissions['projects.create'] ||
       permissions['projects.edit'] ||
       permissions['projects.delete']

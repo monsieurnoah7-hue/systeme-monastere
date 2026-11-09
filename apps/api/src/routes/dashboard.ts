@@ -319,6 +319,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
     delayed_count: number;
     overtime_hours: number;
     financial_damage_fcfa: number;
+    pending_incident_count: number;
   };
   type ProjectAttention = {
     code: string;
@@ -344,7 +345,8 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
                 THEN (CURRENT_DATE - delivery_deadline) * COALESCE(penalty_rate_daily_fcfa, 0)
                 ELSE 0
               END
-          ), 0)::float AS financial_damage_fcfa
+          ), 0)::float AS financial_damage_fcfa,
+          (SELECT count(*)::int FROM project_incidents i WHERE i.review_status = 'pending') AS pending_incident_count
         FROM projects
       `).catch((error) => {
         console.error('[dashboard] synthèse projets indisponible:', error);
@@ -432,6 +434,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
           delayedCount: Number(projectSummary.delayed_count ?? 0),
           overtimeHours: Number(projectSummary.overtime_hours ?? 0),
           financialDamageFcfa: canViewProjectFinancials ? Number(projectSummary.financial_damage_fcfa ?? 0) : null,
+          pendingIncidentCount: Number(projectSummary.pending_incident_count ?? 0),
           attention: projectAttention.map((project) => ({
             ...project,
             days_late: Number(project.days_late ?? 0),

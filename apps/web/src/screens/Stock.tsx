@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, type Employee, type Magasin, type ScanResult, type StockMovement, type StockRef, type User } from '../lib/api';
-import { QR_PREFIX, qrDataUrl } from '../lib/qr';
+import { QR_PREFIX, getCachedQr, qrDataUrl } from '../lib/qr';
 import { MOVE_LABEL, MOVE_TONE, formatDateTime } from '../lib/labels';
 import {
   Banner,
@@ -136,29 +136,61 @@ function StockBar({ ref }: { ref: StockRef }) {
 }
 
 function RefQr({ id }: { id: number }) {
-  const [src, setSrc] = useState<string | null>(null);
+  const qrKey = `${QR_PREFIX.stock}${id}`;
+  const [src, setSrc] = useState<string | null>(() => getCachedQr(qrKey, 200) ?? null);
   useEffect(() => {
     let cancelled = false;
-    void qrDataUrl(`${QR_PREFIX.stock}${id}`, 200).then((value) => {
+    const cached = getCachedQr(qrKey, 200);
+    if (cached) {
+      setSrc(cached);
+      return;
+    }
+    void qrDataUrl(qrKey, 200).then((value) => {
       if (!cancelled) setSrc(value);
     });
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [qrKey]);
   return (
-    <span className="grid h-24 w-24 shrink-0 place-items-center rounded-xl border border-line bg-white shadow-xs">
-      {src ? <img src={src} alt={`QR ${id}`} className="h-20 w-20" /> : <IconBox size={28} className="text-ink-faint" />}
+    <span
+      data-qr-ready={src ? 'true' : 'false'}
+      data-qr-pending={src ? 'false' : 'true'}
+      className="grid h-24 w-24 shrink-0 place-items-center rounded-xl border border-gray-300 bg-white"
+    >
+      {src ? (
+        <img
+          src={src}
+          alt={`QR ${id}`}
+          className="h-20 w-20 object-contain"
+          style={{ imageRendering: '-webkit-optimize-contrast' }}
+        />
+      ) : (
+        <IconBox size={28} className="text-gray-400" />
+      )}
     </span>
   );
 }
 
 function StockBinLabel({ refItem }: { refItem: StockRef }) {
   return (
-    <div className="a4-page py-6" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
+    <div
+      className="a4-page py-6"
+      style={{
+        fontFamily: '"IBM Plex Sans", -apple-system, sans-serif',
+        breakInside: 'avoid',
+        pageBreakInside: 'avoid',
+      }}
+    >
       <div
-        className="mx-auto flex flex-col justify-between overflow-hidden rounded-xl border-2 border-gray-900 bg-white p-5 text-gray-900 shadow-md"
-        style={{ width: '130mm', minHeight: '80mm', boxSizing: 'border-box' }}
+        className="stock-bin-label mx-auto flex flex-col justify-between overflow-hidden rounded-xl border-2 border-gray-900 bg-white p-5 text-gray-900"
+        style={{
+          width: '130mm',
+          minHeight: '80mm',
+          boxSizing: 'border-box',
+          breakInside: 'avoid',
+          pageBreakInside: 'avoid',
+        }}
       >
         {/* En-tête officiel Monastère */}
         <div className="flex items-center justify-between border-b-2 border-gray-900 pb-2">

@@ -565,8 +565,13 @@ CREATE TABLE IF NOT EXISTS project_incidents (
   description text NOT NULL,
   delay_days numeric NOT NULL DEFAULT 0 CHECK (delay_days >= 0),
   employee_ids text[] NOT NULL DEFAULT '{}',
-  excluded_from_accountability boolean NOT NULL DEFAULT true,
+  excluded_from_accountability boolean NOT NULL DEFAULT false,
   event_date date NOT NULL DEFAULT CURRENT_DATE,
+  reporter_employee_id text REFERENCES employees(id),
+  review_status text NOT NULL DEFAULT 'approved' CHECK (review_status IN ('pending','approved','rejected')),
+  review_note text,
+  reviewed_by bigint REFERENCES users(id),
+  reviewed_at timestamptz,
   created_by bigint REFERENCES users(id),
   created_at timestamptz NOT NULL DEFAULT now()
 );

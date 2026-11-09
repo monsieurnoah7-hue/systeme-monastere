@@ -4208,12 +4208,18 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
   return (
     <div
       className={cx(
-        'badge-card relative flex flex-col justify-between overflow-hidden rounded-[3mm] border border-gray-300 bg-white text-gray-900 shadow-sm',
-        isPreview ? 'h-[200px] w-full max-w-[340px] p-3 text-[13px]' : 'h-[53.98mm] w-[85.6mm] p-[3mm] text-[8pt]',
+        'badge-card relative flex flex-col justify-between overflow-hidden rounded-[2mm] border border-gray-300 bg-white text-gray-900',
+        isPreview ? 'h-[200px] w-full max-w-[340px] p-3 text-[13px] shadow-sm' : 'h-[54mm] w-[85.6mm] p-[2.5mm] text-[8pt]',
       )}
-      style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif' }}
+      style={{
+        fontFamily: '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        breakInside: 'avoid',
+        pageBreakInside: 'avoid',
+        boxSizing: 'border-box',
+      }}
     >
-      <div className="flex items-center gap-2 border-b border-gray-200 pb-1.5">
+      {/* En-tête officiel du badge */}
+      <div className="flex items-center gap-2 border-b border-gray-200 pb-1">
         <img
           src="/emblem.png"
           alt=""
@@ -4223,17 +4229,21 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
           <p className="text-[8pt] font-bold tracking-wide text-gray-950">CFTM</p>
           <p className="text-[5.5pt] font-medium text-gray-600">Bénédictins du Mont‑Fébé</p>
         </div>
-        <span className="text-[5.5pt] font-semibold uppercase tracking-[0.12em] text-gray-500">Personnel</span>
+        <span className="rounded bg-gray-100 border border-gray-200 px-1 py-0.5 text-[5pt] font-bold uppercase tracking-wider text-gray-600">
+          Personnel
+        </span>
       </div>
 
       {/* Corps : Identité & Photo à gauche, QR Code à droite */}
-      <div className="flex flex-1 items-center justify-between gap-2.5 py-1">
-        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-          {/* Photo portrait officielle style badge professionnel */}
-          <div className={cx(
-            'shrink-0 rounded-lg overflow-hidden border border-gray-300 bg-gray-100 flex items-center justify-center font-bold text-gray-600',
-            isPreview ? 'h-16 w-14 text-sm' : 'h-[17mm] w-[14mm] text-[8pt]',
-          )}>
+      <div className="flex flex-1 items-center justify-between gap-2 py-0.5">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {/* Photo portrait officielle ou initiales */}
+          <div
+            className={cx(
+              'shrink-0 rounded-md overflow-hidden border border-gray-300 bg-gray-100 flex items-center justify-center font-bold text-gray-600',
+              isPreview ? 'h-16 w-14 text-sm' : 'h-[17mm] w-[14mm] text-[8pt]',
+            )}
+          >
             {employee.photo_path ? (
               <img src={employee.photo_path} alt={employee.full_name} className="h-full w-full object-cover" />
             ) : (
@@ -4242,17 +4252,15 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
           </div>
 
           <div className="min-w-0 flex-1 space-y-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono text-[6pt] font-semibold text-gray-600">
-                {employee.id}
-              </span>
-            </div>
+            <span className="inline-block font-mono text-[6pt] font-bold text-gray-600 bg-gray-100 rounded px-1">
+              {employee.id}
+            </span>
 
             <div>
-              <p className="truncate text-[9.5pt] font-extrabold leading-tight text-gray-950">
+              <p className="text-[8.5pt] font-extrabold leading-tight text-gray-950 line-clamp-2">
                 {employee.full_name}
               </p>
-              <p className="truncate text-[7pt] font-medium text-gray-600">
+              <p className="truncate text-[6.5pt] font-semibold text-gray-600">
                 {employee.job_title}
               </p>
             </div>
@@ -4260,52 +4268,99 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
         </div>
 
         {/* QR Code haute précision pour pointage et prêt */}
-        <div className="flex shrink-0 flex-col items-center justify-center rounded-lg border border-gray-200 bg-white p-1 shadow-2xs">
+        <div className="flex shrink-0 flex-col items-center justify-center rounded-md border border-gray-200 bg-white p-1">
           {employee.badge_token ? (
             <QrCode
               value={`${QR_PREFIX.badge}${employee.badge_token}`}
-              size={isPreview ? 84 : 72}
+              size={isPreview ? 84 : 68}
               alt={`QR badge ${employee.id}`}
             />
           ) : (
-            <div className="grid h-[18mm] w-[18mm] place-items-center border border-dashed border-gray-300 text-[6pt] text-gray-400">
+            <div className="grid h-[17mm] w-[17mm] place-items-center border border-dashed border-gray-300 text-[6pt] text-gray-400">
               Sans code
             </div>
           )}
-          <span className="mt-0.5 font-mono text-[6pt] font-bold tracking-widest text-gray-500">
+          <span className="mt-0.5 font-mono text-[5.5pt] font-bold tracking-widest text-gray-600">
             {employee.badge_token ?? '------'}
           </span>
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-gray-200 pt-1 text-[5pt] font-medium text-gray-500">
+      {/* Pied : Mention officielle */}
+      <div className="flex items-center justify-between border-t border-gray-200 pt-0.5 text-[5pt] font-medium text-gray-500">
         <span>Carte professionnelle</span>
-        <span className="font-semibold uppercase tracking-wider">Pointage</span>
+        <span className="font-semibold uppercase tracking-wider text-[#ff5500]">Pointage & Outillage</span>
       </div>
     </div>
   );
 }
 
 function BadgeSheet({ employees, paper = 'A4' }: { employees: Employee[]; paper?: 'A4' | 'Letter' }) {
+  const BADGES_PER_PAGE = 8; // 2 colonnes × 4 lignes = 8 badges par feuille A4/Letter
+  const pages: Employee[][] = [];
+  for (let i = 0; i < employees.length; i += BADGES_PER_PAGE) {
+    pages.push(employees.slice(i, i + BADGES_PER_PAGE));
+  }
+  if (pages.length === 0) pages.push([]);
+
   return (
-    <div className="a4-page" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
-      <style>{`@page { size: ${paper} portrait; margin: 10mm; }`}</style>
-      <div style={{ marginBottom: '6mm', borderBottom: '1px solid #e5e7eb', paddingBottom: '3mm' }} className="flex items-center justify-between">
-        <div>
-          <p style={{ fontSize: '12pt', fontWeight: 700, color: '#ff6603', margin: 0 }}>
-            CFTM · Bénédictins du Mont‑Fébé
-          </p>
-          <p style={{ fontSize: '8.5pt', color: '#6b7280', margin: '1mm 0 0' }}>
-            Planche de badges · {employees.length} carte(s) · format ID‑1 (85,6 × 53,98 mm)
-          </p>
-        </div>
-        <img src="/emblem.png" alt="" style={{ height: '9mm', width: '9mm', objectFit: 'contain' }} />
-      </div>
-      <div className="badge-grid">
-        {employees.map((employee, index) => (
-          <BadgeCard key={`${employee.id}-${index}`} employee={employee} />
-        ))}
-      </div>
+    <div style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif' }}>
+      <style>{`@page { size: ${paper} portrait; margin: 6mm; }`}</style>
+      {pages.map((pageEmployees, pageIndex) => {
+        const isLast = pageIndex === pages.length - 1;
+        return (
+          <div
+            key={`badge-page-${pageIndex}`}
+            className="badge-page"
+            style={{
+              width: '190mm',
+              margin: '0 auto',
+              padding: '4mm 0',
+              boxSizing: 'border-box',
+              breakAfter: isLast ? 'auto' : 'page',
+              pageBreakAfter: isLast ? 'auto' : 'always',
+            }}
+          >
+            {/* En-tête de planche reproduit proprement sur chaque page */}
+            <div
+              style={{
+                marginBottom: '4mm',
+                borderBottom: '1px solid #e5e7eb',
+                paddingBottom: '2.5mm',
+              }}
+              className="flex items-center justify-between"
+            >
+              <div>
+                <p style={{ fontSize: '11pt', fontWeight: 800, color: '#ff6603', margin: 0 }}>
+                  CFTM · Bénédictins du Mont‑Fébé
+                </p>
+                <p style={{ fontSize: '7.5pt', color: '#6b7280', margin: '0.5mm 0 0' }}>
+                  Planche de badges · Page {pageIndex + 1} / {pages.length} · {employees.length} carte(s) au total · Format ID‑1 (85,6 × 54 mm)
+                </p>
+              </div>
+              <img src="/emblem.png" alt="" style={{ height: '8mm', width: '8mm', objectFit: 'contain' }} />
+            </div>
+
+            {/* Grille exacte de 2 colonnes × 4 lignes */}
+            <div
+              className="badge-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 85.6mm)',
+                gap: '4mm 8mm',
+                justifyContent: 'center',
+              }}
+            >
+              {pageEmployees.map((employee, cardIndex) => (
+                <BadgeCard
+                  key={`${employee.id}-${pageIndex}-${cardIndex}`}
+                  employee={employee}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

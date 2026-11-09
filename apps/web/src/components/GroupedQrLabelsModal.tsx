@@ -9,20 +9,110 @@ import { PrintPreviewModal } from './PrintPreviewModal';
 type Label = { key: string; name: string; detail: string; store: string; qr: string };
 
 function QrLabelSheet({ labels, paper }: { labels: Label[]; paper: 'A4' | 'Letter' }) {
-  return <div className="a4-page label-grid" style={{ '--label-cols': 4, '--label-width': '45mm', '--label-height': '25mm', '--label-gap': '2mm', width: '190mm', minHeight: paper === 'A4' ? '277mm' : '260mm', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 45mm)', gridAutoRows: '25mm', gap: '2mm', alignContent: 'start', padding: '4mm', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' } as React.CSSProperties}>
-    {labels.map((label, index) => <div key={`${label.key}-${index}`} className="tool-label-card" style={{ width: '45mm', height: '25mm', display: 'flex', overflow: 'hidden', border: '0.25mm solid #bbb', background: 'white', color: '#17181b', breakInside: 'avoid', boxSizing: 'border-box', padding: '1mm' }}>
-      <img src={label.qr} alt={`QR ${label.name}`} style={{ width: '20mm', height: '20mm', objectFit: 'contain', alignSelf: 'center' }} />
-      <div style={{ minWidth: 0, alignSelf: 'center', paddingLeft: '1mm' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8mm', marginBottom: '0.5mm' }}>
-          <img src="/emblem.png" alt="" style={{ width: '3mm', height: '3mm', objectFit: 'contain' }} />
-          <strong style={{ display: 'block', fontSize: '6pt' }}>CFTM</strong>
-        </div>
-        <span style={{ display: 'block', fontSize: '7pt', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label.name}</span>
-        <span style={{ display: 'block', fontSize: '5.5pt', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label.detail}</span>
-        <span style={{ display: 'block', fontSize: '5pt', color: '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label.store}</span>
-      </div>
-    </div>)}
-  </div>;
+  const LABELS_PER_PAGE = 40; // 4 colonnes × 10 lignes = 40 étiquettes par page A4
+  const pages: Label[][] = [];
+  for (let i = 0; i < labels.length; i += LABELS_PER_PAGE) {
+    pages.push(labels.slice(i, i + LABELS_PER_PAGE));
+  }
+  if (pages.length === 0) pages.push([]);
+
+  return (
+    <div style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif' }}>
+      <style>{`@page { size: ${paper} portrait; margin: 6mm; }`}</style>
+      {pages.map((pageLabels, pageIndex) => {
+        const isLast = pageIndex === pages.length - 1;
+        return (
+          <div
+            key={`grouped-qr-page-${pageIndex}`}
+            className="label-sheet-page"
+            style={{
+              width: '190mm',
+              margin: '0 auto',
+              padding: '3mm 0',
+              boxSizing: 'border-box',
+              breakAfter: isLast ? 'auto' : 'page',
+              pageBreakAfter: isLast ? 'auto' : 'always',
+            }}
+          >
+            {pages.length > 1 && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  borderBottom: '1px solid #e5e7eb',
+                  paddingBottom: '1.5mm',
+                  marginBottom: '2mm',
+                  fontSize: '7pt',
+                  color: '#6b7280',
+                }}
+              >
+                <span>CFTM · Planche QR groupée (45 × 25 mm)</span>
+                <span>Page {pageIndex + 1} / {pages.length} · {labels.length} étiquettes au total</span>
+              </div>
+            )}
+            <div
+              className="label-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 45mm)',
+                gridAutoRows: '25mm',
+                gap: '2mm',
+                justifyContent: 'start',
+                alignContent: 'start',
+              }}
+            >
+              {pageLabels.map((label, index) => (
+                <div
+                  key={`${label.key}-${pageIndex}-${index}`}
+                  className="tool-label-card"
+                  style={{
+                    width: '45mm',
+                    height: '25mm',
+                    display: 'flex',
+                    overflow: 'hidden',
+                    border: '0.25mm solid #cbd5e1',
+                    background: 'white',
+                    color: '#0f172a',
+                    breakInside: 'avoid',
+                    pageBreakInside: 'avoid',
+                    boxSizing: 'border-box',
+                    padding: '1mm',
+                  }}
+                >
+                  <img
+                    src={label.qr}
+                    alt={`QR ${label.name}`}
+                    style={{
+                      width: '20mm',
+                      height: '20mm',
+                      objectFit: 'contain',
+                      alignSelf: 'center',
+                      imageRendering: '-webkit-optimize-contrast',
+                    }}
+                  />
+                  <div style={{ minWidth: 0, flex: 1, alignSelf: 'center', paddingLeft: '1.5mm' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1mm', marginBottom: '0.4mm' }}>
+                      <img src="/emblem.png" alt="" style={{ width: '3mm', height: '3mm', objectFit: 'contain' }} />
+                      <strong style={{ fontSize: '5.5pt', color: '#334155' }}>CFTM</strong>
+                    </div>
+                    <span style={{ display: 'block', fontSize: '7pt', fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#0f172a' }}>
+                      {label.name}
+                    </span>
+                    <span style={{ display: 'block', fontSize: '5.5pt', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#475569' }}>
+                      {label.detail}
+                    </span>
+                    <span style={{ display: 'block', fontSize: '5pt', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {label.store}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function GroupedQrLabelsModal({ canViewTools, canViewStock, storeScope }: { canViewTools: boolean; canViewStock: boolean; storeScope?: string }) {

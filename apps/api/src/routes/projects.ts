@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { getDb } from '../db/index.js';
 import { writeAudit } from '../lib/audit.js';
 import { actorId, actorName, requireAuth } from '../middleware/auth.js';
-import { requirePerm } from '../middleware/permissions.js';
+import { hasPermission, requirePerm } from '../middleware/permissions.js';
+import { DEFAULT_PERMISSIONS } from '../lib/permissions.js';
 import { randomUUID } from 'node:crypto';
 
 type WorkPlanEntry = { employee_id: string; weekday: number; planned_hours: number };
@@ -336,6 +337,13 @@ async function validateWorkPlan(projectId: string | null, assignedIds: string[],
 
 projectsRoutes.get('/', requireAuth, requirePerm('projects.view'), async (c) => {
   const db = getDb();
+  const user = c.get('auth').user;
+  const explicitView = await db.one<{ allowed: boolean }>(
+    'SELECT allowed FROM role_permissions WHERE role = $1 AND action = $2', [user.role, 'projects.view'],
+  );
+  const canViewAll = user.role === 'direction' || Boolean(explicitView?.allowed) ||
+    (!explicitView && DEFAULT_PERMISSIONS['projects.view'].includes(user.role)) ||
+    await hasPermission(user.role, 'projects.edit') || await hasPermission(user.role, 'projects.create');
   const rows = await db.query<ProjectRow>(`
     SELECT id, code, title, client_name, site_location, category,
            start_date::text AS start_date, work_plan, assigned_worker_ids, assigned_worker_names,
@@ -347,8 +355,9 @@ projectsRoutes.get('/', requireAuth, requirePerm('projects.view'), async (c) => 
            installation_days, status, notes,
            created_at::text AS created_at, updated_at::text AS updated_at
     FROM projects
+    WHERE ($1::boolean OR $2::text IS NOT NULL AND $2 = ANY(assigned_worker_ids))
     ORDER BY delivery_deadline ASC NULLS LAST, created_at DESC
-  `);
+  `, [canViewAll, user.employee_id ?? null]);
 
   const context = await loadProjectMetricContext(rows);
   const projects = rows.map((row) => computeProjectMetrics(row, context));
@@ -609,39 +618,76 @@ const incidentBody = z.object({
 });
 
 projectsRoutes.get('/:id/incidents', requireAuth, requirePerm('projects.view'), async (c) => {
-  const incidents = await getDb().query(
-    `SELECT id, project_id, kind, description, delay_days, employee_ids, excluded_from_accountability,
-            event_date::text AS event_date, created_at::text AS created_at
-       FROM project_incidents WHERE project_id = $1 ORDER BY event_date DESC, id DESC`,
-    [c.req.param('id')],
+  const db = getDb();
+  const projectId = c.req.param('id');
+  const user = c.get('auth').user;
+  const project = await db.one<ProjectRow>('SELECT * FROM projects WHERE id = $1', [projectId]);
+  if (!project) return c.json({ error: 'Projet introuvable.' }, 404);
+  const canReview = await hasPermission(user.role, 'projects.edit');
+  if (!canReview && (!user.employee_id || !project.assigned_worker_ids.includes(user.employee_id))) {
+    return c.json({ error: 'Ce projet ne vous est pas affecté.' }, 403);
+  }
+  const incidents = await db.query(
+    `SELECT i.id, i.project_id, i.kind, i.description, i.delay_days, i.employee_ids, i.excluded_from_accountability,
+            i.event_date::text AS event_date, i.created_at::text AS created_at,
+            i.reporter_employee_id, e.full_name AS reporter_name, i.review_status, i.review_note, i.reviewed_by, i.reviewed_at::text AS reviewed_at
+       FROM project_incidents i LEFT JOIN employees e ON e.id = i.reporter_employee_id
+      WHERE i.project_id = $1 AND ($2::boolean OR i.reporter_employee_id = $3)
+       ORDER BY i.event_date DESC, i.id DESC`,
+    [projectId, canReview, user.employee_id ?? null],
   );
   return c.json({ incidents });
 });
 
-projectsRoutes.post('/:id/incidents', requireAuth, requirePerm('projects.edit'), async (c) => {
+projectsRoutes.post('/:id/incidents', requireAuth, requirePerm('projects.report_incident'), async (c) => {
   const projectId = c.req.param('id');
   const parsed = incidentBody.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: 'Vérifiez le type, la description et la durée de l’imprévu.' }, 400);
   const db = getDb();
   const project = await db.one<ProjectRow>('SELECT * FROM projects WHERE id = $1', [projectId]);
   if (!project) return c.json({ error: 'Projet introuvable.' }, 404);
-  const employeeIds = [...new Set(parsed.data.employee_ids)];
-  if (employeeIds.some((id) => !project.assigned_worker_ids.includes(id))) return c.json({ error: 'L’imprévu vise un exécutant non affecté au projet.' }, 400);
-  const excluded = parsed.data.kind === 'unjustified_absence'
-    ? false
-    : parsed.data.excluded_from_accountability ?? true;
+  const reporterId = c.get('auth').user.employee_id;
+  if (await hasPermission(c.get('auth').user.role, 'projects.edit')) return c.json({ error: 'Les responsables traitent les signalements ; ils ne les déclarent pas au nom des travailleurs.' }, 403);
+  if (!reporterId || !project.assigned_worker_ids.includes(reporterId)) return c.json({ error: 'Seul un travailleur affecté peut signaler un imprévu sur ce projet.' }, 403);
+  const employeeIds = [reporterId];
   const incident = await db.one(
-    `INSERT INTO project_incidents (project_id, kind, description, delay_days, employee_ids, excluded_from_accountability, event_date, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO project_incidents (project_id, kind, description, delay_days, employee_ids, excluded_from_accountability, event_date, created_by, reporter_employee_id, review_status)
+     VALUES ($1, $2, $3, $4, $5, false, $6, $7, $8, 'pending')
      RETURNING id, project_id, kind, description, delay_days, employee_ids, excluded_from_accountability,
-               event_date::text AS event_date, created_at::text AS created_at`,
-    [projectId, parsed.data.kind, parsed.data.description, parsed.data.delay_days, employeeIds, excluded, parsed.data.event_date, actorId(c)],
+               event_date::text AS event_date, created_at::text AS created_at,
+               reporter_employee_id, (SELECT full_name FROM employees e WHERE e.id = project_incidents.reporter_employee_id) AS reporter_name,
+               review_status, review_note, reviewed_by, reviewed_at::text AS reviewed_at`,
+    [projectId, parsed.data.kind, parsed.data.description, parsed.data.delay_days, employeeIds, parsed.data.event_date, actorId(c), reporterId],
   );
   await writeAudit(db, {
     entity: 'project_incident', entityId: String((incident as any)?.id ?? ''), action: 'create', after: incident,
     actorId: actorId(c), actorName: actorName(c), reason: parsed.data.description,
   });
   return c.json({ incident }, 201);
+});
+
+projectsRoutes.patch('/:id/incidents/:incidentId/review', requireAuth, requirePerm('projects.edit'), async (c) => {
+  const parsed = z.object({ decision: z.enum(['approved', 'rejected']), note: z.string().trim().max(500).optional() }).safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) return c.json({ error: 'Décision invalide.' }, 400);
+  const db = getDb();
+  const projectId = c.req.param('id');
+  const incidentId = c.req.param('incidentId') ?? '';
+  const incident = await db.one<any>('SELECT * FROM project_incidents WHERE id = $1 AND project_id = $2', [incidentId, projectId]);
+  if (!incident) return c.json({ error: 'Signalement introuvable.' }, 404);
+  if (incident.review_status !== 'pending') return c.json({ error: 'Ce signalement a déjà été traité.' }, 409);
+  if (parsed.data.decision === 'rejected' && !parsed.data.note?.trim()) return c.json({ error: 'Indiquez le motif du refus.' }, 400);
+  const excluded = parsed.data.decision === 'approved' && incident.kind !== 'unjustified_absence';
+  const reviewed = await db.one(
+    `UPDATE project_incidents SET review_status = $3, review_note = $4, excluded_from_accountability = $5,
+            reviewed_by = $6, reviewed_at = now()
+      WHERE id = $1 AND project_id = $2 AND review_status = 'pending'
+      RETURNING id, project_id, kind, description, delay_days, employee_ids, excluded_from_accountability,
+                event_date::text AS event_date, created_at::text AS created_at, reporter_employee_id,
+                review_status, review_note, reviewed_by, reviewed_at::text AS reviewed_at`,
+    [incidentId, projectId, parsed.data.decision, parsed.data.note?.trim() || null, excluded, actorId(c)],
+  );
+  await writeAudit(db, { entity: 'project_incident', entityId: incidentId, action: parsed.data.decision, before: incident, after: reviewed, actorId: actorId(c), actorName: actorName(c), reason: parsed.data.note || 'Décision sur un signalement d’imprévu' });
+  return c.json({ incident: reviewed });
 });
 
 projectsRoutes.delete('/:id', requireAuth, requirePerm('projects.delete'), async (c) => {

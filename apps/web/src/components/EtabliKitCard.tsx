@@ -47,7 +47,14 @@ async function generateKitQrCodes(items: EtabliKitItem[]) {
   return Object.fromEntries(entries);
 }
 
-function EtabliLabelsSheet({ kit, labels, codes, kitQr, format, paper }: {
+function EtabliLabelsSheet({
+  kit,
+  labels,
+  codes,
+  kitQr,
+  format,
+  paper,
+}: {
   kit: EtabliKit;
   labels: EtabliKitItem[];
   codes: Record<number, string>;
@@ -58,43 +65,172 @@ function EtabliLabelsSheet({ kit, labels, codes, kitQr, format, paper }: {
   const compact = format === 'compact';
   const labelWidth = compact ? '38mm' : '63.5mm';
   const labelHeight = compact ? '21mm' : '38.1mm';
+  const LABELS_PER_PAGE = compact ? 60 : 21;
+
+  type SheetItem = { type: 'kit' } | { type: 'item'; item: EtabliKitItem };
+  const allItems: SheetItem[] = [{ type: 'kit' }, ...labels.map((item) => ({ type: 'item' as const, item }))];
+
+  const pages: SheetItem[][] = [];
+  for (let i = 0; i < allItems.length; i += LABELS_PER_PAGE) {
+    pages.push(allItems.slice(i, i + LABELS_PER_PAGE));
+  }
+  if (pages.length === 0) pages.push([]);
+
+  const pageWidth = paper === 'A4' ? '198mm' : '203mm';
+
   return (
-    <div className="label-sheet" style={{ width: paper === 'A4' ? '200mm' : '203.2mm', margin: '0 auto', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif' }}>
       <style>{`@page { size: ${paper} portrait; margin: 5mm; }`}</style>
-      <div className="label-grid" style={{ gridTemplateColumns: `repeat(auto-fill, ${labelWidth})`, gap: '2mm' }}>
-        <div className="tool-label-card flex overflow-hidden border border-gray-500 bg-white text-gray-900" style={{ width: labelWidth, height: labelHeight, boxSizing: 'border-box', breakInside: 'avoid' }}>
-          <div className="flex shrink-0 items-center justify-center" style={{ width: compact ? '17mm' : '29mm', height: '100%', padding: compact ? '1mm' : '2mm', boxSizing: 'border-box' }}>
-            <img src={kitQr} alt={`QR établi ${kit.etabli_number}`} className="h-full w-full object-contain" />
-          </div>
-          <div className={`flex min-w-0 flex-1 flex-col justify-center leading-tight ${compact ? 'py-[1mm] pr-[1mm]' : 'py-[2mm] pr-[2mm]'}`}>
-            <div className="mb-[0.8mm] flex items-center gap-1 border-b border-gray-200 pb-[0.6mm]">
-              <img src="/emblem.png" alt="" className={compact ? 'h-[3mm] w-[3mm] object-contain' : 'h-[4mm] w-[4mm] object-contain'} />
-              <span className={`font-bold tracking-wide text-gray-800 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>CFTM</span>
-            </div>
-            <p className={`truncate font-mono font-bold text-gray-950 ${compact ? 'text-[6pt]' : 'text-[6.5pt]'}`}>{kit.code}</p>
-            <p className={`truncate font-semibold text-gray-800 ${compact ? 'text-[5.5pt]' : 'text-[7.5pt]'}`}>Établi N°{kit.etabli_number}</p>
-            <p className={`truncate text-gray-600 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>{kit.employee_name}</p>
-          </div>
-        </div>
-        {labels.map((item, index) => (
-          <div key={`${item.id}-${index}`} className="tool-label-card flex overflow-hidden border border-gray-500 bg-white text-gray-900" style={{ width: labelWidth, height: labelHeight, boxSizing: 'border-box', breakInside: 'avoid' }}>
-            <div className="flex shrink-0 items-center justify-center" style={{ width: compact ? '17mm' : '29mm', height: '100%', padding: compact ? '1mm' : '2mm', boxSizing: 'border-box' }}>
-              <img src={codes[item.id]} alt={`QR ${item.tool_code}`} className="h-full w-full object-contain" />
-            </div>
-            <div className={`flex min-w-0 flex-1 flex-col justify-center leading-tight ${compact ? 'py-[1mm] pr-[1mm]' : 'py-[2mm] pr-[2mm]'}`}>
-              <div className="mb-[0.8mm] flex items-center gap-1 border-b border-gray-200 pb-[0.6mm]">
-                <img src="/emblem.png" alt="" className={compact ? 'h-[3mm] w-[3mm] object-contain' : 'h-[4mm] w-[4mm] object-contain'} />
-                <span className={`font-bold tracking-wide text-gray-800 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>CFTM</span>
+      {pages.map((pageItems, pageIndex) => {
+        const isLast = pageIndex === pages.length - 1;
+        return (
+          <div
+            key={`etabli-page-${pageIndex}`}
+            className="label-sheet-page"
+            style={{
+              width: pageWidth,
+              margin: '0 auto',
+              boxSizing: 'border-box',
+              breakAfter: isLast ? 'auto' : 'page',
+              pageBreakAfter: isLast ? 'auto' : 'always',
+            }}
+          >
+            {pages.length > 1 && (
+              <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 text-[7pt] text-gray-500">
+                <span>CFTM · Planche Établi N°{kit.etabli_number} ({compact ? 'compact 38 × 21 mm' : 'standard 63,5 × 38,1 mm'})</span>
+                <span>Page {pageIndex + 1} / {pages.length} · {allItems.length} étiquettes au total</span>
               </div>
-              <p className={`truncate font-mono font-bold text-gray-950 ${compact ? 'text-[6pt]' : 'text-[6.5pt]'}`}>
-                {compact ? `${kit.code}-${String(item.item_num).padStart(2, '0')}` : item.tool_code}
-              </p>
-              <p className={`truncate font-semibold text-gray-800 ${compact ? 'text-[5.5pt]' : 'text-[7.5pt]'}`}>{item.name}</p>
-              <p className={`truncate text-gray-600 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>Établi {kit.etabli_number}</p>
+            )}
+            <div
+              className="label-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: compact ? 'repeat(5, 38mm)' : 'repeat(3, 63.5mm)',
+                gap: '2mm',
+                justifyContent: 'start',
+                alignContent: 'start',
+              }}
+            >
+              {pageItems.map((entry, index) => {
+                if (entry.type === 'kit') {
+                  return (
+                    <div
+                      key={`kit-${kit.id}-${pageIndex}-${index}`}
+                      className="tool-label-card flex overflow-hidden border border-gray-400 bg-white text-gray-900"
+                      style={{
+                        width: labelWidth,
+                        height: labelHeight,
+                        boxSizing: 'border-box',
+                        breakInside: 'avoid',
+                        pageBreakInside: 'avoid',
+                      }}
+                    >
+                      <div
+                        className="flex shrink-0 items-center justify-center"
+                        style={{
+                          width: compact ? '17mm' : '28mm',
+                          height: '100%',
+                          padding: compact ? '1mm' : '2mm',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <img
+                          src={kitQr}
+                          alt={`QR établi ${kit.etabli_number}`}
+                          className="h-full w-full object-contain"
+                          style={{ imageRendering: '-webkit-optimize-contrast' }}
+                        />
+                      </div>
+                      <div
+                        className={`flex min-w-0 flex-1 flex-col justify-center leading-tight ${
+                          compact ? 'py-[0.8mm] pr-[1mm]' : 'py-[2mm] pr-[2mm]'
+                        }`}
+                      >
+                        <div className="mb-[0.6mm] flex items-center gap-1 border-b border-gray-200 pb-[0.4mm]">
+                          <img
+                            src="/emblem.png"
+                            alt=""
+                            className={compact ? 'h-[3mm] w-[3mm] object-contain' : 'h-[4mm] w-[4mm] object-contain'}
+                          />
+                          <span className={`font-bold tracking-wide text-gray-800 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>
+                            CFTM
+                          </span>
+                        </div>
+                        <p className={`truncate font-mono font-bold text-gray-950 ${compact ? 'text-[6pt]' : 'text-[6.5pt]'}`}>
+                          {kit.code}
+                        </p>
+                        <p className={`truncate font-semibold text-gray-800 ${compact ? 'text-[5.5pt]' : 'text-[7.5pt]'}`}>
+                          Établi N°{kit.etabli_number}
+                        </p>
+                        <p className={`truncate text-gray-600 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>
+                          {kit.employee_name}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const item = entry.item;
+                return (
+                  <div
+                    key={`item-${item.id}-${pageIndex}-${index}`}
+                    className="tool-label-card flex overflow-hidden border border-gray-400 bg-white text-gray-900"
+                    style={{
+                      width: labelWidth,
+                      height: labelHeight,
+                      boxSizing: 'border-box',
+                      breakInside: 'avoid',
+                      pageBreakInside: 'avoid',
+                    }}
+                  >
+                    <div
+                      className="flex shrink-0 items-center justify-center"
+                      style={{
+                        width: compact ? '17mm' : '28mm',
+                        height: '100%',
+                        padding: compact ? '1mm' : '2mm',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      <img
+                        src={codes[item.id]}
+                        alt={`QR ${item.tool_code}`}
+                        className="h-full w-full object-contain"
+                        style={{ imageRendering: '-webkit-optimize-contrast' }}
+                      />
+                    </div>
+                    <div
+                      className={`flex min-w-0 flex-1 flex-col justify-center leading-tight ${
+                        compact ? 'py-[0.8mm] pr-[1mm]' : 'py-[2mm] pr-[2mm]'
+                      }`}
+                    >
+                      <div className="mb-[0.6mm] flex items-center gap-1 border-b border-gray-200 pb-[0.4mm]">
+                        <img
+                          src="/emblem.png"
+                          alt=""
+                          className={compact ? 'h-[3mm] w-[3mm] object-contain' : 'h-[4mm] w-[4mm] object-contain'}
+                        />
+                        <span className={`font-bold tracking-wide text-gray-800 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>
+                          CFTM
+                        </span>
+                      </div>
+                      <p className={`truncate font-mono font-bold text-gray-950 ${compact ? 'text-[6pt]' : 'text-[6.5pt]'}`}>
+                        {compact ? `${kit.code}-${String(item.item_num).padStart(2, '0')}` : item.tool_code}
+                      </p>
+                      <p className={`truncate font-semibold text-gray-800 ${compact ? 'text-[5.5pt]' : 'text-[7.5pt]'}`}>
+                        {item.name}
+                      </p>
+                      <p className={`truncate text-gray-600 ${compact ? 'text-[4.5pt]' : 'text-[6pt]'}`}>
+                        Établi {kit.etabli_number}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

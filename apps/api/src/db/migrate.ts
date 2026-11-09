@@ -243,6 +243,21 @@ export async function migrate(): Promise<void> {
     `);
     await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [PROJECT_REVISION]);
   }
+
+  const INCIDENT_REVIEW_REVISION = '022_project_incident_review_flow_v1';
+  if (!(await getDb().one('SELECT name FROM _migrations WHERE name = $1', [INCIDENT_REVIEW_REVISION]))) {
+    await runSql(`
+      ALTER TABLE project_incidents ADD COLUMN IF NOT EXISTS reporter_employee_id text REFERENCES employees(id);
+      ALTER TABLE project_incidents ADD COLUMN IF NOT EXISTS review_status text NOT NULL DEFAULT 'approved';
+      ALTER TABLE project_incidents ADD COLUMN IF NOT EXISTS review_note text;
+      ALTER TABLE project_incidents ADD COLUMN IF NOT EXISTS reviewed_by bigint REFERENCES users(id);
+      ALTER TABLE project_incidents ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
+      ALTER TABLE project_incidents DROP CONSTRAINT IF EXISTS project_incidents_review_status_check;
+      ALTER TABLE project_incidents ADD CONSTRAINT project_incidents_review_status_check CHECK (review_status IN ('pending','approved','rejected'));
+      ALTER TABLE project_incidents ALTER COLUMN excluded_from_accountability SET DEFAULT false;
+    `);
+    await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [INCIDENT_REVIEW_REVISION]);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {

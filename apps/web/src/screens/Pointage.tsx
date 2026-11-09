@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import { api, type Dashboard as DashboardType, type Employee, type KioskIdentify, type PunchResult, type PunchType, type User } from '../lib/api';
-import { QR_PREFIX, qrDataUrl } from '../lib/qr';
+import { QR_PREFIX, getCachedQr, qrDataUrl } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { initials } from '../lib/labels';
 import { Banner, Button, Card, Modal, PasswordInput, Spinner, cx } from '../components/ui';
@@ -66,25 +66,37 @@ const PUNCH_LABEL: Record<PunchType, string> = {
 };
 
 function PunchReceipt({ result }: { result: PunchResult }) {
-  const [src, setSrc] = useState<string | null>(null);
+  const qrKey = `${QR_PREFIX.punch}${result.employee.id}:${result.serverAt}`;
+  const [src, setSrc] = useState<string | null>(() => getCachedQr(qrKey, 200) ?? null);
   useEffect(() => {
     let cancelled = false;
-    void qrDataUrl(`${QR_PREFIX.punch}${result.employee.id}:${result.serverAt}`, 200).then((value) => {
+    const cached = getCachedQr(qrKey, 200);
+    if (cached) {
+      setSrc(cached);
+      return;
+    }
+    void qrDataUrl(qrKey, 200).then((value) => {
       if (!cancelled) setSrc(value);
     });
     return () => {
       cancelled = true;
     };
-  }, [result]);
+  }, [qrKey]);
 
   return (
     <div
       className="receipt-page"
-      style={{ fontFamily: '"IBM Plex Sans", sans-serif', background: '#ffffff', color: '#111827' }}
+      style={{
+        fontFamily: '"IBM Plex Sans", -apple-system, sans-serif',
+        background: '#ffffff',
+        color: '#111827',
+        breakInside: 'avoid',
+        pageBreakInside: 'avoid',
+      }}
     >
       <div style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '2mm', marginBottom: '3mm' }} className="flex items-center justify-between">
         <div>
-          <p style={{ fontSize: '10pt', fontWeight: 700, margin: 0, color: '#ff6603' }}>C.F.T. des Bénédictins du Mont Fébé</p>
+          <p style={{ fontSize: '10pt', fontWeight: 800, margin: 0, color: '#ff6603' }}>C.F.T. des Bénédictins du Mont Fébé</p>
           <p style={{ fontSize: '7pt', color: '#6b7280', margin: '0.5mm 0 0' }}>
             Ticket de pointage · {PUNCH_LABEL[result.punchType]}
           </p>
@@ -117,11 +129,17 @@ function PunchReceipt({ result }: { result: PunchResult }) {
         </tbody>
       </table>
       {src ? (
-        <div style={{ marginTop: '3mm', textAlign: 'center' }}>
-          <img src={src} alt="QR pointage" style={{ width: '18mm', height: '18mm' }} />
+        <div data-qr-ready="true" style={{ marginTop: '3mm', textAlign: 'center' }}>
+          <img
+            src={src}
+            alt="QR pointage"
+            style={{ width: '18mm', height: '18mm', margin: '0 auto', imageRendering: '-webkit-optimize-contrast' }}
+          />
           <p style={{ fontSize: '6pt', color: '#6b7280', margin: '1mm 0 0' }}>Archive immuable du serveur</p>
         </div>
-      ) : null}
+      ) : (
+        <div data-qr-pending="true" style={{ height: '18mm' }} />
+      )}
     </div>
   );
 }

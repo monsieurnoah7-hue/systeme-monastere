@@ -13,7 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { Project, ProjectsResponse, Employee, ProjectIncident, ProjectWorkPlanAllocation } from '../lib/api';
-import { createProject, updateProject, deleteProject, addProjectWorkLog, fetchProjectIncidents, addProjectIncident } from '../lib/api';
+import { createProject, updateProject, deleteProject, addProjectWorkLog, fetchProjectIncidents, addProjectIncident, reviewProjectIncident } from '../lib/api';
 import { Button, Card, Modal, Banner, Spinner, cx } from './ui';
 
 export function ProjectsView({
@@ -22,6 +22,8 @@ export function ProjectsView({
   canCreate,
   canEdit,
   canDelete,
+  canReportIncident,
+  currentEmployeeId,
   onRefresh,
 }: {
   data: ProjectsResponse | null;
@@ -29,6 +31,8 @@ export function ProjectsView({
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  canReportIncident: boolean;
+  currentEmployeeId: string | null;
   onRefresh: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<'production' | 'planning'>('production');
@@ -223,8 +227,8 @@ export function ProjectsView({
         kind: incidentForm.kind,
         description: incidentForm.description.trim(),
         delay_days: Number(incidentForm.delay_days) || 0,
-        employee_ids: incidentForm.employee_id ? [incidentForm.employee_id] : [],
-        excluded_from_accountability: incidentForm.kind !== 'unjustified_absence',
+        employee_ids: [],
+        excluded_from_accountability: false,
         event_date: incidentForm.event_date,
       });
       setIncidents((current) => [incident, ...current]);
@@ -232,6 +236,23 @@ export function ProjectsView({
       onRefresh();
     } catch (e) {
       setIncidentError(e instanceof Error ? e.message : 'Impossible d’enregistrer l’imprévu.');
+    } finally {
+      setIncidentBusy(false);
+    }
+  }
+
+  async function handleReviewIncident(incident: ProjectIncident, decision: 'approved' | 'rejected') {
+    if (!incidentProject) return;
+    const note = decision === 'rejected' ? window.prompt('Motif du refus (obligatoire) :') : '';
+    if (decision === 'rejected' && (!note || !note.trim())) return;
+    setIncidentBusy(true);
+    setIncidentError(null);
+    try {
+      const updated = await reviewProjectIncident(incidentProject.id, incident.id, decision, note?.trim());
+      setIncidents((current) => current.map((item) => item.id === updated.id ? updated : item));
+      onRefresh();
+    } catch (e) {
+      setIncidentError(e instanceof Error ? e.message : 'Impossible de traiter le signalement.');
     } finally {
       setIncidentBusy(false);
     }
@@ -570,9 +591,10 @@ export function ProjectsView({
                         <span>Pointer Heures</span>
                       </button>}
 
-                      {canEdit && <button type="button" onClick={() => void openIncidentLog(p)} className="rounded-lg border border-line px-3 py-2 text-[11px] font-semibold text-ink-soft hover:bg-paper-2 hover:text-ink">
+                      {!canEdit && canReportIncident && currentEmployeeId && p.assigned_worker_ids.includes(currentEmployeeId) && <button type="button" onClick={() => void openIncidentLog(p)} className="rounded-lg border border-line px-3 py-2 text-[11px] font-semibold text-ink-soft hover:bg-paper-2 hover:text-ink">
                         Signaler un imprévu
                       </button>}
+                      {canEdit && <button type="button" onClick={() => void openIncidentLog(p)} className="rounded-lg border border-line px-3 py-2 text-[11px] font-semibold text-ink-soft hover:bg-paper-2 hover:text-ink">Voir les signalements</button>}
 
                       {(canEdit || canDelete) && (
                         <div className="flex items-center gap-1">
@@ -864,23 +886,17 @@ export function ProjectsView({
 
       <Modal
         open={!!incidentProject}
-        title={`Imprévus · ${incidentProject?.code ?? ''}`}
+        title={`${canEdit ? 'Signalements à examiner' : 'Signaler un imprévu'} · ${incidentProject?.code ?? ''}`}
         onClose={() => setIncidentProject(null)}
-        footer={<><Button variant="ghost" onClick={() => setIncidentProject(null)}>Fermer</Button><Button variant="primary" disabled={incidentBusy || !incidentForm.description.trim()} onClick={() => void handleAddIncident()}>{incidentBusy ? <Spinner /> : 'Enregistrer l’imprévu'}</Button></>}
+        footer={<><Button variant="ghost" onClick={() => setIncidentProject(null)}>Fermer</Button>{!canEdit && <Button variant="primary" disabled={incidentBusy || !incidentForm.description.trim()} onClick={() => void handleAddIncident()}>{incidentBusy ? <Spinner /> : 'Envoyer le signalement'}</Button>}</>}
       >
         <div className="space-y-4 text-sm">
-          <p className="rounded-lg border border-line bg-paper-2/50 p-3 text-xs text-ink-soft">Les jours fériés chômés et les jours non travaillés du profil sont exclus du décompte. Les coupures, changements de commande, absences et accidents sont consignés ici pour ajuster l’échéance. Cette estimation n’entraîne aucune retenue salariale.</p>
+          {!canEdit && <p className="rounded-lg border border-line bg-paper-2/50 p-3 text-xs text-ink-soft">Votre déclaration sera horodatée et transmise à la Direction. Elle ne modifie pas le délai du projet avant validation.</p>}
           {incidentError && <Banner tone="error">{incidentError}</Banner>}
-          <div className="grid gap-3 sm:grid-cols-2">
+          {!canEdit && <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-semibold text-ink-soft">Type d’imprévu
               <select value={incidentForm.kind} onChange={(e) => setIncidentForm((f) => ({ ...f, kind: e.target.value as ProjectIncident['kind'] }))} className="mt-1 h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink">
-                <option value="power_outage">Coupure d’électricité</option><option value="scope_change">Travaux supplémentaires / changement de commande</option><option value="justified_absence">Absence justifiée</option><option value="unjustified_absence">Absence non justifiée</option><option value="work_accident">Accident de travail</option><option value="other">Autre imprévu</option>
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-ink-soft">Personne concernée
-              <select value={incidentForm.employee_id} onChange={(e) => setIncidentForm((f) => ({ ...f, employee_id: e.target.value }))} className="mt-1 h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink">
-                <option value="">Toute l’équipe affectée</option>
-                {incidentProject?.assigned_worker_ids.map((id, index) => <option key={id} value={id}>{incidentProject.assigned_worker_names[index] || id}</option>)}
+                <option value="power_outage">Coupure d’électricité</option><option value="scope_change">Travaux supplémentaires</option><option value="justified_absence">Absence justifiée</option><option value="work_accident">Accident de travail</option><option value="other">Autre imprévu</option>
               </select>
             </label>
             <label className="text-xs font-semibold text-ink-soft">Date de l’événement
@@ -889,14 +905,13 @@ export function ProjectsView({
             <label className="text-xs font-semibold text-ink-soft">Jours ouvrés perdus
               <input type="number" min="0" max="365" step="1" value={incidentForm.delay_days} onChange={(e) => setIncidentForm((f) => ({ ...f, delay_days: e.target.value }))} className="mt-1 h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink" />
             </label>
-          </div>
-          <label className="block text-xs font-semibold text-ink-soft">Description / référence
+          </div>}
+          {!canEdit && <label className="block text-xs font-semibold text-ink-soft">Description
             <textarea value={incidentForm.description} onChange={(e) => setIncidentForm((f) => ({ ...f, description: e.target.value }))} rows={2} maxLength={500} className="mt-1 w-full rounded-lg border border-line bg-surface p-3 text-sm text-ink" placeholder="Ex. panne du générateur, période et justificatif…" />
-          </label>
-          {incidentForm.kind === 'unjustified_absence' && <p className="rounded-lg bg-amber-wash p-3 text-xs text-amber">Cette absence reste imputable à la personne concernée et ne décale pas l’échéance du ratio.</p>}
+          </label>}
           <section className="border-t border-line pt-3" aria-label="Historique des imprévus">
-            <h3 className="font-semibold text-ink">Historique</h3>
-            {incidents.length === 0 ? <p className="mt-2 text-xs text-ink-faint">Aucun imprévu enregistré.</p> : <ul className="mt-2 space-y-2">{incidents.map((incident) => <li key={incident.id} className="rounded-lg border border-line p-3 text-xs"><div className="flex justify-between gap-3 font-semibold text-ink"><span>{incident.kind.replaceAll('_', ' ')}</span><span>{incident.delay_days} j</span></div><p className="mt-1 text-ink-soft">{incident.event_date} · {incident.description}</p><p className="mt-1 text-ink-faint">{incident.excluded_from_accountability ? 'Décale l’échéance imputable' : 'Reste imputable à l’exécutant'}</p></li>)}</ul>}
+            <h3 className="font-semibold text-ink">{canEdit ? 'À traiter et historique' : 'Mes signalements'}</h3>
+            {incidents.length === 0 ? <p className="mt-2 text-xs text-ink-faint">Aucun signalement enregistré.</p> : <ul className="mt-2 space-y-2">{incidents.map((incident) => <li key={incident.id} className="rounded-lg border border-line p-3 text-xs"><div className="flex flex-wrap justify-between gap-2 font-semibold text-ink"><span>{incident.kind.replaceAll('_', ' ')}</span><span>{incident.delay_days} j · {incident.review_status === 'pending' ? 'En attente' : incident.review_status === 'approved' ? 'Accepté' : 'Refusé'}</span></div><p className="mt-1 text-ink-soft">{incident.reporter_name || incident.reporter_employee_id || 'Travailleur'} · {incident.created_at ? new Date(incident.created_at).toLocaleString('fr-FR') : incident.event_date}</p><p className="mt-1 text-ink-soft">Événement du {incident.event_date} · {incident.description}</p>{incident.review_note && <p className="mt-1 text-ink-faint">Décision : {incident.review_note}</p>}{canEdit && incident.review_status === 'pending' && <div className="mt-3 flex gap-2"><Button size="sm" variant="primary" disabled={incidentBusy} onClick={() => void handleReviewIncident(incident, 'approved')}>Accepter</Button><Button size="sm" variant="secondary" disabled={incidentBusy} onClick={() => void handleReviewIncident(incident, 'rejected')}>Refuser</Button></div>}</li>)}</ul>}
           </section>
         </div>
       </Modal>

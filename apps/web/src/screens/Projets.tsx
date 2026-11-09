@@ -20,6 +20,7 @@ export default function Projets({
   const canCreate = isDirection || Boolean(permissions?.['projects.create']);
   const canEdit = isDirection || Boolean(permissions?.['projects.edit']);
   const canDelete = isDirection || Boolean(permissions?.['projects.delete']);
+  const canReportIncident = Boolean(permissions?.['projects.report_incident']);
 
   const loadData = useCallback(async () => {
     try {
@@ -70,6 +71,8 @@ export default function Projets({
           canCreate={canCreate}
           canEdit={canEdit}
           canDelete={canDelete}
+          canReportIncident={canReportIncident}
+          currentEmployeeId={user.employee_id}
           onRefresh={loadData}
         />
       )}

@@ -618,6 +618,7 @@ export type Dashboard = {
     totalCount: number;
     activeCount: number;
     delayedCount: number;
+    pendingIncidentCount: number;
     overtimeHours: number;
     financialDamageFcfa: number | null;
     attention: {
@@ -1072,6 +1073,13 @@ export type ProjectIncident = {
   employee_ids: string[];
   excluded_from_accountability: boolean;
   event_date: string;
+  reporter_employee_id?: string | null;
+  reporter_name?: string | null;
+  review_status?: 'pending' | 'approved' | 'rejected';
+  review_note?: string | null;
+  reviewed_by?: number | null;
+  reviewed_at?: string | null;
+  created_at?: string;
 };
 
 export type ProjectsResponse = {
@@ -1120,6 +1128,13 @@ export async function fetchProjectIncidents(id: string): Promise<ProjectIncident
 export async function addProjectIncident(id: string, data: Omit<ProjectIncident, 'id'>): Promise<ProjectIncident> {
   const res = await api<{ incident: ProjectIncident }>(`/api/projects/${encodeURIComponent(id)}/incidents`, {
     method: 'POST', body: JSON.stringify(data),
+  });
+  return res.incident;
+}
+
+export async function reviewProjectIncident(id: string, incidentId: number, decision: 'approved' | 'rejected', note?: string): Promise<ProjectIncident> {
+  const res = await api<{ incident: ProjectIncident }>(`/api/projects/${encodeURIComponent(id)}/incidents/${incidentId}/review`, {
+    method: 'PATCH', body: JSON.stringify({ decision, note }),
   });
   return res.incident;
 }
