@@ -13,7 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { Project, ProjectsResponse, Employee, ProjectIncident, ProjectWorkPlanAllocation } from '../lib/api';
-import { createProject, updateProject, deleteProject, addProjectWorkLog, fetchProjectIncidents, addProjectIncident, reviewProjectIncident } from '../lib/api';
+import { createProject, updateProject, deleteProject, fetchProjectIncidents, addProjectIncident, reviewProjectIncident } from '../lib/api';
 import { Button, Card, Modal, Banner, Spinner, cx } from './ui';
 
 export function ProjectsView({
@@ -47,13 +47,6 @@ export function ProjectsView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Quick Hours Modal
-  const [quickHoursProject, setQuickHoursProject] = useState<Project | null>(null);
-  const [quickHoursValue, setQuickHoursValue] = useState<string>('');
-  const [quickHoursEmployeeId, setQuickHoursEmployeeId] = useState('');
-  const [quickHoursDate, setQuickHoursDate] = useState(new Date().toISOString().slice(0, 10));
-  const [quickHoursNote, setQuickHoursNote] = useState('');
-  const [quickHoursBusy, setQuickHoursBusy] = useState(false);
   const [incidentProject, setIncidentProject] = useState<Project | null>(null);
   const [incidents, setIncidents] = useState<ProjectIncident[]>([]);
   const [incidentBusy, setIncidentBusy] = useState(false);
@@ -167,28 +160,6 @@ export function ProjectsView({
       onRefresh();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Erreur suppression');
-    }
-  }
-
-  async function handleAddHours() {
-    if (!quickHoursProject || !quickHoursEmployeeId) return;
-    const added = Number(quickHoursValue);
-    if (isNaN(added) || added <= 0) return;
-    setQuickHoursBusy(true);
-    try {
-      await addProjectWorkLog(quickHoursProject.id, {
-        employee_id: quickHoursEmployeeId,
-        work_date: quickHoursDate,
-        hours: added,
-        note: quickHoursNote.trim() || null,
-      });
-      setQuickHoursProject(null);
-      setQuickHoursNote('');
-      onRefresh();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Erreur');
-    } finally {
-      setQuickHoursBusy(false);
     }
   }
 
@@ -575,22 +546,6 @@ export function ProjectsView({
 
                     {/* Actions Card */}
                     <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
-                      {canEdit && <button
-                        type="button"
-                        disabled={!p.assigned_worker_ids?.length}
-                        title={!p.assigned_worker_ids?.length ? 'Affectez d’abord au moins un exécutant' : 'Saisir les heures réellement travaillées'}
-                        onClick={() => {
-                          setQuickHoursProject(p);
-                          setQuickHoursValue('');
-                          setQuickHoursEmployeeId(p.assigned_worker_ids?.[0] || '');
-                          setQuickHoursDate(new Date().toISOString().slice(0, 10));
-                        }}
-                        className="flex items-center gap-1.5 rounded-lg border border-line bg-transparent px-3 py-2 text-[11px] font-semibold text-ink-soft transition-colors hover:bg-paper-2 hover:text-ink cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <Clock size={12} />
-                        <span>Pointer Heures</span>
-                      </button>}
-
                       {!canEdit && canReportIncident && currentEmployeeId && p.assigned_worker_ids.includes(currentEmployeeId) && <button type="button" onClick={() => void openIncidentLog(p)} className="rounded-lg border border-line px-3 py-2 text-[11px] font-semibold text-ink-soft hover:bg-paper-2 hover:text-ink">
                         Signaler un imprévu
                       </button>}
@@ -792,56 +747,6 @@ export function ProjectsView({
               })}
             </div>
           </div>
-        </div>
-      </Modal>
-
-      {/* MODAL RAPIDE DE POINTAGE D'HEURES */}
-      <Modal
-        open={!!quickHoursProject}
-        title={`Pointer des Heures sur : ${quickHoursProject?.code}`}
-        onClose={() => setQuickHoursProject(null)}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setQuickHoursProject(null)}>Annuler</Button>
-            <Button
-              variant="primary"
-              disabled={quickHoursBusy || !quickHoursEmployeeId || !quickHoursValue}
-              onClick={() => void handleAddHours()}
-              className="!bg-ink !text-paper hover:!bg-surface-3 hover:!text-ink"
-            >
-              {quickHoursBusy ? <Spinner /> : 'Ajouter au Cumul'}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3 text-xs">
-          <p className="text-ink-soft">
-            Enregistrez le temps réellement travaillé sur ce projet. La capacité journalière est vérifiée sur l’ensemble des projets affectés à cette personne.
-          </p>
-          <div>
-            <label className="mb-1 block font-semibold text-ink">Exécutant</label>
-            <select value={quickHoursEmployeeId} onChange={(e) => setQuickHoursEmployeeId(e.target.value)} className="h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink">
-              <option value="">Choisir un exécutant</option>
-              {quickHoursProject?.assigned_worker_ids.map((id, index) => <option key={id} value={id}>{quickHoursProject.assigned_worker_names[index] || employees.find((employee) => String(employee.id) === id)?.full_name || id}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block font-semibold text-ink">Date de travail</label>
-            <input type="date" value={quickHoursDate} onChange={(e) => setQuickHoursDate(e.target.value)} className="h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink" />
-          </div>
-          <div>
-            <label className="mb-1 block font-semibold text-ink">Heures effectuées</label>
-            <input
-              type="number"
-              value={quickHoursValue}
-              onChange={(e) => setQuickHoursValue(e.target.value)}
-              placeholder="Ex : 8"
-              className="h-10 w-full rounded-lg border border-line bg-surface px-3 font-mono font-bold text-xs text-ink focus:border-amber focus:outline-none"
-            />
-          </div>
-          <label className="block font-semibold text-ink">Motif (obligatoire un jour de repos ou férié)
-            <textarea value={quickHoursNote} onChange={(e) => setQuickHoursNote(e.target.value)} rows={2} maxLength={500} className="mt-1 w-full rounded-lg border border-line bg-surface p-3 text-sm text-ink" placeholder="Ex. intervention exceptionnelle autorisée" />
-          </label>
         </div>
       </Modal>
 

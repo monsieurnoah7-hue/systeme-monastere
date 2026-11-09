@@ -432,6 +432,7 @@ export function Drawer({
   onClose,
   children,
   wide,
+  bodyClassName,
 }: {
   open: boolean;
   title: string;
@@ -439,6 +440,7 @@ export function Drawer({
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  bodyClassName?: string;
 }) {
   return (
     <DrawerRoot
@@ -475,7 +477,7 @@ export function Drawer({
             </button>
           </div>
         </DrawerHeader>
-        <div className="scroll-thin flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className={cx('scroll-thin flex-1 overflow-y-auto px-5 py-4', bodyClassName)}>{children}</div>
       </DrawerContent>
     </DrawerRoot>
   );
