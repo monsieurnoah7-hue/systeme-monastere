@@ -252,6 +252,14 @@ CREATE INDEX IF NOT EXISTS audit_entity_idx ON audit_log(entity, entity_id);
 
 // Idempotent adjustments for databases created before breaks/permissions/magasins/leaves/tools accounting.
 export const MIGRATION_DDL = `
+CREATE TABLE IF NOT EXISTS offline_mutations (
+  user_id bigint NOT NULL,
+  mutation_id text NOT NULL,
+  response jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, mutation_id)
+);
+
 CREATE TABLE IF NOT EXISTS terminal_authorizations (
   terminal_id text NOT NULL REFERENCES terminals(id) ON DELETE CASCADE,
   user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,

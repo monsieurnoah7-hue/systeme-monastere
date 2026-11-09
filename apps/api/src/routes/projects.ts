@@ -6,6 +6,7 @@ import { actorId, actorName, requireAuth } from '../middleware/auth.js';
 import { hasPermission, requirePerm } from '../middleware/permissions.js';
 import { DEFAULT_PERMISSIONS } from '../lib/permissions.js';
 import { randomUUID } from 'node:crypto';
+import { withOfflineIdempotency } from '../lib/offline-idempotency.js';
 
 type WorkPlanEntry = { employee_id: string; weekday: number; planned_hours: number };
 
@@ -650,20 +651,23 @@ projectsRoutes.post('/:id/incidents', requireAuth, requirePerm('projects.report_
   if (await hasPermission(c.get('auth').user.role, 'projects.edit')) return c.json({ error: 'Les responsables traitent les signalements ; ils ne les déclarent pas au nom des travailleurs.' }, 403);
   if (!reporterId || !project.assigned_worker_ids.includes(reporterId)) return c.json({ error: 'Seul un travailleur affecté peut signaler un imprévu sur ce projet.' }, 403);
   const employeeIds = [reporterId];
-  const incident = await db.one(
-    `INSERT INTO project_incidents (project_id, kind, description, delay_days, employee_ids, excluded_from_accountability, event_date, created_by, reporter_employee_id, review_status)
-     VALUES ($1, $2, $3, $4, $5, false, $6, $7, $8, 'pending')
-     RETURNING id, project_id, kind, description, delay_days, employee_ids, excluded_from_accountability,
-               event_date::text AS event_date, created_at::text AS created_at,
-               reporter_employee_id, (SELECT full_name FROM employees e WHERE e.id = project_incidents.reporter_employee_id) AS reporter_name,
-               review_status, review_note, reviewed_by, reviewed_at::text AS reviewed_at`,
-    [projectId, parsed.data.kind, parsed.data.description, parsed.data.delay_days, employeeIds, parsed.data.event_date, actorId(c), reporterId],
-  );
-  await writeAudit(db, {
-    entity: 'project_incident', entityId: String((incident as any)?.id ?? ''), action: 'create', after: incident,
-    actorId: actorId(c), actorName: actorName(c), reason: parsed.data.description,
+  const result = await withOfflineIdempotency(db, c.get('auth').user.id, c.req.header('Idempotency-Key'), async (tx) => {
+    const incident = await tx.one(
+      `INSERT INTO project_incidents (project_id, kind, description, delay_days, employee_ids, excluded_from_accountability, event_date, created_by, reporter_employee_id, review_status)
+       VALUES ($1, $2, $3, $4, $5, false, $6, $7, $8, 'pending')
+       RETURNING id, project_id, kind, description, delay_days, employee_ids, excluded_from_accountability,
+                 event_date::text AS event_date, created_at::text AS created_at,
+                 reporter_employee_id, (SELECT full_name FROM employees e WHERE e.id = project_incidents.reporter_employee_id) AS reporter_name,
+                 review_status, review_note, reviewed_by, reviewed_at::text AS reviewed_at`,
+      [projectId, parsed.data.kind, parsed.data.description, parsed.data.delay_days, employeeIds, parsed.data.event_date, actorId(c), reporterId],
+    );
+    await writeAudit(tx, {
+      entity: 'project_incident', entityId: String((incident as any)?.id ?? ''), action: 'create', after: incident,
+      actorId: actorId(c), actorName: actorName(c), reason: parsed.data.description,
+    });
+    return { incident };
   });
-  return c.json({ incident }, 201);
+  return c.json(result.value, 201);
 });
 
 projectsRoutes.patch('/:id/incidents/:incidentId/review', requireAuth, requirePerm('projects.edit'), async (c) => {

@@ -1,9 +1,11 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { api, type ScanResult, type User } from './lib/api';
+import { api, clearApiCache, isApiCacheFresh, setApiCacheUser, syncOfflineMutations, type ScanResult, type User } from './lib/api';
 import { computeAllowedViews, Shell, type ViewId } from './components/Shell';
 import { EmptyState, Spinner, ToastHost, useToast } from './components/ui';
 import { UndoProvider } from './components/UndoToast';
 import { Login } from './screens/Login';
+import { ApiError } from './lib/api';
+import { clearOfflinePermissions, clearOfflineUser, getOfflinePermissions, getOfflineUser, isOfflineLogoutPending, saveOfflinePermissions, saveOfflineUser, setOfflineLogoutPending } from './lib/offline';
 
 const Scanner = lazy(() => import('./components/Scanner').then((m) => ({ default: m.Scanner })));
 const Pointage = lazy(() => import('./screens/Pointage').then((m) => ({ default: m.Pointage })));
@@ -18,34 +20,132 @@ const Parametres = lazy(() => import('./screens/Parametres').then((m) => ({ defa
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [booting, setBooting] = useState(true);
 
   useEffect(() => {
-    api<{ user: User | null }>('/api/auth/me')
-      .then((res) => setUser(res.user))
-      .catch(() => setUser(null));
+    let cancelled = false;
+    async function bootstrap() {
+      if (isOfflineLogoutPending()) {
+        if (navigator.onLine) {
+          try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* révoqué au prochain démarrage connecté */ }
+          setOfflineLogoutPending(false);
+        }
+        clearOfflineUser();
+        if (!cancelled) {
+          setApiCacheUser(null);
+          setUser(null);
+          setBooting(false);
+        }
+        return;
+      }
+      if (!navigator.onLine) {
+        const offlineUser = getOfflineUser<User>();
+        if (offlineUser) setApiCacheUser(offlineUser.id);
+        if (!cancelled) {
+          setUser(offlineUser);
+          setBooting(false);
+        }
+        return;
+      }
+      try {
+        const res = await api<{ user: User | null }>('/api/auth/me', { timeoutMs: 4_000 });
+        if (res.user) {
+          setApiCacheUser(res.user.id);
+          saveOfflineUser(res.user);
+        } else {
+          clearOfflineUser();
+          setApiCacheUser(null);
+        }
+        if (!cancelled) setUser(res.user);
+      } catch (error) {
+        const offlineUser = error instanceof ApiError ? null : getOfflineUser<User>();
+        if (offlineUser) setApiCacheUser(offlineUser.id);
+        if (!cancelled) setUser(offlineUser);
+      } finally {
+        if (!cancelled) setBooting(false);
+      }
+    }
+    void bootstrap();
 
     function handleUserUpdate(e: CustomEvent<User>) {
       if (e.detail) {
+        setApiCacheUser(e.detail.id);
+        saveOfflineUser(e.detail);
         setUser((prev) => (prev ? { ...prev, ...e.detail } : e.detail));
       }
     }
     window.addEventListener('auth:user-updated' as any, handleUserUpdate);
-    return () => window.removeEventListener('auth:user-updated' as any, handleUserUpdate);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('auth:user-updated' as any, handleUserUpdate);
+    };
   }, []);
 
   async function logout() {
+    const currentUserId = user?.id;
+    let serverLogoutConfirmed = false;
     try {
       await api('/api/auth/logout', { method: 'POST' });
+      serverLogoutConfirmed = true;
     } catch {
       // la session est déjà close côté serveur
     }
+    setOfflineLogoutPending(!serverLogoutConfirmed);
+    if (currentUserId !== undefined) {
+      clearApiCache();
+      clearOfflinePermissions(currentUserId);
+    }
+    clearOfflineUser();
+    setApiCacheUser(null);
     setUser(null);
+  }
+
+  function acceptLogin(nextUser: User) {
+    setOfflineLogoutPending(false);
+    setApiCacheUser(nextUser.id);
+    saveOfflineUser(nextUser);
+    setUser(nextUser);
+  }
+
+  useEffect(() => {
+    if (!user) return;
+    const synchronize = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const session = await api<{ user: User | null }>('/api/auth/me', { bypassCache: true });
+        if (session.user?.id !== user.id) {
+          if (!session.user) {
+            clearOfflineUser();
+            setApiCacheUser(null);
+            setUser(null);
+          }
+          return;
+        }
+        await syncOfflineMutations(user.id);
+        window.dispatchEvent(new CustomEvent('mf-refresh-data'));
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          clearOfflineUser();
+          setApiCacheUser(null);
+          setUser(null);
+          return;
+        }
+        // Réseau instable ou session expirée : la file reste locale et sera retentée après reconnexion.
+      }
+    };
+    synchronize();
+    window.addEventListener('online', synchronize);
+    return () => window.removeEventListener('online', synchronize);
+  }, [user?.id]);
+
+  if (booting) {
+    return <div className="grid min-h-full place-items-center bg-paper"><Spinner /></div>;
   }
 
   if (!user) {
     return (
       <ToastHost>
-        <Login onLogin={setUser} />
+        <Login onLogin={acceptLogin} />
       </ToastHost>
     );
   }
@@ -68,9 +168,19 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     function fetchPermissions() {
       api<{ role: string; superAdmin: boolean; permissions: Record<string, boolean> }>('/api/permissions/me', { bypassCache: true })
         .then((res) => {
-          if (!cancelled && res?.permissions) setPermissions(res.permissions);
+          if (!cancelled && res?.permissions) {
+            if (isApiCacheFresh('/api/permissions/me', 12 * 60 * 60 * 1000)) {
+              setPermissions(res.permissions);
+              saveOfflinePermissions(user.id, res.permissions);
+            } else {
+              setPermissions(getOfflinePermissions(user.id) ?? {});
+            }
+          }
         })
-        .catch(() => {});
+        .catch(() => {
+          const saved = getOfflinePermissions(user.id);
+          if (!cancelled) setPermissions(saved ?? {});
+        });
     }
     fetchPermissions();
 
@@ -89,7 +199,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       document.removeEventListener('visibilitychange', onVisible);
       window.clearInterval(refreshTimer);
     };
-  }, [user.role]);
+  }, [user.id, user.role]);
 
   const allowed = useMemo(() => computeAllowedViews(user.role, permissions), [user.role, permissions]);
   const defaultView: ViewId = user.role === 'travailleur' ? 'espace' : (allowed[0] ?? 'espace');

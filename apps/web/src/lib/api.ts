@@ -1,3 +1,5 @@
+import { enqueueOfflineMutation, getOfflinePermissions, markServerSync, type OfflineMutation, listOfflineMutations, recordOfflineSync, removeOfflineMutation, updateOfflineMutation } from './offline';
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -22,6 +24,7 @@ function parseApiJson(text: string, status: number): Record<string, unknown> | n
 export type ApiOptions = RequestInit & {
   bypassCache?: boolean;
   cacheTtlMs?: number;
+  timeoutMs?: number;
 };
 
 type CacheEntry<T = unknown> = {
@@ -33,6 +36,24 @@ type CacheEntry<T = unknown> = {
 const RAM_CACHE = new Map<string, CacheEntry>();
 const IN_FLIGHT = new Map<string, Promise<unknown>>();
 const PERSIST_PREFIX = 'mf_cache_v2_';
+let cacheUserId: number | null = null;
+
+export function setApiCacheUser(userId: number | null): void {
+  if (cacheUserId !== userId) {
+    RAM_CACHE.clear();
+    IN_FLIGHT.clear();
+  }
+  cacheUserId = userId;
+}
+
+export function isApiCacheFresh(path: string, maxAgeMs: number): boolean {
+  const entry = RAM_CACHE.get(path);
+  return Boolean(entry && Date.now() - entry.timestamp <= maxAgeMs);
+}
+
+function cacheKey(path: string): string {
+  return `${PERSIST_PREFIX}${cacheUserId ?? 'public'}_${path}`;
+}
 
 function isPersistable(path: string): boolean {
   return (
@@ -42,15 +63,27 @@ function isPersistable(path: string): boolean {
     path.startsWith('/api/employees') ||
     path.startsWith('/api/settings') ||
     path.startsWith('/api/dashboard') ||
-    path.startsWith('/api/me')
+    path.startsWith('/api/me') ||
+    path.startsWith('/api/projects') ||
+    path.startsWith('/api/leaves') ||
+    path.startsWith('/api/attendance') ||
+    path.startsWith('/api/loans') ||
+    path.startsWith('/api/kits') ||
+    path.startsWith('/api/fleet') ||
+    path === '/api/permissions/me'
   );
 }
 
 function getStoredCache<T>(path: string): CacheEntry<T> | null {
   try {
-    const raw = localStorage.getItem(PERSIST_PREFIX + path);
+    const raw = localStorage.getItem(cacheKey(path));
     if (!raw) return null;
-    return JSON.parse(raw) as CacheEntry<T>;
+    const entry = JSON.parse(raw) as CacheEntry<T>;
+    if (!entry.timestamp || Date.now() - entry.timestamp > 7 * 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(cacheKey(path));
+      return null;
+    }
+    return entry;
   } catch {
     return null;
   }
@@ -58,7 +91,7 @@ function getStoredCache<T>(path: string): CacheEntry<T> | null {
 
 function setStoredCache(path: string, entry: CacheEntry): void {
   try {
-    localStorage.setItem(PERSIST_PREFIX + path, JSON.stringify(entry));
+    localStorage.setItem(cacheKey(path), JSON.stringify(entry));
   } catch {
     // quota safe
   }
@@ -77,12 +110,15 @@ export function clearApiCache(prefix?: string): void {
   }
 
   for (const k of Array.from(RAM_CACHE.keys())) {
-    if (k.startsWith(prefix)) RAM_CACHE.delete(k);
+    if (k === prefix || k.startsWith(`${prefix}/`) || k.startsWith(`${prefix}?`)) RAM_CACHE.delete(k);
   }
   try {
     const keys = Object.keys(localStorage);
     for (const k of keys) {
-      if (k.startsWith(PERSIST_PREFIX + prefix)) localStorage.removeItem(k);
+      if (!k.startsWith(PERSIST_PREFIX)) continue;
+      const pathStart = k.indexOf('_/api/');
+      const storedPath = pathStart >= 0 ? k.slice(pathStart + 1) : '';
+      if (storedPath === prefix || storedPath.startsWith(`${prefix}/`) || storedPath.startsWith(`${prefix}?`)) localStorage.removeItem(k);
     }
   } catch {}
 }
@@ -98,17 +134,29 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   const isGet = method === 'GET';
   const bypassCache = options.bypassCache ?? false;
   const ttl = options.cacheTtlMs ?? 20_000; // 20s en mémoire
+  const timeoutMs = options.timeoutMs ?? 12_000;
 
   // Mutations (POST, PATCH, PUT, DELETE)
   if (!isGet) {
-    const res = await fetch(path, {
+    const queuePermission = offlineQueuePermission(path, method, options.body);
+    const mutationId = queuePermission ? createMutationId() : undefined;
+    const requestInit: RequestInit = {
       credentials: 'include',
       ...options,
       headers: {
         ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(mutationId ? { 'Idempotency-Key': mutationId } : {}),
         ...(options.headers ?? {}),
       },
-    });
+    };
+    let res: Response;
+    try {
+      res = await fetch(path, requestInit);
+    } catch (error) {
+      const queued = await tryQueueOfflineMutation(path, options.body, mutationId, queuePermission, error);
+      if (queued) return queued as T;
+      throw error;
+    }
     const text = await res.text();
     const data = parseApiJson(text, res.status);
     if (!res.ok) {
@@ -184,7 +232,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const res = await fetch(path, {
@@ -198,6 +246,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       // 304 Not Modified -> Réutilisation immédiate sans re-téléchargement
       if (res.status === 304 && cached) {
         cached.timestamp = Date.now();
+        markServerSync(cacheUserId);
         RAM_CACHE.set(path, cached);
         if (isPersistable(path)) setStoredCache(path, cached);
         return cached.data;
@@ -221,6 +270,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
         timestamp: Date.now(),
       };
       RAM_CACHE.set(path, newEntry as CacheEntry);
+      markServerSync(cacheUserId);
       if (isPersistable(path)) {
         setStoredCache(path, newEntry as CacheEntry);
       }
@@ -228,6 +278,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       return data as T;
     } catch (err) {
       clearTimeout(timeoutId);
+      if (err instanceof ApiError) throw err;
       // Mode dégradé 2G / Réseau coupé : fallback transparent sur le cache local
       if (cached) {
         console.warn(`[Resilience 2G/Hors-ligne] Réseau instable ou lent, données servies depuis le cache pour ${path}`);
@@ -241,6 +292,86 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 
   IN_FLIGHT.set(path, fetchPromise);
   return fetchPromise;
+}
+
+export async function syncOfflineMutations(userId: number): Promise<void> {
+  if (!navigator.onLine) return;
+  for (const item of await listOfflineMutations(userId)) {
+    if (item.state === 'failed') continue;
+    try {
+      const response = await fetch(item.path, {
+        method: item.method,
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': item.id },
+        body: item.body,
+      });
+      const text = await response.text();
+      const result = parseApiJson(text, response.status);
+      if (response.ok) {
+        recordOfflineSync(userId, item);
+        await removeOfflineMutation(item.id);
+        clearApiCache(item.path.split('/').slice(0, 3).join('/'));
+        clearApiCache('/api/dashboard');
+        window.dispatchEvent(new CustomEvent('mf-refresh-data'));
+        window.dispatchEvent(new CustomEvent('offline:mutation-synced', { detail: item }));
+      } else if (response.status === 401) {
+        break;
+      } else if (response.status === 403 || response.status === 409 || response.status === 400) {
+        await updateOfflineMutation(item.id, 'failed', (result?.error as string) ?? `Refus du serveur (${response.status}).`);
+      } else {
+        break;
+      }
+    } catch {
+      break;
+    }
+  }
+  window.dispatchEvent(new CustomEvent('offline:outbox-updated'));
+}
+
+function offlineQueuePermission(path: string, method: string, body: BodyInit | null | undefined): string | null {
+  if (method !== 'POST' || cacheUserId === null || typeof body !== 'string') return null;
+  if (/^\/api\/projects\/[^/]+\/incidents$/.test(path)) return 'projects.report_incident';
+  if (path === '/api/leaves/request-permission' && getOfflineUserHasEmployee()) return 'employee.permission_request';
+  return null;
+}
+
+async function tryQueueOfflineMutation(path: string, body: BodyInit | null | undefined, id: string | undefined, permission: string | null, cause: unknown): Promise<{ queued: true; outbox_id: string } | null> {
+  if (!id || !permission || cacheUserId === null || typeof body !== 'string' || cause instanceof ApiError) return null;
+  if (permission === 'projects.report_incident' && !getOfflinePermissions(cacheUserId)?.[permission]) return null;
+  if (permission === 'employee.permission_request' && !getOfflineUserHasEmployee()) return null;
+
+  const item: OfflineMutation = {
+    id,
+    userId: cacheUserId,
+    path,
+    method: 'POST',
+    body,
+    permission,
+    createdAt: Date.now(),
+    state: 'pending',
+  };
+  try {
+    await enqueueOfflineMutation(item);
+    return { queued: true, outbox_id: id };
+  } catch {
+    return null;
+  }
+}
+
+function getOfflineUserHasEmployee(): boolean {
+  try {
+    const raw = localStorage.getItem('mf_offline_user_v1');
+    const entry = raw ? JSON.parse(raw) as { user?: { employee_id?: string | null } } : null;
+    return Boolean(entry?.user?.employee_id);
+  } catch { return false; }
+}
+
+function createMutationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const value = Math.floor(Math.random() * 16);
+    return (char === 'x' ? value : (value & 0x3) | 0x8).toString(16);
+  });
 }
 
 export type Role = string;
@@ -364,12 +495,12 @@ export async function deleteHoliday(id: string): Promise<void> {
   });
 }
 
-export async function requestWorkerPermission(data: { from_date: string; to_date: string; note: string }): Promise<Leave> {
-  const res = await api<{ leave: Leave }>('/api/leaves/request-permission', {
+export async function requestWorkerPermission(data: { from_date: string; to_date: string; note: string }): Promise<{ leave?: Leave; queued?: boolean }> {
+  const res = await api<{ leave?: Leave; queued?: boolean }>('/api/leaves/request-permission', {
     method: 'POST',
     body: JSON.stringify(data),
   });
-  return res.leave;
+  return res.queued ? { queued: true } : { leave: res.leave };
 }
 
 export async function deleteLeave(id: number): Promise<void> {
@@ -1125,11 +1256,11 @@ export async function fetchProjectIncidents(id: string): Promise<ProjectIncident
   return res.incidents;
 }
 
-export async function addProjectIncident(id: string, data: Omit<ProjectIncident, 'id'>): Promise<ProjectIncident> {
-  const res = await api<{ incident: ProjectIncident }>(`/api/projects/${encodeURIComponent(id)}/incidents`, {
+export async function addProjectIncident(id: string, data: Omit<ProjectIncident, 'id'>): Promise<{ incident?: ProjectIncident; queued?: boolean }> {
+  const res = await api<{ incident?: ProjectIncident; queued?: boolean }>(`/api/projects/${encodeURIComponent(id)}/incidents`, {
     method: 'POST', body: JSON.stringify(data),
   });
-  return res.incident;
+  return res.queued ? { queued: true } : { incident: res.incident };
 }
 
 export async function reviewProjectIncident(id: string, incidentId: number, decision: 'approved' | 'rejected', note?: string): Promise<ProjectIncident> {

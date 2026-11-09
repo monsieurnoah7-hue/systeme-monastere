@@ -51,6 +51,7 @@ export function ProjectsView({
   const [incidents, setIncidents] = useState<ProjectIncident[]>([]);
   const [incidentBusy, setIncidentBusy] = useState(false);
   const [incidentError, setIncidentError] = useState<string | null>(null);
+  const [incidentQueued, setIncidentQueued] = useState(false);
   const [scheduleProject, setScheduleProject] = useState<Project | null>(null);
   const [scheduleRows, setScheduleRows] = useState<ProjectWorkPlanAllocation[]>([]);
   const [scheduleBusy, setScheduleBusy] = useState(false);
@@ -182,6 +183,7 @@ export function ProjectsView({
     setIncidentProject(project);
     setIncidents([]);
     setIncidentError(null);
+    setIncidentQueued(false);
     setIncidentForm({ kind: 'power_outage', description: '', delay_days: '0', event_date: new Date().toISOString().slice(0, 10), employee_id: '' });
     try {
       setIncidents(await fetchProjectIncidents(project.id));
@@ -194,7 +196,7 @@ export function ProjectsView({
     if (!incidentProject || incidentForm.description.trim().length < 3) return;
     setIncidentBusy(true);
     try {
-      const incident = await addProjectIncident(incidentProject.id, {
+      const result = await addProjectIncident(incidentProject.id, {
         kind: incidentForm.kind,
         description: incidentForm.description.trim(),
         delay_days: Number(incidentForm.delay_days) || 0,
@@ -202,9 +204,13 @@ export function ProjectsView({
         excluded_from_accountability: false,
         event_date: incidentForm.event_date,
       });
-      setIncidents((current) => [incident, ...current]);
+      if (result.queued) {
+        setIncidentQueued(true);
+      } else if (result.incident) {
+        setIncidents((current) => [result.incident!, ...current]);
+        onRefresh();
+      }
       setIncidentForm((current) => ({ ...current, description: '', delay_days: '0' }));
-      onRefresh();
     } catch (e) {
       setIncidentError(e instanceof Error ? e.message : 'Impossible d’enregistrer l’imprévu.');
     } finally {
@@ -798,6 +804,7 @@ export function ProjectsView({
         <div className="space-y-4 text-sm">
           {!canEdit && <p className="rounded-lg border border-line bg-paper-2/50 p-3 text-xs text-ink-soft">Votre déclaration sera horodatée et transmise à la Direction. Elle ne modifie pas le délai du projet avant validation.</p>}
           {incidentError && <Banner tone="error">{incidentError}</Banner>}
+          {incidentQueued && <Banner tone="info">Signalement conservé sur cet appareil. Il sera transmis et contrôlé à la reconnexion.</Banner>}
           {!canEdit && <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-semibold text-ink-soft">Type d’imprévu
               <select value={incidentForm.kind} onChange={(e) => setIncidentForm((f) => ({ ...f, kind: e.target.value as ProjectIncident['kind'] }))} className="mt-1 h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink">

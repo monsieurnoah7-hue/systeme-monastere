@@ -149,12 +149,14 @@ export function Espace({
     setPermBusy(true);
     setPermError(null);
     try {
-      await requestWorkerPermission({
+      const result = await requestWorkerPermission({
         from_date: permForm.from_date,
         to_date: permForm.to_date,
         note: permForm.note.trim(),
       });
-      toast('Demande de permission exceptionnelle transmise à la Direction.', 'success');
+      toast(result.queued
+        ? 'Demande enregistrée sur cet appareil. Elle sera transmise à la reconnexion.'
+        : 'Demande de permission exceptionnelle transmise à la Direction.', result.queued ? 'info' : 'success');
       setPermissionModalOpen(false);
       setPermForm({ from_date: '', to_date: '', note: '' });
       void load();

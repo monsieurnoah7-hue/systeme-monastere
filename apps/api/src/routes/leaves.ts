@@ -5,6 +5,7 @@ import { writeAudit } from '../lib/audit.js';
 import { generateCameroonLegalHolidays, type CameroonHoliday } from '../lib/cameroon-holidays.js';
 import { actorId, actorName, requireAuth } from '../middleware/auth.js';
 import { requirePerm } from '../middleware/permissions.js';
+import { withOfflineIdempotency } from '../lib/offline-idempotency.js';
 
 const LEAVE_KINDS = ['conge', 'permission', 'absence'] as const;
 const LEAVE_STATUS = ['pending', 'approved', 'rejected'] as const;
@@ -220,7 +221,7 @@ leavesRoutes.delete('/holidays/:id', requirePerm('leaves.manage'), async (c) => 
 
 // 6. Demande de Permission Exceptionnelle par le Travailleur
 // (Les travailleurs ne peuvent demander qu'une permission exceptionnelle, pas de congé payé)
-leavesRoutes.post('/request-permission', async (c) => {
+leavesRoutes.post('/request-permission', requireAuth, async (c) => {
   const auth = c.get('auth');
   const body = workerPermissionBody.safeParse(await c.req.json().catch(() => ({})));
   if (!body.success) {
@@ -228,7 +229,7 @@ leavesRoutes.post('/request-permission', async (c) => {
   }
 
   // Identifiant travailleur lié au compte
-  const targetEmployeeId = auth?.user?.employee_id || body.data.employee_id;
+  const targetEmployeeId = auth.user.employee_id;
   if (!targetEmployeeId) {
     return c.json({ error: 'Votre compte n’est associé à aucune fiche de travailleur.' }, 403);
   }
@@ -237,29 +238,26 @@ leavesRoutes.post('/request-permission', async (c) => {
   const emp = await db.one<{ id: string; full_name: string }>('SELECT id, full_name FROM employees WHERE id = $1', [targetEmployeeId]);
   if (!emp) return c.json({ error: 'Fiche travailleur introuvable.' }, 404);
 
-  const leave = await db.one<LeaveRow>(
-    `INSERT INTO absences (employee_id, kind, from_date, to_date, note, actor, status)
-     VALUES ($1, 'permission', $2, $3, $4, $5, 'pending') RETURNING *`,
-    [
-      emp.id,
-      body.data.from_date,
-      body.data.to_date,
-      body.data.note.trim(),
-      actorName(c),
-    ],
-  );
+  const result = await withOfflineIdempotency(db, auth.user.id, c.req.header('Idempotency-Key'), async (tx) => {
+    const leave = await tx.one<LeaveRow>(
+      `INSERT INTO absences (employee_id, kind, from_date, to_date, note, actor, status)
+       VALUES ($1, 'permission', $2, $3, $4, $5, 'pending') RETURNING *`,
+      [emp.id, body.data.from_date, body.data.to_date, body.data.note.trim(), actorName(c)],
+    );
 
-  await writeAudit(db, {
-    entity: 'absence',
-    entityId: String(leave?.id ?? ''),
-    action: 'request_permission',
-    after: leave,
-    actorId: actorId(c),
-    actorName: actorName(c),
-    reason: body.data.note.trim(),
+    await writeAudit(tx, {
+      entity: 'absence',
+      entityId: String(leave?.id ?? ''),
+      action: 'request_permission',
+      after: leave,
+      actorId: actorId(c),
+      actorName: actorName(c),
+      reason: body.data.note.trim(),
+    });
+    return { leave };
   });
 
-  return c.json({ leave }, 201);
+  return c.json(result.value, 201);
 });
 
 // 7. Allocation d'un Congé ou Octroi de Permission par la Direction / Superviseur Privilégié

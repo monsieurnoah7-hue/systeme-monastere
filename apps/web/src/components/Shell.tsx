@@ -13,6 +13,8 @@ import {
   Warehouse,
   Wrench,
   X,
+  CloudUpload,
+  WifiOff,
 } from 'lucide-react';
 import type { MyPermissions, Role, User } from '../lib/api';
 import { ROLE_LABEL, initials } from '../lib/labels';
@@ -20,6 +22,7 @@ import { CommandPalette } from './CommandPalette';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from './ui/drawer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { cx } from './ui';
+import { getLastServerSync, getOfflineSyncHistory, listOfflineMutations, type OfflineMutation, type OfflineSyncHistory, updateOfflineMutation } from '../lib/offline';
 
 export type ViewId = 'dashboard' | 'projets' | 'outils' | 'pointage' | 'stock' | 'employes' | 'magasins' | 'espace' | 'parametres';
 
@@ -235,6 +238,11 @@ export function Shell({
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
+  const [failedOfflineCount, setFailedOfflineCount] = useState(0);
+  const [offlineMutations, setOfflineMutations] = useState<OfflineMutation[]>([]);
+  const [offlineHistory, setOfflineHistory] = useState<OfflineSyncHistory[]>([]);
+  const [lastServerSync, setLastServerSync] = useState<number | null>(() => getLastServerSync(user.id));
   const effectiveAllowed = allowedList ?? allowedViews(user.role);
   const items = NAV.filter((item) => effectiveAllowed.includes(item.id));
 
@@ -250,15 +258,27 @@ export function Shell({
     : mobileNavBase;
 
   useEffect(() => {
+    const refreshOutbox = () => {
+      void listOfflineMutations(user.id).then((items) => {
+        setPendingOfflineCount(items.filter((item) => item.state === 'pending').length);
+        setFailedOfflineCount(items.filter((item) => item.state === 'failed').length);
+        setOfflineMutations(items);
+        setOfflineHistory(getOfflineSyncHistory(user.id));
+        setLastServerSync(getLastServerSync(user.id));
+      }).catch(() => { setPendingOfflineCount(0); setFailedOfflineCount(0); });
+    };
     const onOnline = () => setIsOnline(true);
-    const onOffline = () => setIsOnline(false);
+    const onOffline = () => { setIsOnline(false); refreshOutbox(); };
+    refreshOutbox();
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
+    window.addEventListener('offline:outbox-updated', refreshOutbox);
     return () => {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
+      window.removeEventListener('offline:outbox-updated', refreshOutbox);
     };
-  }, []);
+  }, [user.id]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -358,7 +378,7 @@ export function Shell({
               {!isOnline && (
                 <span className="flex items-center gap-1 rounded-full bg-amber-wash border border-amber/30 px-2 py-0.5 text-[10px] font-medium text-amber">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber" />
-                  Mode local
+                  Hors ligne
                 </span>
               )}
               {onScan && (
@@ -466,7 +486,7 @@ export function Shell({
                 {!isOnline && (
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-wash border border-amber/30 text-[11px] text-amber font-medium shadow-xs">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber animate-ping" />
-                    <span>Mode hors-ligne (Cache local)</span>
+                    <span>Hors connexion · données locales</span>
                   </div>
                 )}
 
@@ -489,6 +509,37 @@ export function Shell({
                 view === 'pointage' ? 'pb-18' : 'pb-24',
               )}
             >
+              {(!isOnline || pendingOfflineCount > 0 || failedOfflineCount > 0) && (
+                <div role="status" aria-live="polite" className={cx(
+                  'no-print mb-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs',
+                  isOnline ? 'border-blue-500/25 bg-blue-500/5 text-blue-200' : 'border-amber/30 bg-amber-wash text-amber',
+                )}>
+                  {isOnline ? <CloudUpload size={15} className="mt-0.5 shrink-0" /> : <WifiOff size={15} className="mt-0.5 shrink-0" />}
+                  <div className="min-w-0 flex-1">
+                    <p>
+                    {!isOnline ? 'Hors connexion : affichage des dernières données synchronisées.' : 'Connexion rétablie.'}
+                    {!isOnline && lastServerSync ? ` Dernière réponse serveur : ${new Date(lastServerSync).toLocaleString('fr-FR')}.` : ''}
+                    {pendingOfflineCount > 0 && ` ${pendingOfflineCount} saisie(s) en attente de transmission${isOnline ? ' au serveur' : ''}.`}
+                    {failedOfflineCount > 0 && ` ${failedOfflineCount} saisie(s) nécessitent une vérification; le serveur ne les a pas acceptées.`}
+                    </p>
+                    <details className="mt-1.5">
+                      <summary className="w-fit cursor-pointer font-semibold underline underline-offset-2">Détails des synchronisations</summary>
+                      <div className="mt-2 space-y-1.5 font-normal">
+                        {offlineMutations.map((item) => (
+                          <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line/60 bg-paper/60 px-2 py-1.5">
+                            <span>{item.path.includes('/incidents') ? 'Signalement d’imprévu' : 'Demande de permission'} · {new Date(item.createdAt).toLocaleString('fr-FR')} · {item.state === 'failed' ? `À vérifier : ${item.error ?? 'refus serveur'}` : 'En attente'}</span>
+                            {item.state === 'failed' && <button type="button" className="font-semibold underline" onClick={() => void updateOfflineMutation(item.id, 'pending')}>Réessayer</button>}
+                          </div>
+                        ))}
+                        {offlineHistory.slice(0, 5).map((item) => (
+                          <div key={item.id} className="text-ink-soft">Transmis au serveur · {item.path.includes('/incidents') ? 'Signalement d’imprévu' : 'Demande de permission'} · {new Date(item.syncedAt).toLocaleString('fr-FR')}</div>
+                        ))}
+                        {!offlineMutations.length && !offlineHistory.length && <span>Aucune saisie hors connexion récente.</span>}
+                      </div>
+                    </details>
+                  </div>
+                </div>
+              )}
               {children}
             </div>
           </main>
