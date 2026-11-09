@@ -7,7 +7,16 @@ export interface ExportSheetPdfOptions {
   orientation?: 'portrait' | 'landscape';
   scale?: number;
   download?: boolean;
+  openInNewTab?: boolean;
+  targetWindow?: Window | null;
   onProgress?: (progress: { current: number; total: number; message: string }) => void;
+}
+
+export interface ExportSheetPdfResult {
+  blob: Blob;
+  blobUrl: string;
+  filename: string;
+  totalPages: number;
 }
 
 /**
@@ -20,11 +29,12 @@ export interface ExportSheetPdfOptions {
  * - Découpage intelligent pour les conteneurs sans pagination explicite
  * - Attente de la stabilisation des images et codes QR (évite les zones blanches)
  * - Isolation DOM unclipped pour éviter tout rognage causé par des ascendants scrollables
+ * - Téléchargement immédiat sur le disque et ouverture automatique dans le visualiseur de l'appareil
  */
 export async function exportSheetToPdf(
   sourceElement: HTMLElement,
   options: ExportSheetPdfOptions = {},
-): Promise<Blob> {
+): Promise<ExportSheetPdfResult> {
   const paper = options.paper ?? 'A4';
   const orientation = options.orientation ?? 'portrait';
   const isLandscape = orientation === 'landscape';
@@ -247,11 +257,39 @@ export async function exportSheetToPdf(
     const finalFilename = (options.filename || defaultFilename).trim();
     const safeFilename = finalFilename.endsWith('.pdf') ? finalFilename : `${finalFilename}.pdf`;
 
-    if (options.download !== false) {
-      doc.save(safeFilename);
+    const blob = doc.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+
+    // 1. Ouvrir dans l'onglet/fenêtre cible si demandé
+    if (options.openInNewTab) {
+      if (options.targetWindow && !options.targetWindow.closed) {
+        options.targetWindow.location.href = blobUrl;
+      } else {
+        try {
+          window.open(blobUrl, '_blank');
+        } catch {
+          // Ignoré si bloqué par le navigateur
+        }
+      }
     }
 
-    return doc.output('blob');
+    // 2. Déclencher le téléchargement effectif du fichier sur le disque
+    if (options.download !== false) {
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = safeFilename;
+      link.setAttribute('rel', 'noopener noreferrer');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    return {
+      blob,
+      blobUrl,
+      filename: safeFilename,
+      totalPages,
+    };
   } finally {
     // 7. Nettoyage garanti de la zone isolée
     if (staging.parentNode) {

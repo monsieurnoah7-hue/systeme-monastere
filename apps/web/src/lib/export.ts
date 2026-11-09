@@ -2,7 +2,7 @@
  * Module d'Export Universel C.F.T. (CSV UTF-8, Excel, Impression PDF Haute Fidélité)
  */
 
-export { exportSheetToPdf, type ExportSheetPdfOptions } from './pdf-sheet';
+export { exportSheetToPdf, type ExportSheetPdfOptions, type ExportSheetPdfResult } from './pdf-sheet';
 
 
 export function exportToCsv(filename: string, headers: string[], rows: (string | number | null | undefined)[][]): void {

@@ -5,7 +5,7 @@
  * 2. Dimensions A4 (210x297mm) et Letter (215.9x279.4mm)
  * 3. En-têtes PDF %PDF-1.
  * 4. Présence de l'export universel dans export.ts
- * 5. Présence des boutons "Télécharger le PDF" et "Imprimer cette planche"
+ * 5. Présence des boutons "Télécharger le PDF", ouverture automatique et notifications
  */
 
 import { jsPDF } from 'jspdf';
@@ -88,6 +88,18 @@ try {
     printPreviewContent.includes('pdfFilename'),
     'Prop pdfFilename supportée dans PrintPreviewModal',
   );
+  assert(
+    printPreviewContent.includes('useToast'),
+    'useToast intégré pour notifier l\'utilisateur du succès du téléchargement',
+  );
+  assert(
+    printPreviewContent.includes('openInNewTab: true'),
+    'Option openInNewTab: true activée pour ouverture automatique du PDF',
+  );
+  assert(
+    printPreviewContent.includes('Afficher le PDF'),
+    'Bouton/Lien "Afficher le PDF" présent dans la carte de confirmation',
+  );
 
   const exportTs = readFileSync(
     resolve('apps/web/src/lib/export.ts'),
@@ -96,6 +108,19 @@ try {
   assert(
     exportTs.includes('exportSheetToPdf'),
     'exportSheetToPdf exporté depuis apps/web/src/lib/export.ts',
+  );
+
+  const pdfSheetTs = readFileSync(
+    resolve('apps/web/src/lib/pdf-sheet.ts'),
+    'utf-8',
+  );
+  assert(
+    pdfSheetTs.includes('openInNewTab'),
+    'Option openInNewTab gérée dans pdf-sheet.ts',
+  );
+  assert(
+    pdfSheetTs.includes('link.download = safeFilename'),
+    'Téléchargement effectif du fichier vérifié (link.download)',
   );
 } catch (err) {
   assert(false, `Erreur lecture source PrintPreviewModal : ${err.message}`);
