@@ -3,18 +3,14 @@ import {
   Briefcase,
   Calendar,
   Clock,
-  AlertTriangle,
   CheckCircle2,
-  Users,
-  Plus,
-  Wrench,
-  Search,
-  Edit2,
-  Trash2,
 } from 'lucide-react';
 import type { Project, ProjectsResponse, Employee, ProjectIncident, ProjectWorkPlanAllocation } from '../lib/api';
 import { createProject, updateProject, deleteProject, fetchProjectIncidents, addProjectIncident, reviewProjectIncident } from '../lib/api';
 import { Button, Card, Modal, Banner, Spinner, cx } from './ui';
+import { ProjectsHeaderBar } from './ProjectsHeaderBar';
+import { ProjectListRow } from './ProjectListRow';
+import { ProjectBentoCard } from './ProjectBentoCard';
 
 export function ProjectsView({
   data,
@@ -36,6 +32,10 @@ export function ProjectsView({
   onRefresh: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<'production' | 'planning'>('production');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) return 'list';
+    return 'grid';
+  });
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<string>('all');
   const [filterDelayedOnly, setFilterDelayedOnly] = useState(false);
@@ -256,361 +256,170 @@ export function ProjectsView({
 
   return (
     <div className="space-y-6">
-      {/* Synthèse courte : une seule hiérarchie, sans compétition de couleurs */}
-      <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xs" aria-label="Synthèse des projets">
-        <div className="grid grid-cols-2 gap-px bg-line md:grid-cols-3">
-          <div className="bg-surface p-3 sm:p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-faint">Impact financier estimé</p>
-            <p className="mt-2 font-mono text-2xl font-semibold tabular-nums text-ink">
+      {/* Synthèse supérieure : Contraste de surface rehaussé pour écran mobile/tablette */}
+      <section className="overflow-hidden rounded-2xl border border-line-strong bg-surface-2 shadow-card" aria-label="Synthèse des projets">
+        <div className="grid grid-cols-2 gap-px bg-line-strong md:grid-cols-3">
+          <div className="bg-surface-2 p-3 sm:p-4">
+            <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-faint">Impact financier estimé</p>
+            <p className="mt-1.5 font-mono text-xl sm:text-2xl font-bold tabular-nums text-ink">
               {(summary?.total_financial_damage_fcfa ?? 0).toLocaleString()} <span className="text-xs font-normal text-ink-faint">FCFA</span>
             </p>
-            <p className="mt-1 text-xs text-ink-soft">Heures hors budget et pénalités calculées.</p>
+            <p className="mt-0.5 text-[11px] text-ink-soft hidden sm:block">Heures hors budget et pénalités calculées.</p>
           </div>
-          <div className="bg-surface p-3 sm:p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-faint">Heures hors budget</p>
-            <p className="mt-2 font-mono text-2xl font-semibold tabular-nums text-ink">
-              +{(summary?.total_overtime_hours ?? 0).toLocaleString()} <span className="text-xs font-normal text-ink-faint">heures</span>
+          <div className="bg-surface-2 p-3 sm:p-4">
+            <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-faint">Heures hors budget</p>
+            <p className="mt-1.5 font-mono text-xl sm:text-2xl font-bold tabular-nums text-ink">
+              +{(summary?.total_overtime_hours ?? 0).toLocaleString()} <span className="text-xs font-normal text-ink-faint">h</span>
             </p>
-            <p className="mt-1 text-xs text-ink-soft">Écart entre le réalisé et le budget projet.</p>
+            <p className="mt-0.5 text-[11px] text-ink-soft hidden sm:block">Écart entre le réalisé et le budget projet.</p>
           </div>
-          <div className="col-span-2 bg-surface p-3 sm:p-5 md:col-span-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-faint">Délais à surveiller</p>
-            <div className="mt-2 flex items-baseline gap-2">
-              <p className="font-mono text-2xl font-semibold tabular-nums text-ink">{summary?.delayed_count ?? 0}</p>
-              <span className="text-xs text-ink-faint">sur {summary?.active_count ?? 0} projets actifs</span>
+          <div className="col-span-2 bg-surface-2 p-3 sm:p-4 md:col-span-1 border-t md:border-t-0 border-line-strong">
+            <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-faint">Délais critiques</p>
+            <div className="mt-1.5 flex items-baseline gap-2">
+              <p className={cx('font-mono text-xl sm:text-2xl font-bold tabular-nums', (summary?.delayed_count ?? 0) > 0 ? 'text-red-400' : 'text-emerald-400')}>
+                {summary?.delayed_count ?? 0}
+              </p>
+              <span className="text-xs text-ink-faint">sur {summary?.active_count ?? 0} commandes actives</span>
             </div>
-            <p className="mt-1 text-xs text-ink-soft">{summary?.delayed_count ? 'Une décision de la Direction est requise.' : 'Aucun retard détecté.'}</p>
+            <p className="mt-0.5 text-[11px] text-ink-soft">
+              {summary?.delayed_count ? 'Action ou arbitrage requis.' : 'Toutes les commandes sont dans les délais.'}
+            </p>
           </div>
         </div>
       </section>
 
-      {/* Commandes persistantes : onglets, action principale, recherche et filtres.
-          Ces éléments restent des enfants directs de la page afin que le sticky
-          soit borné par toute la zone de contenu, pas par ce seul bandeau. */}
-        {/* Navigation Onglets : Production Atelier vs Planning Chantiers de Pose */}
-        <div className="sticky top-0 z-20 -mx-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-1 border-y border-line bg-paper/95 px-3 py-2 shadow-sm backdrop-blur sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:flex lg:items-center lg:justify-between lg:border-y-0 lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none lg:backdrop-blur-none">
-        <div className="col-span-2 grid w-full grid-cols-2 gap-1 rounded-xl border border-line bg-paper-2/50 p-1 lg:col-span-1 lg:inline-flex lg:w-auto">
-          <button
-            type="button"
-            onClick={() => setActiveTab('production')}
-            className={cx(
-              'flex min-w-0 items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-center text-xs font-semibold leading-tight transition-all cursor-pointer lg:whitespace-nowrap',
-              activeTab === 'production'
-                ? 'bg-ink text-paper shadow-xs'
-                : 'text-ink-soft hover:bg-surface hover:text-ink'
-            )}
-          >
-            <Wrench size={15} />
-            <span>Suivi Commandes &amp; Artisans ({projects.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('planning')}
-            className={cx(
-              'flex min-w-0 items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-center text-xs font-semibold leading-tight transition-all cursor-pointer lg:whitespace-nowrap',
-              activeTab === 'planning'
-                ? 'bg-ink text-paper shadow-xs'
-                : 'text-ink-soft hover:bg-surface hover:text-ink'
-            )}
-          >
-            <Calendar size={15} />
-            <span>Charge hebdomadaire</span>
-          </button>
-        </div>
-
-        {canCreate && (
-          <Button
-            size="sm"
-            variant="primary"
-            icon={<Plus size={14} />}
-            onClick={openCreate}
-            className="!h-full !min-h-[48px] w-auto !bg-ink !text-paper hover:!bg-surface-3 hover:!text-ink lg:!h-8 lg:!min-h-0 lg:w-auto"
-          >
-            <span className="sm:hidden">Nouveau</span>
-            <span className="hidden sm:inline">Nouvelle commande / projet</span>
-          </Button>
-        )}
-        </div>
-
-        {/* Barre de Recherche & Filtres */}
-        <div className="sticky top-[68px] z-10 -mx-3 flex flex-col gap-2 border-y border-line bg-paper/95 px-3 py-2.5 shadow-sm backdrop-blur sm:top-[64px] sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:flex-row lg:items-center lg:justify-between lg:border-y-0 lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none lg:backdrop-blur-none">
-        <div className="relative w-full min-w-0 lg:max-w-sm lg:flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-          <input
-            type="text"
-            placeholder="Rechercher n° commande, client, lieu..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-lg border border-line bg-paper-2/50 pl-9 pr-3 text-sm text-ink focus:border-ink focus:outline-none"
-          />
-        </div>
-
-          <div className="flex w-full min-w-0 flex-col gap-2 pb-1 sm:flex-row sm:items-center lg:w-auto lg:justify-end">
-            <label className="sr-only" htmlFor="project-category-filter">Filtrer les projets par catégorie</label>
-            <select
-              id="project-category-filter"
-              value={filterCat}
-              onChange={(event) => setFilterCat(event.target.value)}
-              className="h-10 w-full min-w-0 rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink sm:min-w-48 lg:w-56"
-            >
-              <option value="all">Toutes les catégories</option>
-              {configuredCategories.map((category) => <option key={category} value={category}>{category}</option>)}
-            </select>
-          <button
-            type="button"
-            onClick={() => setFilterDelayedOnly((v) => !v)}
-            className={cx(
-              'shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold transition-all cursor-pointer',
-              filterDelayedOnly
-                ? 'bg-ink text-paper border-ink shadow-xs'
-                : 'bg-transparent text-ink-soft hover:bg-surface border-line'
-            )}
-          >
-            En retard uniquement
-          </button>
-        </div>
-        </div>
+      {/* Bandeau de commande compact et unifié (48px) avec recherche, filtres et bascule de vue */}
+      <ProjectsHeaderBar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        search={search}
+        onSearchChange={setSearch}
+        filterCat={filterCat}
+        onFilterCatChange={setFilterCat}
+        filterDelayedOnly={filterDelayedOnly}
+        onFilterDelayedOnlyChange={setFilterDelayedOnly}
+        categories={configuredCategories}
+        canCreate={canCreate}
+        onCreate={openCreate}
+        totalCount={projects.length}
+        delayedCount={summary?.delayed_count ?? 0}
+      />
 
       {/* =========================================================================
-          TAB 1 : SUIVI DES PROJETS ET DES HEURES
+          TAB 1 : SUIVI DES PROJETS (ARCHITECTURE DUAL-MODE)
       ========================================================================= */}
       {activeTab === 'production' && (
         <div className="space-y-4">
           {filteredProjects.length === 0 ? (
-            <Card className="p-8 text-center text-xs text-ink-soft">
+            <Card className="p-8 text-center text-xs text-ink-soft bg-surface-2 border border-line-strong rounded-2xl shadow-card">
               <Briefcase size={32} className="mx-auto text-ink-faint mb-2" />
-              <p className="font-bold text-ink">{projects.length === 0 ? 'Aucun projet configuré' : 'Aucun projet correspondant'}</p>
-              <p className="mt-1">
+              <p className="font-bold text-ink text-sm">{projects.length === 0 ? 'Aucune commande enregistrée' : 'Aucune commande ne correspond aux filtres'}</p>
+              <p className="mt-1 text-xs">
                 {projects.length === 0
-                  ? canCreate ? 'Ajoutez le premier projet pour commencer le suivi.' : 'La Direction n’a encore configuré aucun projet.'
-                  : 'Modifiez la recherche ou les filtres pour élargir les résultats.'}
+                  ? canCreate ? 'Créez la première commande pour initier le suivi d’atelier.' : 'La Direction n’a encore configuré aucune commande.'
+                  : 'Modifiez la recherche ou réinitialisez les filtres pour afficher l’ensemble des chantiers.'}
               </p>
             </Card>
+          ) : viewMode === 'list' ? (
+            /* Mode 1 : Vue Liste Tactile Synthétique avec Accordéons (Recommandée Mobile/Tablette) */
+            <div className="space-y-2">
+              {filteredProjects.map((p) => (
+                <ProjectListRow
+                  key={p.id}
+                  project={p}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  canReportIncident={canReportIncident}
+                  currentEmployeeId={currentEmployeeId}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  onIncident={openIncidentLog}
+                />
+              ))}
+            </div>
           ) : (
+            /* Mode 2 : Vue Fiches Bento Élevées en Relief (Desktop / Consultation Détaillée) */
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filteredProjects.map((p) => {
-                const isOverdue = p.is_delayed;
-                const hasOvertime = (p.overtime_hours ?? 0) > 0;
-                const hasBudget = Number(p.budget_hours) > 0;
-                const needsConfiguration = !p.title?.trim() || !p.client_name?.trim() || !p.site_location?.trim() || !p.delivery_deadline || !hasBudget;
-
-                return (
-                  <div
-                    key={p.id}
-                    className={cx(
-                      'flex min-w-0 flex-col justify-between overflow-hidden rounded-2xl border bg-surface p-5 shadow-xs transition-all hover:border-line-strong hover:shadow-card space-y-4',
-                      isOverdue ? 'border-l-2 border-l-red-500' : 'border-line'
-                    )}
-                  >
-                    <div>
-                      {/* En-tête : Code Commande + Statut + Deadline */}
-                      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="rounded-md border border-line bg-paper-2 px-2 py-1 font-mono text-[11px] font-semibold tracking-wide text-ink">
-                              {p.code}
-                            </span>
-                            {p.category ? (
-                              <span className="rounded-md border border-line bg-transparent px-1.5 py-1 text-[10px] font-medium text-ink-soft">
-                                {p.category}
-                              </span>
-                            ) : null}
-                          </div>
-                          <h4 className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-ink">
-                            {p.title || 'Projet à compléter'}
-                          </h4>
-                          <p className="mt-1 flex items-center gap-1 truncate text-xs text-ink-faint">
-                            <span>Client : <strong>{p.client_name || 'à renseigner'}</strong></span>
-                            <span>•</span>
-                            <span className="truncate">{p.site_location || 'Lieu à renseigner'}</span>
-                          </p>
-                        </div>
-
-                        <span
-                          className={cx(
-                            'max-w-full shrink-0 self-start truncate rounded-full border px-2.5 py-1 text-[10px] font-semibold sm:max-w-[45%]',
-                            p.status === 'termine'
-                              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                              : p.status === 'en_pose'
-                              ? 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                              : isOverdue
-                              ? 'border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400'
-                              : 'border-line bg-paper-2 text-ink-soft'
-                          )}
-                        >
-                          {p.status === 'termine'
-                            ? 'Terminé'
-                            : needsConfiguration
-                            ? 'À compléter'
-                            : p.status === 'en_pose'
-                            ? 'Pose sur site'
-                            : isOverdue
-                            ? `Retard ${p.delayed_days}j`
-                            : 'Fabrication'}
-                        </span>
-                      </div>
-
-                      {/* Artisans assignés (Menuisiers de l'atelier) */}
-                      <div className="mt-4 rounded-xl border border-line bg-paper-2/40 p-3 text-xs">
-                        <div className="flex items-center justify-between text-[11px] text-ink-faint font-semibold mb-1">
-                          <span className="flex items-center gap-1">
-                            <Users size={12} className="text-amber" />
-                            Artisans / Postes affectés
-                          </span>
-                          <span>{p.assigned_worker_names?.length || 0} ouvrier(s)</span>
-                        </div>
-                        {p.assigned_worker_names && p.assigned_worker_names.length > 0 ? (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {p.assigned_worker_names.map((name, i) => (
-                              <span
-                                key={i}
-                                className="rounded-md bg-surface px-2 py-0.5 text-[10px] font-bold text-ink border border-line truncate max-w-40"
-                              >
-                                {name}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-[10px] text-ink-faint italic">Aucun artisan affecté</p>
-                        )}
-                      </div>
-
-                        {/* Budget configuré pour ce projet */}
-                      <div className="mt-4 space-y-2.5 text-xs">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-ink-soft">
-                            {hasBudget
-                              ? <>Heures : <strong>{p.spent_hours} h</strong> / {p.budget_hours} h prévues</>
-                              : <>Heures saisies : <strong>{p.spent_hours} h</strong></>}
-                          </span>
-                          <span
-                            className={cx(
-                              'font-mono font-bold',
-                              hasOvertime ? 'text-red-600 dark:text-red-400' : 'text-emerald-600'
-                            )}
-                          >
-                            {hasOvertime ? `+${p.overtime_hours} h DÉPASSÉES` : hasBudget ? `${Number(p.budget_hours) - Number(p.spent_hours)} h restantes` : 'Budget à définir'}
-                          </span>
-                        </div>
-
-                        {/* Barre de progression des heures */}
-                        {hasBudget && <div className="h-1.5 w-full overflow-hidden rounded-full bg-paper-2">
-                          <div
-                            className={cx(
-                              'h-full rounded-full transition-all',
-                              hasOvertime ? 'bg-red-500' : 'bg-emerald-500'
-                            )}
-                            style={{ width: `${Math.min(100, p.hours_progress_pct || 0)}%` }}
-                          />
-                        </div>}
-
-                        {/* Décompte Deadline de Livraison Contractuelle */}
-                        <div className="flex items-center justify-between rounded-lg border border-line bg-paper-2/40 p-2.5 text-[11px]">
-                          <span className="text-ink-faint flex items-center gap-1">
-                            <Calendar size={12} />
-                            Délai contractuel :
-                          </span>
-                          <span
-                            className={cx(
-                              'font-mono font-bold',
-                              isOverdue ? 'text-red-600 dark:text-red-400' : 'text-ink'
-                            )}
-                          >
-                            {p.delivery_deadline
-                              ? `${p.delivery_deadline} (${isOverdue ? `dépassé de ${p.delayed_days} j` : `${p.days_to_deadline} j ouvrés restants`})`
-                              : 'À définir · aucun retard calculé'}
-                          </span>
-                        </div>
-                        {p.planned_completion_date && <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-paper-2/40 p-2.5 text-[11px]">
-                          <span className="text-ink-faint flex items-center gap-1"><Clock size={12} />Fin estimée selon le planning :</span>
-                          <span className={cx('font-mono font-bold', p.schedule_at_risk ? 'text-red' : 'text-ink')}>{p.planned_completion_date}</span>
-                        </div>}
-
-                        {/* Estimation du coût projet; aucune retenue sur salaire n’est effectuée. */}
-                        {(hasOvertime || (p.ratio_delayed_workdays || 0) > 0) && (
-                          <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-2 text-[11px] flex items-center justify-between text-red-600 dark:text-red-400">
-                            <span className="font-semibold flex items-center gap-1">
-                              <AlertTriangle size={12} />
-                              Impact estimé · hors paie :
-                            </span>
-                            <span className="font-mono font-extrabold text-xs">
-                              {(p.financial_damage_fcfa || 0).toLocaleString()} FCFA
-                            </span>
-                          </div>
-                        )}
-                        {hasOvertime && !p.accountability_data_complete && (
-                          <p className="text-[10px] text-ink-faint">Ventilation par exécutant incomplète : l’impact imputable attend les heures individuelles.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Actions Card */}
-                    <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
-                      {!canEdit && canReportIncident && currentEmployeeId && p.assigned_worker_ids.includes(currentEmployeeId) && <button type="button" onClick={() => void openIncidentLog(p)} className="rounded-lg border border-line px-3 py-2 text-[11px] font-semibold text-ink-soft hover:bg-paper-2 hover:text-ink">
-                        Signaler un imprévu
-                      </button>}
-                      {canEdit && <button type="button" onClick={() => void openIncidentLog(p)} className="rounded-lg border border-line px-3 py-2 text-[11px] font-semibold text-ink-soft hover:bg-paper-2 hover:text-ink">Voir les signalements</button>}
-
-                      {(canEdit || canDelete) && (
-                        <div className="flex items-center gap-1">
-                          {canEdit && <button
-                            type="button"
-                            onClick={() => openEdit(p)}
-                            className="p-1.5 rounded-lg text-ink-soft hover:bg-surface-2 hover:text-ink transition-colors cursor-pointer"
-                            title="Modifier"
-                          >
-                            <Edit2 size={13} />
-                          </button>}
-                          {canDelete && <button
-                            type="button"
-                            onClick={() => handleDelete(p)}
-                            className="p-1.5 rounded-lg text-red/70 hover:bg-red-wash hover:text-red transition-colors cursor-pointer"
-                            title="Supprimer"
-                          >
-                            <Trash2 size={13} />
-                          </button>}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {filteredProjects.map((p) => (
+                <ProjectBentoCard
+                  key={p.id}
+                  project={p}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  canReportIncident={canReportIncident}
+                  currentEmployeeId={currentEmployeeId}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                  onIncident={openIncidentLog}
+                />
+              ))}
             </div>
           )}
         </div>
       )}
 
       {activeTab === 'planning' && (
-        <section className="space-y-3" aria-label="Charge hebdomadaire des projets">
-          <div className="rounded-xl border border-line bg-surface p-4">
-            <h3 className="font-semibold text-ink">Répartition du budget par jour ouvré</h3>
-            <p className="mt-1 text-xs text-ink-soft">Définissez les heures prévues par personne et par jour. Les repos et jours fériés sont sautés automatiquement dans la date de fin estimée.</p>
+        <section className="space-y-4" aria-label="Charge hebdomadaire des projets">
+          <div className="rounded-2xl border border-line-strong bg-surface-2 p-4 sm:p-5 shadow-card">
+            <h3 className="font-bold text-ink text-sm sm:text-base">Répartition du budget par jour ouvré</h3>
+            <p className="mt-1 text-xs text-ink-soft">Définissez les heures prévues par personne et par jour. Les repos et jours fériés sont sautés automatiquement dans le calcul de la date d'achèvement estimée.</p>
           </div>
-          {filteredProjects.length === 0 ? <p className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-ink-soft">Aucun projet correspondant.</p> : (
-            <div className="grid gap-3 xl:grid-cols-2">
+          {filteredProjects.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-line-strong bg-surface-2 p-8 text-center text-xs text-ink-soft">Aucune commande correspondante.</p>
+          ) : (
+            <div className="grid gap-3.5 xl:grid-cols-2">
               {filteredProjects.map((p) => (
-                <article key={p.id} className="rounded-xl border border-line bg-surface p-4">
+                <article key={p.id} className="rounded-2xl border border-line-strong bg-surface-2 p-4 sm:p-5 shadow-card hover:shadow-card-hover transition-all">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-mono text-xs font-semibold text-ink-soft">{p.code}</p>
-                      <h4 className="mt-1 font-semibold text-ink">{p.title || 'Projet à compléter'}</h4>
+                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-paper border border-line text-ink">{p.code}</span>
+                      <h4 className="mt-1.5 font-bold text-sm text-ink">{p.title || 'Projet à compléter'}</h4>
                       <p className="mt-1 text-xs text-ink-soft">{p.assigned_worker_names?.join(', ') || 'Aucun exécutant affecté'}</p>
                     </div>
-                    {canEdit && <Button size="sm" variant="secondary" disabled={!p.assigned_worker_ids?.length} onClick={() => {
-                      setScheduleProject(p);
-                      setScheduleRows(Array.isArray(p.work_plan) ? p.work_plan.map((row) => ({ ...row })) : []);
-                      setScheduleError(null);
-                    }}>Répartir les heures</Button>}
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!p.assigned_worker_ids?.length}
+                        onClick={() => {
+                          setScheduleProject(p);
+                          setScheduleRows(Array.isArray(p.work_plan) ? p.work_plan.map((row) => ({ ...row })) : []);
+                          setScheduleError(null);
+                        }}
+                        className="h-8 text-xs font-semibold"
+                      >
+                        Répartir les heures
+                      </Button>
+                    )}
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                    <div><p className="text-xs text-ink-faint">Budget total</p><p className="mt-1 font-mono font-semibold text-ink">{Number(p.budget_hours) > 0 ? `${p.budget_hours} h` : 'À définir'}</p></div>
-                    <div><p className="text-xs text-ink-faint">Prévu / semaine</p><p className="mt-1 font-mono font-semibold text-ink">{p.planned_weekly_hours ?? 0} h</p></div>
-                    <div><p className="text-xs text-ink-faint">Fin estimée</p><p className="mt-1 font-mono font-semibold text-ink">{p.planned_completion_date || 'À planifier'}</p></div>
-                    <div><p className="text-xs text-ink-faint">Échéance</p><p className={cx('mt-1 font-mono font-semibold', p.schedule_at_risk ? 'text-red' : 'text-ink')}>{p.delivery_deadline || 'À définir'}</p></div>
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs">
+                    <div className="p-2 rounded-lg bg-surface border border-line">
+                      <p className="text-[10px] uppercase text-ink-faint font-semibold">Budget total</p>
+                      <p className="mt-1 font-mono font-bold text-ink">{Number(p.budget_hours) > 0 ? `${p.budget_hours} h` : 'À définir'}</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-surface border border-line">
+                      <p className="text-[10px] uppercase text-ink-faint font-semibold">Prévu / sem.</p>
+                      <p className="mt-1 font-mono font-bold text-ink">{p.planned_weekly_hours ?? 0} h</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-surface border border-line">
+                      <p className="text-[10px] uppercase text-ink-faint font-semibold">Fin estimée</p>
+                      <p className="mt-1 font-mono font-bold text-ink">{p.planned_completion_date || 'À planifier'}</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-surface border border-line">
+                      <p className="text-[10px] uppercase text-ink-faint font-semibold">Échéance</p>
+                      <p className={cx('mt-1 font-mono font-bold', p.schedule_at_risk ? 'text-red-400' : 'text-ink')}>{p.delivery_deadline || 'À définir'}</p>
+                    </div>
                   </div>
-                  {p.schedule_at_risk && <p className="mt-3 rounded-lg border border-amber/30 bg-amber-wash p-2 text-xs text-amber">Avec cette répartition, le budget serait terminé après la date de livraison.</p>}
-                  {(!p.work_plan?.length) && <p className="mt-3 text-xs text-ink-faint">Aucune répartition hebdomadaire configurée.</p>}
+                  {p.schedule_at_risk && (
+                    <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-400 font-medium">
+                      Attention : avec cette répartition, le budget serait terminé après la date limite de livraison contractuelle.
+                    </p>
+                  )}
+                  {(!p.work_plan?.length) && (
+                    <p className="mt-3 text-xs text-ink-faint italic">Aucune répartition hebdomadaire configurée pour l'instant.</p>
+                  )}
                 </article>
               ))}
             </div>
