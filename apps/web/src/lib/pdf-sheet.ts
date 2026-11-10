@@ -7,8 +7,6 @@ export interface ExportSheetPdfOptions {
   orientation?: 'portrait' | 'landscape';
   scale?: number;
   download?: boolean;
-  openInNewTab?: boolean;
-  targetWindow?: Window | null;
   onProgress?: (progress: { current: number; total: number; message: string }) => void;
 }
 
@@ -20,14 +18,15 @@ export interface ExportSheetPdfResult {
 }
 
 /**
- * Exporte une planche d'impression (badges, étiquettes QR, étiquettes de stock, établis)
- * en un document PDF haute fidélité prêt à l'impression.
+ * Exporte une planche d'impression (badges, étiquettes QR, étiquettes de stock, établis, portes)
+ * en un document PDF vectorisé haute fidélité prêt à l'impression.
  *
- * Utilise html-to-image (moteur SVG vectoriel natif) combiné à jsPDF :
- * - Prise en charge native de Tailwind CSS v4 (oklch, color-mix, variables modernes)
+ * Utilise un conteneur de staging hors-champ attaché directement au document :
+ * - Garantit 100% de la largeur normalisée (210mm A4 / 215.9mm Letter) sans aucun rognage
+ * - Isole complètement le rendu des contraintes de zoom et d'overflow du modal utilisateur
  * - Rendu haute résolution (240~300 DPI) garantissant la lisibilité parfaite des codes QR
  * - Gestion automatique multi-pages (.badge-page, .label-sheet-page, .a4-page)
- * - Téléchargement immédiat sur le disque et ouverture automatique dans le visualiseur
+ * - Téléchargement direct et transparent sans redirection ni changement de page
  */
 export async function exportSheetToPdf(
   sourceElement: HTMLElement,
@@ -50,7 +49,7 @@ export async function exportSheetToPdf(
   });
 
   // 1. Attente de la génération complète des codes QR
-  const maxWaitMs = 3000;
+  const maxWaitMs = 3500;
   const startTime = Date.now();
   while (Date.now() - startTime < maxWaitMs) {
     const pending = sourceElement.querySelectorAll('[data-qr-pending="true"]');
@@ -58,26 +57,48 @@ export async function exportSheetToPdf(
     await new Promise((r) => setTimeout(r, 60));
   }
 
-  // 2. Attente du chargement des polices typographiques
+  // 2. Attente du chargement complet des polices typographiques
   if (document.fonts?.ready) {
     await document.fonts.ready.catch(() => undefined);
   }
 
-  // 3. Sauvegarde et réinitialisation temporaire de la transformation zoom du viewport
-  const prevTransform = sourceElement.style.transform;
-  const prevTransformOrigin = sourceElement.style.transformOrigin;
-  sourceElement.style.transform = 'none';
-  sourceElement.style.transformOrigin = 'top left';
+  // 3. Création du conteneur de staging dédié hors-champ (DOM isolé de la modale)
+  const staging = document.createElement('div');
+  staging.id = 'pdf-render-staging';
+  staging.style.position = 'fixed';
+  staging.style.left = '0';
+  staging.style.top = '0';
+  staging.style.width = `${pageWidthMm}mm`;
+  staging.style.minHeight = `${pageHeightMm}mm`;
+  staging.style.background = '#ffffff';
+  staging.style.color = '#0f172a';
+  staging.style.zIndex = '-99999';
+  staging.style.pointerEvents = 'none';
+  staging.style.overflow = 'visible';
+  staging.style.margin = '0';
+  staging.style.padding = '0';
+  staging.style.boxSizing = 'border-box';
+
+  // Clonage profond du contenu pour ne jamais altérer l'affichage de la modale en cours
+  const clone = sourceElement.cloneNode(true) as HTMLElement;
+  clone.style.transform = 'none';
+  clone.style.transformOrigin = 'top left';
+  clone.style.margin = '0';
+  clone.style.width = `${pageWidthMm}mm`;
+  clone.style.minHeight = `${pageHeightMm}mm`;
+  clone.style.boxSizing = 'border-box';
+  staging.appendChild(clone);
+  document.body.appendChild(staging);
 
   let doc: jsPDF | null = null;
 
   try {
-    // 4. Détection des pages de la planche
+    // 4. Détection précise des pages de la planche
     const pageSelector = '.badge-page, .label-sheet-page, .a4-page, [data-print-page]';
-    let pages = Array.from(sourceElement.querySelectorAll<HTMLElement>(pageSelector));
+    let pages = Array.from(clone.querySelectorAll<HTMLElement>(pageSelector));
 
     if (pages.length === 0) {
-      pages = [sourceElement];
+      pages = [clone];
     }
 
     doc = new jsPDF({
@@ -95,11 +116,15 @@ export async function exportSheetToPdf(
       options.onProgress?.({
         current: i + 1,
         total: totalPages,
-        message: `Rendu de la planche (Page ${i + 1} / ${totalPages})…`,
+        message: `Rendu haute résolution (Page ${i + 1} / ${totalPages})…`,
       });
 
       const pageEl = pages[i];
       if (!pageEl) continue;
+
+      // Mesure physique exacte dans le DOM de staging
+      const elemWidthPx = pageEl.offsetWidth;
+      const elemHeightPx = pageEl.offsetHeight;
 
       const imgData = await toPng(pageEl, {
         pixelRatio,
@@ -113,8 +138,6 @@ export async function exportSheetToPdf(
       }
 
       // Calcul des dimensions métriques et centrage précis
-      const elemWidthPx = pageEl.offsetWidth;
-      const elemHeightPx = pageEl.offsetHeight;
       const widthMm = elemWidthPx * (25.4 / 96);
       const heightMm = elemHeightPx * (25.4 / 96);
 
@@ -138,7 +161,7 @@ export async function exportSheetToPdf(
     options.onProgress?.({
       current: totalPages,
       total: totalPages,
-      message: 'Finalisation et enregistrement du PDF…',
+      message: 'Finalisation et enregistrement du document…',
     });
 
     const now = new Date();
@@ -150,20 +173,7 @@ export async function exportSheetToPdf(
     const blob = doc.output('blob');
     const blobUrl = URL.createObjectURL(blob);
 
-    // 6. Ouvrir dans l'onglet/fenêtre cible si demandé
-    if (options.openInNewTab) {
-      try {
-        if (options.targetWindow && !options.targetWindow.closed) {
-          options.targetWindow.location.href = blobUrl;
-        } else {
-          window.open(blobUrl, '_blank');
-        }
-      } catch (popupErr) {
-        console.warn('Navigation de la fenêtre d’aperçu bloquée par le navigateur:', popupErr);
-      }
-    }
-
-    // 7. Déclencher le téléchargement direct sur le disque
+    // 6. Déclencher le téléchargement direct sur le disque sans aucune redirection
     if (options.download !== false) {
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -181,8 +191,9 @@ export async function exportSheetToPdf(
       totalPages,
     };
   } finally {
-    // 8. Restauration garantie du zoom du viewport
-    sourceElement.style.transform = prevTransform;
-    sourceElement.style.transformOrigin = prevTransformOrigin;
+    // 7. Nettoyage garanti du conteneur de staging
+    if (staging.parentNode) {
+      document.body.removeChild(staging);
+    }
   }
 }

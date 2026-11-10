@@ -31,7 +31,7 @@ export function PrintPreviewModal({
   const toast = useToast();
   const viewport = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
-  const [fitScale, setFitScale] = useState(1);
+  const [fitScale, setFitScale] = useState(0.8);
   const [zoom, setZoom] = useState(1);
   const [contentHeight, setContentHeight] = useState(0);
   const [exporting, setExporting] = useState(false);
@@ -45,17 +45,33 @@ export function PrintPreviewModal({
   useEffect(() => {
     if (!open || !viewport.current) return;
     const node = viewport.current;
-    const measure = () => setFitScale(Math.min(1, Math.max(0.32, (node.clientWidth - 24) / pageWidthPx)));
+    const measure = () => {
+      const clientW = node.clientWidth;
+      if (!clientW) return;
+      // 32px de marge intérieure (p-4 = 16px de chaque côté)
+      const availableWidth = clientW - 32;
+      const fit = Math.min(1.0, Math.max(0.25, availableWidth / pageWidthPx));
+      setFitScale(fit);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
-    return () => observer.disconnect();
+    const rAF = requestAnimationFrame(measure);
+    const timer = setTimeout(measure, 120);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(rAF);
+      clearTimeout(timer);
+    };
   }, [open, pageWidthPx]);
 
   useEffect(() => {
     if (!open || !canvas.current) return;
     const node = canvas.current;
-    const measure = () => setContentHeight(Math.max(node.scrollHeight, node.getBoundingClientRect().height / Math.max(fitScale * zoom, 0.01)));
+    const measure = () =>
+      setContentHeight(
+        Math.max(node.scrollHeight, node.getBoundingClientRect().height / Math.max(fitScale * zoom, 0.01)),
+      );
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
@@ -83,43 +99,20 @@ export function PrintPreviewModal({
   const handleDownloadPdf = useCallback(async () => {
     if (!canvas.current || exporting || printing) return;
 
-    // Ouverture synchrone immédiate d'un onglet au clic utilisateur pour neutraliser le bloqueur de pop-ups
-    let previewWindow: Window | null = null;
-    try {
-      previewWindow = window.open('', '_blank');
-      if (previewWindow) {
-        try {
-          previewWindow.document.title = 'Génération de la planche PDF…';
-          previewWindow.document.body.innerHTML = `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: grid; place-items: center; min-height: 90vh; margin: 0; background: #0f172a; color: #f8fafc;">
-              <div style="text-align: center; padding: 32px; max-width: 480px; border-radius: 16px; background: #1e293b; border: 1px solid #334155; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
-                <div style="font-size: 42px; margin-bottom: 16px;">📄</div>
-                <div style="font-weight: 700; font-size: 19px; margin-bottom: 8px; color: #ffffff;">Génération de votre planche PDF…</div>
-                <div style="font-size: 13px; color: #94a3b8; line-height: 1.6;">Le document PDF haute fidélité est en cours de compilation. Il va s'afficher automatiquement ici et être enregistré sur votre appareil.</div>
-              </div>
-            </div>
-          `;
-        } catch {
-          // Si le navigateur bloque l'accès au document de la popup
-        }
-      }
-    } catch {
-      previewWindow = null;
-    }
-
     try {
       setExporting(true);
-      setExportProgress('Initialisation de l’export PDF…');
+      setExportProgress('Préparation du document PDF haute fidélité…');
 
       if (onDownloadPdf) {
         await onDownloadPdf();
       } else {
-        const cleanSlug = title
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '') || 'planche-impression';
+        const cleanSlug =
+          title
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '') || 'planche-impression';
         const now = new Date();
         const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const filename = pdfFilename || `${cleanSlug}-${paper.toLowerCase()}-${dateStr}.pdf`;
@@ -127,8 +120,6 @@ export function PrintPreviewModal({
         const result = await exportSheetToPdf(canvas.current, {
           paper,
           filename,
-          openInNewTab: true,
-          targetWindow: previewWindow,
           onProgress: (p) => setExportProgress(p.message),
         });
 
@@ -139,16 +130,11 @@ export function PrintPreviewModal({
         });
 
         toast(
-          `Planche PDF « ${result.filename} » téléchargée avec succès (${result.totalPages} page${result.totalPages > 1 ? 's' : ''})`,
+          `Planche PDF « ${result.filename} » enregistrée (${result.totalPages} page${result.totalPages > 1 ? 's' : ''})`,
           'success',
         );
       }
     } catch (err: unknown) {
-      if (previewWindow && !previewWindow.closed) {
-        try {
-          previewWindow.close();
-        } catch {}
-      }
       console.error('Erreur export PDF planche:', err);
       const detailMsg = err instanceof Error ? ` (${err.message})` : '';
       toast(`Échec de la génération du document PDF${detailMsg}.`, 'error');
@@ -163,7 +149,7 @@ export function PrintPreviewModal({
       open={open}
       title={title}
       onClose={onClose}
-      wide
+      wide="sheet"
       footer={(
         <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
           <Button variant="ghost" disabled={printing || exporting} onClick={onClose}>
@@ -175,7 +161,7 @@ export function PrintPreviewModal({
               disabled={printing || exporting}
               onClick={handleDownloadPdf}
               icon={exporting ? <Spinner /> : <Download size={14} />}
-              title="Télécharger la planche en PDF et l'ouvrir automatiquement dans votre visualiseur"
+              title="Télécharger la planche en PDF prêt à l’impression sur votre appareil"
             >
               {exporting ? 'Export en cours…' : downloadedInfo ? 'Retélécharger le PDF' : 'Télécharger le PDF'}
             </Button>
@@ -200,8 +186,8 @@ export function PrintPreviewModal({
               type="button"
               className="grid h-8 w-8 place-items-center rounded-md hover:bg-paper-2 disabled:opacity-40"
               aria-label="Réduire le zoom"
-              disabled={zoom <= 0.75}
-              onClick={() => setZoom((value) => Math.max(0.75, Math.round((value - 0.15) * 100) / 100))}
+              disabled={zoom <= 0.6}
+              onClick={() => setZoom((value) => Math.max(0.6, Math.round((value - 0.15) * 100) / 100))}
             >
               <Minus size={14} />
             </button>
@@ -219,7 +205,7 @@ export function PrintPreviewModal({
         </div>
 
         {exporting && (
-          <div className="flex items-center gap-2.5 rounded-lg border border-amber/30 bg-amber/10 px-3 py-2 text-xs font-medium text-amber">
+          <div className="flex items-center gap-2.5 rounded-lg border border-amber/30 bg-amber/10 px-3.5 py-2.5 text-xs font-medium text-amber">
             <Spinner />
             <span>{exportProgress || 'Génération du PDF haute fidélité prêt à l’impression…'}</span>
           </div>
@@ -237,8 +223,8 @@ export function PrintPreviewModal({
               href={downloadedInfo.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-md bg-emerald-500/20 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/30 transition-colors shrink-0"
-              title="Ouvrir le fichier PDF dans un nouvel onglet"
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/30 transition-colors shrink-0"
+              title="Ouvrir le document PDF téléchargé dans un nouvel onglet"
             >
               <span>Afficher le PDF</span>
               <ExternalLink size={12} />
@@ -246,16 +232,28 @@ export function PrintPreviewModal({
           </div>
         )}
 
-        <div ref={viewport} className="print-preview-viewport max-h-[62vh] max-h-[62dvh] overflow-auto rounded-xl border border-line bg-[#333] p-3">
-          <div className="mx-auto" style={{ width: pageWidthPx * scale, height: canvasHeight }}>
+        <div
+          ref={viewport}
+          className="print-preview-viewport max-h-[64vh] max-h-[64dvh] overflow-auto rounded-xl border border-line bg-[#222222] p-4 text-center"
+        >
+          <div
+            className="mx-auto inline-block text-left"
+            style={{
+              width: `${Math.round(pageWidthPx * scale)}px`,
+              minHeight: `${Math.round(canvasHeight)}px`,
+            }}
+          >
             <div
               ref={canvas}
-              className="print-preview-page"
+              className="print-preview-page shadow-2xl"
               style={{
                 width: `${pageWidthMm}mm`,
                 minHeight: `${pageHeightMm}mm`,
                 transform: `scale(${scale})`,
                 transformOrigin: 'top left',
+                backgroundColor: '#ffffff',
+                color: '#0f172a',
+                boxSizing: 'border-box',
               }}
             >
               {content}
@@ -263,7 +261,7 @@ export function PrintPreviewModal({
           </div>
         </div>
         <p className="text-[11px] text-ink-faint">
-          Vérifiez les codes et la disposition. Le bouton Télécharger enregistre le fichier PDF haute fidélité prêt à l'impression et l'ouvre directement sur votre appareil.
+          Vérifiez les codes et la disposition. Le bouton Télécharger enregistre la planche haute fidélité prête à l'impression directement sur votre appareil.
         </p>
       </div>
     </Modal>

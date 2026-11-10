@@ -337,9 +337,24 @@
 }
 
 .print-preview-page .a4-page {
+  box-sizing: border-box;
   width: 190mm;
   margin: 0 auto;
   padding: 5mm 0;
+}
+
+.print-preview-page .badge-page {
+  box-sizing: border-box;
+  width: 190mm;
+  margin: 0 auto;
+  padding: 4mm 0;
+}
+
+.print-preview-page .label-sheet-page {
+  box-sizing: border-box;
+  width: 198mm;
+  margin: 0 auto;
+  padding: 3mm 0;
 }
 
 .print-preview-page .label-grid {
@@ -353,7 +368,7 @@
   display: grid;
   grid-template-columns: repeat(2, 85.6mm);
   justify-content: center;
-  gap: 6mm 8mm;
+  gap: 4mm 8mm;
 }
 
 .print-preview-page .tool-label-card,

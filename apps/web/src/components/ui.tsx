@@ -496,7 +496,7 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
-  wide?: boolean;
+  wide?: boolean | 'sheet';
 }) {
   return (
     <Dialog
@@ -509,7 +509,11 @@ export function Modal({
         showCloseButton={false}
         className={cx(
           'grid max-h-[92vh] max-h-[92dvh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden bg-paper p-0 pb-[env(safe-area-inset-bottom)] sm:rounded-card',
-          wide ? 'sm:max-w-2xl' : 'sm:max-w-lg',
+          wide === 'sheet'
+            ? 'sm:max-w-4xl lg:max-w-5xl'
+            : wide
+            ? 'sm:max-w-2xl'
+            : 'sm:max-w-lg',
         )}
       >
         <DialogHeader className="border-b border-line px-5 py-4">
