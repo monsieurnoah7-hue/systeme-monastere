@@ -147,7 +147,7 @@ export const ROLE_ARCHETYPES_UI: RoleArchetypeUI[] = [
 
 const WEEKDAYS_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Lundi -> Dimanche
 
-const ROLE_ORDER: Record<string, number> = { direction: 0, magasinier: 1, chef_atelier: 2, travailleur: 3 };
+const ROLE_ORDER: Record<string, number> = { direction: 0, observateur: 1, chef_atelier: 2, magasinier: 3, travailleur: 4 };
 
 const DEFAULT_ROLE_THEME = {
   badgeVariant: 'outline' as const,
@@ -164,6 +164,13 @@ const ROLE_THEME: Record<string, { badgeVariant: 'default' | 'secondary' | 'outl
     bg: 'bg-surface-2 text-ink border-line',
     text: 'text-ink',
     border: 'border-line',
+  },
+  observateur: {
+    badgeVariant: 'secondary',
+    tone: 'blue',
+    bg: 'bg-blue-wash text-blue border-blue/30',
+    text: 'text-blue',
+    border: 'border-blue/30',
   },
   magasinier: {
     badgeVariant: 'secondary',
@@ -190,6 +197,7 @@ const ROLE_THEME: Record<string, { badgeVariant: 'default' | 'secondary' | 'outl
 
 const ROLE_DESC: Record<Role, string> = {
   direction: 'Super-administrateur : accès intégral à tous les modules, comptes et sauvegardes.',
+  observateur: 'Haute Autorité : consultation intégrale de tous les modules et indicateurs financiers en lecture seule.',
   magasinier: 'Gestion logistique : inventaire d’outils, stocks, entrées/sorties et magasins.',
   chef_atelier: 'Supervision terrain : gestion des équipes, prêts d’outils et départs de chantier.',
   travailleur: 'Accès restreint : consultation de son espace personnel, prêts et pointages.',
@@ -526,6 +534,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
   const canViewUsers = isDirection || Boolean(permissions['users.view'] || permissions['users.manage']);
   const canManageUsers = isDirection || Boolean(permissions['users.manage']);
   const canManagePermissions = isDirection || Boolean(permissions['permissions.manage']);
+  const canViewPermissions = isDirection || Boolean(permissions['permissions.manage'] || permissions['settings.view']);
   const canViewSettings = isDirection || Boolean(permissions['settings.view'] || permissions['settings.edit']);
   const canEditSettings = isDirection || Boolean(permissions['settings.edit']);
   const canManageTerminals = isDirection || Boolean(permissions['terminals.manage']);
@@ -533,12 +542,12 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
   const canViewKiosk = canViewSettings || canManageTerminals;
   const availableTabs = [
     ...(canViewUsers ? ['comptes'] : []),
-    ...(canManagePermissions ? ['permissions'] : []),
+    ...(canViewPermissions ? ['permissions'] : []),
     ...(canViewKiosk ? ['kiosk'] : []),
     'securite',
     ...(canUseBackups ? ['sauvegardes'] : []),
   ] as const;
-  const defaultTab = canViewUsers ? 'comptes' : canManagePermissions ? 'permissions' : canViewKiosk ? 'kiosk' : 'securite';
+  const defaultTab = canViewUsers ? 'comptes' : canViewPermissions ? 'permissions' : canViewKiosk ? 'kiosk' : 'securite';
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<'comptes' | 'permissions' | 'kiosk' | 'securite' | 'sauvegardes'>(() => {
@@ -1918,7 +1927,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
             </div>
           )}
 
-          {activeTab === 'permissions' && canManagePermissions && rbacView === 'matrix' && (
+          {activeTab === 'permissions' && canViewPermissions && rbacView === 'matrix' && (
             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-line/40 text-xs sm:flex sm:items-center">
               {/* Real-time Search */}
               <div className="relative col-span-2 w-full min-w-0 sm:col-span-1 sm:w-64 sm:shrink-0">
@@ -2560,6 +2569,13 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
               </div>
             </CardHeader>
 
+            {!canManagePermissions && (
+              <div className="flex items-center gap-2 bg-blue-wash/80 border-b border-blue/20 px-4 sm:px-5 py-3 text-sm text-blue font-medium">
+                <Eye size={16} className="shrink-0" />
+                <span>Mode consultation : Vous visualisez la matrice des droits et rôles en lecture seule (Observateur Passif). Aucune modification n’est permise.</span>
+              </div>
+            )}
+
             {hasUnsavedPerms ? (
               <div role="status" aria-live="polite" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-amber-wash/80 border-b border-amber/20 px-4 sm:px-5 py-3 text-sm text-amber font-medium">
                 <span className="flex items-center gap-2">
@@ -2604,7 +2620,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                                     >
                                       {roleName}
                                     </span>
-                                    {!isSystem && roleDetail && (
+                                    {canManagePermissions && !isSystem && roleDetail && (
                                       <div className="flex items-center gap-0.5">
                                         <button
                                           type="button"
@@ -2728,6 +2744,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
                                     const isChecked = !!permDraft[action]?.[role];
                                     const roleName = availableRoles.find((ar) => ar.id === role)?.name ?? ROLE_LABEL[role] ?? role;
+                                    const cellDisabled = !canManagePermissions;
                                     return (
                                       <td key={role} className="px-3 py-2 text-center min-w-[110px] border-r border-b border-line/40">
                                         <button
@@ -2735,16 +2752,18 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                                           role="checkbox"
                                           aria-checked={isChecked}
                                           aria-label={`${isChecked ? 'Retirer' : 'Accorder'} « ${meta?.label ?? action} » au rôle « ${roleName} »`}
-                                          onClick={() => togglePerm(action, role)}
+                                          disabled={cellDisabled}
+                                          onClick={canManagePermissions ? () => togglePerm(action, role) : undefined}
                                           className={cx(
-                                            'inline-flex h-11 w-11 items-center justify-center rounded-lg border text-xs font-bold transition-colors shadow-xs active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+                                            'inline-flex h-11 w-11 items-center justify-center rounded-lg border text-xs font-bold transition-colors shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+                                            canManagePermissions ? 'active:scale-95' : 'cursor-default opacity-85',
                                             isChecked
                                               ? isView
                                                 ? 'border-blue-500 bg-blue-600 text-white shadow-xs'
                                                 : 'border-green bg-green text-white shadow-xs'
                                               : 'border-line bg-surface text-ink-faint hover:bg-paper-2',
                                           )}
-                                          title={`${isChecked ? 'Révoquer' : 'Accorder'} ${meta?.label ?? action} pour ${roleName}`}
+                                          title={canManagePermissions ? `${isChecked ? 'Révoquer' : 'Accorder'} ${meta?.label ?? action} pour ${roleName}` : `Statut : ${isChecked ? 'Accordé' : 'Non accordé'}`}
                                         >
                                           {isChecked ? <Check size={15} /> : ''}
                                         </button>
@@ -2796,7 +2815,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                                     const roleDetail = availableRoles.find((item) => item.id === role);
                                     const roleName = roleDetail?.name ?? ROLE_LABEL[role] ?? role;
                                     const checked = role === 'direction' || !!permDraft[action]?.[role];
-                                    const locked = role === 'direction';
+                                    const locked = role === 'direction' || !canManagePermissions;
                                     return (
                                       <button
                                         key={role}

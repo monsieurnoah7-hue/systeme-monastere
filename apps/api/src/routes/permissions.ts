@@ -15,14 +15,20 @@ import {
   type PermissionAction,
 } from '../lib/permissions.js';
 import { actorId, actorName, requireAuth } from '../middleware/auth.js';
-import { invalidatePermissionCache, requirePerm } from '../middleware/permissions.js';
+import { invalidatePermissionCache, hasPermission, requirePerm } from '../middleware/permissions.js';
 
 export const permissionsRoutes = new Hono();
 
 permissionsRoutes.use('*', requireAuth);
 
-// Liste unifiée des permissions & modules
-permissionsRoutes.get('/', requirePerm('permissions.manage'), async (c) => {
+// Liste unifiée des permissions & modules (consultable par gestionnaire ou en lecture seule de gouvernance)
+permissionsRoutes.get('/', async (c, next) => {
+  const role = c.get('auth')?.user.role;
+  if (!role) return c.json({ error: 'Authentification requise.' }, 401);
+  const ok = (await hasPermission(role, 'permissions.manage')) || (await hasPermission(role, 'settings.view'));
+  if (!ok) return c.json({ error: 'Droit insuffisant pour cette opération.' }, 403);
+  await next();
+}, async (c) => {
   const db = getDb();
   const dbRoles = await db.query<{ id: string; name: string; description: string | null; is_system: boolean }>(
     `SELECT id, name, description, is_system 

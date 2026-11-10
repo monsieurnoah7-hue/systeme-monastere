@@ -59,8 +59,8 @@ usersRoutes.post('/', requirePerm('users.manage'), async (c) => {
   if (!body.success) return c.json({ error: body.error.issues[0]?.message ?? 'Compte invalide.' }, 400);
   const data = body.data;
   const db = getDb();
-  if (c.get('auth')?.user.role !== 'direction' && data.role === 'direction') {
-    return c.json({ error: 'Seule la Direction peut créer un autre compte administrateur.' }, 403);
+  if (c.get('auth')?.user.role !== 'direction' && (data.role === 'direction' || data.role === 'observateur')) {
+    return c.json({ error: 'Seule la Direction peut attribuer un profil de Direction ou d’Observateur Passif.' }, 403);
   }
 
   const existing = await db.one('SELECT id FROM users WHERE login = $1', [data.login]);
@@ -112,8 +112,11 @@ usersRoutes.patch('/:id', requirePerm('users.manage'), async (c) => {
   const before = await db.one<UserListRow & { password_hash: string }>('SELECT * FROM users WHERE id = $1', [id]);
   if (!before) return c.json({ error: 'Compte introuvable.' }, 404);
   const patch = body.data;
-  if (c.get('auth')?.user.role !== 'direction' && (before.role === 'direction' || patch.role === 'direction')) {
-    return c.json({ error: 'Seule la Direction peut gérer les comptes administrateurs.' }, 403);
+  if (
+    c.get('auth')?.user.role !== 'direction' &&
+    (before.role === 'direction' || before.role === 'observateur' || patch.role === 'direction' || patch.role === 'observateur')
+  ) {
+    return c.json({ error: 'Seule la Direction peut gérer les comptes de Direction ou d’Observateur Passif.' }, 403);
   }
 
   if (patch.active === false && before.id === actorId(c)) {
@@ -210,6 +213,10 @@ usersRoutes.delete('/:id', requirePerm('users.manage'), async (c) => {
 
   if (id === actorId(c)) {
     return c.json({ error: 'Vous ne pouvez pas supprimer votre propre compte administrateur.' }, 409);
+  }
+
+  if (user.role === 'observateur' && c.get('auth')?.user.role !== 'direction') {
+    return c.json({ error: 'Seule la Direction peut supprimer un compte d’Observateur Passif.' }, 403);
   }
 
   if (user.role === 'direction') {

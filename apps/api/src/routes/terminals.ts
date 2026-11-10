@@ -28,7 +28,13 @@ type TerminalRow = {
   registered_at: string;
 };
 
-terminalsRoutes.get('/', requirePerm('terminals.manage'), async (c) => {
+terminalsRoutes.get('/', async (c, next) => {
+  const role = c.get('auth')?.user.role;
+  if (!role) return c.json({ error: 'Authentification requise.' }, 401);
+  const ok = (await hasPermission(role, 'terminals.manage')) || (await hasPermission(role, 'settings.view'));
+  if (!ok) return c.json({ error: 'Droit insuffisant pour cette opération.' }, 403);
+  await next();
+}, async (c) => {
   const db = getDb();
   const terminals = await db.query<TerminalRow & { last_used: string | null; punches_today: string }>(
     `SELECT t.id, t.name, t.active, t.registered_at,

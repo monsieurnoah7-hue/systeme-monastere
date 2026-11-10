@@ -5,6 +5,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   magasinier: 'Magasinier',
   chef_atelier: 'Chef d’atelier',
   travailleur: 'Travailleur',
+  observateur: 'Observateur Passif',
 };
 
 export const STATUS_LABEL: Record<ToolStatus, string> = {

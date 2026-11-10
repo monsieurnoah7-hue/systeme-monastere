@@ -34,26 +34,26 @@ type NavItem = {
   roles: Role[];
 };
 
-const ALL_STAFF: Role[] = ['direction', 'magasinier', 'chef_atelier'];
+const ALL_STAFF: Role[] = ['direction', 'magasinier', 'chef_atelier', 'observateur'];
 
 export const NAV: NavItem[] = [
   { id: 'dashboard', label: 'Tableau de bord', short: 'Bord', icon: Gauge, roles: ALL_STAFF },
   { id: 'projets', label: 'Commandes & Chantiers', short: 'Chantiers', icon: Briefcase, roles: ALL_STAFF },
   { id: 'pointage', label: 'Pointage', short: 'Pointage', icon: Clock, roles: ALL_STAFF },
-  { id: 'employes', label: 'Travailleurs', short: 'Équipe', icon: Users, roles: ['direction', 'magasinier', 'chef_atelier'] },
+  { id: 'employes', label: 'Travailleurs', short: 'Équipe', icon: Users, roles: ['direction', 'magasinier', 'chef_atelier', 'observateur'] },
   { id: 'outils', label: 'Matériel & Machines', short: 'Machines', icon: Wrench, roles: ALL_STAFF },
   { id: 'stock', label: 'Matières & Quincaillerie', short: 'Matières', icon: Package, roles: ALL_STAFF },
   { id: 'magasins', label: 'Magasins', short: 'Magasins', icon: Warehouse, roles: ALL_STAFF },
-  { id: 'espace', label: 'Mon Espace', short: 'Espace', icon: UserIcon, roles: ['direction', 'magasinier', 'chef_atelier', 'travailleur'] },
-  { id: 'parametres', label: 'Paramètres', short: 'Réglages', icon: Settings, roles: ['direction'] },
+  { id: 'espace', label: 'Mon Espace', short: 'Espace', icon: UserIcon, roles: ['direction', 'magasinier', 'chef_atelier', 'travailleur', 'observateur'] },
+  { id: 'parametres', label: 'Paramètres', short: 'Réglages', icon: Settings, roles: ['direction', 'observateur'] },
 ];
 
 export function computeAllowedViews(
   role: Role,
   permissions?: Record<string, boolean> | null,
 ): ViewId[] {
-  // Super-Administrateur / Direction a accès à l'ensemble des modules
-  if (role === 'direction') {
+  // Super-Administrateur / Direction et Haute Autorité Observateur ont accès à l'ensemble des modules
+  if (role === 'direction' || role === 'observateur') {
     return ['dashboard', 'projets', 'pointage', 'employes', 'outils', 'stock', 'magasins', 'espace', 'parametres'];
   }
 
@@ -370,7 +370,7 @@ export function Shell({
               </div>
               <div className="min-w-0 leading-tight">
                 <span className="block max-w-[min(48vw,15rem)] truncate text-xs font-bold text-ink sm:max-w-[16rem]">CFTM Bénédictins Mont Fébé</span>
-                <span className="block truncate text-[10px] text-ink-soft">{ROLE_LABEL[user.role]}</span>
+                <span className="block truncate text-[10px] text-ink-soft">{ROLE_LABEL[user.role] ?? user.role}</span>
               </div>
             </div>
 

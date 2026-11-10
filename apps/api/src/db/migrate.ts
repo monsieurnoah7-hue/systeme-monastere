@@ -1,4 +1,5 @@
 import { env } from '../env.js';
+import { hashPassword } from '../lib/crypto.js';
 import { DDL, MIGRATION_DDL, MIGRATION_NAME } from './ddl.js';
 import { getDb } from './index.js';
 import { syncOfficialCftmData } from './cftm-data.js';
@@ -257,6 +258,76 @@ export async function migrate(): Promise<void> {
       ALTER TABLE project_incidents ALTER COLUMN excluded_from_accountability SET DEFAULT false;
     `);
     await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [INCIDENT_REVIEW_REVISION]);
+  }
+
+  const SUPER_OBSERVERS_REVISION = '023_super_observateurs_passifs_v1';
+  if (!(await getDb().one('SELECT name FROM _migrations WHERE name = $1', [SUPER_OBSERVERS_REVISION]))) {
+    // 1. Inscrire le rôle système 'observateur'
+    await getDb().query(`
+      INSERT INTO roles (id, name, description, is_system) VALUES
+        ('observateur', 'Observateur Passif (Haute Autorité)', 'Consultation intégrale du système, de tous les modules et indicateurs financiers en lecture seule stricte, sans droit de modification.', true)
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        description = EXCLUDED.description,
+        is_system = true;
+    `);
+
+    // 2. Définir les permissions de l'observateur :
+    // Toutes les vues + valorisation financière + export de rapports + édition personnelle de son profil (photo + login)
+    // AUCUNE permission de création, modification ou suppression opérationnelle
+    const VIEW_AND_SELF_ACTIONS = [
+      'dashboard.view',
+      'projects.view',
+      'tools.view',
+      'loans.view',
+      'magasins.view',
+      'stock.view',
+      'attendance.view',
+      'leaves.view',
+      'employees.view',
+      'financial.view',
+      'reports.view',
+      'reports.export',
+      'settings.view',
+      'users.view',
+      'profile.photo_edit_self',
+      'profile.login_edit',
+    ];
+
+    for (const action of PERMISSION_ACTIONS) {
+      const allowed = VIEW_AND_SELF_ACTIONS.includes(action);
+      await getDb().query(`
+        INSERT INTO role_permissions (role, action, allowed)
+        VALUES ('observateur', $1, $2)
+        ON CONFLICT (role, action) DO UPDATE SET allowed = EXCLUDED.allowed;
+      `, [action, allowed]);
+    }
+
+    // 3. Créer ou mettre à jour les deux super comptes d'observateurs passifs :
+    // - Père Nicolas, Prieur du monastère
+    // - Père Abbé Christian Meyer (en Suisse)
+    const prieurPass = hashPassword('prieur2026');
+    const abbePass = hashPassword('abbemeyer2026');
+
+    await getDb().query(`
+      INSERT INTO users (login, password_hash, display_name, role, employee_id, active)
+      VALUES ('prieur', $1, 'Père Nicolas (Prieur)', 'observateur', NULL, true)
+      ON CONFLICT (login) DO UPDATE SET
+        role = 'observateur',
+        display_name = 'Père Nicolas (Prieur)',
+        active = true;
+    `, [prieurPass]);
+
+    await getDb().query(`
+      INSERT INTO users (login, password_hash, display_name, role, employee_id, active)
+      VALUES ('abbe.meyer', $1, 'Père Abbé Christian Meyer (Suisse)', 'observateur', NULL, true)
+      ON CONFLICT (login) DO UPDATE SET
+        role = 'observateur',
+        display_name = 'Père Abbé Christian Meyer (Suisse)',
+        active = true;
+    `, [abbePass]);
+
+    await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [SUPER_OBSERVERS_REVISION]);
   }
 }
 

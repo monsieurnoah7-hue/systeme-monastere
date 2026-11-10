@@ -38,6 +38,11 @@ import {
   User as UserIcon,
   Compass,
   RefreshCw,
+  Eye,
+  Gauge,
+  Briefcase,
+  Wrench,
+  Package,
 } from 'lucide-react';
 
 const SITUATION_LABEL: Record<string, string> = {
@@ -129,7 +134,8 @@ export function Espace({
   }, []);
 
   const isDirection = user?.role === 'direction';
-  const canEditLogin = isDirection || Boolean(permissions?.['profile.login_edit']) || Boolean(permissions?.['users.manage']);
+  const isObserver = user?.role === 'observateur';
+  const canEditLogin = isDirection || isObserver || Boolean(permissions?.['profile.login_edit']) || Boolean(permissions?.['users.manage']);
 
   const toast = useToast();
   const [permissionModalOpen, setPermissionModalOpen] = useState(false);
@@ -306,10 +312,11 @@ export function Espace({
   }
 
   // =========================================================================
-  // ESPACE EXÉCUTIF : DIRECTION DU MONASTÈRE (Super-Admin)
+  // ESPACE EXÉCUTIF : DIRECTION DU MONASTÈRE & HAUTE AUTORITÉ (OBSERVATEUR)
   // =========================================================================
-  if (isDirection) {
-    const userPhoto = user?.photo_path || overview?.employee?.photo_path || (user?.employee_id ? `/photos/employees/${user.employee_id}.jpg` : '/photos/employees/EMP-001.jpg');
+  if (isDirection || isObserver) {
+    const defaultPhoto = isDirection ? '/photos/employees/EMP-001.jpg' : null;
+    const userPhoto = user?.photo_path || overview?.employee?.photo_path || (user?.employee_id ? `/photos/employees/${user.employee_id}.jpg` : defaultPhoto);
 
     return (
       <div className="space-y-4">
@@ -319,23 +326,28 @@ export function Espace({
             {/* Real Profile Photo with adequate & pleasant size and Facebook-style Presence Dot */}
             <div className="relative shrink-0">
               <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl overflow-hidden border-2 border-line/80 bg-surface shadow-md">
-                <img
-                  src={userPhoto}
-                  alt={displayName || 'Direction Générale'}
-                  className="h-full w-full object-cover object-top"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    target.style.display = 'none';
-                    if (target.nextElementSibling) {
-                      (target.nextElementSibling as HTMLElement).style.display = 'grid';
-                    }
-                  }}
-                />
+                {userPhoto ? (
+                  <img
+                    src={userPhoto}
+                    alt={displayName || (isObserver ? 'Observateur Passif' : 'Direction Générale')}
+                    className="h-full w-full object-cover object-top"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      target.style.display = 'none';
+                      if (target.nextElementSibling) {
+                        (target.nextElementSibling as HTMLElement).style.display = 'grid';
+                      }
+                    }}
+                  />
+                ) : null}
                 <div
-                  style={{ display: 'none' }}
-                  className="h-full w-full place-items-center bg-amber-wash text-amber text-lg font-bold"
+                  style={{ display: userPhoto ? 'none' : 'grid' }}
+                  className={cx(
+                    'h-full w-full place-items-center text-lg font-bold',
+                    isObserver ? 'bg-blue-wash text-blue' : 'bg-amber-wash text-amber',
+                  )}
                 >
-                  {initials(displayName || 'Direction')}
+                  {initials(displayName || (isObserver ? 'Observateur' : 'Direction'))}
                 </div>
               </div>
               {/* Facebook-style status dot */}
@@ -348,15 +360,24 @@ export function Espace({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-base sm:text-lg font-bold tracking-tight text-ink truncate">
-                  {displayName || 'Direction Générale'}
+                  {displayName || (isObserver ? 'Observateur Passif' : 'Direction Générale')}
                 </h1>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-amber-wash text-amber border border-amber/30 shadow-xs">
-                  <ShieldCheck size={12} className="shrink-0" />
-                  <span>Super-Admin Permanent</span>
-                </span>
+                {isDirection ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-amber-wash text-amber border border-amber/30 shadow-xs">
+                    <ShieldCheck size={12} className="shrink-0" />
+                    <span>Super-Admin Permanent</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-blue-wash text-blue border border-blue/30 shadow-xs">
+                    <Eye size={12} className="shrink-0" />
+                    <span>Observateur Passif · Haute Autorité</span>
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-ink-soft truncate mt-0.5">
-                Direction du Monastère des Bénédictins · Tous privilèges exécutifs · Non soumis au pointage
+                {isDirection
+                  ? 'Direction du Monastère des Bénédictins · Tous privilèges exécutifs · Non soumis au pointage'
+                  : 'Haute Autorité Monastique · Consultation intégrale en lecture seule stricte · Non soumis au pointage'}
               </p>
             </div>
           </div>
@@ -655,152 +676,282 @@ export function Espace({
             </div>
           </Card>
 
-          {/* Panel 2: Raccourcis de Gouvernance & Attribution (5 cols on desktop, responsive on mobile) */}
+          {/* Panel 2: Raccourcis de Surveillance (Observateur) ou Gouvernance (Direction) */}
           <Card className={`lg:col-span-5 p-4 sm:p-5 shadow-card border-line flex flex-col justify-between ${mobileTab !== 'gouvernance' ? 'hidden lg:flex' : 'flex'}`}>
             <div>
               <div className="flex items-center justify-between border-b border-line pb-2.5">
                 <div className="flex items-center gap-2">
                   <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-paper-2 border border-line text-blue">
-                    <Compass size={13} />
+                    {isObserver ? <Eye size={13} /> : <Compass size={13} />}
                   </span>
                   <div>
-                    <h2 className="text-xs sm:text-sm font-bold text-ink">Gouvernance &amp; Centres Maîtres</h2>
-                    <p className="text-[10px] sm:text-[11px] text-ink-soft">Accès directs aux modules de contrôle</p>
+                    <h2 className="text-xs sm:text-sm font-bold text-ink">
+                      {isObserver ? 'Surveillance & Consultation' : 'Gouvernance & Centres Maîtres'}
+                    </h2>
+                    <p className="text-[10px] sm:text-[11px] text-ink-soft">
+                      {isObserver ? 'Accès directs en lecture seule aux services' : 'Accès directs aux modules de contrôle'}
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="mt-3.5 flex-1 flex flex-col justify-between gap-2.5">
-              {/* Tile 1: Rôles & Permissions Dynamiques */}
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  sessionStorage.setItem('parametres_active_tab', 'permissions');
-                  if (onNavigate) {
-                    onNavigate('parametres');
-                  } else {
-                    window.location.hash = 'parametres';
-                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'parametres' }));
-                  }
-                }}
-                className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-amber/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-amber-wash text-amber border border-amber/20">
-                    <KeyRound size={16} />
+              {isObserver ? (
+                <>
+                  {/* Tile 1: Tableau de bord exécutif */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (onNavigate) onNavigate('dashboard');
+                      else { window.location.hash = 'dashboard'; window.dispatchEvent(new CustomEvent('nav-view', { detail: 'dashboard' })); }
+                    }}
+                    className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-blue/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[54px]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-blue-wash text-blue border border-blue/20">
+                        <Gauge size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-ink truncate group-hover:text-blue transition-colors">
+                          Tableau de Bord Exécutif
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                          Indicateurs, présences et valorisations globales
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-ink-faint group-hover:text-blue group-hover:translate-x-0.5 transition-all ml-2">
+                      <ChevronRight size={16} />
+                    </span>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-ink truncate group-hover:text-amber transition-colors">
-                      Rôles &amp; Permissions Dynamiques
-                    </p>
-                    <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
-                      Créer des rôles sur-mesure et allouer les privilèges
-                    </p>
-                  </div>
-                </div>
-                <span className="shrink-0 text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all ml-2">
-                  <ChevronRight size={16} />
-                </span>
-              </div>
 
-              {/* Tile 2: Pointage & Kiosques CFTM */}
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  sessionStorage.setItem('parametres_active_tab', 'kiosk');
-                  if (onNavigate) {
-                    onNavigate('parametres');
-                  } else {
-                    window.location.hash = 'parametres';
-                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'parametres' }));
-                  }
-                }}
-                className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-amber/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-amber-wash text-amber border border-amber/20">
-                    <Clock size={16} />
+                  {/* Tile 2: Commandes & Chantiers */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (onNavigate) onNavigate('projets');
+                      else { window.location.hash = 'projets'; window.dispatchEvent(new CustomEvent('nav-view', { detail: 'projets' })); }
+                    }}
+                    className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-amber/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[54px]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-amber-wash text-amber border border-amber/20">
+                        <Briefcase size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-ink truncate group-hover:text-amber transition-colors">
+                          Commandes &amp; Chantiers
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                          Suivi des projets, heures et incidents d’atelier
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all ml-2">
+                      <ChevronRight size={16} />
+                    </span>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-ink truncate group-hover:text-amber transition-colors">
-                      Pointage &amp; Kiosques d'Atelier
-                    </p>
-                    <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
-                      Cadences, verrous stricts &amp; bornes tablettes
-                    </p>
-                  </div>
-                </div>
-                <span className="shrink-0 text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all ml-2">
-                  <ChevronRight size={16} />
-                </span>
-              </div>
 
-              {/* Tile 3: Magasins & Stocks */}
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  if (onNavigate) {
-                    onNavigate('magasins');
-                  } else {
-                    window.location.hash = 'magasins';
-                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'magasins' }));
-                  }
-                }}
-                className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-blue/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-blue-wash text-blue border border-blue/20">
-                    <Warehouse size={16} />
+                  {/* Tile 3: Matières Premières & Stocks */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (onNavigate) onNavigate('stock');
+                      else { window.location.hash = 'stock'; window.dispatchEvent(new CustomEvent('nav-view', { detail: 'stock' })); }
+                    }}
+                    className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-green/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[54px]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-green-wash text-green border border-green/20">
+                        <Package size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-ink truncate group-hover:text-green transition-colors">
+                          Matières Premières &amp; Stocks
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                          Niveaux de stocks, alertes et valorisations
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-ink-faint group-hover:text-green group-hover:translate-x-0.5 transition-all ml-2">
+                      <ChevronRight size={16} />
+                    </span>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-ink truncate group-hover:text-blue transition-colors">
-                      Magasins, Dépôts &amp; Quincaillerie
-                    </p>
-                    <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
-                      Gestion des dépôts et affectation des outillages
-                    </p>
-                  </div>
-                </div>
-                <span className="shrink-0 text-ink-faint group-hover:text-blue group-hover:translate-x-0.5 transition-all ml-2">
-                  <ChevronRight size={16} />
-                </span>
-              </div>
 
-              {/* Tile 4: Travailleurs & Collaborateurs */}
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  if (onNavigate) {
-                    onNavigate('employes');
-                  } else {
-                    window.location.hash = 'employes';
-                    window.dispatchEvent(new CustomEvent('nav-view', { detail: 'employes' }));
-                  }
-                }}
-                className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-green/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-green-wash text-green border border-green/20">
-                    <Users size={16} />
+                  {/* Tile 4: Matériel & Machines */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (onNavigate) onNavigate('outils');
+                      else { window.location.hash = 'outils'; window.dispatchEvent(new CustomEvent('nav-view', { detail: 'outils' })); }
+                    }}
+                    className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-blue/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[54px]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-blue-wash text-blue border border-blue/20">
+                        <Wrench size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-ink truncate group-hover:text-blue transition-colors">
+                          Matériel &amp; Machines
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                          Parc d’outillage, états et historique des prêts
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-ink-faint group-hover:text-blue group-hover:translate-x-0.5 transition-all ml-2">
+                      <ChevronRight size={16} />
+                    </span>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-ink truncate group-hover:text-green transition-colors">
-                      Comptes Utilisateurs &amp; Travailleurs
+
+                  {/* Notice Haute Autorité */}
+                  <div className="mt-1 rounded-xl border border-blue/20 bg-blue-wash/60 p-3 text-[11px] text-ink-soft">
+                    <p className="font-semibold text-blue flex items-center gap-1.5 mb-1">
+                      <Eye size={13} /> Droits de Haute Autorité en Lecture Seule
                     </p>
-                    <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
-                      Fiches ouvriers, affectations &amp; responsabilités
-                    </p>
+                    Conformément aux prérogatives de votre charge monastique, vous disposez d’une visibilité intégrale sur l’activité du monastère. Aucune écriture opérationnelle ne peut être réalisée depuis ce compte, à l’exception de vos propres paramètres personnels.
                   </div>
-                </div>
-                <span className="shrink-0 text-ink-faint group-hover:text-green group-hover:translate-x-0.5 transition-all ml-2">
-                  <ChevronRight size={16} />
-                </span>
-              </div>
+                </>
+              ) : (
+                <>
+                  {/* Tile 1: Rôles & Permissions Dynamiques */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      sessionStorage.setItem('parametres_active_tab', 'permissions');
+                      if (onNavigate) {
+                        onNavigate('parametres');
+                      } else {
+                        window.location.hash = 'parametres';
+                        window.dispatchEvent(new CustomEvent('nav-view', { detail: 'parametres' }));
+                      }
+                    }}
+                    className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-amber/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-amber-wash text-amber border border-amber/20">
+                        <KeyRound size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-ink truncate group-hover:text-amber transition-colors">
+                          Rôles &amp; Permissions Dynamiques
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                          Créer des rôles sur-mesure et allouer les privilèges
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all ml-2">
+                      <ChevronRight size={16} />
+                    </span>
+                  </div>
+
+                  {/* Tile 2: Pointage & Kiosques CFTM */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      sessionStorage.setItem('parametres_active_tab', 'kiosk');
+                      if (onNavigate) {
+                        onNavigate('parametres');
+                      } else {
+                        window.location.hash = 'parametres';
+                        window.dispatchEvent(new CustomEvent('nav-view', { detail: 'parametres' }));
+                      }
+                    }}
+                    className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-amber/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-amber-wash text-amber border border-amber/20">
+                        <Clock size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-ink truncate group-hover:text-amber transition-colors">
+                          Pointage &amp; Kiosques d'Atelier
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                          Cadences, verrous stricts &amp; bornes tablettes
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-ink-faint group-hover:text-amber group-hover:translate-x-0.5 transition-all ml-2">
+                      <ChevronRight size={16} />
+                    </span>
+                  </div>
+
+                  {/* Tile 3: Magasins & Stocks */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (onNavigate) {
+                        onNavigate('magasins');
+                      } else {
+                        window.location.hash = 'magasins';
+                        window.dispatchEvent(new CustomEvent('nav-view', { detail: 'magasins' }));
+                      }
+                    }}
+                    className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-blue/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-blue-wash text-blue border border-blue/20">
+                        <Warehouse size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-ink truncate group-hover:text-blue transition-colors">
+                          Magasins, Dépôts &amp; Quincaillerie
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                          Gestion des dépôts et affectation des outillages
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-ink-faint group-hover:text-blue group-hover:translate-x-0.5 transition-all ml-2">
+                      <ChevronRight size={16} />
+                    </span>
+                  </div>
+
+                  {/* Tile 4: Travailleurs & Collaborateurs */}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (onNavigate) {
+                        onNavigate('employes');
+                      } else {
+                        window.location.hash = 'employes';
+                        window.dispatchEvent(new CustomEvent('nav-view', { detail: 'employes' }));
+                      }
+                    }}
+                    className="group p-3 sm:p-3.5 rounded-xl border border-line bg-surface hover:border-green/50 hover:bg-surface-2 transition-all cursor-pointer flex items-center justify-between shadow-xs active:scale-[0.99] flex-1 min-h-[58px]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-lg bg-green-wash text-green border border-green/20">
+                        <Users size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-ink truncate group-hover:text-green transition-colors">
+                          Comptes Utilisateurs &amp; Travailleurs
+                        </p>
+                        <p className="text-[10px] sm:text-[11px] text-ink-soft truncate">
+                          Fiches ouvriers, affectations &amp; responsabilités
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-ink-faint group-hover:text-green group-hover:translate-x-0.5 transition-all ml-2">
+                      <ChevronRight size={16} />
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </Card>
         </div>
