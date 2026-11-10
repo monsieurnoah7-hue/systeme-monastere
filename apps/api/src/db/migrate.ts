@@ -310,24 +310,35 @@ export async function migrate(): Promise<void> {
     const abbePass = hashPassword('abbemeyer2026');
 
     await getDb().query(`
-      INSERT INTO users (login, password_hash, display_name, role, employee_id, active)
-      VALUES ('prieur', $1, 'Père Nicolas (Prieur)', 'observateur', NULL, true)
+      INSERT INTO users (login, password_hash, display_name, role, employee_id, photo_path, active)
+      VALUES ('prieur', $1, 'Père Nicolas (Prieur)', 'observateur', NULL, '/photos/users/prieur.jpg', true)
       ON CONFLICT (login) DO UPDATE SET
         role = 'observateur',
         display_name = 'Père Nicolas (Prieur)',
+        photo_path = COALESCE(users.photo_path, '/photos/users/prieur.jpg'),
         active = true;
     `, [prieurPass]);
 
     await getDb().query(`
-      INSERT INTO users (login, password_hash, display_name, role, employee_id, active)
-      VALUES ('abbe.meyer', $1, 'Père Abbé Christian Meyer (Suisse)', 'observateur', NULL, true)
+      INSERT INTO users (login, password_hash, display_name, role, employee_id, photo_path, active)
+      VALUES ('abbe.meyer', $1, 'Père Abbé Christian Meyer (Suisse)', 'observateur', NULL, '/photos/users/abbe-meyer.jpg', true)
       ON CONFLICT (login) DO UPDATE SET
         role = 'observateur',
         display_name = 'Père Abbé Christian Meyer (Suisse)',
+        photo_path = COALESCE(users.photo_path, '/photos/users/abbe-meyer.jpg'),
         active = true;
     `, [abbePass]);
 
     await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [SUPER_OBSERVERS_REVISION]);
+  }
+
+  const SUPER_OBSERVERS_PHOTOS_REVISION = '024_photos_super_observateurs_v1';
+  if (!(await getDb().one('SELECT name FROM _migrations WHERE name = $1', [SUPER_OBSERVERS_PHOTOS_REVISION]))) {
+    await getDb().query(`
+      UPDATE users SET photo_path = '/photos/users/prieur.jpg' WHERE login = 'prieur';
+      UPDATE users SET photo_path = '/photos/users/abbe-meyer.jpg' WHERE login = 'abbe.meyer';
+    `);
+    await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [SUPER_OBSERVERS_PHOTOS_REVISION]);
   }
 }
 

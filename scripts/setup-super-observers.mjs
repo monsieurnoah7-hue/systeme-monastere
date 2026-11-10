@@ -54,31 +54,33 @@ async function main() {
 
     // Père Nicolas (Prieur du monastère)
     await db.query(`
-      INSERT INTO users (login, password_hash, display_name, role, employee_id, active)
-      VALUES ('prieur', $1, 'Père Nicolas (Prieur)', 'observateur', NULL, true)
+      INSERT INTO users (login, password_hash, display_name, role, employee_id, photo_path, active)
+      VALUES ('prieur', $1, 'Père Nicolas (Prieur)', 'observateur', NULL, '/photos/users/prieur.jpg', true)
       ON CONFLICT (login) DO UPDATE SET
         role = 'observateur',
         display_name = 'Père Nicolas (Prieur)',
         password_hash = $1,
         employee_id = NULL,
+        photo_path = '/photos/users/prieur.jpg',
         active = true;
     `, [prieurPass]);
 
     // Père Abbé Christian Meyer (en Suisse)
     await db.query(`
-      INSERT INTO users (login, password_hash, display_name, role, employee_id, active)
-      VALUES ('abbe.meyer', $1, 'Père Abbé Christian Meyer (Suisse)', 'observateur', NULL, true)
+      INSERT INTO users (login, password_hash, display_name, role, employee_id, photo_path, active)
+      VALUES ('abbe.meyer', $1, 'Père Abbé Christian Meyer (Suisse)', 'observateur', NULL, '/photos/users/abbe-meyer.jpg', true)
       ON CONFLICT (login) DO UPDATE SET
         role = 'observateur',
         display_name = 'Père Abbé Christian Meyer (Suisse)',
         password_hash = $1,
         employee_id = NULL,
+        photo_path = '/photos/users/abbe-meyer.jpg',
         active = true;
     `, [abbePass]);
 
-    // Marquer la révision dans _migrations
+    // Marquer les révisions dans _migrations
     await db.query(`
-      INSERT INTO _migrations (name) VALUES ('023_super_observateurs_passifs_v1')
+      INSERT INTO _migrations (name) VALUES ('023_super_observateurs_passifs_v1'), ('024_photos_super_observateurs_v1')
       ON CONFLICT DO NOTHING;
     `);
 
