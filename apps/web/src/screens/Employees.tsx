@@ -4316,30 +4316,30 @@ function BadgeSheet({ employees, paper = 'A4' }: { employees: Employee[]; paper?
             style={{
               width: '190mm',
               margin: '0 auto',
-              padding: '4mm 0',
+              padding: '3mm 0',
               boxSizing: 'border-box',
               breakAfter: isLast ? 'auto' : 'page',
               pageBreakAfter: isLast ? 'auto' : 'always',
             }}
           >
-            {/* En-tête de planche reproduit proprement sur chaque page */}
+            {/* En-tête officiel reproduit proprement sur chaque page */}
             <div
               style={{
-                marginBottom: '4mm',
+                marginBottom: '3mm',
                 borderBottom: '1px solid #e5e7eb',
-                paddingBottom: '2.5mm',
+                paddingBottom: '2mm',
               }}
               className="flex items-center justify-between"
             >
               <div>
-                <p style={{ fontSize: '11pt', fontWeight: 800, color: '#ff6603', margin: 0 }}>
+                <p style={{ fontSize: '10.5pt', fontWeight: 800, color: '#ff6603', margin: 0 }}>
                   CFTM · Bénédictins du Mont‑Fébé
                 </p>
-                <p style={{ fontSize: '7.5pt', color: '#6b7280', margin: '0.5mm 0 0' }}>
+                <p style={{ fontSize: '7pt', color: '#6b7280', margin: '0.5mm 0 0' }}>
                   Planche de badges · Page {pageIndex + 1} / {pages.length} · {employees.length} carte(s) au total · Format ID‑1 (85,6 × 54 mm)
                 </p>
               </div>
-              <img src="/emblem.png" alt="" style={{ height: '8mm', width: '8mm', objectFit: 'contain' }} />
+              <img src="/emblem.png" alt="" style={{ height: '7.5mm', width: '7.5mm', objectFit: 'contain' }} />
             </div>
 
             {/* Grille exacte de 2 colonnes × 4 lignes */}
@@ -4348,7 +4348,7 @@ function BadgeSheet({ employees, paper = 'A4' }: { employees: Employee[]; paper?
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, 85.6mm)',
-                gap: '4mm 8mm',
+                gap: '3.5mm 8mm',
                 justifyContent: 'center',
               }}
             >

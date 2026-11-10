@@ -347,19 +347,27 @@
   box-sizing: border-box;
   width: 190mm;
   margin: 0 auto;
-  padding: 4mm 0;
+  padding: 3mm 0;
 }
 
 .print-preview-page .label-sheet-page {
   box-sizing: border-box;
-  width: 198mm;
+  width: 194mm;
   margin: 0 auto;
-  padding: 3mm 0;
+  padding: 4mm 0;
+}
+
+.print-preview-page .badge-page + .badge-page,
+.print-preview-page .label-sheet-page + .label-sheet-page,
+.print-preview-page .a4-page + .a4-page {
+  border-top: 2px dashed #cbd5e1;
+  margin-top: 6mm;
+  padding-top: 6mm;
 }
 
 .print-preview-page .label-grid {
   display: grid;
-  justify-content: start;
+  justify-content: center;
   align-content: start;
   grid-auto-rows: max-content;
 }
@@ -368,7 +376,7 @@
   display: grid;
   grid-template-columns: repeat(2, 85.6mm);
   justify-content: center;
-  gap: 4mm 8mm;
+  gap: 3.5mm 8mm;
 }
 
 .print-preview-page .tool-label-card,

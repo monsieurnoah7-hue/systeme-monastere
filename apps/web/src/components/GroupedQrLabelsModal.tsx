@@ -8,7 +8,7 @@ import { PrintPreviewModal } from './PrintPreviewModal';
 
 type Label = { key: string; name: string; detail: string; store: string; qr: string };
 
-function QrLabelSheet({ labels, paper }: { labels: Label[]; paper: 'A4' | 'Letter' }) {
+function QrLabelSheet({ labels, paper, source }: { labels: Label[]; paper: 'A4' | 'Letter'; source?: 'tools' | 'stock' }) {
   const LABELS_PER_PAGE = 40; // 4 colonnes × 10 lignes = 40 étiquettes par page A4
   const pages: Label[][] = [];
   for (let i = 0; i < labels.length; i += LABELS_PER_PAGE) {
@@ -28,28 +28,34 @@ function QrLabelSheet({ labels, paper }: { labels: Label[]; paper: 'A4' | 'Lette
             style={{
               width: '190mm',
               margin: '0 auto',
-              padding: '3mm 0',
+              padding: '4mm 0',
               boxSizing: 'border-box',
               breakAfter: isLast ? 'auto' : 'page',
               pageBreakAfter: isLast ? 'auto' : 'always',
             }}
           >
-            {pages.length > 1 && (
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  borderBottom: '1px solid #e5e7eb',
-                  paddingBottom: '1.5mm',
-                  marginBottom: '2mm',
-                  fontSize: '7pt',
-                  color: '#6b7280',
-                }}
-              >
-                <span>CFTM · Planche QR groupée (45 × 25 mm)</span>
-                <span>Page {pageIndex + 1} / {pages.length} · {labels.length} étiquettes au total</span>
+            {/* En-tête officiel toujours affiché sur chaque page */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: '1px solid #e5e7eb',
+                paddingBottom: '2mm',
+                marginBottom: '3mm',
+              }}
+            >
+              <div>
+                <p style={{ fontSize: '10.5pt', fontWeight: 800, color: '#ff6603', margin: 0 }}>
+                  CFTM · Bénédictins du Mont‑Fébé
+                </p>
+                <p style={{ fontSize: '7pt', color: '#6b7280', margin: '0.5mm 0 0' }}>
+                  Planche QR groupée ({source === 'tools' ? 'Matériel & Machines' : 'Matières & Quincaillerie'}) · Page {pageIndex + 1} / {pages.length} · {labels.length} étiquette(s) au total · Format 45 × 25 mm
+                </p>
               </div>
-            )}
+              <img src="/emblem.png" alt="" style={{ height: '7mm', width: '7mm', objectFit: 'contain' }} />
+            </div>
+
             <div
               className="label-grid"
               style={{
@@ -57,7 +63,7 @@ function QrLabelSheet({ labels, paper }: { labels: Label[]; paper: 'A4' | 'Lette
                 gridTemplateColumns: 'repeat(4, 45mm)',
                 gridAutoRows: '25mm',
                 gap: '2mm',
-                justifyContent: 'start',
+                justifyContent: 'center',
                 alignContent: 'start',
               }}
             >
@@ -69,25 +75,28 @@ function QrLabelSheet({ labels, paper }: { labels: Label[]; paper: 'A4' | 'Lette
                     width: '45mm',
                     height: '25mm',
                     display: 'flex',
+                    alignItems: 'center',
                     overflow: 'hidden',
                     border: '0.25mm solid #cbd5e1',
-                    background: 'white',
+                    borderRadius: '1.5mm',
+                    background: '#ffffff',
                     color: '#0f172a',
                     breakInside: 'avoid',
                     pageBreakInside: 'avoid',
                     boxSizing: 'border-box',
-                    padding: '1mm',
+                    padding: '1mm 1.5mm',
                   }}
                 >
                   <img
                     src={label.qr}
                     alt={`QR ${label.name}`}
                     style={{
-                      width: '20mm',
-                      height: '20mm',
+                      width: '19mm',
+                      height: '19mm',
                       objectFit: 'contain',
                       alignSelf: 'center',
                       imageRendering: '-webkit-optimize-contrast',
+                      flexShrink: 0,
                     }}
                   />
                   <div style={{ minWidth: 0, flex: 1, alignSelf: 'center', paddingLeft: '1.5mm' }}>
@@ -95,7 +104,7 @@ function QrLabelSheet({ labels, paper }: { labels: Label[]; paper: 'A4' | 'Lette
                       <img src="/emblem.png" alt="" style={{ width: '3mm', height: '3mm', objectFit: 'contain' }} />
                       <strong style={{ fontSize: '5.5pt', color: '#334155' }}>CFTM</strong>
                     </div>
-                    <span style={{ display: 'block', fontSize: '7pt', fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#0f172a' }}>
+                    <span style={{ display: 'block', fontSize: '6.8pt', fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#0f172a', lineHeight: 1.2 }}>
                       {label.name}
                     </span>
                     <span style={{ display: 'block', fontSize: '5.5pt', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#475569' }}>
@@ -154,7 +163,7 @@ export function GroupedQrLabelsModal({ canViewTools, canViewStock, storeScope }:
     setPreparing(true);
     try {
       const labels = await Promise.all(copies.map(async (item) => ({ key: item.key, name: item.name, detail: item.detail, store: item.store, qr: await qrDataUrl(`${item.prefix}${item.key.split(':')[1]}`, 220) })));
-      setPrintContent(<QrLabelSheet labels={labels} paper={paper} />);
+      setPrintContent(<QrLabelSheet labels={labels} paper={paper} source={source} />);
       setOpen(false); setPreview(true);
     } catch { toast('Impossible de préparer cette planche QR.', 'error'); }
     finally { setPreparing(false); }

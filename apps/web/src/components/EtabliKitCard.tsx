@@ -90,24 +90,32 @@ function EtabliLabelsSheet({
             style={{
               width: pageWidth,
               margin: '0 auto',
+              padding: '4mm 0',
               boxSizing: 'border-box',
               breakAfter: isLast ? 'auto' : 'page',
               pageBreakAfter: isLast ? 'auto' : 'always',
             }}
           >
-            {pages.length > 1 && (
-              <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 text-[7pt] text-gray-500">
-                <span>CFTM · Planche Établi N°{kit.etabli_number} ({compact ? 'compact 38 × 21 mm' : 'standard 63,5 × 38,1 mm'})</span>
-                <span>Page {pageIndex + 1} / {pages.length} · {allItems.length} étiquettes au total</span>
+            {/* En-tête officiel CFTM sur chaque page */}
+            <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 mb-2.5">
+              <div>
+                <p style={{ fontSize: '10pt', fontWeight: 800, color: '#ff6603', margin: 0 }}>
+                  CFTM · Bénédictins du Mont‑Fébé
+                </p>
+                <p style={{ fontSize: '7pt', color: '#6b7280', margin: '0.5mm 0 0' }}>
+                  Planche Établi N°{kit.etabli_number} ({compact ? 'compact 38 × 21 mm' : 'standard 63,5 × 38,1 mm'}) · Page {pageIndex + 1} / {pages.length} · {allItems.length} étiquette(s) au total
+                </p>
               </div>
-            )}
+              <img src="/emblem.png" alt="" style={{ height: '7mm', width: '7mm', objectFit: 'contain' }} />
+            </div>
+
             <div
               className="label-grid"
               style={{
                 display: 'grid',
                 gridTemplateColumns: compact ? 'repeat(5, 38mm)' : 'repeat(3, 63.5mm)',
                 gap: '2mm',
-                justifyContent: 'start',
+                justifyContent: 'center',
                 alignContent: 'start',
               }}
             >

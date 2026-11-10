@@ -137,13 +137,16 @@ export async function exportSheetToPdf(
         doc.addPage(paper === 'Letter' ? 'letter' : 'a4', orientation);
       }
 
-      // Calcul des dimensions métriques et centrage précis
+      // Calcul des dimensions métriques et cadrage professionnel
       const widthMm = elemWidthPx * (25.4 / 96);
       const heightMm = elemHeightPx * (25.4 / 96);
 
-      // Marge de sécurité de 3mm
-      const maxAvailableW = pageWidthMm - 6;
-      const maxAvailableH = pageHeightMm - 6;
+      // Marges de sécurité normalisées (8mm de marge périmétrique)
+      const topMarginMm = 8;
+      const horizontalMarginMm = 8;
+      const maxAvailableW = pageWidthMm - horizontalMarginMm * 2;
+      const maxAvailableH = pageHeightMm - topMarginMm * 2;
+
       const scaleFit = Math.min(
         maxAvailableW / Math.max(widthMm, 1),
         maxAvailableH / Math.max(heightMm, 1),
@@ -152,8 +155,11 @@ export async function exportSheetToPdf(
 
       const finalWidthMm = widthMm * scaleFit;
       const finalHeightMm = heightMm * scaleFit;
+
+      // Centrage horizontal parfait et calage naturel par le haut (marge supérieure fixe de 8mm)
+      // Évite que les planches partielles flottent au milieu de la feuille ou coupent le bas
       const offsetX = Math.max(0, (pageWidthMm - finalWidthMm) / 2);
-      const offsetY = Math.max(0, (pageHeightMm - finalHeightMm) / 2);
+      const offsetY = topMarginMm;
 
       doc.addImage(imgData, 'PNG', offsetX, offsetY, finalWidthMm, finalHeightMm, undefined, 'FAST');
     }
