@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import {
   Briefcase,
   Clock,
+  Download,
   Gauge,
   LogOut,
   Menu,
@@ -21,10 +22,21 @@ import { ROLE_LABEL, initials } from '../lib/labels';
 import { CommandPalette } from './CommandPalette';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from './ui/drawer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { cx } from './ui';
+import { cx, Modal } from './ui';
 import { getLastServerSync, getOfflineSyncHistory, listOfflineMutations, type OfflineMutation, type OfflineSyncHistory, updateOfflineMutation } from '../lib/offline';
 
 export type ViewId = 'dashboard' | 'projets' | 'outils' | 'pointage' | 'stock' | 'employes' | 'magasins' | 'espace' | 'parametres';
+
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
+
+function isStandaloneApp() {
+  if (typeof window === 'undefined') return false;
+  const iosNavigator = navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia('(display-mode: standalone)').matches || iosNavigator.standalone === true;
+}
 
 type NavItem = {
   id: ViewId;
@@ -237,6 +249,9 @@ export function Shell({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [installHelpOpen, setInstallHelpOpen] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(isStandaloneApp);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
   const [failedOfflineCount, setFailedOfflineCount] = useState(0);
@@ -245,6 +260,47 @@ export function Shell({
   const [lastServerSync, setLastServerSync] = useState<number | null>(() => getLastServerSync(user.id));
   const effectiveAllowed = allowedList ?? allowedViews(user.role);
   const items = NAV.filter((item) => effectiveAllowed.includes(item.id));
+
+  useEffect(() => {
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    };
+    const onInstalled = () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+      setInstallHelpOpen(false);
+    };
+    const onDisplayModeChange = () => setIsInstalled(isStandaloneApp());
+    const displayMode = window.matchMedia('(display-mode: standalone)');
+
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    displayMode.addEventListener?.('change', onDisplayModeChange);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+      displayMode.removeEventListener?.('change', onDisplayModeChange);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) {
+      setInstallHelpOpen(true);
+      return;
+    }
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    setInstallPrompt(null);
+    if (choice.outcome === 'accepted') setIsInstalled(true);
+  };
+
+  const installButton = (className: string) => !isInstalled && (
+    <button type="button" onClick={() => void handleInstall()} className={className}>
+      <Download size={16} className="shrink-0" />
+      <span>{installPrompt ? 'Installer l’application' : 'Installation de l’application'}</span>
+    </button>
+  );
 
   // Keep the most-used destinations in the dock and always include the active screen.
   const mobilePriority: ViewId[] = ['dashboard', 'pointage', 'projets', 'outils', 'stock', 'employes', 'magasins', 'espace', 'parametres'];
@@ -329,6 +385,7 @@ export function Shell({
 
           {/* User Profile Footer */}
           <div className="border-t border-line p-2.5 bg-surface-2/30">
+            {installButton('mb-2 flex min-h-10 w-full items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink-soft transition-colors hover:border-amber/40 hover:text-ink')}
             <div className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 bg-surface border border-line/50">
               <span className="relative grid h-7 w-7 place-items-center rounded-full bg-amber-wash text-xs font-bold text-amber border border-amber/20 overflow-hidden shrink-0">
                 {user.photo_path ? (
@@ -440,6 +497,7 @@ export function Shell({
                 </div>
 
                 <nav className="space-y-1">
+                  {installButton('mb-3 flex min-h-11 w-full items-center gap-2.5 rounded-lg border border-amber/30 bg-amber-wash/40 px-3 py-2 text-sm font-semibold text-amber transition-colors hover:bg-amber-wash')}
                   {items.map((item) => (
                     <NavButton
                       key={item.id}
@@ -482,6 +540,7 @@ export function Shell({
 
               {/* Action & Status right section */}
               <div className="flex items-center gap-2.5">
+                {installButton('inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-amber/40 hover:text-ink')}
                 {/* Offline pill indicator shown ONLY when disconnected */}
                 {!isOnline && (
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-wash border border-amber/30 text-[11px] text-amber font-medium shadow-xs">
@@ -607,6 +666,28 @@ export function Shell({
         </div>
       </div>
 
+      <Modal
+        open={installHelpOpen}
+        title="Installer l’application CFTM"
+        onClose={() => setInstallHelpOpen(false)}
+      >
+        <div className="space-y-4 text-sm leading-relaxed text-ink-soft">
+          <p>Choisissez <strong className="text-ink">Installer l’application</strong> dans le navigateur. « Créer un raccourci » ouvre le site dans un onglet du navigateur.</p>
+          <div className="rounded-xl border border-line bg-surface-2 p-3">
+            <p className="font-semibold text-ink">Android · Chrome</p>
+            <p className="mt-1">Menu ⋮ → « Installer l’application ». Si cette option n’apparaît pas : « Ajouter à l’écran d’accueil » → « Installer l’application ».</p>
+          </div>
+          <div className="rounded-xl border border-line bg-surface-2 p-3">
+            <p className="font-semibold text-ink">iPhone ou iPad · Safari</p>
+            <p className="mt-1">Partager → « Sur l’écran d’accueil » → « Ajouter ».</p>
+          </div>
+          <div className="rounded-xl border border-line bg-surface-2 p-3">
+            <p className="font-semibold text-ink">Ordinateur · Chrome ou Edge</p>
+            <p className="mt-1">Utilisez l’icône d’installation dans la barre d’adresse, ou le menu du navigateur → « Installer l’application ».</p>
+          </div>
+          <p className="text-xs">L’installation complète nécessite une adresse sécurisée en HTTPS. Une adresse locale HTTP sur le Wi-Fi peut ne proposer qu’un raccourci.</p>
+        </div>
+      </Modal>
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}

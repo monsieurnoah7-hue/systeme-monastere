@@ -53,7 +53,7 @@ export function ProjectsHeaderBar({
   const hasActiveFilters = filterCat !== 'all' || filterDelayedOnly;
 
   return (
-    <div className="sticky top-0 z-20 -mx-3 sm:-mx-6 lg:mx-0 bg-paper/95 backdrop-blur-md border-b border-line px-3 sm:px-6 lg:px-0 py-2 sm:py-2.5 transition-all shadow-xs">
+    <div className="sticky top-0 lg:top-11 z-10 -mx-3 sm:-mx-6 lg:mx-0 bg-paper border-b border-line px-3 sm:px-6 lg:px-0 py-2 sm:py-2.5 transition-all shadow-xs">
       {/* Ligne 1 : Navigation Onglets Principaux + Bouton Création CTA */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1 p-1 bg-surface-2 rounded-xl border border-line">
