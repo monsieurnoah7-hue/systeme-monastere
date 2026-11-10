@@ -268,6 +268,22 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
 // -------------------------------------------------------------------------
 // CRUD Routes
 // -------------------------------------------------------------------------
+projectsRoutes.get('/assignees', requireAuth, async (c) => {
+  const role = c.get('auth').user.role;
+  const canAssignWorkers = await hasPermission(role, 'projects.create') || await hasPermission(role, 'projects.edit');
+  if (!canAssignWorkers) return c.json({ error: 'Droit insuffisant pour affecter des travailleurs aux projets.' }, 403);
+
+  const employees = await getDb().query(
+    `SELECT id, full_name, job_title, active,
+            coalesce(workdays, '[1,2,3,4,5,6]'::jsonb) AS workdays,
+            coalesce(daily_work_hours, 8)::float AS daily_work_hours
+       FROM employees
+      WHERE active = true
+      ORDER BY full_name`,
+  );
+  return c.json({ employees });
+});
+
 const emptyToNull = (val: unknown) => (typeof val === 'string' && val.trim() === '' ? null : val);
 
 const projectBody = z.object({

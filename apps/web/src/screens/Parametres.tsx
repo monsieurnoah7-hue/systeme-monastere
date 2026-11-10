@@ -635,7 +635,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
   // Filter states for accounts
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | Role>('all');
-  const [kpiCardFilter, setKpiCardFilter] = useState<'all' | 'active' | 'inactive' | 'linked' | 'direction'>('all');
+  const [kpiCardFilter, setKpiCardFilter] = useState<'all' | 'active' | 'inactive' | 'linked' | 'unlinked' | 'direction'>('all');
 
   // Permissions & RBAC filter states
   const [permSearch, setPermSearch] = useState('');
@@ -943,6 +943,10 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
     try {
       if (userForm.password !== userForm.confirmPassword) {
         setFormError('La confirmation du mot de passe ne correspond pas.');
+        return;
+      }
+      if (userForm.role !== 'direction' && !userForm.employee_id) {
+        setFormError('Sélectionnez la fiche du travailleur. Si elle n’existe pas encore, créez-la d’abord dans Travailleurs.');
         return;
       }
       await api('/api/users', {
@@ -1344,6 +1348,10 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
   // Mappings & Filtered Data
   const employeesById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
+  const unlinkedStaffAccounts = useMemo(
+    () => users.filter((u) => u.active && u.role !== 'direction' && (!u.employee_id || !employeesById.has(u.employee_id))),
+    [users, employeesById],
+  );
 
   const sortedUsers = useMemo(
     () =>
@@ -1361,6 +1369,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
       if (kpiCardFilter === 'active' && !u.active) return false;
       if (kpiCardFilter === 'inactive' && u.active) return false;
       if (kpiCardFilter === 'linked' && !u.employee_id) return false;
+      if (kpiCardFilter === 'unlinked' && (!u.active || u.role === 'direction' || (u.employee_id && employeesById.has(u.employee_id)))) return false;
       if (kpiCardFilter === 'direction' && u.role !== 'direction') return false;
 
       // Role filter
@@ -1871,6 +1880,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                     { key: 'all', label: 'Tous', count: users.length },
                     { key: 'active', label: 'Actifs', count: activeUsersCount },
                     { key: 'inactive', label: 'Inactifs', count: users.length - activeUsersCount },
+                    { key: 'unlinked', label: 'À rattacher', count: unlinkedStaffAccounts.length },
                     { key: 'direction', label: 'Direction', count: users.filter((u) => u.role === 'direction').length },
                   ].map(({ key, label, count }) => (
                     <button
@@ -2079,6 +2089,17 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
             </Card>
           </div>
 
+          {unlinkedStaffAccounts.length > 0 && (
+            <div className="flex flex-col gap-3 rounded-xl border border-amber/30 bg-amber-wash/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs leading-relaxed text-ink">
+                <strong>{unlinkedStaffAccounts.length} compte{unlinkedStaffAccounts.length > 1 ? 's' : ''} actif{unlinkedStaffAccounts.length > 1 ? 's' : ''} hors Direction</strong> {unlinkedStaffAccounts.length > 1 ? 'ne sont liés' : 'n’est pas lié'} à aucune fiche du Répertoire et ne {unlinkedStaffAccounts.length > 1 ? 'comptent' : 'compte'} donc pas dans l’effectif des travailleurs.
+              </p>
+              <Button size="sm" variant="secondary" className="shrink-0" onClick={() => setKpiCardFilter('unlinked')}>
+                Voir les comptes à rattacher
+              </Button>
+            </div>
+          )}
+
           {/* User Management Table Card */}
           <Card className="shadow-card">
             <CardHeader className="border-b border-line pb-4">
@@ -2106,6 +2127,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                   <strong className="underline">
                     {kpiCardFilter === 'active' && 'Comptes Actifs'}
                     {kpiCardFilter === 'linked' && 'Rattachés aux Travailleurs'}
+                    {kpiCardFilter === 'unlinked' && 'Comptes de personnel sans fiche'}
                     {kpiCardFilter === 'direction' && 'Direction & Administration'}
                   </strong>
                   {' '}({filteredUsers.length} résultat{filteredUsers.length > 1 ? 's' : ''})
@@ -3989,7 +4011,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
             </Button>
             <Button
               variant="primary"
-              disabled={busy || userForm.login.trim().length < 3 || userForm.password.length < 6}
+              disabled={busy || userForm.login.trim().length < 3 || userForm.password.length < 6 || (userForm.role !== 'direction' && !userForm.employee_id)}
               onClick={() => void createUser()}
             >
               {busy ? <Spinner /> : 'Créer le compte'}
@@ -4035,19 +4057,27 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Rattacher à un travailleur (Recommandé)</label>
+              <label className="mb-1.5 block text-xs font-medium text-ink-soft">Fiche travailleur {userForm.role !== 'direction' && <span className="text-red">· obligatoire</span>}</label>
               <select
                 value={userForm.employee_id}
                 onChange={(e) => handleUserEmployeeChange(e.target.value)}
+                required={userForm.role !== 'direction'}
                 className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
               >
-                <option value="">— Aucun (Compte générique / Visiteur) —</option>
-                {employees.map((e) => (
+                {userForm.role === 'direction'
+                  ? <option value="">— Aucun (compte Direction) —</option>
+                  : <option value="">— Choisir une fiche travailleur —</option>}
+                {employees.filter((employee) => employee.active && (userForm.role === 'direction' || !users.some((account) => account.employee_id === employee.id))).map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.full_name} ({e.id} - {e.job_title})
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-[11px] text-ink-faint">
+                {userForm.role === 'direction'
+                  ? 'Le compte Direction peut exister sans fiche travailleur.'
+                  : 'Un compte de personnel doit être lié à une fiche active. Pour une nouvelle personne, créez d’abord sa fiche dans Travailleurs.'}
+              </p>
             </div>
 
             <div>

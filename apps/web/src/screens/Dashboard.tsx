@@ -127,7 +127,7 @@ function WorkshopPulseRibbon({
   onOpenEtablis: () => void;
 }) {
   const totalTeam = das04
-    ? das04.present + das04.absent + das04.late + das04.conge + das04.permission
+    ? das04.detail.length
     : 0;
   const attendanceRate = totalTeam > 0 && das04 ? Math.round((das04.present / totalTeam) * 100) : 0;
   const totalArbitrages = pendingLeavesCount + das05.overdueLoans + das05.lowStock;
@@ -1834,7 +1834,7 @@ export function Dashboard({ active = true }: { active?: boolean }) {
   // Indicateurs & Rendu des Cartes de Supervision
   // =========================================================================
   const totalTeam = das04
-    ? das04.present + das04.absent + das04.late + das04.conge + das04.permission
+    ? das04.detail.length
     : 0;
   const alertTotal = das05.overdueLoans + das05.lowStock + das05.missingTools + das05.missingOut + (fleetSummary?.alerts.total_urgent ?? 0);
 

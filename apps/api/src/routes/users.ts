@@ -70,8 +70,18 @@ usersRoutes.post('/', requirePerm('users.manage'), async (c) => {
   if (!roleExists) return c.json({ error: `Le rôle « ${data.role} » n’existe pas.` }, 400);
 
   if (data.employee_id) {
-    const employee = await db.one('SELECT id FROM employees WHERE id = $1', [data.employee_id]);
+    const employee = await db.one<{ id: string; active: boolean }>('SELECT id, active FROM employees WHERE id = $1', [data.employee_id]);
     if (!employee) return c.json({ error: 'Travailleur lié introuvable.' }, 404);
+    if (!employee.active && data.role !== 'direction') return c.json({ error: 'Un compte de personnel doit être lié à une fiche travailleur active.' }, 409);
+  }
+
+  if (data.role !== 'direction' && !data.employee_id) {
+    return c.json({ error: 'Pour créer un compte de personnel, sélectionnez d’abord sa fiche dans le Répertoire des travailleurs. Pour une nouvelle personne, créez sa fiche avec le bouton « Nouveau travailleur ».' }, 400);
+  }
+
+  if (data.role !== 'direction' && data.employee_id) {
+    const linkedAccount = await db.one<{ id: number }>('SELECT id FROM users WHERE employee_id = $1 LIMIT 1', [data.employee_id]);
+    if (linkedAccount) return c.json({ error: 'Cette fiche travailleur possède déjà un compte. Modifiez ou réactivez ce compte au lieu d’en créer un second.' }, 409);
   }
 
   const user = await db.one<UserListRow>(

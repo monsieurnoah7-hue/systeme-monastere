@@ -15,6 +15,7 @@ export default function Projets({
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
 
   const isDirection = user.role === 'direction';
   const canCreate = isDirection || Boolean(permissions?.['projects.create']);
@@ -25,19 +26,28 @@ export default function Projets({
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [projRes, empRes] = await Promise.all([
-        fetchProjects(),
-        api<{ employees: Employee[] }>('/api/employees').then((r) => r.employees).catch(() => []),
-      ]);
+      const projRes = await fetchProjects();
       setData(projRes);
-      setEmployees(empRes);
       setError(null);
+      if (canCreate || canEdit) {
+        try {
+          const empRes = await api<{ employees: Employee[] }>('/api/projects/assignees');
+          setEmployees(empRes.employees);
+          setAssignmentError(null);
+        } catch (employeeError) {
+          setEmployees([]);
+          setAssignmentError(employeeError instanceof Error ? employeeError.message : 'Liste des travailleurs indisponible.');
+        }
+      } else {
+        setEmployees([]);
+        setAssignmentError(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur chargement projets');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canCreate, canEdit]);
 
   useEffect(() => {
     loadData();
@@ -59,6 +69,7 @@ export default function Projets({
       </div>
 
       {error && <Banner tone="error">{error}</Banner>}
+      {assignmentError && <Banner tone="error">Impossible de charger les travailleurs à affecter : {assignmentError}</Banner>}
 
       {loading && !data ? (
         <div className="grid h-64 place-items-center">
