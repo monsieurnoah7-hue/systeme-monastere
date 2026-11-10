@@ -4314,9 +4314,9 @@ function BadgeSheet({ employees, paper = 'A4' }: { employees: Employee[]; paper?
             key={`badge-page-${pageIndex}`}
             className="badge-page"
             style={{
-              width: '190mm',
+              width: '179.2mm',
               margin: '0 auto',
-              padding: '3mm 0',
+              padding: '4mm 0 0 0',
               boxSizing: 'border-box',
               breakAfter: isLast ? 'auto' : 'page',
               pageBreakAfter: isLast ? 'auto' : 'always',
@@ -4325,7 +4325,7 @@ function BadgeSheet({ employees, paper = 'A4' }: { employees: Employee[]; paper?
             {/* En-tête officiel reproduit proprement sur chaque page */}
             <div
               style={{
-                marginBottom: '3mm',
+                marginBottom: '3.5mm',
                 borderBottom: '1px solid #e5e7eb',
                 paddingBottom: '2mm',
               }}

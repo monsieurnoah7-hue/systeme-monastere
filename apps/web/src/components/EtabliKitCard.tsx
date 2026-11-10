@@ -76,7 +76,7 @@ function EtabliLabelsSheet({
   }
   if (pages.length === 0) pages.push([]);
 
-  const pageWidth = paper === 'A4' ? '198mm' : '203mm';
+  const pageWidth = compact ? '196mm' : '195.5mm';
 
   return (
     <div style={{ fontFamily: '"IBM Plex Sans", -apple-system, sans-serif' }}>

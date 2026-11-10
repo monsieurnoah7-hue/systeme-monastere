@@ -346,22 +346,17 @@ export function ProjectsView({
           />
         </div>
 
-          <div className="flex w-full flex-wrap items-center gap-1.5 pb-1 lg:w-auto lg:justify-end">
-            {[{ id: 'all', label: 'Tous' }, ...configuredCategories.map((category) => ({ id: category, label: category }))].map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setFilterCat(c.id)}
-                className={cx(
-                  'shrink-0 rounded-lg px-3 py-2 text-xs font-medium transition-colors cursor-pointer border',
-                  filterCat === c.id
-                    ? 'bg-ink text-paper border-ink'
-                    : 'bg-transparent text-ink-soft hover:bg-surface border-line'
-                )}
-              >
-                {c.label}
-              </button>
-            ))}
+          <div className="flex w-full min-w-0 flex-col gap-2 pb-1 sm:flex-row sm:items-center lg:w-auto lg:justify-end">
+            <label className="sr-only" htmlFor="project-category-filter">Filtrer les projets par catégorie</label>
+            <select
+              id="project-category-filter"
+              value={filterCat}
+              onChange={(event) => setFilterCat(event.target.value)}
+              className="h-10 w-full min-w-0 rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ink sm:min-w-48 lg:w-56"
+            >
+              <option value="all">Toutes les catégories</option>
+              {configuredCategories.map((category) => <option key={category} value={category}>{category}</option>)}
+            </select>
           <button
             type="button"
             onClick={() => setFilterDelayedOnly((v) => !v)}

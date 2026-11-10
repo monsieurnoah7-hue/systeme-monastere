@@ -26,9 +26,9 @@ function QrLabelSheet({ labels, paper, source }: { labels: Label[]; paper: 'A4' 
             key={`grouped-qr-page-${pageIndex}`}
             className="label-sheet-page"
             style={{
-              width: '190mm',
+              width: '186mm',
               margin: '0 auto',
-              padding: '4mm 0',
+              padding: '4mm 0 0 0',
               boxSizing: 'border-box',
               breakAfter: isLast ? 'auto' : 'page',
               pageBreakAfter: isLast ? 'auto' : 'always',

@@ -300,11 +300,21 @@ export async function syncOfflineMutations(userId?: number): Promise<void> {
   for (const item of await listOfflineMutations(userId)) {
     if (item.state === 'failed') continue;
     try {
+      let syncBody = item.body;
+      if (item.path === '/api/kiosk/punch') {
+        try {
+          const payload = JSON.parse(item.body) as Record<string, unknown>;
+          syncBody = JSON.stringify({ ...payload, offlineRecorded: true });
+        } catch {
+          await updateOfflineMutation(item.id, 'failed', 'Pointage hors connexion illisible.');
+          continue;
+        }
+      }
       const response = await fetch(item.path, {
         method: item.method,
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': item.id },
-        body: item.body,
+        body: syncBody,
       });
       const text = await response.text();
       const result = parseApiJson(text, response.status);

@@ -44,6 +44,27 @@ type DirectoryPunch = {
 
 const KIOSK_DIR_KEY = 'mf_kiosk_directory_v1';
 
+function cameroonMinutes(date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Douala',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? 0);
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? 0);
+  return hour * 60 + minute;
+}
+
+function cameroonTime(date = new Date()): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Africa/Douala',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date);
+}
+
 function getStoredDirectory(): { employees: DirectoryEmployee[]; todayPunches: DirectoryPunch[]; date: string } {
   try {
     const raw = localStorage.getItem(KIOSK_DIR_KEY);
@@ -687,8 +708,7 @@ export function Pointage({
     const hasBreakOut = empPunches.some((p) => p.punch_type === 'break_out');
     const onBreak = hasBreakIn && !hasBreakOut;
 
-    const localNow = new Date();
-    const currentMin = localNow.getHours() * 60 + localNow.getMinutes();
+    const currentMin = cameroonMinutes();
     const openedMin = 7 * 60 + 30; // 07:30
     const lateThresholdMin = 8 * 60; // 08:00
     const breakStartMin = 12 * 60; // 12:00
@@ -935,8 +955,7 @@ export function Pointage({
 
       if ((res as any)?.queued) {
         // Enregistré hors-ligne dans la file IndexedDB
-        const localNow = new Date();
-        const localHm = `${String(localNow.getHours()).padStart(2, '0')}:${String(localNow.getMinutes()).padStart(2, '0')}`;
+        const localHm = cameroonTime();
         const localLate = identified.situation?.lateMinutes ?? 0;
         const queuedResult: PunchResult = {
           ok: true,

@@ -40,6 +40,7 @@ import {
   History,
   Eye,
   Briefcase,
+  Plus,
 } from 'lucide-react';
 
 const ToolsDonut = lazy(() => import('../components/DashboardCharts').then((module) => ({ default: module.ToolsDonut })));
@@ -290,6 +291,11 @@ function WhosInWidget({
 }) {
   const [filter, setFilter] = useState<'all' | 'present' | 'late' | 'leaves' | 'absent'>('all');
   const [search, setSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(5);
+
+  useEffect(() => {
+    setVisibleCount(5);
+  }, [filter, search]);
 
   const stats = useMemo(() => {
     let presentCount = 0;
@@ -418,11 +424,11 @@ function WhosInWidget({
       {/* Workers list */}
       <div
         className={cx(
-          'flex-1 min-h-[260px] max-h-[380px]',
+          'flex-1 min-h-0 max-h-none lg:min-h-[260px] lg:max-h-[380px]',
           'overflow-y-auto scroll-thin divide-y divide-line',
         )}
       >
-        {filtered.map((person) => {
+        {filtered.map((person, index) => {
           const isPresent = person.status === 'present';
           const isLate = person.status === 'late';
           const isConge = person.status === 'conge';
@@ -431,7 +437,10 @@ function WhosInWidget({
           return (
             <div
               key={person.id}
-              className="flex items-center justify-between gap-3 p-3 hover:bg-paper-2/50 transition-colors"
+              className={cx(
+                'flex items-center justify-between gap-3 p-3 hover:bg-paper-2/50 transition-colors',
+                index >= visibleCount && 'hidden lg:flex',
+              )}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative shrink-0">
@@ -521,6 +530,21 @@ function WhosInWidget({
           </div>
         ) : null}
       </div>
+
+      {filtered.length > visibleCount && (
+        <div className="border-t border-line/60 px-3 py-2 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((count) => count + 5)}
+            className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-line bg-surface-2/50 px-3 text-xs font-semibold text-ink-soft transition-colors hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+            aria-label={`Afficher ${Math.min(5, filtered.length - visibleCount)} présences supplémentaires`}
+          >
+            <Plus size={15} aria-hidden="true" />
+            Afficher {Math.min(5, filtered.length - visibleCount)} de plus
+            <span className="text-ink-faint">({visibleCount} / {filtered.length})</span>
+          </button>
+        </div>
+      )}
 
       <div className="p-2.5 border-t border-line/60 bg-surface-2/30 flex items-center justify-between text-xs">
         <span className="text-[11px] text-ink-faint">
@@ -877,6 +901,7 @@ function EtablisTourDeControle({
   const [filter, setFilter] = useState<'all' | 'overdue' | 'anomalies' | 'leo' | 'vern'>('all');
   const [search, setSearch] = useState('');
   const [selectedSeries, setSelectedSeries] = useState<'all' | number>('all');
+  const [dailyComplianceVisibleCount, setDailyComplianceVisibleCount] = useState(5);
   const getChunkSize = () => {
     if (typeof window === 'undefined') return 8;
     if (window.innerWidth < 640) return 4;
@@ -884,6 +909,10 @@ function EtablisTourDeControle({
     return 8;
   };
   const [chunkSize, setChunkSize] = useState(getChunkSize);
+
+  useEffect(() => {
+    setDailyComplianceVisibleCount(5);
+  }, [etablis.dailyCompliance.date]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -1061,9 +1090,9 @@ function EtablisTourDeControle({
           <div className="px-2 py-2"><p className="text-lg font-semibold tabular-nums text-amber">{etablis.dailyCompliance.pendingCount}</p><p className="text-[10px] text-ink-faint">À faire</p></div>
           <div className="px-2 py-2"><p className="text-lg font-semibold tabular-nums text-red">{etablis.dailyCompliance.overdueCount}</p><p className="text-[10px] text-ink-faint">En retard</p></div>
         </div>
-        <div className="max-h-72 divide-y divide-line overflow-y-auto">
-          {etablis.dailyCompliance.items.map((item) => (
-            <div key={item.kitId} className="flex items-center justify-between gap-3 px-4 py-2.5">
+        <div className="max-h-none divide-y divide-line lg:max-h-72 lg:overflow-y-auto">
+          {etablis.dailyCompliance.items.map((item, index) => (
+            <div key={item.kitId} className={cx('flex items-center justify-between gap-3 px-4 py-2.5', index >= dailyComplianceVisibleCount && 'hidden lg:flex')}>
               <div className="min-w-0"><p className="truncate text-xs font-medium text-ink">{item.employeeName}</p><p className="truncate text-[10px] text-ink-faint">Établi n° {item.etabliNumber} · {item.code}</p></div>
               <div className="shrink-0 text-right">
                 <Chip dot={false} tone={item.status === 'done' ? 'green' : item.status === 'overdue' ? 'red' : item.status === 'exempt' ? 'grey' : 'amber'}>
@@ -1075,6 +1104,20 @@ function EtablisTourDeControle({
           ))}
           {etablis.dailyCompliance.items.length === 0 && <p className="p-4 text-xs text-ink-faint">Aucun établi actif à suivre.</p>}
         </div>
+        {etablis.dailyCompliance.items.length > dailyComplianceVisibleCount && (
+          <div className="border-t border-line p-3 text-center lg:hidden">
+            <button
+              type="button"
+              onClick={() => setDailyComplianceVisibleCount((count) => Math.min(count + 5, etablis.dailyCompliance.items.length))}
+              aria-label={`Afficher ${Math.min(5, etablis.dailyCompliance.items.length - dailyComplianceVisibleCount)} contrôles supplémentaires`}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line px-4 text-sm font-semibold text-ink-soft transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+            >
+              <Plus size={16} aria-hidden="true" />
+              Afficher {Math.min(5, etablis.dailyCompliance.items.length - dailyComplianceVisibleCount)} de plus
+              <span className="text-xs font-normal text-ink-faint">({dailyComplianceVisibleCount}/{etablis.dailyCompliance.items.length})</span>
+            </button>
+          </div>
+        )}
       </Card>
 
       {/* Toolbar: Search & Segmented Filter Tabs */}

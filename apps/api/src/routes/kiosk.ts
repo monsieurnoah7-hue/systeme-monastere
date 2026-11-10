@@ -64,6 +64,7 @@ const punchBody = z.object({
   reason: z.string().optional(),
   reasonNote: z.string().optional(),
   clientRecordedAt: z.string().optional(),
+  offlineRecorded: z.boolean().optional(),
   offlinePunchId: z.string().optional(),
 });
 
@@ -424,7 +425,9 @@ kioskRoutes.post('/punch', requirePerm('terminals.access'), async (c) => {
   const settings = await loadSettings();
   const now = new Date();
   let punchTime = now;
-  if (body.data.clientRecordedAt) {
+  // Online punches use the server clock (Cameroon time is derived in businessMinutes).
+  // A queued offline punch keeps its original device timestamp when it is synchronized.
+  if (body.data.offlineRecorded && body.data.clientRecordedAt) {
     const parsed = new Date(body.data.clientRecordedAt);
     if (!Number.isNaN(parsed.getTime())) {
       const maxFuture = now.getTime() + 5 * 60 * 1000;

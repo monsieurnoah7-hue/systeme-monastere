@@ -62,56 +62,26 @@ export async function exportSheetToPdf(
     await document.fonts.ready.catch(() => undefined);
   }
 
-  // 3. Création du conteneur de staging dédié hors-champ (DOM isolé de la modale)
-  const staging = document.createElement('div');
-  staging.id = 'pdf-render-staging';
-  staging.style.position = 'fixed';
-  staging.style.left = '0';
-  staging.style.top = '0';
-  staging.style.width = `${pageWidthMm}mm`;
-  staging.style.minHeight = `${pageHeightMm}mm`;
-  staging.style.background = '#ffffff';
-  staging.style.color = '#0f172a';
-  staging.style.zIndex = '-99999';
-  staging.style.pointerEvents = 'none';
-  staging.style.overflow = 'visible';
-  staging.style.margin = '0';
-  staging.style.padding = '0';
-  staging.style.boxSizing = 'border-box';
+  // 3. Détection précise des pages de la planche d'impression
+  const pageSelector = '.badge-page, .label-sheet-page, .a4-page, [data-print-page]';
+  let pages = Array.from(sourceElement.querySelectorAll<HTMLElement>(pageSelector));
 
-  // Clonage profond du contenu pour ne jamais altérer l'affichage de la modale en cours
-  const clone = sourceElement.cloneNode(true) as HTMLElement;
-  clone.style.transform = 'none';
-  clone.style.transformOrigin = 'top left';
-  clone.style.margin = '0';
-  clone.style.width = `${pageWidthMm}mm`;
-  clone.style.minHeight = `${pageHeightMm}mm`;
-  clone.style.boxSizing = 'border-box';
-  staging.appendChild(clone);
-  document.body.appendChild(staging);
+  if (pages.length === 0) {
+    pages = [sourceElement];
+  }
 
-  let doc: jsPDF | null = null;
+  const doc = new jsPDF({
+    orientation,
+    unit: 'mm',
+    format: paper === 'Letter' ? 'letter' : 'a4',
+    compress: true,
+  });
+
+  const totalPages = pages.length;
+  const pixelRatio = options.scale ?? 2.5;
 
   try {
-    // 4. Détection précise des pages de la planche
-    const pageSelector = '.badge-page, .label-sheet-page, .a4-page, [data-print-page]';
-    let pages = Array.from(clone.querySelectorAll<HTMLElement>(pageSelector));
-
-    if (pages.length === 0) {
-      pages = [clone];
-    }
-
-    doc = new jsPDF({
-      orientation,
-      unit: 'mm',
-      format: paper === 'Letter' ? 'letter' : 'a4',
-      compress: true,
-    });
-
-    const totalPages = pages.length;
-    const pixelRatio = options.scale ?? 2.5;
-
-    // 5. Rendu haute fidélité page par page
+    // 4. Rendu haute fidélité page par page dans un conteneur pleine page normalisé
     for (let i = 0; i < totalPages; i++) {
       options.onProgress?.({
         current: i + 1,
@@ -122,46 +92,74 @@ export async function exportSheetToPdf(
       const pageEl = pages[i];
       if (!pageEl) continue;
 
-      // Mesure physique exacte dans le DOM de staging
-      const elemWidthPx = pageEl.offsetWidth;
-      const elemHeightPx = pageEl.offsetHeight;
+      // Création d'un conteneur de staging dédié pleine page (A4: 210×297mm / Letter: 215.9×279.4mm)
+      // Isole parfaitement chaque page du zoom, du viewport modal et élimine tout décalage d'offset
+      const pageWrapper = document.createElement('div');
+      pageWrapper.id = `pdf-render-page-staging-${i}`;
+      pageWrapper.style.position = 'fixed';
+      pageWrapper.style.left = '0';
+      pageWrapper.style.top = '0';
+      pageWrapper.style.width = `${pageWidthMm}mm`;
+      pageWrapper.style.height = `${pageHeightMm}mm`;
+      pageWrapper.style.minHeight = `${pageHeightMm}mm`;
+      pageWrapper.style.maxHeight = `${pageHeightMm}mm`;
+      pageWrapper.style.background = '#ffffff';
+      pageWrapper.style.color = '#0f172a';
+      pageWrapper.style.zIndex = '-99999';
+      pageWrapper.style.pointerEvents = 'none';
+      pageWrapper.style.overflow = 'hidden';
+      pageWrapper.style.margin = '0';
+      pageWrapper.style.padding = '0';
+      pageWrapper.style.boxSizing = 'border-box';
+      pageWrapper.style.fontFamily =
+        '"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
-      const imgData = await toPng(pageEl, {
-        pixelRatio,
-        backgroundColor: '#ffffff',
-        imagePlaceholder:
-          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-      });
+      // Clonage profond de la page en cours
+      const clone = pageEl.cloneNode(true) as HTMLElement;
+      clone.style.transform = 'none';
+      clone.style.transformOrigin = 'top left';
+      clone.style.margin = '0 auto';
+      clone.style.boxSizing = 'border-box';
+      pageWrapper.appendChild(clone);
+      document.body.appendChild(pageWrapper);
 
-      if (i > 0) {
-        doc.addPage(paper === 'Letter' ? 'letter' : 'a4', orientation);
+      try {
+        // Attente du décodage de toutes les images contenues dans la page (logos, portraits, QR)
+        const images = Array.from(pageWrapper.querySelectorAll('img'));
+        if (images.length > 0) {
+          await Promise.all(
+            images.map(
+              (img) =>
+                new Promise<void>((resolve) => {
+                  if (img.complete && img.naturalWidth > 0) return resolve();
+                  img.onload = () => resolve();
+                  img.onerror = () => resolve();
+                }),
+            ),
+          );
+        }
+
+        // Bref délai pour garantir le calcul sub-pixel par le moteur de rendu
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 20)));
+
+        const imgData = await toPng(pageWrapper, {
+          pixelRatio,
+          backgroundColor: '#ffffff',
+          imagePlaceholder:
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        });
+
+        if (i > 0) {
+          doc.addPage(paper === 'Letter' ? 'letter' : 'a4', orientation);
+        }
+
+        // Placement 1:1 pleine page rigoureusement centré et sans décalage métrique
+        doc.addImage(imgData, 'PNG', 0, 0, pageWidthMm, pageHeightMm, undefined, 'FAST');
+      } finally {
+        if (pageWrapper.parentNode) {
+          pageWrapper.parentNode.removeChild(pageWrapper);
+        }
       }
-
-      // Calcul des dimensions métriques et cadrage professionnel
-      const widthMm = elemWidthPx * (25.4 / 96);
-      const heightMm = elemHeightPx * (25.4 / 96);
-
-      // Marges de sécurité normalisées (8mm de marge périmétrique)
-      const topMarginMm = 8;
-      const horizontalMarginMm = 8;
-      const maxAvailableW = pageWidthMm - horizontalMarginMm * 2;
-      const maxAvailableH = pageHeightMm - topMarginMm * 2;
-
-      const scaleFit = Math.min(
-        maxAvailableW / Math.max(widthMm, 1),
-        maxAvailableH / Math.max(heightMm, 1),
-        1,
-      );
-
-      const finalWidthMm = widthMm * scaleFit;
-      const finalHeightMm = heightMm * scaleFit;
-
-      // Centrage horizontal parfait et calage naturel par le haut (marge supérieure fixe de 8mm)
-      // Évite que les planches partielles flottent au milieu de la feuille ou coupent le bas
-      const offsetX = Math.max(0, (pageWidthMm - finalWidthMm) / 2);
-      const offsetY = topMarginMm;
-
-      doc.addImage(imgData, 'PNG', offsetX, offsetY, finalWidthMm, finalHeightMm, undefined, 'FAST');
     }
 
     options.onProgress?.({
@@ -179,7 +177,7 @@ export async function exportSheetToPdf(
     const blob = doc.output('blob');
     const blobUrl = URL.createObjectURL(blob);
 
-    // 6. Déclencher le téléchargement direct sur le disque sans aucune redirection
+    // 5. Déclencher le téléchargement direct sur le disque sans aucune redirection
     if (options.download !== false) {
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -197,9 +195,6 @@ export async function exportSheetToPdf(
       totalPages,
     };
   } finally {
-    // 7. Nettoyage garanti du conteneur de staging
-    if (staging.parentNode) {
-      document.body.removeChild(staging);
-    }
+    // Nettoyage de sécurité global si nécessaire
   }
 }
