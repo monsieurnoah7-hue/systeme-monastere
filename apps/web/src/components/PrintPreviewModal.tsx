@@ -101,7 +101,7 @@ export function PrintPreviewModal({
 
     try {
       setExporting(true);
-      setExportProgress('Préparation du document PDF haute fidélité…');
+      setExportProgress('Préparation du document PDF…');
 
       if (onDownloadPdf) {
         await onDownloadPdf();
@@ -207,7 +207,7 @@ export function PrintPreviewModal({
         {exporting && (
           <div className="flex items-center gap-2.5 rounded-lg border border-amber/30 bg-amber/10 px-3.5 py-2.5 text-xs font-medium text-amber">
             <Spinner />
-            <span>{exportProgress || 'Génération du PDF haute fidélité prêt à l’impression…'}</span>
+            <span>{exportProgress || 'Génération du document PDF prêt à l’impression…'}</span>
           </div>
         )}
 
@@ -261,7 +261,7 @@ export function PrintPreviewModal({
           </div>
         </div>
         <p className="text-[11px] text-ink-faint">
-          Vérifiez les codes et la disposition. Le bouton Télécharger enregistre la planche haute fidélité prête à l'impression directement sur votre appareil.
+          Vérifiez les codes et la disposition. Le bouton Télécharger enregistre la planche prête à l'impression directement sur votre appareil.
         </p>
       </div>
     </Modal>

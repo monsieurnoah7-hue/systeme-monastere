@@ -81,12 +81,12 @@ export async function exportSheetToPdf(
   const pixelRatio = options.scale ?? 2.5;
 
   try {
-    // 4. Rendu haute fidélité page par page dans un conteneur pleine page normalisé
+    // 4. Rendu page par page dans un conteneur pleine page normalisé
     for (let i = 0; i < totalPages; i++) {
       options.onProgress?.({
         current: i + 1,
         total: totalPages,
-        message: `Rendu haute résolution (Page ${i + 1} / ${totalPages})…`,
+        message: `Rendu (Page ${i + 1} / ${totalPages})…`,
       });
 
       const pageEl = pages[i];
