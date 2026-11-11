@@ -23,6 +23,7 @@ import { CommandPalette } from './CommandPalette';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from './ui/drawer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { cx, Modal } from './ui';
+import { MobileBreadcrumb } from './MobileBreadcrumb';
 import { getLastServerSync, getOfflineSyncHistory, listOfflineMutations, type OfflineMutation, type OfflineSyncHistory, updateOfflineMutation } from '../lib/offline';
 
 export type ViewId = 'dashboard' | 'projets' | 'outils' | 'pointage' | 'stock' | 'employes' | 'magasins' | 'espace' | 'parametres';
@@ -249,6 +250,7 @@ export function Shell({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [subSection, setSubSection] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installHelpOpen, setInstallHelpOpen] = useState(false);
   const [isInstalled, setIsInstalled] = useState(isStandaloneApp);
@@ -260,6 +262,21 @@ export function Shell({
   const [lastServerSync, setLastServerSync] = useState<number | null>(() => getLastServerSync(user.id));
   const effectiveAllowed = allowedList ?? allowedViews(user.role);
   const items = NAV.filter((item) => effectiveAllowed.includes(item.id));
+
+  useEffect(() => {
+    const handleSubView = (e: Event) => {
+      const detail = (e as CustomEvent<{ view?: ViewId; subSection?: string | null }>).detail;
+      if (!detail?.view || detail.view === view) {
+        setSubSection(detail?.subSection ?? null);
+      }
+    };
+    window.addEventListener('subview-changed', handleSubView);
+    return () => window.removeEventListener('subview-changed', handleSubView);
+  }, [view]);
+
+  useEffect(() => {
+    setSubSection(null);
+  }, [view]);
 
   useEffect(() => {
     const onBeforeInstallPrompt = (event: Event) => {
@@ -524,6 +541,14 @@ export function Shell({
               </div>
             </DrawerContent>
           </Drawer>
+
+          {/* Mobile & Tablet Breadcrumb Bar */}
+          <MobileBreadcrumb
+            currentView={view}
+            subSection={subSection}
+            onNavigateHome={() => onView('dashboard')}
+            onNavigateView={(v) => onView(v)}
+          />
 
           {/* Main Scrollable Content with Antigravity Top Bar */}
           <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-thin flex flex-col">

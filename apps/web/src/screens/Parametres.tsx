@@ -571,6 +571,27 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
   const [motifDraft, setMotifDraft] = useState('');
   const [kioskSubTab, setKioskSubTab] = useState<'horaires' | 'bornes' | 'regles'>(canViewSettings ? 'horaires' : 'bornes');
 
+  // Breadcrumb synchronization with MobileBreadcrumb
+  useEffect(() => {
+    let subSection = 'Configuration';
+    if (activeTab === 'comptes') {
+      subSection = 'Comptes Utilisateurs';
+    } else if (activeTab === 'permissions') {
+      subSection = 'Rôles & Accès';
+    } else if (activeTab === 'kiosk') {
+      subSection = kioskSubTab === 'horaires' ? 'Kiosque · Horaires' : kioskSubTab === 'bornes' ? 'Kiosque · Bornes' : 'Kiosque · Règles';
+    } else if (activeTab === 'securite') {
+      subSection = 'Sécurité & Profil';
+    } else if (activeTab === 'sauvegardes') {
+      subSection = 'Sauvegardes & Système';
+    }
+    window.dispatchEvent(
+      new CustomEvent('subview-changed', {
+        detail: { view: 'parametres', subSection },
+      }),
+    );
+  }, [activeTab, kioskSubTab]);
+
   useEffect(() => {
     if (!availableTabs.includes(activeTab)) setActiveTab(defaultTab);
     if (!canViewSettings && kioskSubTab !== 'bornes') setKioskSubTab('bornes');
@@ -1552,64 +1573,72 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
         <div className="sticky top-0 lg:top-11 z-30 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2.5 bg-paper border-b border-line shadow-xs mb-3 sm:mb-6">
           {/* Row 1: Master Navigation Tabs + Grouped Master Actions */}
           <div className="grid min-w-0 grid-cols-1 items-center gap-2 2xl:grid-cols-[minmax(0,1fr)_auto]">
-            {/* All primary sections stay visible on narrow screens; desktop keeps a compact row. */}
+            {/* All primary sections stay visible on narrow screens with horizontal scroll; desktop keeps a compact row. */}
             <div className="min-w-0 flex-1">
-              <TabsList variant="line" className="grid w-full min-w-0 grid-cols-2 gap-1 bg-transparent p-0 sm:grid-cols-3 xl:grid-cols-5 xl:gap-1.5">
-                {canViewUsers && <TabsTrigger
-                  value="comptes"
-                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal xl:gap-1.5 xl:px-2 xl:text-sm 2xl:whitespace-nowrap"
-                >
-                  <Users size={14} className="text-amber" />
-                  <span>Comptes</span>
-                  <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
-                    {activeUsersCount}/{users.length}
-                  </span>
-                </TabsTrigger>}
+              <TabsList variant="line" className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto scroll-none bg-transparent p-0 xl:grid xl:grid-cols-5 xl:gap-1.5">
+                {canViewUsers && (
+                  <TabsTrigger
+                    value="comptes"
+                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap xl:min-h-11 xl:px-2 xl:text-sm"
+                  >
+                    <Users size={14} className="text-amber shrink-0" />
+                    <span>Comptes</span>
+                    <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
+                      {activeUsersCount}/{users.length}
+                    </span>
+                  </TabsTrigger>
+                )}
 
-                {canManagePermissions && <TabsTrigger
-                  value="permissions"
-                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal xl:gap-1.5 xl:px-2 xl:text-sm 2xl:whitespace-nowrap"
-                >
-                  <ShieldCheck size={14} className="text-amber" />
-                  <span className="hidden xl:inline">Rôles &amp; Permissions</span>
-                  <span className="xl:hidden">Accès</span>
-                  {hasUnsavedPerms ? (
-                    <span className="h-2 w-2 rounded-full bg-amber animate-pulse" title="Modifications en attente" />
-                  ) : null}
-                </TabsTrigger>}
+                {canManagePermissions && (
+                  <TabsTrigger
+                    value="permissions"
+                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap xl:min-h-11 xl:px-2 xl:text-sm"
+                  >
+                    <ShieldCheck size={14} className="text-amber shrink-0" />
+                    <span className="hidden sm:inline">Rôles &amp; Permissions</span>
+                    <span className="sm:hidden">Accès</span>
+                    {hasUnsavedPerms ? (
+                      <span className="h-2 w-2 rounded-full bg-amber animate-pulse shrink-0" title="Modifications en attente" />
+                    ) : null}
+                  </TabsTrigger>
+                )}
 
-                {canViewKiosk && <TabsTrigger
-                  value="kiosk"
-                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal xl:gap-1.5 xl:px-2 xl:text-sm 2xl:whitespace-nowrap"
-                >
-                  <Clock size={14} className="text-amber" />
-                  <span className="hidden xl:inline">Pointage &amp; Kiosque</span>
-                  <span className="xl:hidden">Kiosque</span>
-                  <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
-                    {activeTerminalsCount} act.
-                  </span>
-                </TabsTrigger>}
+                {canViewKiosk && (
+                  <TabsTrigger
+                    value="kiosk"
+                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap xl:min-h-11 xl:px-2 xl:text-sm"
+                  >
+                    <Clock size={14} className="text-amber shrink-0" />
+                    <span className="hidden sm:inline">Pointage &amp; Kiosque</span>
+                    <span className="sm:hidden">Kiosque</span>
+                    <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
+                      {activeTerminalsCount} act.
+                    </span>
+                  </TabsTrigger>
+                )}
 
                 <TabsTrigger
                   value="securite"
-                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal xl:gap-1.5 xl:px-2 xl:text-sm 2xl:whitespace-nowrap"
+                  className="shrink-0 min-h-10 min-w-0 gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap xl:min-h-11 xl:px-2 xl:text-sm"
                 >
-                  <KeyRound size={14} className="text-amber" />
-                  <span className="hidden xl:inline">Sécurité &amp; Profil</span>
-                  <span className="xl:hidden">Sécurité</span>
+                  <KeyRound size={14} className="text-amber shrink-0" />
+                  <span className="hidden sm:inline">Sécurité &amp; Profil</span>
+                  <span className="sm:hidden">Sécurité</span>
                 </TabsTrigger>
 
-                {canUseBackups && <TabsTrigger
-                  value="sauvegardes"
-                  className="min-h-11 min-w-0 gap-1 px-1.5 py-1.5 text-xs font-medium whitespace-normal xl:gap-1.5 xl:px-2 xl:text-sm 2xl:whitespace-nowrap"
-                >
-                  <HardDrive size={14} className="text-amber" />
-                  <span className="hidden xl:inline">Sauvegardes &amp; Système</span>
-                  <span className="xl:hidden">Sauvegardes</span>
-                  <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
-                    {backups.length}
-                  </span>
-                </TabsTrigger>}
+                {canUseBackups && (
+                  <TabsTrigger
+                    value="sauvegardes"
+                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap xl:min-h-11 xl:px-2 xl:text-sm"
+                  >
+                    <HardDrive size={14} className="text-amber shrink-0" />
+                    <span className="hidden sm:inline">Sauvegardes &amp; Système</span>
+                    <span className="sm:hidden">Sauvegardes</span>
+                    <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
+                      {backups.length}
+                    </span>
+                  </TabsTrigger>
+                )}
               </TabsList>
             </div>
 
@@ -2302,7 +2331,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
               </div>
 
               {/* Mobile Cards (sm:hidden) */}
-              <div className="sm:hidden divide-y divide-line">
+              <div className="sm:hidden space-y-3 p-3">
                 {filteredUsers.map((account) => {
                   const employee = account.employee_id ? employeesById.get(account.employee_id) : undefined;
                   const theme = ROLE_THEME[account.role] ?? DEFAULT_ROLE_THEME;
@@ -2310,8 +2339,8 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                     <div
                       key={account.id}
                       className={cx(
-                        'p-4 space-y-3',
-                        !account.active && 'bg-paper/30 opacity-80',
+                        'p-3.5 space-y-3 rounded-2xl border border-line bg-surface shadow-xs transition-all',
+                        !account.active && 'opacity-70 bg-paper/50',
                       )}
                     >
                       <div className="flex items-start gap-3">
@@ -2321,7 +2350,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                             setProfilePhotoOpen(true);
                           } : undefined}
                           className={cx(
-                            'relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold border shadow-xs overflow-hidden',
+                            'relative grid h-11 w-11 shrink-0 place-items-center rounded-xl text-xs font-bold border shadow-xs overflow-hidden cursor-pointer',
                             theme.bg,
                           )}
                         >
@@ -2337,7 +2366,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                             <span className="font-semibold text-sm text-ink truncate">{account.display_name}</span>
                             <span
                               className={cx(
-                                'inline-flex items-center gap-1 rounded-chip border px-1.5 py-0.5 text-[10px] font-medium shrink-0',
+                                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold shrink-0',
                                 account.active
                                   ? 'border-green/20 bg-green-wash text-green'
                                   : 'border-line-strong bg-grey-wash text-ink-faint',
@@ -2348,12 +2377,12 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                             <span className="font-mono text-xs text-ink-faint">@{account.login}</span>
                             <span className="text-ink-faint text-[10px]">·</span>
                             <span
                               className={cx(
-                                'inline-flex items-center rounded-chip border px-1.5 py-0.5 text-[10px] font-medium',
+                                'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold',
                                 theme.bg,
                               )}
                             >
@@ -2369,44 +2398,37 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                         </div>
                       </div>
 
-                      {canManageUsers && <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-line/50">
-                        <Button size="sm" variant="ghost" onClick={() => openEditAccount(account)} className="h-8 text-xs flex-1">
-                          Modifier
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setResetFor(account);
-                            setResetPassword('');
-                          }}
-                          className="h-8 text-xs flex-1"
-                        >
-                          Mot de passe
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={account.active ? 'outline-danger' : 'secondary'}
-                          onClick={() => void toggleUser(account)}
-                          className="h-8 text-xs"
-                        >
-                          {account.active ? 'Désactiver' : 'Activer'}
-                        </Button>
-                        {account.id !== user.id && (
+                      {canManageUsers && (
+                        <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-line/60">
                           <Button
                             size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setDeleteUserFor(account);
-                              setDeleteUserError(null);
-                            }}
-                            className="h-8 w-8 p-0 text-red hover:bg-red/10"
-                            title="Supprimer ce compte"
+                            variant="secondary"
+                            onClick={() => openEditAccount(account)}
+                            className="min-h-10 text-xs font-semibold rounded-lg"
                           >
-                            <Trash2 size={14} />
+                            Modifier
                           </Button>
-                        )}
-                      </div>}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setResetFor(account);
+                              setResetPassword('');
+                            }}
+                            className="min-h-10 text-xs font-semibold rounded-lg"
+                          >
+                            Clé
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={account.active ? 'outline-danger' : 'primary'}
+                            onClick={() => void toggleUser(account)}
+                            className="min-h-10 text-xs font-semibold rounded-lg"
+                          >
+                            {account.active ? 'Désactiver' : 'Activer'}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

@@ -268,13 +268,43 @@ export function Magasins({
   const [reloadKey, setReloadKey] = useState(0);
   const [q, setQ] = useState('');
   const [activeCategory, setActiveCategory] = useState<LocationCategory>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    try {
+      return (localStorage.getItem('mf_magasins_view_mode') as 'grid' | 'list') || 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const handleSetViewMode = (mode: 'grid' | 'list') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('mf_magasins_view_mode', mode);
+    } catch {}
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inventoryEditTarget, setInventoryEditTarget] = useState<InventoryEditTarget | null>(null);
   const [detail, setDetail] = useState<MagasinDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [drawerFilter, setDrawerFilter] = useState('');
   const [drawerTab, setDrawerTab] = useState<'tools' | 'stock' | 'loans' | 'settings'>('tools');
+
+  // Breadcrumb synchronization with MobileBreadcrumb
+  useEffect(() => {
+    let subSection = 'Tous les Dépôts';
+    if (detail?.magasin) {
+      const tabName = drawerTab === 'tools' ? 'Machines' : drawerTab === 'stock' ? 'Matières' : drawerTab === 'loans' ? 'Prêts' : 'Droits';
+      subSection = `${detail.magasin.name} · ${tabName}`;
+    } else if (activeCategory !== 'all') {
+      const cat = LOCATION_CATEGORIES.find((c) => c.id === activeCategory);
+      if (cat) subSection = cat.label;
+    }
+    window.dispatchEvent(
+      new CustomEvent('subview-changed', {
+        detail: { view: 'magasins', subSection },
+      }),
+    );
+  }, [detail, drawerTab, activeCategory]);
   const [doorLabelPreviewOpen, setDoorLabelPreviewOpen] = useState(false);
   const [doorLabelContent, setDoorLabelContent] = useState<React.ReactNode>(null);
   const [doorLabelMagasin, setDoorLabelMagasin] = useState<Magasin | null>(null);
@@ -838,21 +868,38 @@ export function Magasins({
               })}
             </div>
 
-            <label className="col-span-full flex min-w-0 items-center gap-2 md:hidden">
-              <span className="shrink-0 text-xs font-medium text-ink-soft">Catégorie</span>
-              <select
-                value={activeCategory}
-                onChange={(event) => setActiveCategory(event.target.value as LocationCategory)}
-                className="h-10 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none focus:ring-2 focus:ring-amber/20"
-                aria-label="Filtrer les emplacements par catégorie"
-              >
-                {LOCATION_CATEGORIES.map((cat) => {
-                  const count = categoryCounts[cat.id] ?? 0;
-                  if (cat.id !== 'all' && count === 0) return null;
-                  return <option key={cat.id} value={cat.id}>{cat.shortLabel} ({count})</option>;
-                })}
-              </select>
-            </label>
+            {/* Mobile Category Pill Scroll */}
+            <div className="col-span-full flex min-w-0 items-center gap-1.5 overflow-x-auto scroll-none py-1 md:hidden">
+              {LOCATION_CATEGORIES.map((cat) => {
+                const count = categoryCounts[cat.id] ?? 0;
+                if (cat.id !== 'all' && count === 0) return null;
+                const isSelected = activeCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setActiveCategory(cat.id)}
+                    aria-pressed={isSelected}
+                    className={cx(
+                      'flex shrink-0 min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all active:scale-95',
+                      isSelected
+                        ? 'bg-amber text-white border-amber shadow-xs'
+                        : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                    )}
+                  >
+                    <span>{cat.shortLabel}</span>
+                    <span
+                      className={cx(
+                        'text-[10px] tabular-nums font-bold px-1.5 py-0.2 rounded-full',
+                        isSelected ? 'bg-white/25 text-white' : 'bg-paper text-ink-faint',
+                      )}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
             {/* Center: Real-Time Search Bar (Desktop / Tablet) */}
             <div className="relative hidden min-w-0 items-center md:col-start-1 md:row-start-2 md:flex">
@@ -907,11 +954,11 @@ export function Magasins({
               <div className="flex items-center rounded-lg border border-line bg-surface p-0.5">
                 <button
                   type="button"
-                  onClick={() => setViewMode('grid')}
+                  onClick={() => handleSetViewMode('grid')}
                   aria-pressed={viewMode === 'grid'}
                   className={cx(
                     'inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-md px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
-                    viewMode === 'grid' ? 'bg-paper-2 text-ink' : 'text-ink-soft hover:text-ink'
+                    viewMode === 'grid' ? 'bg-paper-2 text-ink' : 'text-ink-soft hover:text-ink',
                   )}
                   title="Affichage en Grille Bento"
                 >
@@ -920,11 +967,11 @@ export function Magasins({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewMode('list')}
+                  onClick={() => handleSetViewMode('list')}
                   aria-pressed={viewMode === 'list'}
                   className={cx(
                     'inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-md px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
-                    viewMode === 'list' ? 'bg-paper-2 text-ink' : 'text-ink-soft hover:text-ink'
+                    viewMode === 'list' ? 'bg-paper-2 text-ink' : 'text-ink-soft hover:text-ink',
                   )}
                   title="Affichage en Liste"
                 >
@@ -1326,13 +1373,13 @@ export function Magasins({
         })()}
 
             <div className="sticky top-0 z-30 isolate -mx-1 min-w-0 space-y-2 border-b border-line bg-paper px-1 pb-2 shadow-[0_6px_12px_-10px_rgba(0,0,0,0.9)]">
-            {/* Navigation Sub-Tabs dans le magasin (Responsive Grouped Segment) */}
-            <div className="grid min-w-0 grid-cols-3 gap-1 rounded-xl border border-line bg-paper-2 p-1 sm:flex sm:items-center sm:gap-1.5 sm:rounded-2xl">
+            {/* Navigation Sub-Tabs dans le magasin (Responsive Scrollable Segment) */}
+            <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto scroll-none rounded-xl border border-line bg-paper-2 p-1 sm:rounded-2xl">
               <button
                 type="button"
                 onClick={() => setDrawerTab('tools')}
                 className={cx(
-                  'flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-[11px] font-semibold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs sm:rounded-xl',
+                  'flex shrink-0 min-h-9 items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all sm:rounded-xl',
                   drawerTab === 'tools'
                     ? 'bg-amber text-white shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper'
@@ -1354,7 +1401,7 @@ export function Magasins({
                 type="button"
                 onClick={() => setDrawerTab('stock')}
                 className={cx(
-                  'flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-[11px] font-semibold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs sm:rounded-xl',
+                  'flex shrink-0 min-h-9 items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all sm:rounded-xl',
                   drawerTab === 'stock'
                     ? 'bg-amber text-white shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper'
@@ -1376,7 +1423,7 @@ export function Magasins({
                 type="button"
                 onClick={() => setDrawerTab('loans')}
                 className={cx(
-                  'flex min-w-0 items-center justify-center gap-1 px-1.5 py-2 rounded-lg text-[11px] font-semibold transition-colors sm:gap-1.5 sm:px-3 sm:text-xs sm:rounded-xl',
+                  'flex shrink-0 min-h-9 items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all sm:rounded-xl',
                   drawerTab === 'loans'
                     ? 'bg-amber text-white shadow-xs'
                     : 'text-ink-soft hover:text-ink hover:bg-paper'
@@ -1403,7 +1450,7 @@ export function Magasins({
                   type="button"
                   onClick={() => setDrawerTab('settings')}
                   className={cx(
-                    'col-span-3 flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors sm:ml-auto sm:col-span-1 sm:rounded-xl',
+                    'flex shrink-0 min-h-9 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all sm:ml-auto sm:rounded-xl',
                     drawerTab === 'settings'
                       ? 'bg-blue text-white shadow-xs'
                       : 'text-ink-soft hover:text-ink hover:bg-paper'

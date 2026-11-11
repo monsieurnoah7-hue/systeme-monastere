@@ -46,7 +46,6 @@ import {
 } from '../components/ui/dropdown-menu';
 import { useUndo } from '../components/UndoToast';
 import {
-  IconChevronRight,
   IconPlus,
   IconPrinter,
   IconQr,
@@ -75,11 +74,16 @@ import {
   RefreshCw,
   Search,
   X,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { exportToExcel, exportToPdf } from '../lib/export';
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { GroupedQrLabelsModal } from '../components/GroupedQrLabelsModal';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
+import { ToolListRow } from '../components/ToolListRow';
+import { ToolBentoCard } from '../components/ToolBentoCard';
+import { ToolLoanCard } from '../components/ToolLoanCard';
 import { FleetView } from '../components/FleetView';
 import { InventoryEditModal, type InventoryEditTarget } from '../components/InventoryEditModal';
 import { computePortfolioAudit, computeToolAccounting, formatCurrency } from '../lib/accounting';
@@ -279,7 +283,19 @@ export function Outils({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('mf_tools_view_mode');
+      if (saved === 'table' || saved === 'cards') return saved;
+    }
+    return 'cards';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mf_tools_view_mode', viewMode);
+    } catch {}
+  }, [viewMode]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ToolDetail | null>(null);
@@ -290,6 +306,11 @@ export function Outils({
   const [inventoryEditTarget, setInventoryEditTarget] = useState<InventoryEditTarget | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'tools' | 'loans' | 'fleet'>(initialTab);
+
+  useEffect(() => {
+    const subLabel = activeTab === 'loans' ? 'Prêts en cours' : activeTab === 'fleet' ? 'Flotte & Groupes' : 'Matériel & Outils';
+    window.dispatchEvent(new CustomEvent('subview-changed', { detail: { view: 'outils', subSection: subLabel } }));
+  }, [activeTab]);
   const [fleetSummary, setFleetSummary] = useState<FleetSummary | null>(null);
   const [activeLoans, setActiveLoans] = useState<ToolLoan[]>([]);
   const [loansSearch, setLoansSearch] = useState('');
@@ -1250,29 +1271,31 @@ export function Outils({
                     ))}
                   </select>
 
-                  {/* View mode toggle button */}
-                  <div className="hidden sm:flex items-center rounded-lg border border-line bg-surface p-0.5 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('table')}
-                      className={cx(
-                        'px-2 py-0.5 text-[10px] font-semibold rounded transition-colors',
-                        viewMode === 'table' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
-                      )}
-                      title="Afficher en mode Tableau"
-                    >
-                      Tableau
-                    </button>
+                  {/* View mode toggle button (Mobile & Desktop Dual-Mode) */}
+                  <div className="flex items-center rounded-lg border border-line bg-surface p-0.5 shadow-2xs">
                     <button
                       type="button"
                       onClick={() => setViewMode('cards')}
                       className={cx(
-                        'px-2 py-0.5 text-[10px] font-semibold rounded transition-colors',
-                        viewMode === 'cards' ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
+                        'inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded px-2 text-xs font-semibold transition-colors',
+                        viewMode === 'cards' ? 'bg-paper-2 text-ink shadow-2xs' : 'text-ink-soft hover:text-ink',
                       )}
-                      title="Afficher en mode Cartes"
+                      title="Afficher en mode Fiches Bento"
                     >
-                      Cartes
+                      <LayoutGrid size={12} />
+                      <span className="hidden sm:inline">Grille</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('table')}
+                      className={cx(
+                        'inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded px-2 text-xs font-semibold transition-colors',
+                        viewMode === 'table' ? 'bg-paper-2 text-ink shadow-2xs' : 'text-ink-soft hover:text-ink',
+                      )}
+                      title="Afficher en mode Liste"
+                    >
+                      <List size={12} />
+                      <span className="hidden sm:inline">Liste</span>
                     </button>
                   </div>
 
@@ -1366,9 +1389,11 @@ export function Outils({
               hint="Tous les outils et matériels sont actuellement disponibles dans leurs magasins et dépôts respectifs."
             />
           ) : (
-            <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs table-rhythm">
+            <>
+              {/* Desktop Loans Table */}
+              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs table-rhythm">
                   <thead>
                     <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
                       <th className="px-3 py-2.5 min-w-28 border-r border-line col-lead">Réf. Outil</th>
@@ -1469,6 +1494,26 @@ export function Outils({
                 </table>
               </div>
             </div>
+
+            {/* Mobile & Tablet Loans Cards View */}
+            <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {filteredActiveLoans.map((loan) => (
+                <ToolLoanCard
+                  key={loan.id}
+                  loan={loan}
+                  canReturn={canReturn}
+                  onReturn={() => {
+                    setReturnFor(loan);
+                    setReturnForm({
+                      condition: 'bon',
+                      observations: '',
+                      qty: loan.remaining_qty ?? loan.qty ?? 1,
+                    });
+                  }}
+                />
+              ))}
+            </div>
+          </>
           )}
         </TabsContent>}
 
@@ -1785,10 +1830,10 @@ export function Outils({
             ) : null
           }
         />
-      ) : (
+      ) : viewMode === 'table' ? (
         <>
           {/* Tableur Google Sheets Style */}
-          <div className={cx('rounded-xl border border-line bg-surface shadow-xs overflow-hidden', viewMode === 'cards' ? 'hidden' : 'hidden sm:block')}>
+          <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs table-rhythm">
                 <thead>
@@ -2095,183 +2140,93 @@ export function Outils({
             </div>
           </div>
 
-          {/* Cards View (pour Mobile) */}
-          <div className={cx('space-y-2.5', viewMode === 'cards' ? 'block' : 'sm:hidden')}>
-            {displayedTools.map((tool) => {
-              const acc = computeToolAccounting(tool);
-              const isSelected = selectedToolIds.has(tool.id);
-              return (
-                <div
-                  key={tool.id}
-                  onClick={() => setSelectedId(tool.id)}
-                  className={cx(
-                    'rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper-2 cursor-pointer transition-all space-y-2.5',
-                    isSelected && 'border-amber/50 bg-amber-wash/30',
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    {canManage && (
-                      <div className="pt-1" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelect(tool.id)}
-                          className="h-4 w-4 rounded accent-amber cursor-pointer"
-                        />
-                      </div>
-                    )}
-
-                    {tool.photo_path ? (
-                      <img
-                        src={tool.photo_path}
-                        alt={tool.name}
-                        className="h-14 w-14 shrink-0 rounded-xl object-cover border border-line shadow-xs"
-                      />
-                    ) : (
-                      <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-paper text-ink-faint border border-line">
-                        <IconWrench size={22} />
-                      </span>
-                    )}
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-xs font-bold text-amber">{tool.id}</span>
-                          <span className="rounded bg-paper px-1.5 py-0.5 text-[10px] font-medium text-ink-soft border border-line">
-                            {tool.category}
-                          </span>
-                          {tool.brand ? (
-                            <span className="rounded bg-paper px-1.5 py-0.5 text-[10px] font-bold text-ink-soft border border-line">
-                              {tool.brand}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        <span
-                          className={cx(
-                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0',
-                            tool.status === 'disponible'
-                              ? 'bg-green-wash text-green'
-                              : tool.status === 'en_pret'
-                                ? 'bg-amber-wash text-amber'
-                                : 'bg-red-wash text-red',
-                          )}
-                        >
-                          <span
-                            className={cx(
-                              'h-1.5 w-1.5 rounded-full',
-                              tool.status === 'disponible' ? 'bg-green' : 'bg-amber',
-                            )}
-                          />
-                          {STATUS_LABEL[tool.status]}
-                        </span>
-                      </div>
-
-                      <p className="font-semibold text-sm text-ink mt-0.5 truncate">{tool.name}</p>
-
-                      {canViewFinancial && acc ? (
-                        <div className="mt-1 flex items-center gap-2 text-[11px]">
-                          <span className="text-ink-faint">VNC:</span>
-                          <span className="font-bold text-green">{formatCurrency(acc.vnc)}</span>
-                          <span className="text-ink-faint">({acc.progressPercent}% amorti)</span>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-ink-faint pt-2 border-t border-line/60">
-                    <div className="flex items-center gap-1.5 font-mono text-xs">
-                      <span className="font-bold text-ink">
-                        <span className={(tool.available_qty ?? 1) > 0 ? 'text-green' : 'text-red'}>
-                          {tool.available_qty ?? (tool.status === 'disponible' ? 1 : 0)}
-                        </span>
-                        /{tool.total_qty ?? 1}
-                      </span>
-                      {(tool.loaned_qty ?? 0) > 0 && (
-                        <span className="text-[10px] text-amber font-semibold">({tool.loaned_qty} prêté)</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                      {canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => setInventoryEditTarget({ kind: 'tool', item: tool })}
-                          className="inline-flex min-h-9 items-center gap-1 rounded-md border border-line bg-paper px-2 text-[11px] font-medium text-ink-soft"
-                          title="Modifier la fiche complète"
-                        >
-                          <Edit3 size={12} />
-                          Modifier
-                        </button>
-                      )}
-                      {canManage && (
-                        <button
-                          onClick={() => {
-                            setMovementTool(tool);
-                            setMovementForm({
-                              type: 'in',
-                              qty: 1,
-                              magasin_id: tool.magasin_id || '',
-                              note: '',
-                              doc_ref: '',
-                            });
-                          }}
-                          className="rounded border border-amber/30 bg-amber-wash/60 px-2 py-1 text-[11px] font-semibold text-amber hover:bg-amber hover:text-white"
-                          title="Mouvement stock"
-                        >
-                          <Zap size={11} />
-                        </button>
-                      )}
-                      {(canEdit || canDelete) && (
-                        <>
-                          {canEdit && (
-                            <button
-                              onClick={() => {
-                                setAssignFor(tool);
-                                setAssignMagasinId(tool.magasin_id ?? '');
-                              }}
-                              className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-amber"
-                              title="Affecter de magasin"
-                            >
-                              <ArrowRightLeft size={13} />
-                            </button>
-                          )}
-                          {canDelete && (
-                            <button
-                              onClick={() => setDeleteSingleTool(tool)}
-                              className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-red hover:border-red-500/30"
-                              title="Supprimer cet outil"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </>
-                      )}
-                      {canLoan && ((tool.available_qty ?? (tool.status === 'disponible' ? 1 : 0)) > 0) ? (
-                        <button
-                          onClick={() => {
-                            setLoanFor(tool);
-                            setLoanForm({
-                              employeeId: employees[0]?.id ?? '',
-                              motive: '',
-                              qty: 1,
-                              outCondition: 'bon',
-                            });
-                          }}
-                          className="rounded bg-amber px-2.5 py-1 text-[11px] font-semibold text-white"
-                        >
-                          Prêter
-                        </button>
-                      ) : null}
-                      <span className="text-ink-soft font-medium flex items-center">
-                        Fiche <IconChevronRight size={14} />
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          {/* Mobile & Tablet Mode Liste Accordéon */}
+          <div className="lg:hidden space-y-2">
+            {displayedTools.map((tool) => (
+              <ToolListRow
+                key={tool.id}
+                tool={tool}
+                isSelected={selectedToolIds.has(tool.id)}
+                onSelect={() => toggleSelect(tool.id)}
+                onClick={() => setSelectedId(tool.id)}
+                onEdit={() => setInventoryEditTarget({ kind: 'tool', item: tool })}
+                onLoan={() => {
+                  setLoanFor(tool);
+                  setLoanForm({
+                    employeeId: employees[0]?.id ?? '',
+                    motive: '',
+                    qty: 1,
+                    outCondition: 'bon',
+                  });
+                }}
+                onMovement={() => {
+                  setMovementTool(tool);
+                  setMovementForm({
+                    type: 'in',
+                    qty: 1,
+                    magasin_id: tool.magasin_id || '',
+                    note: '',
+                    doc_ref: '',
+                  });
+                }}
+                onAssign={() => {
+                  setAssignFor(tool);
+                  setAssignMagasinId(tool.magasin_id ?? '');
+                }}
+                canManage={canManage}
+                canEdit={canEdit}
+                canLoan={canLoan}
+              />
+            ))}
           </div>
         </>
+      ) : (
+        /* Mode Grille Bento Élevée (Mobile, Tablette & Desktop) */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {displayedTools.map((tool) => {
+            const acc = computeToolAccounting(tool);
+            return (
+              <ToolBentoCard
+                key={tool.id}
+                tool={tool}
+                acc={acc}
+                isSelected={selectedToolIds.has(tool.id)}
+                onSelect={() => toggleSelect(tool.id)}
+                onClick={() => setSelectedId(tool.id)}
+                onEdit={() => setInventoryEditTarget({ kind: 'tool', item: tool })}
+                onLoan={() => {
+                  setLoanFor(tool);
+                  setLoanForm({
+                    employeeId: employees[0]?.id ?? '',
+                    motive: '',
+                    qty: 1,
+                    outCondition: 'bon',
+                  });
+                }}
+                onMovement={() => {
+                  setMovementTool(tool);
+                  setMovementForm({
+                    type: 'in',
+                    qty: 1,
+                    magasin_id: tool.magasin_id || '',
+                    note: '',
+                    doc_ref: '',
+                  });
+                }}
+                onAssign={() => {
+                  setAssignFor(tool);
+                  setAssignMagasinId(tool.magasin_id ?? '');
+                }}
+                onDelete={() => setDeleteSingleTool(tool)}
+                canManage={canManage}
+                canEdit={canEdit}
+                canDelete={canDelete}
+                canLoan={canLoan}
+                canViewFinancial={canViewFinancial}
+              />
+            );
+          })}
+        </div>
       )}
         </TabsContent>}
       </Tabs>

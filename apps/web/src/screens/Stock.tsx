@@ -50,6 +50,8 @@ import {
   RefreshCw,
   Search,
   X,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
@@ -66,6 +68,9 @@ import { ImagePickerModal } from '../components/ImagePickerModal';
 import { GroupedQrLabelsModal } from '../components/GroupedQrLabelsModal';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { formatCurrency } from '../lib/accounting';
+import { StockListRow } from '../components/StockListRow';
+import { StockBentoCard } from '../components/StockBentoCard';
+import { StockMovementCard } from '../components/StockMovementCard';
 
 const ExcelImportModal = lazy(() => import('../components/ExcelImportModal').then((module) => ({ default: module.ExcelImportModal })));
 
@@ -266,6 +271,24 @@ export function Stock({
   const canExportReports = hasPerm('reports.export') || (!permissions && user.role === 'direction');
 
   const [activeTab, setActiveTab] = useState<'inventory' | 'journal'>('inventory');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('mf_stock_view_mode');
+      if (saved === 'list' || saved === 'grid') return saved;
+    }
+    return 'grid';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mf_stock_view_mode', viewMode);
+    } catch {}
+  }, [viewMode]);
+
+  useEffect(() => {
+    const subLabel = activeTab === 'journal' ? 'Journal des Flux' : 'Matières & Quincaillerie';
+    window.dispatchEvent(new CustomEvent('subview-changed', { detail: { view: 'stock', subSection: subLabel } }));
+  }, [activeTab]);
   const [refs, setRefs] = useState<StockRef[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [magasins, setMagasins] = useState<Magasin[]>([]);
@@ -892,6 +915,35 @@ export function Stock({
                   </Button>
                 )}
 
+                {activeTab === 'inventory' && (
+                  <div className="flex items-center rounded-lg border border-line bg-surface p-0.5 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('grid')}
+                      className={cx(
+                        'inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded px-2 text-xs font-semibold transition-colors',
+                        viewMode === 'grid' ? 'bg-paper-2 text-ink shadow-2xs' : 'text-ink-soft hover:text-ink',
+                      )}
+                      title="Affichage en Grille Bento"
+                    >
+                      <LayoutGrid size={12} />
+                      <span className="hidden sm:inline">Grille</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('list')}
+                      className={cx(
+                        'inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded px-2 text-xs font-semibold transition-colors',
+                        viewMode === 'list' ? 'bg-paper-2 text-ink shadow-2xs' : 'text-ink-soft hover:text-ink',
+                      )}
+                      title="Affichage en Liste"
+                    >
+                      <List size={12} />
+                      <span className="hidden sm:inline">Liste</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Hamburger Options Menu */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1362,10 +1414,10 @@ export function Stock({
                 ) : null
               }
             />
-          ) : (
+          ) : viewMode === 'list' ? (
             <>
-              {/* Tableur Google Sheets Style (Desktop & Tablette) */}
-              <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden hidden sm:block">
+              {/* Tableur Google Sheets Style (Desktop) */}
+              <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden hidden lg:block">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs table-rhythm">
                     <thead>
@@ -1605,138 +1657,53 @@ export function Stock({
                 </div>
               </div>
 
-              {/* Mobile Cards View */}
-              <div className="space-y-2.5 sm:hidden">
-                {filtered.map((ref) => {
-                  const state = stockState(ref);
-                  const lineValuation = Number(ref.qty || 0) * Number(ref.unit_cost || 0);
-                  const isSelected = selectedRefIds.has(ref.id);
-                  return (
-                    <div
-                      key={ref.id}
-                      onClick={() => setSelectedId(ref.id)}
-                      className={cx(
-                        'rounded-xl border border-line bg-surface p-3.5 shadow-xs active:bg-paper cursor-pointer transition-all space-y-2.5',
-                        isSelected && 'border-amber/50 bg-amber-wash/30',
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        {canManageRefs && (
-                          <div className="pt-1" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleSelect(ref.id)}
-                              className="h-4 w-4 rounded accent-amber cursor-pointer"
-                            />
-                          </div>
-                        )}
-
-                        {ref.photo_path ? (
-                          <img
-                            src={ref.photo_path}
-                            alt={ref.name}
-                            className="h-14 w-14 shrink-0 rounded-xl object-cover border border-line shadow-xs"
-                          />
-                        ) : (
-                          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-paper text-ink-faint border border-line">
-                            <IconBox size={22} />
-                          </span>
-                        )}
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-1">
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <p className="font-semibold text-sm text-ink">{ref.name}</p>
-                                {ref.brand ? (
-                                  <span className="rounded bg-paper px-1.5 py-0.2 text-[10px] font-bold text-ink-soft border border-line">
-                                    {ref.brand}
-                                  </span>
-                                ) : null}
-                              </div>
-                              <p className="text-xs text-ink-faint mt-0.5">
-                                {ref.category} · {ref.magasin_name ?? <strong className="text-amber">📁 Brouillon</strong>}
-                              </p>
-                            </div>
-                            <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft shrink-0">
-                              <span
-                                className={cx(
-                                  'h-1.5 w-1.5 rounded-full shrink-0',
-                                  state.tone === 'green' ? 'bg-green' : state.tone === 'amber' ? 'bg-amber' : 'bg-red',
-                                )}
-                              />
-                              {state.label}
-                            </span>
-                          </div>
-
-                          {canViewFinancial && ref.unit_cost ? (
-                            <div className="mt-1 flex items-center gap-2 text-[11px]">
-                              <span className="text-ink-faint">Valeur:</span>
-                              <span className="font-bold text-green">{formatCurrency(lineValuation)}</span>
-                              <span className="text-ink-faint">({formatCurrency(ref.unit_cost)}/{ref.unit})</span>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <StockBar ref={ref} />
-
-                      <div className="flex items-center justify-between pt-2 border-t border-line/60" onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs text-ink-faint">Seuil : {ref.min_qty} {ref.unit}</span>
-                        <div className="flex items-center gap-1.5">
-                          {canManageRefs && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setSelectedRefIds(new Set([ref.id]));
-                                  setBatchAssignMagasinId(ref.magasin_id ?? '');
-                                  setBatchAssignOpen(true);
-                                }}
-                                className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-amber"
-                                title="Affecter / Transférer"
-                              >
-                                <ArrowRightLeft size={13} />
-                              </button>
-                              <button
-                                onClick={() => setDeleteSingleRef(ref)}
-                                className="rounded border border-line bg-paper p-1 text-ink-soft hover:text-red hover:border-red-500/30"
-                                title="Supprimer cet article"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </>
-                          )}
-                          {canMove ? (
-                            <>
-                              <button
-                                onClick={() => openMove('out', ref)}
-                                className="rounded border border-amber/30 bg-amber-wash px-2.5 py-1 text-xs font-semibold text-amber hover:bg-amber hover:text-white active:scale-95 transition-all"
-                              >
-                                - Sortie
-                              </button>
-                              <button
-                                onClick={() => openMove('in', ref)}
-                                className="rounded border border-green/30 bg-green/10 px-2.5 py-1 text-xs font-semibold text-green hover:bg-green hover:text-white active:scale-95 transition-all"
-                              >
-                                + Entrée
-                              </button>
-                              <button
-                                onClick={() => openMove('out', ref)}
-                                className="rounded border border-line bg-paper p-1 text-ink-soft hover:bg-paper-2 hover:text-amber active:scale-95 transition-all"
-                                title="Hub Mouvement"
-                              >
-                                <Zap size={14} className="text-amber" />
-                              </button>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* Mobile & Tablet Mode Liste Accordéon */}
+              <div className="lg:hidden space-y-2">
+                {filtered.map((ref) => (
+                  <StockListRow
+                    key={ref.id}
+                    item={ref}
+                    isSelected={selectedRefIds.has(ref.id)}
+                    onSelect={() => toggleSelect(ref.id)}
+                    onClick={() => setSelectedId(ref.id)}
+                    onMoveIn={() => openMove('in', ref)}
+                    onMoveOut={() => openMove('out', ref)}
+                    onTransfer={() => {
+                      setSelectedRefIds(new Set([ref.id]));
+                      setBatchAssignMagasinId(ref.magasin_id ?? '');
+                      setBatchAssignOpen(true);
+                    }}
+                    canManage={canManageRefs}
+                    canMove={canMove}
+                  />
+                ))}
               </div>
             </>
+          ) : (
+            /* Mode Grille Bento Élevée (Mobile, Tablette & Desktop) */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              {filtered.map((ref) => (
+                <StockBentoCard
+                  key={ref.id}
+                  item={ref}
+                  isSelected={selectedRefIds.has(ref.id)}
+                  onSelect={() => toggleSelect(ref.id)}
+                  onClick={() => setSelectedId(ref.id)}
+                  onMoveIn={() => openMove('in', ref)}
+                  onMoveOut={() => openMove('out', ref)}
+                  onTransfer={() => {
+                    setSelectedRefIds(new Set([ref.id]));
+                    setBatchAssignMagasinId(ref.magasin_id ?? '');
+                    setBatchAssignOpen(true);
+                  }}
+                  onDelete={() => setDeleteSingleRef(ref)}
+                  canManage={canManageRefs}
+                  canMove={canMove}
+                  canDelete={canDeleteRef}
+                  canViewFinancial={canViewFinancial}
+                />
+              ))}
+            </div>
           )}
         </TabsContent>
 
@@ -1749,61 +1716,71 @@ export function Stock({
               hint="Les entrées, sorties et ajustements d'inventaire apparaîtront dans cette table d'audit."
             />
           ) : (
-            <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs table-rhythm">
-                  <thead>
-                    <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                      <th className="px-3 py-2.5 min-w-36 border-r border-line col-lead">Date & Heure</th>
-                      <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Type</th>
-                      <th className="px-3 py-2.5 min-w-44 border-r border-line col-lead">Article</th>
-                      <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Quantité</th>
-                      <th className="px-3 py-2.5 min-w-36 border-r border-line">Bénéficiaire / Motif</th>
-                      <th className="px-3 py-2.5 min-w-28 text-right col-actions">Agent</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line">
-                    {movements.map((move, idx) => (
-                      <tr
-                        key={move.id}
-                        className={cx(
-                          'transition-colors',
-                          idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
-                          'hover:bg-amber-wash/20',
-                        )}
-                      >
-                        <td className="px-3 py-2 font-mono text-ink-faint tabular-nums border-r border-line">
-                          {formatDateTime(move.created_at)}
-                        </td>
-                        <td className="px-3 py-2 text-center border-r border-line">
-                          <Chip tone={MOVE_TONE[move.move_type]}>{MOVE_LABEL[move.move_type]}</Chip>
-                        </td>
-                        <td className="px-3 py-2 font-semibold text-ink border-r border-line">
-                          {move.ref_name}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono font-bold text-ink border-r border-line tabular-nums">
-                          {move.move_type === 'out' || move.move_type === 'transfer' ? `-${move.qty}` : `+${move.qty}`} {move.unit ?? 'u'}
-                        </td>
-                        <td className="px-3 py-2 text-ink-soft border-r border-line">
-                          {move.move_type === 'transfer' ? (
-                            <div className="font-semibold text-blue">
-                              Vers {move.target_magasin_name ?? 'autre magasin / atelier'}
-                            </div>
-                          ) : (
-                            <div>{move.beneficiary ?? '—'}</div>
-                          )}
-                          {move.doc_ref ? <div className="text-[10px] font-mono text-ink-soft">Doc: {move.doc_ref}</div> : null}
-                          {move.note ? <div className="text-[10px] text-ink-faint">{move.note}</div> : null}
-                        </td>
-                        <td className="px-3 py-2 text-right text-ink-faint">
-                          {move.actor}
-                        </td>
+            <>
+              {/* Desktop Tableur */}
+              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs table-rhythm">
+                    <thead>
+                      <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                        <th className="px-3 py-2.5 min-w-36 border-r border-line col-lead">Date &amp; Heure</th>
+                        <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Type</th>
+                        <th className="px-3 py-2.5 min-w-44 border-r border-line col-lead">Article</th>
+                        <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Quantité</th>
+                        <th className="px-3 py-2.5 min-w-36 border-r border-line">Bénéficiaire / Motif</th>
+                        <th className="px-3 py-2.5 min-w-28 text-right col-actions">Agent</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {movements.map((move, idx) => (
+                        <tr
+                          key={move.id}
+                          className={cx(
+                            'transition-colors',
+                            idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                            'hover:bg-amber-wash/20',
+                          )}
+                        >
+                          <td className="px-3 py-2 font-mono text-ink-faint tabular-nums border-r border-line">
+                            {formatDateTime(move.created_at)}
+                          </td>
+                          <td className="px-3 py-2 text-center border-r border-line">
+                            <Chip tone={MOVE_TONE[move.move_type]}>{MOVE_LABEL[move.move_type]}</Chip>
+                          </td>
+                          <td className="px-3 py-2 font-semibold text-ink border-r border-line">
+                            {move.ref_name}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono font-bold text-ink border-r border-line tabular-nums">
+                            {move.move_type === 'out' || move.move_type === 'transfer' ? `-${move.qty}` : `+${move.qty}`} {move.unit ?? 'u'}
+                          </td>
+                          <td className="px-3 py-2 text-ink-soft border-r border-line">
+                            {move.move_type === 'transfer' ? (
+                              <div className="font-semibold text-blue">
+                                Vers {move.target_magasin_name ?? 'autre magasin / atelier'}
+                              </div>
+                            ) : (
+                              <div>{move.beneficiary ?? '—'}</div>
+                            )}
+                            {move.doc_ref ? <div className="text-[10px] font-mono text-ink-soft">Doc: {move.doc_ref}</div> : null}
+                            {move.note ? <div className="text-[10px] text-ink-faint">{move.note}</div> : null}
+                          </td>
+                          <td className="px-3 py-2 text-right text-ink-faint">
+                            {move.actor}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+
+              {/* Mobile & Tablet Movement Cards */}
+              <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {movements.map((move) => (
+                  <StockMovementCard key={move.id} movement={move} />
+                ))}
+              </div>
+            </>
           )}
         </TabsContent>
       </Tabs>
