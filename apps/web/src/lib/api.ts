@@ -2,9 +2,11 @@ import { enqueueOfflineMutation, getOfflinePermissions, markServerSync, type Off
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  payload?: Record<string, unknown>;
+  constructor(status: number, message: string, payload?: Record<string, unknown> | null) {
     super(message);
     this.status = status;
+    this.payload = payload ?? undefined;
   }
 }
 
@@ -161,7 +163,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     const text = await res.text();
     const data = parseApiJson(text, res.status);
     if (!res.ok) {
-      throw new ApiError(res.status, (data?.error as string) ?? `Erreur ${res.status}`);
+      throw new ApiError(res.status, (data?.error as string) ?? `Erreur ${res.status}`, data);
     }
 
     // Invalidation intelligente des caches cibles
@@ -261,7 +263,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
           console.warn(`[Resilience] Serveur indisponible (${res.status}), utilisation du cache local pour ${path}`);
           return cached.data;
         }
-        throw new ApiError(res.status, (data?.error as string) ?? `Erreur ${res.status}`);
+        throw new ApiError(res.status, (data?.error as string) ?? `Erreur ${res.status}`, data);
       }
 
       const etag = res.headers.get('etag') ?? undefined;

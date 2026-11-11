@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
-import { api, syncOfflineMutations, type Dashboard as DashboardType, type Employee, type KioskIdentify, type PunchResult, type PunchType, type User } from '../lib/api';
+import { ApiError, api, syncOfflineMutations, type Dashboard as DashboardType, type Employee, type KioskIdentify, type PunchResult, type PunchType, type User } from '../lib/api';
 import { listOfflineMutations } from '../lib/offline';
 import { QR_PREFIX, getCachedQr, qrDataUrl } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
@@ -921,6 +921,11 @@ export function Pointage({
       setStage('validate_pin');
       return;
     }
+    const effectiveReason = motifNote.trim() || (motif && motif !== 'Autre' ? motif : '');
+    if (punchType === 'in' && lateNeeded && !effectiveReason) {
+      setError('Choisissez un motif de retard ou saisissez une précision avant de valider.');
+      return;
+    }
     if (punchType === 'in' && identified.situation?.isLateCriticalBlocked) {
       setError(`Pointage direct bloqué : retard critique (${identified.situation.lateMinutes} min > max autorisée ${identified.situation.maxLateAllowed || 60} min). Veuillez contacter la Direction.`);
       return;
@@ -947,7 +952,7 @@ export function Pointage({
           idMode: 'manual',
           selfie: finalSelfie || undefined,
           pin: pin.trim(),
-          reason: motif && motif !== 'Autre' ? motif : motif === 'Autre' ? motifNote : undefined,
+          reason: effectiveReason || undefined,
           clientRecordedAt,
           offlinePunchId,
         }),
@@ -979,8 +984,24 @@ export function Pointage({
       recordLocalTodayPunch(identified.employee.id, punchType, res.serverTime, res.lateMinutes);
       setStage('confirm');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Pointage refusé.');
-      setSelfie(null);
+      const apiError = err instanceof ApiError ? err : null;
+      if (apiError?.payload?.reasonRequired === true && punchType === 'in') {
+        const serverLateMinutes = Number(apiError.payload.lateMinutes);
+        setIdentified((current) => current ? {
+          ...current,
+          situation: {
+            ...current.situation,
+            lateMinutes: Number.isFinite(serverLateMinutes) ? serverLateMinutes : current.situation.lateMinutes,
+            isLate: true,
+          },
+        } : current);
+        setMotif('');
+        setMotifNote('');
+        setError('Le serveur confirme un retard : choisissez un motif ou saisissez une précision. Votre selfie est conservé.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Pointage refusé.');
+        setSelfie(null);
+      }
     } finally {
       setBusy(false);
     }
@@ -1030,7 +1051,8 @@ export function Pointage({
 
   const situation = identified?.situation;
   const lateNeeded =
-    punchType === 'in' && !!situation && situation.lateMinutes > situation.toleranceMinutes;
+    punchType === 'in' && !!situation && (Boolean(situation.isLate) || situation.lateMinutes > situation.toleranceMinutes);
+  const lateReasonMissing = lateNeeded && !(motifNote.trim() || (motif && motif !== 'Autre'));
 
   // Filtered rows for Timesheets
   const filteredAttendance = attendanceDetail.filter((row) => {
@@ -2001,36 +2023,56 @@ export function Pointage({
                   </div>
                 )}
 
-                {/* Motif de retard compact directement dans la carte si en retard */}
-                {lateNeeded && (
-                  <div className="pt-1.5 border-t border-amber/20 space-y-1">
-                    <div className="flex items-center justify-between text-[10px] text-amber font-bold">
-                      <span>⚠️ Retard +{situation?.lateMinutes}m</span>
-                      <span className="text-ink-faint font-normal">Motif :</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {(situation?.lateMotifs && situation.lateMotifs.length > 0
-                        ? situation.lateMotifs
-                        : ['Transport', 'Santé', 'Famille', 'Pluie', 'Autre']
-                      ).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          onClick={() => setMotif(m)}
-                          className={cx(
-                            'rounded-md px-1.5 py-0.5 text-[10px] font-semibold border transition-all',
-                            motif === m
-                              ? 'bg-amber text-white border-amber shadow-xs'
-                              : 'bg-surface text-ink border-line hover:border-amber/40'
-                          )}
-                        >
-                          {m}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </Card>
+
+              {lateNeeded && (
+                <Card className="space-y-2 border-amber/30 bg-amber-wash/20 p-3 shadow-xs" aria-live="polite">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-bold text-amber">Retard de {situation?.lateMinutes ?? 0} min · motif requis</span>
+                    <span className="shrink-0 text-[10px] text-ink-faint">Choisissez ou précisez</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(situation?.lateMotifs && situation.lateMotifs.length > 0
+                      ? situation.lateMotifs
+                      : ['Transport', 'Santé', 'Famille', 'Pluie', 'Autre']
+                    ).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        aria-pressed={motif === m}
+                        onClick={() => {
+                          setMotif(m);
+                          setMotifNote('');
+                          setError(null);
+                        }}
+                        className={cx(
+                          'min-h-8 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                          motif === m
+                            ? 'border-amber bg-amber text-white'
+                            : 'border-line bg-surface text-ink hover:border-amber/40',
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="block space-y-1 text-[11px] font-medium text-ink-soft">
+                    <span>Précision ou autre motif</span>
+                    <input
+                      type="text"
+                      value={motifNote}
+                      onChange={(event) => {
+                        setMotifNote(event.target.value.slice(0, 240));
+                        if (event.target.value.trim()) setMotif('Autre');
+                        setError(null);
+                      }}
+                      maxLength={240}
+                      placeholder="Décrivez brièvement la raison"
+                      className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber"
+                    />
+                  </label>
+                </Card>
+              )}
 
               {/* Bannières d'alerte réglementaire */}
               {situation?.isLateCriticalBlocked && (
@@ -2096,7 +2138,7 @@ export function Pointage({
                   {/* Bouton de pointage principal sous le pouce */}
                   <button
                     type="button"
-                    disabled={busy || (lateNeeded && !motif && !motifNote)}
+                    disabled={busy || lateReasonMissing}
                     onClick={() => {
                       const video = videoRef.current;
                       if (video && ready) {
@@ -2111,7 +2153,7 @@ export function Pointage({
                     }}
                     className={cx(
                       'w-full h-10 sm:h-11 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-98 cursor-pointer',
-                      busy || (lateNeeded && !motif && !motifNote)
+                      busy || lateReasonMissing
                         ? 'bg-line text-ink-faint cursor-not-allowed'
                         : 'bg-amber text-white hover:bg-amber-deep',
                     )}
@@ -2139,7 +2181,7 @@ export function Pointage({
                       variant="primary"
                       size="sm"
                       className="flex-1 text-xs font-bold h-9"
-                      disabled={busy}
+                      disabled={busy || lateReasonMissing}
                       onClick={() => void submitPunch()}
                     >
                       {busy ? <Spinner /> : `Confirmer`}
