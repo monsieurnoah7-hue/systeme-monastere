@@ -70,6 +70,8 @@ import { formatCurrency } from '../lib/accounting';
 import { StockListRow } from '../components/StockListRow';
 import { StockBentoCard } from '../components/StockBentoCard';
 import { StockMovementCard } from '../components/StockMovementCard';
+import { ScrollableChipRail } from '../components/ScrollableChipRail';
+import { StickyTableScroller } from '../components/StickyTableScroller';
 
 const ExcelImportModal = lazy(() => import('../components/ExcelImportModal').then((module) => ({ default: module.ExcelImportModal })));
 
@@ -995,9 +997,9 @@ export function Stock({
               </div>
             </div>
 
-            {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Scroll Unique) */}
+            {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Scroll avec flèches PC) */}
             {activeTab === 'inventory' ? (
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 pt-1.5 border-t border-line/40 text-xs">
+              <ScrollableChipRail className="border-t border-line/40 pt-1 text-xs">
                 {/* Scope Chips */}
                 {[
                   { id: 'all', label: 'Tout le stock', count: refs.length },
@@ -1088,9 +1090,9 @@ export function Stock({
                   <Clock size={13} className="text-amber" />
                   <span>Journal ({movements.length})</span>
                 </button>
-              </div>
+              </ScrollableChipRail>
             ) : (
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 pt-1.5 border-t border-line/40 text-xs">
+              <ScrollableChipRail className="border-t border-line/40 pt-1 text-xs">
                 {/* Revenir au Stock */}
                 <button
                   type="button"
@@ -1142,7 +1144,7 @@ export function Stock({
                     className="h-8 rounded-full border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none shadow-2xs"
                   />
                 </div>
-              </div>
+              </ScrollableChipRail>
             )}
           </div>
         </div>
@@ -1338,7 +1340,7 @@ export function Stock({
             <>
               {/* Tableur Google Sheets Style (Desktop) */}
               <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden hidden lg:block">
-                <div className="overflow-x-auto">
+                <StickyTableScroller>
                   <table className="w-full text-left border-collapse text-xs table-rhythm">
                     <thead>
                       <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
@@ -1354,7 +1356,7 @@ export function Stock({
                           </th>
                         )}
                         <th className="px-2.5 py-2.5 w-12 border-r border-line text-center col-lead">Photo</th>
-                        <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-44 border-r border-line col-lead">
+                        <th className="px-3 py-2.5 min-w-64 border-r border-line col-lead">
                           Désignation &amp; Marque
                         </th>
                         <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
@@ -1429,8 +1431,8 @@ export function Stock({
                               )}
                             </td>
 
-                            {/* Sticky Designation & Marque */}
-                            <td className="sticky left-0 z-10 bg-surface group-hover:bg-surface-2 px-3 py-2 font-semibold text-ink border-r border-line">
+                            {/* Designation & Marque */}
+                            <td className="px-3 py-2 font-semibold text-ink border-r border-line">
                               <div className="flex items-center gap-1.5">
                                 <span>{ref.name}</span>
                                 {ref.brand ? (
@@ -1566,7 +1568,7 @@ export function Stock({
                       })}
                     </tbody>
                   </table>
-                </div>
+                </StickyTableScroller>
 
                 {/* Spreadsheet Summary Footer */}
                 <div className="bg-paper border-t border-line px-4 py-2.5 text-xs flex items-center justify-between font-semibold text-ink-soft">

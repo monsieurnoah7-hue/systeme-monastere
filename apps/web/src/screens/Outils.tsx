@@ -86,6 +86,8 @@ import { ToolBentoCard } from '../components/ToolBentoCard';
 import { ToolLoanCard } from '../components/ToolLoanCard';
 import { FleetView } from '../components/FleetView';
 import { InventoryEditModal, type InventoryEditTarget } from '../components/InventoryEditModal';
+import { ScrollableChipRail } from '../components/ScrollableChipRail';
+import { StickyTableScroller } from '../components/StickyTableScroller';
 import { computePortfolioAudit, computeToolAccounting, formatCurrency } from '../lib/accounting';
 import { fetchFleetSummary, type FleetSummary } from '../lib/api';
 
@@ -1111,7 +1113,7 @@ export function Outils({
                       >
                         <div className="flex items-center gap-2">
                           {viewMode === 'table' ? <LayoutGrid size={14} className="text-amber" /> : <List size={14} className="text-amber" />}
-                          <span>Mode {viewMode === 'table' ? 'Cartes Bento' : 'Tableur Pro'}</span>
+                          <span>Mode {viewMode === 'table' ? 'Cartes Bento' : 'Tableur'}</span>
                         </div>
                       </DropdownMenuItem>
                     )}
@@ -1177,8 +1179,8 @@ export function Outils({
               </div>
             </div>
 
-            {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Scroll Unique) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 pt-1.5 border-t border-line/40 text-xs">
+            {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Scroll avec flèches PC) */}
+            <ScrollableChipRail className="border-t border-line/40 pt-1 text-xs">
               {/* Onglets Principaux de Vue */}
               {canViewTools && (
                 <button
@@ -1332,7 +1334,7 @@ export function Outils({
                   )}
                 </>
               )}
-            </div>
+            </ScrollableChipRail>
           </div>
         </div>
 
@@ -1762,7 +1764,7 @@ export function Outils({
         <>
           {/* Tableur Google Sheets Style */}
           <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
+            <StickyTableScroller>
               <table className="w-full text-left border-collapse text-xs table-rhythm">
                 <thead>
                   <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
@@ -1778,10 +1780,10 @@ export function Outils({
                       </th>
                     )}
                     <th className="px-2.5 py-2.5 w-12 border-r border-line text-center col-lead">Photo</th>
-                    <th className="sticky left-0 z-10 bg-paper-2 px-3 py-2.5 min-w-24 border-r border-line col-lead">
+                    <th className="px-3 py-2.5 min-w-36 border-r border-line col-lead">
                       Réf / Code QR
                     </th>
-                    <th className="px-3 py-2.5 min-w-44 border-r border-line col-lead">Désignation &amp; Marque</th>
+                    <th className="px-3 py-2.5 min-w-64 border-r border-line col-lead">Désignation &amp; Marque</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
                     <th className="px-3 py-2.5 min-w-36 border-r border-line">Emplacement / Magasin</th>
                     <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Stock &amp; Dispo</th>
@@ -1846,8 +1848,8 @@ export function Outils({
                           )}
                         </td>
 
-                        {/* Sticky ID */}
-                        <td className="sticky left-0 z-10 bg-surface group-hover:bg-surface-2 px-3 py-2 font-mono font-bold text-amber border-r border-line">
+                        {/* ID Code QR */}
+                        <td className="px-3 py-2 font-mono font-bold text-amber border-r border-line">
                           <div className="flex items-center gap-1.5">
                             <IconQr size={13} className="text-ink-faint shrink-0" />
                             <span>{tool.id}</span>
@@ -2057,7 +2059,7 @@ export function Outils({
                   })}
                 </tbody>
               </table>
-            </div>
+            </StickyTableScroller>
 
             {/* Tableur Footer Total */}
             <div className="bg-paper border-t border-line px-4 py-2.5 text-xs flex items-center justify-between font-semibold text-ink-soft">

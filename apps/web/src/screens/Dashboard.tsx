@@ -2820,14 +2820,14 @@ function DrawerContentDetail({
   if (drawer.kind === 'attendance' && data.das04) {
     if (data.das04.detail.length === 0) return <EmptyState title="Aucun travailleur actif" />;
     return (
-      <div className="relative overflow-auto max-h-[calc(100dvh-130px)] rounded-xl border border-line shadow-xs scroll-thin">
-        <table className="w-full text-left table-rhythm min-w-[460px]">
+      <div className="relative overflow-x-auto max-h-[calc(100dvh-130px)] rounded-xl border border-line shadow-xs scroll-thin bg-surface">
+        <table className="w-full text-left table-rhythm">
           <thead className="sticky top-0 z-20 border-b border-line bg-surface-2 text-[11px] uppercase font-bold text-ink-faint shadow-xs">
             <tr>
-              <th className="sticky top-0 bg-surface-2 px-3 py-2.5 col-lead">Travailleur</th>
-              <th className="sticky top-0 bg-surface-2 px-2.5 py-2.5 text-center">Arrivée</th>
-              <th className="sticky top-0 bg-surface-2 px-2.5 py-2.5 text-center">Départ</th>
-              <th className="sticky top-0 bg-surface-2 px-3.5 py-2.5 text-right whitespace-nowrap">Statut</th>
+              <th className="sticky top-0 bg-surface-2 px-3 py-2.5">Travailleur</th>
+              <th className="sticky top-0 bg-surface-2 px-2 py-2.5 text-center w-16">Arrivée</th>
+              <th className="sticky top-0 bg-surface-2 px-2 py-2.5 text-center w-20">Départ</th>
+              <th className="sticky top-0 bg-surface-2 px-3 py-2.5 text-right w-24 whitespace-nowrap">Statut</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line text-xs">
@@ -2872,8 +2872,8 @@ function DrawerContentDetail({
                       )}
                     </button>
                   </td>
-                  <td className="px-2.5 py-2.5 text-center font-mono tabular-nums">{row.inAt ?? '—'}</td>
-                  <td className="px-2.5 py-2.5 text-center font-mono tabular-nums">
+                  <td className="px-2 py-2.5 text-center font-mono tabular-nums text-xs">{row.inAt ?? '—'}</td>
+                  <td className="px-2 py-2.5 text-center font-mono tabular-nums text-xs">
                     {row.outAt ? (
                       row.outAt
                     ) : row.inAt && !isAbsentOrConge ? (
@@ -2885,7 +2885,7 @@ function DrawerContentDetail({
                       <span className="text-ink-faint">—</span>
                     )}
                   </td>
-                  <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
                     <button
                       type="button"
                       onClick={() => onOpenAttendanceEmployee?.(row.id, row.fullName)}

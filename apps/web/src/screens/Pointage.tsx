@@ -20,7 +20,18 @@ import {
   Smartphone,
   Users,
   X,
+  Menu,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
+import { ScrollableChipRail } from '../components/ScrollableChipRail';
+import { StickyTableScroller } from '../components/StickyTableScroller';
 import { exportToExcel, exportToPdf } from '../lib/export';
 
 type Terminal = { id: string; name: string };
@@ -1133,9 +1144,22 @@ export function Pointage({
           MODE 1 : FEUILLES DE PRÉSENCE (VUE TABLEUR)
       ========================================================================= */}
       {activeMainTab === 'timesheets' && canViewAttendance ? (
-        <div className="space-y-5">
-          {/* Timesheets KPI Summary */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="space-y-4">
+          {/* Mobile compact 1-line KPI strip */}
+          <div className="sm:hidden flex items-center justify-between rounded-xl border border-line bg-surface px-3.5 py-2 text-xs font-semibold shadow-2xs">
+            <span className="text-green font-bold tabular-nums">{totalPresent} à l'heure</span>
+            <span className="text-ink-faint">·</span>
+            <span className="text-amber font-bold tabular-nums">{totalLate} retards</span>
+            <span className="text-ink-faint">·</span>
+            <span className="text-ink-faint font-bold tabular-nums">{attendanceDetail.filter((r) => r.status === 'absent').length} absents</span>
+            <span className="text-ink-faint">·</span>
+            <span className="text-ink font-bold tabular-nums">
+              {attendanceDetail.length > 0 ? `${Math.round(((totalPresent + totalLate) / attendanceDetail.length) * 100)}%` : '—'}
+            </span>
+          </div>
+
+          {/* Desktop KPI Grid */}
+          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <Card className="p-4 shadow-card">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
                 Présents à l'heure
@@ -1179,155 +1203,192 @@ export function Pointage({
             </Card>
           </div>
 
-          {/* Tableur Toolbar */}
-          <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 shadow-xs sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1 min-w-[240px]">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher par nom ou fonction…"
-                className="h-9 w-full rounded-lg border border-line bg-paper-2/60 pl-9 pr-3 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:bg-surface focus:outline-none"
-              />
-            </div>
+          {/* Tableur Sticky Toolbar (Ligne 1 Action Bar + Ligne 2 ScrollableChipRail) */}
+          <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+            <div className="flex flex-col gap-1.5">
+              {/* LIGNE 1 : Barre d'action unifiée */}
+              <div className="flex items-center justify-between gap-2">
+                {/* Titre & Compteur */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-wash border border-amber/30 text-amber shrink-0 shadow-2xs">
+                    <Clock size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h1 className="text-sm sm:text-base font-bold text-ink truncate tracking-tight">Pointage</h1>
+                      <span className="rounded-full bg-paper-2 border border-line px-2 py-0.5 text-xs font-bold font-mono text-amber tabular-nums">
+                        {filteredAttendance.length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-lg border border-line bg-paper-2 p-0.5 text-xs">
-                <button
-                  onClick={() => setStatusFilter('all')}
-                  className={cx(
-                    'rounded-md px-2.5 py-1 font-medium transition-colors',
-                    statusFilter === 'all' ? 'bg-surface font-semibold text-ink shadow-xs' : 'text-ink-soft',
+                {/* Recherche intégrée au centre */}
+                <div className="flex-1 max-w-xs sm:max-w-md relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Rechercher ouvrier, fonction..."
+                    className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
+                      title="Effacer"
+                    >
+                      <X size={12} />
+                    </button>
                   )}
-                >
-                  Tous
-                </button>
-                <button
-                  onClick={() => setStatusFilter('present')}
-                  className={cx(
-                    'rounded-md px-2.5 py-1 font-medium transition-colors',
-                    statusFilter === 'present' ? 'bg-surface font-semibold text-green shadow-xs' : 'text-ink-soft',
+                </div>
+
+                {/* CTA et Menu Options */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {canAccessKiosk && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon={<Smartphone size={14} />}
+                      onClick={() => setActiveMainTab('kiosk')}
+                      className="hidden sm:inline-flex"
+                    >
+                      Borne Kiosque
+                    </Button>
                   )}
-                >
-                  À l'heure
-                </button>
-                <button
-                  onClick={() => setStatusFilter('late')}
-                  className={cx(
-                    'rounded-md px-2.5 py-1 font-medium transition-colors',
-                    statusFilter === 'late' ? 'bg-surface font-semibold text-amber shadow-xs' : 'text-ink-soft',
-                  )}
-                >
-                  Retards
-                </button>
-                <button
-                  onClick={() => setStatusFilter('absent')}
-                  className={cx(
-                    'rounded-md px-2.5 py-1 font-medium transition-colors',
-                    statusFilter === 'absent' ? 'bg-surface font-semibold text-ink-faint shadow-xs' : 'text-ink-soft',
-                  )}
-                >
-                  Absents
-                </button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:bg-paper-2 hover:text-ink transition-colors shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                        title="Options et outils de pointage"
+                        aria-label="Options"
+                      >
+                        <Menu size={16} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
+                      <DropdownMenuLabel className="px-2.5 py-1.5 text-xs font-semibold text-ink-faint uppercase tracking-wider">
+                        Feuilles de Présence
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem onClick={loadTimesheets} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink">
+                        <RefreshCw size={14} className={tsLoading ? 'animate-spin text-amber' : 'text-ink-soft'} />
+                        <span>Actualiser les relevés</span>
+                      </DropdownMenuItem>
+                      {canAccessKiosk && (
+                        <DropdownMenuItem onClick={() => setActiveMainTab('kiosk')} className="sm:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink">
+                          <Smartphone size={14} className="text-amber" />
+                          <span>Ouvrir la Borne Kiosque</span>
+                        </DropdownMenuItem>
+                      )}
+                      {canExportReports && (
+                        <>
+                          <DropdownMenuSeparator className="my-1 border-line" />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              const dateStr = new Date().toISOString().split('T')[0];
+                              const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Statut', 'Heures', 'Pause', 'Écart'];
+                              const rows = filteredAttendance.map((row) => [
+                                row.id,
+                                row.fullName,
+                                row.jobTitle,
+                                row.inAt || '-',
+                                row.outAt || (row.inAt ? 'En poste' : '-'),
+                                row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
+                                row.inAt ? '7h45' : '0h00',
+                                row.inAt ? '0h45' : '-',
+                                row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
+                              ]);
+                              exportToExcel(`Feuille_Presence_${dateStr}`, 'Présences', headers, rows);
+                            }}
+                            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                          >
+                            <Download size={14} className="text-green" />
+                            <span>Exporter vers Excel (.xlsx)</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Statut', 'Heures', 'Pause', 'Écart'];
+                              const rows = filteredAttendance.map((row) => [
+                                row.id,
+                                row.fullName,
+                                row.jobTitle,
+                                row.inAt || '-',
+                                row.outAt || (row.inAt ? 'En poste' : '-'),
+                                row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
+                                row.inAt ? '7h45' : '0h00',
+                                row.inAt ? '0h45' : '-',
+                                row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
+                              ]);
+                              exportToPdf(
+                                'Feuille de Présence & Pointage Quotidien',
+                                'Registre officiel des présences d’atelier du Centre de Formation Technique',
+                                headers,
+                                rows,
+                                [
+                                  { label: 'Effectif Total', value: attendanceDetail.length },
+                                  { label: 'Présents à l’heure', value: totalPresent },
+                                  { label: 'Retards constatés', value: totalLate },
+                                  {
+                                    label: 'Ponctualité globale',
+                                    value:
+                                      attendanceDetail.length > 0
+                                        ? `${Math.round(((totalPresent + totalLate) / attendanceDetail.length) * 100)}%`
+                                        : '—',
+                                  },
+                                ],
+                              );
+                            }}
+                            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                          >
+                            <Printer size={14} className="text-blue" />
+                            <span>Imprimer la feuille du jour</span>
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
 
-              {/* View Switcher on mobile/desktop */}
-              <div className="flex items-center rounded-lg border border-line bg-paper-2 p-0.5 sm:hidden">
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={cx('rounded p-1', viewMode === 'table' ? 'bg-surface shadow-xs' : '')}
-                  title="Vue Tableur"
-                >
-                  <FileSpreadsheet size={15} />
-                </button>
-                <button
-                  onClick={() => setViewMode('cards')}
-                  className={cx('rounded p-1', viewMode === 'cards' ? 'bg-surface shadow-xs' : '')}
-                  title="Vue Fiches"
-                >
-                  <Users size={15} />
-                </button>
-              </div>
-
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={tsLoading}
-                icon={<RefreshCw size={13} className={tsLoading ? 'animate-spin' : ''} />}
-                onClick={loadTimesheets}
-                aria-label={tsLoading ? 'Actualisation des présences en cours' : 'Actualiser les présences'}
-              >
-                {tsLoading ? 'Actualisation…' : 'Actualiser'}
-              </Button>
-
-              {canExportReports && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<Download size={13} />}
-                    onClick={() => {
-                      const dateStr = new Date().toISOString().split('T')[0];
-                      const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Statut', 'Heures', 'Pause', 'Écart'];
-                      const rows = filteredAttendance.map((row) => [
-                        row.id,
-                        row.fullName,
-                        row.jobTitle,
-                        row.inAt || '-',
-                        row.outAt || (row.inAt ? 'En poste' : '-'),
-                        row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
-                        row.inAt ? '7h45' : '0h00',
-                        row.inAt ? '0h45' : '-',
-                        row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
-                      ]);
-                      exportToExcel(`Feuille_Presence_${dateStr}`, 'Présences', headers, rows);
-                    }}
+              {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Statuts) */}
+              <ScrollableChipRail className="border-t border-line/40 pt-1 text-xs">
+                {[
+                  { id: 'all', label: 'Tous', count: attendanceDetail.length },
+                  { id: 'present', label: "À l'heure", count: totalPresent },
+                  { id: 'late', label: 'Retards', count: totalLate },
+                  { id: 'absent', label: 'Non pointés', count: attendanceDetail.filter((r) => r.status === 'absent').length },
+                ].map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setStatusFilter(st.id as any)}
+                    className={cx(
+                      'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                      statusFilter === st.id
+                        ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                        : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                    )}
                   >
-                    Excel
-                  </Button>
+                    <span>{st.label}</span>
+                    <span className={cx('text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full', statusFilter === st.id ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint')}>{st.count}</span>
+                  </button>
+                ))}
 
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<Printer size={13} />}
-                    onClick={() => {
-                      const headers = ['Matricule', 'Nom Complet', 'Poste / Fonction', 'Arrivée', 'Départ', 'Statut', 'Heures', 'Pause', 'Écart'];
-                      const rows = filteredAttendance.map((row) => [
-                        row.id,
-                        row.fullName,
-                        row.jobTitle,
-                        row.inAt || '-',
-                        row.outAt || (row.inAt ? 'En poste' : '-'),
-                        row.status === 'present' ? 'Présent' : row.status === 'late' ? 'En retard' : 'Absent',
-                        row.inAt ? '7h45' : '0h00',
-                        row.inAt ? '0h45' : '-',
-                        row.lateMinutes > 0 ? `+${row.lateMinutes} min` : (row.inAt ? '0' : '-'),
-                      ]);
-                      exportToPdf(
-                        'Feuille de Présence & Pointage Quotidien',
-                        'Registre officiel des présences d’atelier du Centre de Formation Technique',
-                        headers,
-                        rows,
-                        [
-                          { label: 'Effectif Total', value: attendanceDetail.length },
-                          { label: 'Présents à l’heure', value: totalPresent },
-                          { label: 'Retards constatés', value: totalLate },
-                          {
-                            label: 'Ponctualité globale',
-                            value:
-                              attendanceDetail.length > 0
-                                ? `${Math.round(((totalPresent + totalLate) / attendanceDetail.length) * 100)}%`
-                                : '—',
-                          },
-                        ],
-                      );
-                    }}
-                  >
-                    Imprimer
-                  </Button>
-                </>
-              )}
+                <span className="h-4 w-px bg-line shrink-0 mx-0.5" />
+
+                {/* Switcher vue Tableur / Fiches */}
+                <button
+                  type="button"
+                  onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')}
+                  className="h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border border-line bg-surface text-ink-soft hover:text-ink shadow-2xs"
+                >
+                  {viewMode === 'table' ? <Users size={14} /> : <FileSpreadsheet size={14} />}
+                  <span>Mode {viewMode === 'table' ? 'Fiches mobiles' : 'Tableur'}</span>
+                </button>
+              </ScrollableChipRail>
             </div>
           </div>
 
@@ -1339,9 +1400,9 @@ export function Pointage({
 
           {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
           <div className={cx('overflow-hidden rounded-xl border border-line bg-surface shadow-card', viewMode === 'cards' && 'hidden sm:block')}>
-            <div className="overflow-x-auto scroll-thin touch-pan-y touch-pan-x overscroll-x-contain">
+            <StickyTableScroller tableClassName="scroll-thin">
               <table className={cx('w-full text-left sheet-grid table-rhythm', canCorrectAttendance ? 'min-w-[860px]' : 'min-w-[760px]')}>
-                <thead>
+                <thead className="sticky top-0 z-10 bg-paper-2 border-b border-line shadow-xs">
                   <tr>
                     <th className="sheet-th sticky-col min-w-[190px] col-lead">Travailleur / ID</th>
                     <th className="sheet-th w-28 text-center">Arrivée (In)</th>
@@ -1373,6 +1434,11 @@ export function Pointage({
                             <div className="min-w-0">
                               <span className="truncate block font-semibold text-ink text-xs">{row.fullName}</span>
                               <span className="truncate block text-[10px] text-ink-faint">{row.jobTitle}</span>
+                              {isLate && (
+                                <span className="block mt-0.5 text-[10px] text-amber-soft truncate max-w-[220px]" title={(row as any).lateReason || 'Aucun motif renseigné'}>
+                                  <span className="font-semibold text-amber">Motif :</span> {(row as any).lateReason ? `« ${(row as any).lateReason} »` : 'Non précisé'}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -1420,17 +1486,15 @@ export function Pointage({
                         <td className="sheet-cell text-center font-mono tabular-nums">
                           {row.lateMinutes > 0 ? (
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className="inline-block rounded bg-surface-2 border border-line px-1.5 py-0.5 text-[10px] font-bold text-amber">
+                              <span className="inline-block rounded bg-amber-wash/40 border border-amber/30 px-1.5 py-0.5 text-[10px] font-bold text-amber">
                                 +{row.lateMinutes} min
                               </span>
-                              {(row as any).lateReason && (
-                                <span
-                                  className="text-[10px] font-sans text-amber-soft font-normal truncate max-w-[120px] cursor-help"
-                                  title={`Motif déclaré : ${(row as any).lateReason}`}
-                                >
-                                  « {(row as any).lateReason} »
-                                </span>
-                              )}
+                              <span
+                                className="text-[10px] font-sans text-amber font-medium truncate max-w-[130px] cursor-help"
+                                title={`Motif déclaré : ${(row as any).lateReason || 'Non précisé'}`}
+                              >
+                                {(row as any).lateReason ? `« ${(row as any).lateReason} »` : '(sans motif)'}
+                              </span>
                             </div>
                           ) : row.inAt ? (
                             <span className="text-green text-[11px]">À l'heure</span>
@@ -1483,7 +1547,7 @@ export function Pointage({
                   </tr>
                 </tfoot>
               </table>
-            </div>
+            </StickyTableScroller>
           </div>
 
           {/* MOBILE CARDS VIEW (Mobile-First alternate) */}
@@ -1493,17 +1557,17 @@ export function Pointage({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <AttendanceAvatar employee={row} />
-                    <div>
-                      <p className="font-semibold text-xs text-ink">{row.fullName}</p>
-                      <p className="text-[10px] text-ink-faint">{row.jobTitle}</p>
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm text-ink truncate">{row.fullName}</p>
+                      <p className="text-xs text-ink-soft truncate">{row.jobTitle}</p>
                     </div>
                   </div>
                   <span
-                    className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[10px] font-medium text-ink-soft"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-xs font-semibold text-ink-soft shrink-0"
                   >
                     <span
                       className={cx(
-                        'h-1.5 w-1.5 rounded-full shrink-0',
+                        'h-2 w-2 rounded-full shrink-0',
                         row.status === 'present'
                           ? 'bg-green'
                           : row.status === 'late'
@@ -1517,41 +1581,41 @@ export function Pointage({
 
                 <div className="mt-3 grid grid-cols-4 gap-2 border-t border-line/60 pt-2.5 text-xs text-center">
                   <div>
-                    <span className="text-[10px] text-ink-faint block">Arrivée</span>
-                    <span className="font-mono font-bold text-ink">{row.inAt ?? '—'}</span>
+                    <span className="text-xs text-ink-faint block">Arrivée</span>
+                    <span className="font-mono font-bold text-sm text-ink">{row.inAt ?? '—'}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-ink-faint block">Départ</span>
-                    <span className="font-mono font-bold text-ink">
+                    <span className="text-xs text-ink-faint block">Départ</span>
+                    <span className="font-mono font-bold text-sm text-ink">
                       {row.outAt ? row.outAt : (row.inAt && row.status !== 'absent' ? <span className="text-green font-medium">En poste</span> : '—')}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-ink-faint block font-semibold text-ink">Statut</span>
+                    <span className="text-xs text-ink-faint block font-semibold text-ink">Statut</span>
                     <span className={cx(
-                      'font-semibold text-[11px] block truncate',
+                      'font-semibold text-xs block truncate',
                       row.status === 'present' ? 'text-green' : row.status === 'late' ? 'text-amber' : 'text-ink-faint'
                     )}>
                       {row.status === 'present' ? 'Validé' : row.status === 'late' ? 'Retard' : 'Non pointé'}
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] text-ink-faint block">Tolérance</span>
-                    <span className={cx('font-mono font-bold', row.lateMinutes > 0 ? 'text-amber' : 'text-green')}>
+                    <span className="text-xs text-ink-faint block">Tolérance</span>
+                    <span className={cx('font-mono font-bold text-sm', row.lateMinutes > 0 ? 'text-amber' : 'text-green')}>
                       {row.lateMinutes > 0 ? `+${row.lateMinutes} min` : row.inAt ? 'À l’heure' : '—'}
                     </span>
                   </div>
                 </div>
 
-                {row.status === 'late' && (row as any).lateReason && (
-                  <div className="mt-2.5 rounded-lg border border-amber/30 bg-amber-wash/30 px-2.5 py-1 text-xs text-amber-soft">
-                    <span className="font-semibold text-amber">Motif déclaré :</span> {(row as any).lateReason}
+                {row.status === 'late' && (
+                  <div className="mt-2.5 rounded-lg border border-amber/30 bg-amber-wash/30 px-3 py-1.5 text-xs text-amber-soft font-medium">
+                    <span className="font-bold text-amber">Motif déclaré :</span> {(row as any).lateReason || 'Non précisé'}
                   </div>
                 )}
                 {canCorrectAttendance && (row.inAt || row.outAt) && (
-                  <div className="mt-2 flex justify-end gap-2 border-t border-line/60 pt-2">
-                    {row.inAt && <Button size="sm" variant="ghost" onClick={() => openAttendanceCorrection(row, 'in')}>Corriger l’arrivée</Button>}
-                    {row.outAt && <Button size="sm" variant="ghost" onClick={() => openAttendanceCorrection(row, 'out')}>Corriger le départ</Button>}
+                  <div className="mt-3 flex justify-end gap-2 border-t border-line/60 pt-2.5">
+                    {row.inAt && <Button size="sm" variant="ghost" className="min-h-10 text-xs font-semibold" onClick={() => openAttendanceCorrection(row, 'in')}>Corriger l’arrivée</Button>}
+                    {row.outAt && <Button size="sm" variant="ghost" className="min-h-10 text-xs font-semibold" onClick={() => openAttendanceCorrection(row, 'out')}>Corriger le départ</Button>}
                   </div>
                 )}
               </Card>

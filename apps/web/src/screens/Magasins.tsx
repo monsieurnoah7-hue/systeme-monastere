@@ -50,7 +50,7 @@ import {
   Search,
   Pencil,
   ImagePlus,
-  SlidersHorizontal,
+  Crop,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -68,6 +68,8 @@ import { InventoryEditModal, type InventoryEditTarget } from '../components/Inve
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { GroupedQrLabelsModal } from '../components/GroupedQrLabelsModal';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
+import { ScrollableChipRail } from '../components/ScrollableChipRail';
+import { ManualPhotoCropperModal } from '../components/ManualPhotoCropperModal';
 
 type MagasinTool = Pick<
   Tool,
@@ -327,6 +329,7 @@ export function Magasins({
     photo_position: 'center' as 'center' | 'top' | 'bottom',
   });
   const [magasinPhotoOpen, setMagasinPhotoOpen] = useState(false);
+  const [cropTarget, setCropTarget] = useState<{ id: string; name: string; photo_path: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -546,20 +549,32 @@ export function Magasins({
     }
   };
 
-  const cyclePhotoPosition = async (m: Magasin) => {
-    const current = ((m as any).photo_position as 'center' | 'top' | 'bottom') || 'center';
-    const nextPos: 'center' | 'top' | 'bottom' = current === 'center' ? 'top' : current === 'top' ? 'bottom' : 'center';
-    const label = nextPos === 'top' ? 'Haut (Visages / Bureaux)' : nextPos === 'bottom' ? 'Bas (Sols / Équipements)' : 'Centre (Standard)';
+  const handleSaveCrop = async (croppedDataUrl: string, position: 'top' | 'center' | 'bottom') => {
+    if (!cropTarget) return;
+    if (cropTarget.id === 'form') {
+      setForm((f) => ({ ...f, photo_path: croppedDataUrl, photo_position: position }));
+      toast('Cadrage manuel appliqué à la photo.', 'success');
+      return;
+    }
     try {
-      await api(`/api/magasins/${m.id}`, {
+      await api(`/api/magasins/${cropTarget.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ photo_position: nextPos }),
+        body: JSON.stringify({
+          photo_path: croppedDataUrl,
+          photo_position: position,
+        }),
       });
-      setMagasins((prev) => prev.map((item) => (item.id === m.id ? { ...item, photo_position: nextPos } as any : item)));
-      toast(`Cadrage de « ${m.name} » : ${label}`, 'success');
+      setMagasins((prev) =>
+        prev.map((item) =>
+          item.id === cropTarget.id
+            ? ({ ...item, photo_path: croppedDataUrl, photo_position: position } as any)
+            : item
+        )
+      );
+      toast(`Cadrage enregistré pour « ${cropTarget.name} ».`, 'success');
       notifyChange();
     } catch {
-      toast('Impossible d’ajuster le cadrage', 'error');
+      toast('Échec de l’enregistrement du cadrage.', 'error');
     }
   };
 
@@ -975,8 +990,8 @@ export function Magasins({
             </div>
           </div>
 
-          {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Catégories) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 pt-1.5 border-t border-line/40 text-xs">
+          {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Catégories avec flèches PC) */}
+          <ScrollableChipRail className="border-t border-line/40 pt-1 text-xs">
             {LOCATION_CATEGORIES.map((cat) => {
               const count = categoryCounts[cat.id] ?? 0;
               if (cat.id !== 'all' && count === 0) return null;
@@ -1006,7 +1021,7 @@ export function Magasins({
                 </button>
               );
             })}
-          </div>
+          </ScrollableChipRail>
         </div>
       </div>
 
@@ -1134,18 +1149,20 @@ export function Magasins({
                     <span className="absolute left-3 top-3 rounded-md bg-black/65 px-2 py-1 font-mono text-[10px] font-semibold text-white backdrop-blur-sm">{m.code}</span>
                     {!m.active && <span className="absolute right-3 top-3 rounded-md bg-red px-2 py-1 text-[10px] font-semibold text-white">Inactif</span>}
                     {m.photo_path && canManage && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          cyclePhotoPosition(m);
-                        }}
-                        className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 rounded-md bg-black/75 px-2.5 py-1 text-[11px] font-semibold text-white shadow-md backdrop-blur-xs transition-transform hover:bg-black hover:scale-105 active:scale-95"
-                        title="Ajuster le cadrage photo (Haut / Centre / Bas)"
-                      >
-                        <SlidersHorizontal size={12} />
-                        <span>Cadrage : {((m as any).photo_position === 'top' ? 'Haut' : (m as any).photo_position === 'bottom' ? 'Bas' : 'Centre')}</span>
-                      </button>
+                      <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCropTarget({ id: m.id, name: m.name, photo_path: m.photo_path! });
+                          }}
+                          className="flex items-center gap-1.5 rounded-lg bg-black/85 border border-white/20 px-2.5 py-1 text-xs font-semibold text-white shadow-md backdrop-blur-xs transition hover:bg-amber hover:text-black hover:border-amber hover:scale-105 active:scale-95"
+                          title="Recadrer manuellement cette photo comme sur WhatsApp (glisser/zoomer)"
+                        >
+                          <Crop size={13} />
+                          <span>Cadrer</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                   <div className="space-y-2.5 p-4">
@@ -2455,6 +2472,13 @@ export function Magasins({
           if (doorLabelContent) print(doorLabelContent);
           setDoorLabelPreviewOpen(false);
         }}
+      />
+      <ManualPhotoCropperModal
+        open={Boolean(cropTarget)}
+        imageUrl={cropTarget?.photo_path ?? null}
+        targetName={cropTarget?.name}
+        onClose={() => setCropTarget(null)}
+        onSave={handleSaveCrop}
       />
       {portal}
     </div>

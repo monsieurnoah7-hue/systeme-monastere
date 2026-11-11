@@ -69,7 +69,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
             max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS out_at,
             coalesce(max(a.late_minutes), 0) AS late_minutes,
             max(CASE WHEN a.punch_type = 'in' THEN a.reason END) AS late_reason,
-            coalesce(max(a.status), 'present') AS status
+            max(a.status) AS status
        FROM employees e
        LEFT JOIN attendance a ON a.employee_id = e.id AND a.punch_date = $1
       WHERE e.active = true
