@@ -452,11 +452,11 @@ export function Drawer({
     >
       <DrawerContent
         className={cx(
-          'h-dvh gap-0 bg-paper p-0 pb-[env(safe-area-inset-bottom)] shadow-pop',
-          wide ? 'w-[min(96vw,46rem)] sm:max-w-3xl' : 'w-[min(96vw,36rem)] sm:max-w-xl',
+          'h-dvh flex flex-col gap-0 bg-paper p-0 pb-[env(safe-area-inset-bottom)] shadow-pop',
+          wide ? 'w-full sm:w-[min(96vw,52rem)] sm:max-w-3xl' : 'w-full sm:w-[min(96vw,38rem)] sm:max-w-xl',
         )}
       >
-        <DrawerHeader className="border-b border-line bg-surface px-5 py-4">
+        <DrawerHeader className="shrink-0 sticky top-0 z-30 border-b border-line bg-surface px-4 sm:px-5 py-3.5 sm:py-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <DrawerTitle className="font-semibold text-ink">{title}</DrawerTitle>
@@ -477,7 +477,7 @@ export function Drawer({
             </button>
           </div>
         </DrawerHeader>
-        <div className={cx('scroll-thin flex-1 overflow-y-auto px-5 py-4', bodyClassName)}>{children}</div>
+        <div className={cx('scroll-thin flex-1 overflow-y-auto px-4 sm:px-5 py-4', bodyClassName)}>{children}</div>
       </DrawerContent>
     </DrawerRoot>
   );

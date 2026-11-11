@@ -36,7 +36,6 @@ import {
   Trash2,
   ArrowRightLeft,
   AlertTriangle,
-  Layers,
   FolderArchive,
   ArrowRight,
   Zap,
@@ -53,7 +52,7 @@ import {
   LayoutGrid,
   List,
 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Tabs, TabsContent } from '../components/ui/tabs';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -791,51 +790,44 @@ export function Stock({
       />
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'inventory' | 'journal')} className="w-full">
-        {/* Sticky Unified Navigation Bar */}
-        <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
-          <div className="flex flex-col gap-2">
-            {/* Row 1: Tabs + Search + Primary CTAs + Overflow Menu */}
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              {/* Left: Navigation Tabs */}
-              <TabsList className="h-9 w-full shrink-0 border border-line bg-paper-2 p-0.5 md:w-auto">
-                <TabsTrigger
-                  value="inventory"
-                  className="gap-1.5 px-2.5 sm:px-3 text-xs font-semibold data-[state=active]:bg-amber data-[state=active]:text-white"
-                >
-                  <IconBox size={14} className="text-amber data-[state=active]:text-white" />
-                  <span>Matières &amp; Quincaillerie</span>
-                  <span className="ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-bold tabular-nums bg-surface text-ink-faint data-[state=active]:bg-white/20 data-[state=active]:text-white">
-                    {refs.length}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="journal"
-                  className="gap-1.5 px-2.5 sm:px-3 text-xs font-semibold data-[state=active]:bg-amber data-[state=active]:text-white"
-                >
-                  <Clock size={14} className="text-amber data-[state=active]:text-white" />
-                  <span className="hidden sm:inline">Journal des Entrées / Sorties</span>
-                  <span className="sm:hidden">Journal</span>
-                  <span className="ml-1 rounded-full px-1.5 py-0.2 text-[10px] font-bold tabular-nums bg-surface text-ink-faint data-[state=active]:bg-white/20 data-[state=active]:text-white">
-                    {movements.length}
-                  </span>
-                </TabsTrigger>
-              </TabsList>
+        {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
+        <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+          <div className="flex flex-col gap-1.5">
+            {/* LIGNE 1 : Barre d'action unique (Titre + Recherche + CTA Primaire + Options) */}
+            <div className="flex items-center justify-between gap-2">
+              {/* Titre & Compteur */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-wash border border-amber/30 text-amber shrink-0 shadow-2xs">
+                  <IconBox size={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="text-sm sm:text-base font-bold text-ink truncate tracking-tight">
+                      {activeTab === 'inventory' ? 'Matières' : 'Journal'}
+                    </h1>
+                    <span className="rounded-full bg-paper-2 border border-line px-2 py-0.5 text-xs font-bold font-mono text-amber tabular-nums">
+                      {activeTab === 'inventory' ? filtered.length : movements.length}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-              {/* Center: Search Bar (Desktop / Tablet) */}
-              <div className="hidden md:flex flex-1 max-w-sm mx-2 items-center relative">
-                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+              {/* Recherche intégrée au centre */}
+              <div className="flex-1 max-w-xs sm:max-w-md relative">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
                 {activeTab === 'inventory' ? (
                   <>
                     <input
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
-                      placeholder="Rechercher article, visserie, colle, fournisseur..."
-                      className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                      placeholder="Rechercher article, visserie..."
+                      className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
                     />
                     {q && (
                       <button
                         onClick={() => setQ('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
+                        title="Effacer"
                       >
                         <X size={12} />
                       </button>
@@ -846,13 +838,14 @@ export function Stock({
                     <input
                       value={journalQ}
                       onChange={(e) => setJournalQ(e.target.value)}
-                      placeholder="Filtrer article, bénéficiaire, agent..."
-                      className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                      placeholder="Filtrer mouvements..."
+                      className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
                     />
                     {journalQ && (
                       <button
                         onClick={() => setJournalQ('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
+                        title="Effacer"
                       >
                         <X size={12} />
                       </button>
@@ -861,112 +854,59 @@ export function Stock({
                 )}
               </div>
 
-              {/* Right: Actions & Options */}
-              <div className="flex w-full items-center justify-end gap-1.5 md:w-auto">
-                <div className="hidden md:inline-flex">
+              {/* Actions de droite : CTA Primaire + Menu Contextuel */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className="hidden lg:inline-flex">
                   <GroupedQrLabelsModal canViewTools={hasPerm('tools.view')} canViewStock={hasPerm('stock.view')} />
                 </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={loading}
-                  icon={<RefreshCw size={13} className={loading ? 'animate-spin' : ''} />}
-                  onClick={refresh}
-                  className="hidden md:inline-flex h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
-                  title={loading ? 'Actualisation en cours' : 'Actualiser les données'}
-                >
-                  <span>{loading ? 'Actualisation…' : 'Actualiser'}</span>
-                </Button>
 
                 {canMove && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      icon={<Zap size={13} />}
-                      onClick={() => openMove('out')}
-                      className="hidden md:inline-flex h-8 px-2 sm:px-3 text-xs shadow-2xs font-bold"
-                      title="Ouvrir le Hub de Mouvement"
-                    >
-                      <span>Mouvement</span>
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={<IconArrowIn size={14} />}
-                      onClick={() => openMove('in')}
-                      className="hidden md:inline-flex h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
-                      title="Enregistrer un arrivage ou entrée de stock"
-                    >
-                      <span>Entrée</span>
-                    </Button>
-                  </>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={<Zap size={14} className="text-amber" />}
+                    onClick={() => openMove('out')}
+                    className="hidden sm:inline-flex h-9 px-3 text-xs sm:text-sm font-bold shadow-2xs"
+                    title="Ouvrir le Hub de Mouvement"
+                  >
+                    <span>Mouvement</span>
+                  </Button>
                 )}
 
                 {canManageRefs && (
                   <Button
                     size="sm"
                     variant="primary"
-                    icon={<IconPlus size={14} />}
+                    icon={<IconPlus size={15} />}
                     onClick={openCreate}
-                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs"
+                    className="h-9 px-2.5 sm:px-3.5 text-xs sm:text-sm font-bold shadow-xs"
                     title="Créer une nouvelle référence"
                   >
                     <span className="hidden sm:inline">Nouvelle référence</span>
-                    <span className="sm:hidden">Référence</span>
+                    <span className="sm:hidden">+ Réf</span>
                   </Button>
                 )}
 
-                {activeTab === 'inventory' && (
-                  <div className="flex items-center rounded-lg border border-line bg-surface p-0.5 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('grid')}
-                      className={cx(
-                        'inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded px-2 text-xs font-semibold transition-colors',
-                        viewMode === 'grid' ? 'bg-paper-2 text-ink shadow-2xs' : 'text-ink-soft hover:text-ink',
-                      )}
-                      title="Affichage en Grille Bento"
-                    >
-                      <LayoutGrid size={12} />
-                      <span className="hidden sm:inline">Grille</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('list')}
-                      className={cx(
-                        'inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded px-2 text-xs font-semibold transition-colors',
-                        viewMode === 'list' ? 'bg-paper-2 text-ink shadow-2xs' : 'text-ink-soft hover:text-ink',
-                      )}
-                      title="Affichage en Liste"
-                    >
-                      <List size={12} />
-                      <span className="hidden sm:inline">Liste</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* Hamburger Options Menu */}
+                {/* Menu Options & Outils unique */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      icon={<Menu size={14} />}
-                      className="h-8 px-2 text-xs shadow-2xs"
-                      title="Options & Exports"
+                    <button
+                      type="button"
+                      className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:text-ink hover:border-amber/40 transition-colors shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                      title="Options & Outils"
+                      aria-label="Options & Outils"
                     >
-                      <span className="hidden sm:inline">Options</span>
-                    </Button>
+                      <Menu size={16} />
+                    </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
-                    <DropdownMenuLabel className="px-2.5 py-1.5 text-[11px] font-semibold text-ink-faint uppercase tracking-wider">
+                    <DropdownMenuLabel className="px-2.5 py-1.5 text-xs font-semibold text-ink-faint uppercase tracking-wider">
                       Actions &amp; Outils
                     </DropdownMenuLabel>
 
                     <DropdownMenuItem
                       onClick={refresh}
-                      className="md:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
                     >
                       <RefreshCw size={14} className={loading ? 'animate-spin text-amber' : 'text-ink-soft'} />
                       <span>Actualiser les données</span>
@@ -976,19 +916,33 @@ export function Stock({
                       <>
                         <DropdownMenuItem
                           onClick={() => openMove('in')}
-                          className="md:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
                         >
                           <IconArrowIn size={14} className="text-green" />
                           <span>+ Enregistrer une Entrée (Arrivage)</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => openMove('out')}
-                          className="md:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
                         >
                           <IconArrowOut size={14} className="text-amber" />
                           <span>- Enregistrer une Sortie (Chantier)</span>
                         </DropdownMenuItem>
                       </>
+                    )}
+
+                    <DropdownMenuSeparator className="my-1 border-line" />
+
+                    {activeTab === 'inventory' && (
+                      <DropdownMenuItem
+                        onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                        className="flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <div className="flex items-center gap-2">
+                          {viewMode === 'grid' ? <List size={14} className="text-amber" /> : <LayoutGrid size={14} className="text-amber" />}
+                          <span>Mode {viewMode === 'grid' ? 'Liste détaillée' : 'Grille Bento'}</span>
+                        </div>
+                      </DropdownMenuItem>
                     )}
 
                     {canExportReports && (
@@ -1041,135 +995,152 @@ export function Stock({
               </div>
             </div>
 
-            {/* Sub-row: Filters & Selectors */}
+            {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Scroll Unique) */}
             {activeTab === 'inventory' ? (
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
-                {/* Status Chips */}
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-                  {[
-                    { key: '', label: 'Tous', count: stats.total },
-                    { key: 'normal', label: 'Disponibles', count: stats.normal },
-                    { key: 'warning', label: 'Stock bas', count: stats.warning },
-                    { key: 'empty', label: 'Rupture', count: stats.empty },
-                  ].map(({ key, label, count }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setStatusFilter(key as any)}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 pt-1.5 border-t border-line/40 text-xs">
+                {/* Scope Chips */}
+                {[
+                  { id: 'all', label: 'Tout le stock', count: refs.length },
+                  { id: 'active', label: 'Parc Actif', count: activeRefs.length },
+                  ...(draftRefs.length > 0 ? [{ id: 'drafts', label: 'À affecter', count: draftRefs.length }] : []),
+                ].map((sc) => (
+                  <button
+                    key={sc.id}
+                    type="button"
+                    onClick={() => {
+                      setScopeFilter(sc.id as any);
+                      setSelectedRefIds(new Set());
+                    }}
+                    className={cx(
+                      'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                      scopeFilter === sc.id
+                        ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                        : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                    )}
+                  >
+                    <span>{sc.label}</span>
+                    <span
                       className={cx(
-                        'px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
-                        statusFilter === key
-                          ? 'bg-amber text-white border-amber shadow-xs'
-                          : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                        'text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full',
+                        scopeFilter === sc.id ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint',
                       )}
                     >
-                      <span>{label}</span>
-                      <span className="opacity-75 text-[10px] tabular-nums font-mono">{count}</span>
-                    </button>
-                  ))}
-                </div>
+                      {sc.count}
+                    </span>
+                  </button>
+                ))}
 
-                {/* Magasin select + Mobile Search */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {magasins.length > 0 && (
-                    <select
-                      value={magasinFilter}
-                      onChange={(e) => setMagasinFilter(e.target.value)}
-                      className="h-7 rounded-lg border border-line bg-surface px-2 text-[11px] text-ink focus:border-amber focus:outline-none shadow-2xs max-w-[140px] sm:max-w-[170px] truncate"
-                      title="Filtrer par magasin"
-                    >
-                      <option value="">Tous magasins ({magasins.length})</option>
-                      {magasins.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                <span className="h-4 w-px bg-line shrink-0 mx-0.5" />
 
-                  {/* Mobile Search input */}
-                  <div className="md:hidden flex items-center relative w-32 shrink-0">
-                    <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                    <input
-                      value={q}
-                      onChange={(e) => setQ(e.target.value)}
-                      placeholder="Chercher…"
-                      className="h-7 w-full rounded-md border border-line bg-surface/90 pl-5 pr-2 text-[11px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
-                    />
-                    {q && (
-                      <button
-                        onClick={() => setQ('')}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
-                      >
-                        <X size={10} />
-                      </button>
+                {/* Status Chips */}
+                {[
+                  { key: '', label: 'Tous', count: stats.total },
+                  { key: 'normal', label: 'Disponibles', count: stats.normal },
+                  { key: 'warning', label: 'Stock bas', count: stats.warning },
+                  { key: 'empty', label: 'Rupture', count: stats.empty },
+                ].map(({ key, label, count }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setStatusFilter(key as any)}
+                    className={cx(
+                      'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                      statusFilter === key
+                        ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                        : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
                     )}
-                  </div>
-                </div>
+                  >
+                    <span>{label}</span>
+                    <span
+                      className={cx(
+                        'text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full',
+                        statusFilter === key ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint',
+                      )}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                ))}
+
+                {/* Sélecteur Magasin sous forme de puce */}
+                {magasins.length > 0 && (
+                  <select
+                    value={magasinFilter}
+                    onChange={(e) => setMagasinFilter(e.target.value)}
+                    className="h-8 rounded-full border border-line bg-surface px-3 text-xs font-semibold text-ink focus:border-amber focus:outline-none shadow-2xs shrink-0 max-w-[170px] truncate"
+                    title="Filtrer par magasin"
+                  >
+                    <option value="">Tous magasins ({magasins.length})</option>
+                    {magasins.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Bascule vers le Journal sous forme de puce */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('journal')}
+                  className="h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border border-line bg-surface text-ink-soft hover:text-ink shadow-2xs"
+                >
+                  <Clock size={13} className="text-amber" />
+                  <span>Journal ({movements.length})</span>
+                </button>
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 pt-1.5 border-t border-line/40 text-xs">
+                {/* Revenir au Stock */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('inventory')}
+                  className="h-8 px-3 rounded-full text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 bg-amber text-white border border-amber shadow-xs"
+                >
+                  <IconBox size={13} />
+                  <span>← Retour aux Matières</span>
+                </button>
+
+                <span className="h-4 w-px bg-line shrink-0 mx-0.5" />
+
                 {/* Type chips */}
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-                  {[
-                    { value: '', label: 'Tous' },
-                    { value: 'in', label: 'Entrées' },
-                    { value: 'out', label: 'Sorties' },
-                    { value: 'transfer', label: 'Transferts' },
-                    { value: 'correction', label: 'Corrections' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setJournalType(opt.value as any)}
-                      className={cx(
-                        'px-2.5 py-1 rounded-full text-xs font-semibold shrink-0 transition-all border shadow-2xs',
-                        journalType === opt.value
-                          ? 'bg-amber text-white border-amber shadow-xs'
-                          : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Date pickers + Mobile Search */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <div className="hidden sm:flex items-center gap-1 text-[11px] text-ink-soft">
-                    <input
-                      type="date"
-                      value={journalFrom}
-                      onChange={(e) => setJournalFrom(e.target.value)}
-                      className="h-7 rounded-lg border border-line bg-surface px-1.5 text-[11px] text-ink focus:border-amber focus:outline-none shadow-2xs"
-                    />
-                    <span>→</span>
-                    <input
-                      type="date"
-                      value={journalTo}
-                      onChange={(e) => setJournalTo(e.target.value)}
-                      className="h-7 rounded-lg border border-line bg-surface px-1.5 text-[11px] text-ink focus:border-amber focus:outline-none shadow-2xs"
-                    />
-                  </div>
-
-                  {/* Mobile Search input */}
-                  <div className="md:hidden flex items-center relative w-32 shrink-0">
-                    <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                    <input
-                      value={journalQ}
-                      onChange={(e) => setJournalQ(e.target.value)}
-                      placeholder="Filtrer…"
-                      className="h-7 w-full rounded-md border border-line bg-surface/90 pl-5 pr-2 text-[11px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
-                    />
-                    {journalQ && (
-                      <button
-                        onClick={() => setJournalQ('')}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
-                      >
-                        <X size={10} />
-                      </button>
+                {[
+                  { value: '', label: 'Tous flux' },
+                  { value: 'in', label: 'Entrées' },
+                  { value: 'out', label: 'Sorties' },
+                  { value: 'transfer', label: 'Transferts' },
+                  { value: 'correction', label: 'Corrections' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setJournalType(opt.value as any)}
+                    className={cx(
+                      'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all border shadow-2xs',
+                      journalType === opt.value
+                        ? 'bg-paper-2 text-ink border-amber shadow-xs font-bold'
+                        : 'bg-surface text-ink-soft border-line hover:text-ink',
                     )}
-                  </div>
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+
+                {/* Dates de début / fin */}
+                <div className="flex items-center gap-1 shrink-0 text-ink-faint">
+                  <input
+                    type="date"
+                    value={journalFrom}
+                    onChange={(e) => setJournalFrom(e.target.value)}
+                    className="h-8 rounded-full border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none shadow-2xs"
+                  />
+                  <span>→</span>
+                  <input
+                    type="date"
+                    value={journalTo}
+                    onChange={(e) => setJournalTo(e.target.value)}
+                    className="h-8 rounded-full border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none shadow-2xs"
+                  />
                 </div>
               </div>
             )}
@@ -1183,168 +1154,98 @@ export function Stock({
         ) : null}
 
         {/* Tab 1: Inventaire & Tableur Pro */}
-        <TabsContent value="inventory" className="space-y-4">
-          {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2.5">
-        <div className="grid w-full grid-cols-3 gap-1 rounded-xl border border-line bg-paper-2 p-1">
-          <button
-            type="button"
-            aria-label={`Afficher tout le stock (${refs.length})`}
-            aria-pressed={scopeFilter === 'all'}
-            onClick={() => {
-              setScopeFilter('all');
-              setSelectedRefIds(new Set());
-            }}
-            className={cx(
-              'flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center text-xs font-semibold leading-tight transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber',
-              scopeFilter === 'all'
-                ? 'bg-amber text-white shadow-xs'
-                : 'text-ink hover:bg-paper',
-            )}
-          >
-            <Layers size={14} />
-            <span className="truncate">Tout</span>
-            <span
-              className={cx(
-                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
-                scopeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
-              )}
-            >
-              {refs.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            aria-label={`Afficher les articles en magasins (${activeRefs.length})`}
-            aria-pressed={scopeFilter === 'active'}
-            onClick={() => {
-              setScopeFilter('active');
-              setSelectedRefIds(new Set());
-            }}
-            className={cx(
-              'flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center text-xs font-semibold leading-tight transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber',
-              scopeFilter === 'active'
-                ? 'bg-amber text-white shadow-xs'
-                : 'text-ink hover:bg-paper',
-            )}
-          >
-            <IconBox size={14} />
-            <span className="truncate">Magasins</span>
-            <span
-              className={cx(
-                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
-                scopeFilter === 'active' ? 'bg-white/20 text-white' : 'bg-surface text-green',
-              )}
-            >
-              {activeRefs.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            aria-label={`Afficher les brouillons et articles non affectés (${draftRefs.length})`}
-            aria-pressed={scopeFilter === 'drafts'}
-            onClick={() => {
-              setScopeFilter('drafts');
-              setSelectedRefIds(new Set());
-            }}
-            className={cx(
-              'flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-center text-xs font-semibold leading-tight transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber',
-              scopeFilter === 'drafts'
-                ? 'bg-amber text-white shadow-xs'
-                : 'text-ink hover:bg-paper',
-            )}
-          >
-            <FolderArchive size={14} />
-            <span className="truncate">À affecter</span>
-            <span
-              className={cx(
-                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
-                scopeFilter === 'drafts'
-                  ? 'bg-white/20 text-white'
-                  : draftRefs.length > 0
-                    ? 'bg-amber-wash text-amber border border-amber/30'
-                    : 'bg-surface text-ink-faint',
-              )}
-            >
-              {draftRefs.length}
-            </span>
-          </button>
-        </div>
-
-        {draftRefs.length > 0 && scopeFilter !== 'drafts' && (
-          <button
-            onClick={() => {
-              setScopeFilter('drafts');
-              setSelectedRefIds(new Set());
-            }}
-            className="text-xs font-semibold text-amber hover:underline flex items-center gap-1.5"
-          >
-            <span>⚠️ {draftRefs.length} article{draftRefs.length > 1 ? 's' : ''} en brouillon sans magasin</span>
-            <ArrowRight size={13} />
-          </button>
-        )}
-      </div>
-
-      {/* KPI Dashboard Cards */}
-      <div className={cx('grid grid-cols-2 gap-3', canViewFinancial ? 'sm:grid-cols-5' : 'sm:grid-cols-4')}>
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Total Articles</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-ink-faint" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-ink tabular-nums">{stats.total}</span>
-            <span className="text-[11px] text-ink-faint">références</span>
-          </div>
-        </div>
-
-        {canViewFinancial && (
-          <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Valeur Stock</span>
-              <Coins size={14} className="text-amber" />
+        <TabsContent value="inventory" className="space-y-3">
+          {/* Alerte brouillons si existants */}
+          {draftRefs.length > 0 && scopeFilter !== 'drafts' && (
+            <div className="flex items-center justify-between p-2.5 rounded-xl border border-amber/30 bg-amber-wash/30 text-xs">
+              <span className="text-ink font-medium">⚠️ {draftRefs.length} article{draftRefs.length > 1 ? 's' : ''} en brouillon sans magasin</span>
+              <button
+                onClick={() => {
+                  setScopeFilter('drafts');
+                  setSelectedRefIds(new Set());
+                }}
+                className="font-bold text-amber hover:underline flex items-center gap-1"
+              >
+                <span>Voir les brouillons</span>
+                <ArrowRight size={13} />
+              </button>
             </div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-lg sm:text-xl font-bold text-green tabular-nums">{formatCurrency(totalStockValuation)}</span>
+          )}
+
+          {/* Mini-Bandeau Synthèse Mobile (remplace les 5 gros blocs sur smartphone pour afficher immédiatement les produits !) */}
+          <div className="sm:hidden flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-surface border border-line text-xs shadow-2xs">
+            <div className="flex items-center gap-2 text-ink-soft flex-wrap">
+              <span className="font-semibold text-green">{stats.normal} dispo</span>
+              <span className="text-line-strong">·</span>
+              <span className="font-semibold text-amber">{stats.warning} alerte</span>
+              <span className="text-line-strong">·</span>
+              <span className="font-semibold text-red">{stats.empty} rupture</span>
+            </div>
+            {canViewFinancial && (
+              <span className="font-mono font-bold text-green text-xs truncate max-w-[130px] ml-1">
+                {formatCurrency(totalStockValuation)}
+              </span>
+            )}
+          </div>
+
+          {/* KPI Dashboard Cards (Affichés sur Tablette & Desktop) */}
+          <div className={cx('hidden sm:grid gap-3', canViewFinancial ? 'sm:grid-cols-5' : 'sm:grid-cols-4')}>
+            <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Total Articles</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-ink-faint" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-ink tabular-nums">{stats.total}</span>
+                <span className="text-xs text-ink-faint">références</span>
+              </div>
+            </div>
+
+            {canViewFinancial && (
+              <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Valeur Stock</span>
+                  <Coins size={14} className="text-amber" />
+                </div>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-lg sm:text-xl font-bold text-green tabular-nums">{formatCurrency(totalStockValuation)}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Stock Normal</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-green" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-ink tabular-nums">{stats.normal}</span>
+                <span className="text-xs text-ink-faint">confortable</span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Sous Seuil</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-amber" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-ink tabular-nums">{stats.warning}</span>
+                <span className="text-xs text-ink-faint">à réappro.</span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs col-span-2 sm:col-span-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">En Rupture</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-red" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-ink tabular-nums">{stats.empty}</span>
+                <span className="text-xs text-ink-faint">épuisées</span>
+              </div>
             </div>
           </div>
-        )}
-
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Stock Normal</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-green" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-ink tabular-nums">{stats.normal}</span>
-            <span className="text-[11px] text-ink-faint">confortable</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Sous Seuil</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-amber" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-ink tabular-nums">{stats.warning}</span>
-            <span className="text-[11px] text-ink-faint">à réappro.</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">En Rupture</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-red" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-ink tabular-nums">{stats.empty}</span>
-            <span className="text-[11px] text-ink-faint">épuisées</span>
-          </div>
-        </div>
-      </div>
 
       {/* Drafts Informative Banner */}
           {scopeFilter === 'drafts' && (

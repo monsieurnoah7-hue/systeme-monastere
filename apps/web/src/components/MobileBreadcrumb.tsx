@@ -24,47 +24,55 @@ export function MobileBreadcrumb({
   const IconComponent = activeNav?.icon ?? Home;
   const viewLabel = activeNav?.label ?? currentView;
 
+  // Déduplication intelligente du fil d'Ariane
+  const isDuplicateSubSection =
+    !subSection ||
+    subSection.trim().toLowerCase() === viewLabel.trim().toLowerCase() ||
+    subSection.trim().toLowerCase() === (activeNav?.short ?? '').trim().toLowerCase();
+
+  const cleanSubSection = isDuplicateSubSection ? null : subSection.trim();
+
   return (
     <nav
       aria-label="Fil d'Ariane mobile"
       className={cx(
-        'no-print lg:hidden sticky top-14 z-15 flex h-9 w-full items-center justify-between gap-2 border-b border-line/70 bg-paper/95 px-3 sm:px-4 backdrop-blur-md shadow-2xs transition-all',
+        'no-print lg:hidden sticky top-14 z-15 flex min-h-10 h-10 w-full items-center justify-between gap-2 border-b border-line bg-paper/98 px-3 sm:px-4 backdrop-blur-md shadow-2xs transition-all',
         className,
       )}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto scroll-none py-0.5">
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
         {/* Racine CFTM */}
         <button
           type="button"
           onClick={onNavigateHome}
-          className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-ink hover:text-amber transition-colors focus-visible:outline-none"
+          className="flex shrink-0 min-h-8 items-center gap-1.5 text-xs font-bold text-ink hover:text-amber transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber rounded-md px-1"
           title="Retour au Tableau de bord"
         >
           <span className="tracking-tight">CFTM</span>
         </button>
 
-        <ChevronRight size={11} className="shrink-0 text-ink-faint/60" />
+        <ChevronRight size={13} className="shrink-0 text-ink-faint/60" />
 
         {/* Module Actif */}
         <button
           type="button"
           onClick={() => onNavigateView?.(currentView)}
           className={cx(
-            'flex shrink-0 items-center gap-1 text-[11px] font-medium transition-colors focus-visible:outline-none',
-            subSection ? 'text-ink-soft hover:text-ink' : 'font-bold text-ink',
+            'flex shrink-0 min-h-8 items-center gap-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber rounded-md px-1',
+            cleanSubSection ? 'text-ink-soft hover:text-ink' : 'text-amber',
           )}
           title={`Module ${viewLabel}`}
         >
-          <IconComponent size={13} className={subSection ? 'text-ink-soft' : 'text-amber shrink-0'} />
-          <span className="truncate max-w-[130px] sm:max-w-none">{viewLabel}</span>
+          <IconComponent size={14} className={cleanSubSection ? 'text-ink-soft' : 'text-amber shrink-0'} />
+          <span className="truncate max-w-[150px] sm:max-w-none">{viewLabel}</span>
         </button>
 
-        {/* Sous-section / Onglet Actif */}
-        {subSection && (
+        {/* Sous-section / Onglet Actif (affiché seulement si différent du module) */}
+        {cleanSubSection && (
           <>
-            <ChevronRight size={11} className="shrink-0 text-ink-faint/60" />
-            <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-amber truncate max-w-[140px] sm:max-w-[220px]">
-              {subSection}
+            <ChevronRight size={13} className="shrink-0 text-ink-faint/60" />
+            <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-amber truncate max-w-[160px] sm:max-w-[240px]">
+              {cleanSubSection}
             </span>
           </>
         )}

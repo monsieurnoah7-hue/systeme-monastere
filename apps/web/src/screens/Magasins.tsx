@@ -50,12 +50,14 @@ import {
   Search,
   Pencil,
   ImagePlus,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { exportToExcel, exportToPdf } from '../lib/export';
@@ -544,6 +546,23 @@ export function Magasins({
     }
   };
 
+  const cyclePhotoPosition = async (m: Magasin) => {
+    const current = ((m as any).photo_position as 'center' | 'top' | 'bottom') || 'center';
+    const nextPos: 'center' | 'top' | 'bottom' = current === 'center' ? 'top' : current === 'top' ? 'bottom' : 'center';
+    const label = nextPos === 'top' ? 'Haut (Visages / Bureaux)' : nextPos === 'bottom' ? 'Bas (Sols / Équipements)' : 'Centre (Standard)';
+    try {
+      await api(`/api/magasins/${m.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ photo_position: nextPos }),
+      });
+      setMagasins((prev) => prev.map((item) => (item.id === m.id ? { ...item, photo_position: nextPos } as any : item)));
+      toast(`Cadrage de « ${m.name} » : ${label}`, 'success');
+      notifyChange();
+    } catch {
+      toast('Impossible d’ajuster le cadrage', 'error');
+    }
+  };
+
   // Transfer tool handler
   const handleExecuteTransferTool = async () => {
     if (!transferToolItem || !transferTargetId) return;
@@ -838,173 +857,103 @@ export function Magasins({
         hint="Gestion des ateliers, locaux de stockage, parcs locaux et affectations"
       />
 
-      {/* Sticky Unified Navigation Bar */}
-      <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
-        <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-          {/* Row 1: Categories + Search + Actions + Overflow Menu */}
-          <div className="contents">
-            {/* Left: Quick Category Pills */}
-            <div className="col-span-full hidden min-w-0 flex-wrap items-center gap-1.5 py-0.5 md:flex">
-              {LOCATION_CATEGORIES.map((cat) => {
-                const count = categoryCounts[cat.id] ?? 0;
-                if (cat.id !== 'all' && count === 0) return null;
-                const isSelected = activeCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setActiveCategory(cat.id)}
-                    aria-pressed={isSelected}
-                    className={cx(
-                      'flex min-h-10 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
-                      isSelected
-                        ? 'bg-amber-wash text-amber border-amber/40'
-                        : 'bg-transparent text-ink-soft border-transparent hover:border-line hover:bg-surface hover:text-ink',
-                    )}
-                  >
-                    <span>{cat.shortLabel}</span>
-                    <span className="text-xs tabular-nums text-ink-faint">
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
+      {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
+      <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+        <div className="flex flex-col gap-1.5">
+          {/* LIGNE 1 : Barre d'action unique (Titre + Recherche + CTA Primaire + Options) */}
+          <div className="flex items-center justify-between gap-2">
+            {/* Titre & Compteur */}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-wash border border-amber/30 text-amber shrink-0 shadow-2xs">
+                <Warehouse size={18} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-sm sm:text-base font-bold text-ink truncate tracking-tight">
+                    Magasins
+                  </h1>
+                  <span className="rounded-full bg-paper-2 border border-line px-2 py-0.5 text-xs font-bold font-mono text-amber tabular-nums">
+                    {filtered.length}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {/* Mobile Category Pill Scroll */}
-            <div className="col-span-full flex min-w-0 items-center gap-1.5 overflow-x-auto scroll-none py-1 md:hidden">
-              {LOCATION_CATEGORIES.map((cat) => {
-                const count = categoryCounts[cat.id] ?? 0;
-                if (cat.id !== 'all' && count === 0) return null;
-                const isSelected = activeCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setActiveCategory(cat.id)}
-                    aria-pressed={isSelected}
-                    className={cx(
-                      'flex shrink-0 min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all active:scale-95',
-                      isSelected
-                        ? 'bg-amber text-white border-amber shadow-xs'
-                        : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
-                    )}
-                  >
-                    <span>{cat.shortLabel}</span>
-                    <span
-                      className={cx(
-                        'text-[10px] tabular-nums font-bold px-1.5 py-0.2 rounded-full',
-                        isSelected ? 'bg-white/25 text-white' : 'bg-paper text-ink-faint',
-                      )}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Center: Real-Time Search Bar (Desktop / Tablet) */}
-            <div className="relative hidden min-w-0 items-center md:col-start-1 md:row-start-2 md:flex">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+            {/* Recherche intégrée au centre */}
+            <div className="flex-1 max-w-xs sm:max-w-md relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Rechercher magasin, atelier, responsable…"
-                className="h-10 w-full min-w-0 rounded-lg border border-line bg-surface/90 pl-9 pr-8 text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
               />
               {q && (
                 <button
                   type="button"
                   onClick={() => setQ('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
+                  title="Effacer"
                 >
                   <X size={12} />
                 </button>
               )}
             </div>
 
-            {/* Right: Actions & Options */}
-            <div className="order-3 col-span-full flex w-full min-w-0 flex-wrap items-center justify-between gap-2 md:order-none md:col-span-1 md:col-start-2 md:row-start-2 md:w-auto md:flex-nowrap md:justify-start">
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={refreshing}
-                icon={<RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />}
-                onClick={() => void handleRefresh()}
-                className="hidden md:inline-flex h-10 rounded-lg px-3 text-sm"
-                title="Actualiser les dépôts"
-                aria-label={refreshing ? 'Actualisation des dépôts en cours' : 'Actualiser les dépôts'}
-              >
-                <span aria-live="polite">{refreshing ? 'Actualisation…' : 'Actualiser'}</span>
-              </Button>
-
+            {/* Actions de droite : CTA Primaire + Menu Contextuel */}
+            <div className="flex items-center gap-1.5 shrink-0">
               {canManage && (
                 <Button
                   size="sm"
                   variant="primary"
-                  icon={<IconPlus size={14} />}
+                  icon={<IconPlus size={15} />}
                   onClick={openNew}
-                  className="h-10 rounded-lg px-3 text-sm font-semibold"
+                  className="h-9 px-2.5 sm:px-3.5 text-xs sm:text-sm font-bold shadow-xs"
                   title="Créer un nouvel atelier ou magasin"
                 >
                   <span className="hidden sm:inline">Nouveau magasin</span>
-                  <span className="sm:hidden">Magasin</span>
+                  <span className="sm:hidden">+ Magasin</span>
                 </Button>
               )}
 
-              {/* View mode toggle button */}
-              <div className="flex items-center rounded-lg border border-line bg-surface p-0.5">
-                <button
-                  type="button"
-                  onClick={() => handleSetViewMode('grid')}
-                  aria-pressed={viewMode === 'grid'}
-                  className={cx(
-                    'inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-md px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
-                    viewMode === 'grid' ? 'bg-paper-2 text-ink' : 'text-ink-soft hover:text-ink',
-                  )}
-                  title="Affichage en Grille Bento"
-                >
-                  <LayoutGrid size={12} />
-                  <span className="hidden lg:inline">Grille</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetViewMode('list')}
-                  aria-pressed={viewMode === 'list'}
-                  className={cx(
-                    'inline-flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-md px-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
-                    viewMode === 'list' ? 'bg-paper-2 text-ink' : 'text-ink-soft hover:text-ink',
-                  )}
-                  title="Affichage en Liste"
-                >
-                  <List size={12} />
-                  <span className="hidden lg:inline">Liste</span>
-                </button>
-              </div>
-
-              {/* Hamburger Options Menu */}
+              {/* Menu Options & Outils unique */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<Menu size={14} />}
-                    className="h-10 rounded-lg px-3 text-sm"
+                  <button
+                    type="button"
+                    className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:text-ink hover:border-amber/40 transition-colors shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                     title="Options & Exports"
+                    aria-label="Options & Exports"
                   >
-                    <span className="hidden sm:inline">Options</span>
-                  </Button>
+                    <Menu size={16} />
+                  </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
+                  <DropdownMenuLabel className="px-2.5 py-1.5 text-xs font-semibold text-ink-faint uppercase tracking-wider">
+                    Actions &amp; Outils
+                  </DropdownMenuLabel>
+
                   <DropdownMenuItem
                     onClick={() => void handleRefresh()}
-                    className="md:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
                   >
                     <RefreshCw size={14} className={refreshing ? 'animate-spin text-amber' : 'text-ink-soft'} />
                     <span>Actualiser les dépôts</span>
                   </DropdownMenuItem>
-                  <DropdownMenuLabel className="px-2.5 py-1.5 text-[11px] font-semibold text-ink-faint uppercase tracking-wider">
+
+                  <DropdownMenuItem
+                    onClick={() => handleSetViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                  >
+                    <div className="flex items-center gap-2">
+                      {viewMode === 'grid' ? <List size={14} className="text-amber" /> : <LayoutGrid size={14} className="text-amber" />}
+                      <span>Mode {viewMode === 'grid' ? 'Liste' : 'Grille Bento'}</span>
+                    </div>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator className="my-1 border-line" />
+
+                  <DropdownMenuLabel className="px-2.5 py-1.5 text-xs font-semibold text-ink-faint uppercase tracking-wider">
                     Exports &amp; Rapports
                   </DropdownMenuLabel>
                   <DropdownMenuItem
@@ -1026,29 +975,37 @@ export function Magasins({
             </div>
           </div>
 
-          {/* Sub-row: Mobile Search (Visible on small screens) */}
-          <div className="order-2 col-span-full flex min-w-0 items-center justify-between gap-2 border-t border-line/40 pt-2 text-xs md:hidden">
-            <div className="flex items-center relative flex-1">
-              <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Rechercher un magasin, atelier, responsable…"
-                className="h-11 w-full rounded-md border border-line bg-surface/90 pl-9 pr-10 text-base text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
-              />
-              {q && (
+          {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Catégories) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 pt-1.5 border-t border-line/40 text-xs">
+            {LOCATION_CATEGORIES.map((cat) => {
+              const count = categoryCounts[cat.id] ?? 0;
+              if (cat.id !== 'all' && count === 0) return null;
+              const isSelected = activeCategory === cat.id;
+              return (
                 <button
+                  key={cat.id}
                   type="button"
-                  onClick={() => setQ('')}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
+                  onClick={() => setActiveCategory(cat.id)}
+                  aria-pressed={isSelected}
+                  className={cx(
+                    'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                    isSelected
+                      ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                      : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                  )}
                 >
-                  <X size={10} />
+                  <span>{cat.shortLabel}</span>
+                  <span
+                    className={cx(
+                      'text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full',
+                      isSelected ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint',
+                    )}
+                  >
+                    {count}
+                  </span>
                 </button>
-              )}
-            </div>
-            <span className="text-[11px] text-ink-faint shrink-0 font-medium">
-              {filtered.length} lieu{filtered.length > 1 ? 'x' : ''}
-            </span>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -1157,7 +1114,7 @@ export function Magasins({
                 className="group w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
               >
                 <div className="overflow-hidden rounded-xl border border-line bg-surface transition-colors hover:border-line-strong hover:bg-paper-2/40">
-                  <div className="relative h-36 sm:h-40 bg-paper-2">
+                  <div className="relative h-44 sm:h-48 bg-paper-2">
                     {m.photo_path ? (
                       <img
                         src={m.photo_path}
@@ -1176,6 +1133,20 @@ export function Magasins({
                     )}
                     <span className="absolute left-3 top-3 rounded-md bg-black/65 px-2 py-1 font-mono text-[10px] font-semibold text-white backdrop-blur-sm">{m.code}</span>
                     {!m.active && <span className="absolute right-3 top-3 rounded-md bg-red px-2 py-1 text-[10px] font-semibold text-white">Inactif</span>}
+                    {m.photo_path && canManage && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          cyclePhotoPosition(m);
+                        }}
+                        className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 rounded-md bg-black/75 px-2.5 py-1 text-[11px] font-semibold text-white shadow-md backdrop-blur-xs transition-transform hover:bg-black hover:scale-105 active:scale-95"
+                        title="Ajuster le cadrage photo (Haut / Centre / Bas)"
+                      >
+                        <SlidersHorizontal size={12} />
+                        <span>Cadrage : {((m as any).photo_position === 'top' ? 'Haut' : (m as any).photo_position === 'bottom' ? 'Bas' : 'Centre')}</span>
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-2.5 p-4">
                     <div className="flex items-start justify-between gap-3">

@@ -1388,7 +1388,7 @@ export function Pointage({
 
                         {/* Out time */}
                         <td className="sheet-cell text-center font-mono tabular-nums text-ink-soft">
-                          {row.outAt ?? (row.inAt ? <span className="text-green text-[11px] font-medium">En poste</span> : '—')}
+                          {row.outAt ? row.outAt : (row.inAt && row.status !== 'absent' ? <span className="text-green text-[11px] font-medium">En poste</span> : '—')}
                         </td>
 
                         {/* Status Chip - Placed directly right of Départ */}
@@ -1523,7 +1523,7 @@ export function Pointage({
                   <div>
                     <span className="text-[10px] text-ink-faint block">Départ</span>
                     <span className="font-mono font-bold text-ink">
-                      {row.outAt ?? (row.inAt ? <span className="text-green font-medium">En poste</span> : '—')}
+                      {row.outAt ? row.outAt : (row.inAt && row.status !== 'absent' ? <span className="text-green font-medium">En poste</span> : '—')}
                     </span>
                   </div>
                   <div>

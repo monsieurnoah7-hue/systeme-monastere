@@ -143,14 +143,14 @@ function WorkshopPulseRibbon({
       <button
         type="button"
         onClick={onOpenAttendance}
-        className="group flex flex-col justify-between p-3.5 rounded-2xl border border-line bg-surface hover:border-amber/40 hover:bg-surface-2/40 transition-all text-left cursor-pointer shadow-xs active:scale-[0.99]"
+        className="group flex flex-col justify-between p-4 rounded-2xl border border-line bg-surface hover:border-amber/40 hover:bg-surface-2/40 transition-all text-left cursor-pointer shadow-xs active:scale-[0.99] min-h-[100px]"
       >
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex items-center gap-1.5">
-            <Users size={14} className="text-amber" />
+          <span className="text-xs font-bold uppercase tracking-wider text-ink-soft flex items-center gap-1.5">
+            <Users size={15} className="text-amber" />
             Effectif en Atelier
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             {attendanceRate}%
           </span>
@@ -159,9 +159,9 @@ function WorkshopPulseRibbon({
           <span className="font-mono text-2xl font-extrabold text-ink tabular-nums">
             {das04?.present ?? 0}
           </span>
-          <span className="text-xs text-ink-faint font-medium">/ {totalTeam} sur site</span>
+          <span className="text-xs text-ink-soft font-medium">/ {totalTeam} sur site</span>
         </div>
-        <p className="mt-1 text-[11px] text-ink-soft truncate">
+        <p className="mt-1 text-xs text-ink-soft truncate font-medium">
           {das04 ? `${das04.late} retard · ${das04.conge + das04.permission} congé · ${das04.absent} attendus` : 'Accès restreint'}
         </p>
       </button>
@@ -172,19 +172,19 @@ function WorkshopPulseRibbon({
         disabled={totalArbitrages === 0}
         onClick={onOpenAlerts}
         className={cx(
-          "group flex flex-col justify-between p-3.5 rounded-2xl border transition-all text-left cursor-pointer shadow-xs active:scale-[0.99] disabled:cursor-default disabled:active:scale-100",
+          "group flex flex-col justify-between p-4 rounded-2xl border transition-all text-left cursor-pointer shadow-xs active:scale-[0.99] disabled:cursor-default disabled:active:scale-100 min-h-[100px]",
           totalArbitrages > 0
             ? "border-amber/40 bg-amber-wash/30 hover:bg-amber-wash/50"
             : "border-line bg-surface hover:border-line-strong hover:bg-surface-2/40"
         )}
       >
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex items-center gap-1.5">
-            <AlertTriangle size={14} className={totalArbitrages > 0 ? "text-amber" : "text-emerald-500"} />
+          <span className="text-xs font-bold uppercase tracking-wider text-ink-soft flex items-center gap-1.5">
+            <AlertTriangle size={15} className={totalArbitrages > 0 ? "text-amber" : "text-emerald-500"} />
             Arbitrages &amp; actions
           </span>
           <span className={cx(
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border",
+            "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold border",
             totalArbitrages > 0
               ? "bg-amber-500/10 text-amber border-amber-500/20"
               : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
@@ -199,11 +199,11 @@ function WorkshopPulseRibbon({
           )}>
             {totalArbitrages}
           </span>
-          <span className="text-xs text-ink-faint font-medium">
+          <span className="text-xs text-ink-soft font-medium">
             {totalArbitrages > 1 ? 'éléments à traiter' : 'élément à traiter'}
           </span>
         </div>
-        <p className="mt-1 text-[11px] leading-snug text-ink-soft">
+        <p className="mt-1 text-xs leading-snug text-ink-soft font-medium">
           {totalArbitrages > 0
             ? arbitrationSummary
             : 'Aucun arbitrage bloquant'}
@@ -214,14 +214,14 @@ function WorkshopPulseRibbon({
       <button
         type="button"
         onClick={onOpenTools}
-        className="group flex flex-col justify-between p-3.5 rounded-2xl border border-line bg-surface hover:border-amber/40 hover:bg-surface-2/40 transition-all text-left cursor-pointer shadow-xs active:scale-[0.99]"
+        className="group flex flex-col justify-between p-4 rounded-2xl border border-line bg-surface hover:border-amber/40 hover:bg-surface-2/40 transition-all text-left cursor-pointer shadow-xs active:scale-[0.99] min-h-[100px]"
       >
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex items-center gap-1.5">
-            <Wrench size={14} className="text-amber" />
+          <span className="text-xs font-bold uppercase tracking-wider text-ink-soft flex items-center gap-1.5">
+            <Wrench size={15} className="text-amber" />
             Parc Outillage
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-ink-soft border border-line">
+          <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-ink-soft border border-line">
             {das01.total} au parc
           </span>
         </div>
@@ -229,9 +229,9 @@ function WorkshopPulseRibbon({
           <span className="font-mono text-2xl font-extrabold text-ink tabular-nums">
             {das01.en_pret}
           </span>
-          <span className="text-xs text-ink-faint font-medium">sortis ({das01.disponible} dispo)</span>
+          <span className="text-xs text-ink-soft font-medium">sortis ({das01.disponible} dispo)</span>
         </div>
-        <p className="mt-1 text-[11px] text-ink-soft truncate">
+        <p className="mt-1 text-xs text-ink-soft truncate font-medium">
           {das01.maintenance} en révision · {das05.lowStock} sous seuil
         </p>
       </button>
@@ -241,19 +241,19 @@ function WorkshopPulseRibbon({
         type="button"
         onClick={onOpenEtablis}
         className={cx(
-          "group flex flex-col justify-between p-3.5 rounded-2xl border transition-all text-left cursor-pointer shadow-xs active:scale-[0.99]",
+          "group flex flex-col justify-between p-4 rounded-2xl border transition-all text-left cursor-pointer shadow-xs active:scale-[0.99] min-h-[100px]",
           (etablis?.anomaliesCount ?? 0) > 0
             ? "border-amber/40 bg-amber-wash/20 hover:bg-amber-wash/40"
             : "border-line bg-surface hover:border-line-strong hover:bg-surface-2/40"
         )}
       >
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex items-center gap-1.5">
-            <ShieldCheck size={14} className={(etablis?.anomaliesCount ?? 0) > 0 ? "text-amber" : "text-emerald-500"} />
+          <span className="text-xs font-bold uppercase tracking-wider text-ink-soft flex items-center gap-1.5">
+            <ShieldCheck size={15} className={(etablis?.anomaliesCount ?? 0) > 0 ? "text-amber" : "text-emerald-500"} />
             Postes &amp; Servantes
           </span>
           <span className={cx(
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border",
+            "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold border",
             (etablis?.anomaliesCount ?? 0) > 0
               ? "bg-amber-500/10 text-amber border-amber-500/20"
               : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
@@ -265,9 +265,9 @@ function WorkshopPulseRibbon({
           <span className="font-mono text-2xl font-extrabold text-ink tabular-nums">
             {(etablis?.totalKits ?? 0) - (etablis?.anomaliesCount ?? 0)}
           </span>
-          <span className="text-xs text-ink-faint font-medium">/ {etablis?.totalKits ?? 0} établis conformes</span>
+          <span className="text-xs text-ink-soft font-medium">/ {etablis?.totalKits ?? 0} établis conformes</span>
         </div>
-        <p className="mt-1 text-[11px] text-ink-soft truncate">
+        <p className="mt-1 text-xs text-ink-soft truncate font-medium">
           {(etablis?.anomaliesCount ?? 0) > 0 ? `⚠️ ${etablis?.anomaliesCount} servante(s) à vérifier` : 'Toutes les servantes sont au complet'}
         </p>
       </button>
@@ -2148,46 +2148,47 @@ export function Dashboard({ active = true }: { active?: boolean }) {
   return (
     <div className="space-y-6">
       {/* En-tête Unifié (Style Apple / Linear Dashboard) */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-3.5">
         <div>
           <div className="flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-500">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>En direct</span>
             </span>
             <span className="text-line-strong">·</span>
-            <span className="capitalize text-ink-soft font-medium">{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+            <span className="capitalize text-ink-soft font-medium text-xs">{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
           </div>
-          <div className="flex items-baseline gap-3 mt-1">
-            <h1 className="text-2xl font-extrabold tracking-tight text-ink font-heading">
+          <div className="flex items-baseline gap-2.5 mt-0.5">
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-ink font-heading">
               Vue d'ensemble
             </h1>
             <LiveClock active={active} />
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 justify-between sm:justify-end">
           <Button
             variant="ghost"
             size="sm"
             disabled={loading}
-            icon={<RefreshCw size={15} className={loading ? 'animate-spin' : ''} />}
+            icon={<RefreshCw size={14} className={loading ? 'animate-spin text-amber' : ''} />}
             onClick={() => {
               setLoading(true);
               setReload((value) => value + 1);
             }}
+            className="h-9 px-2.5 text-xs text-ink-soft hover:text-ink border border-line/60"
             aria-label={loading ? 'Actualisation du tableau de bord en cours' : 'Actualiser le tableau de bord'}
           >
-            {loading ? 'Actualisation…' : 'Actualiser'}
+            <span>{loading ? 'Actualisation…' : 'Actualiser'}</span>
           </Button>
           <button
             type="button"
             onClick={() => setDrawer({ kind: 'attendance' })}
-            className="flex items-center gap-2 rounded-xl bg-amber px-4 py-2.5 text-xs sm:text-sm font-bold text-white shadow-card transition-all hover:bg-amber-2 active:scale-95 cursor-pointer"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl bg-amber px-3.5 py-2 text-xs sm:text-sm font-bold text-white shadow-xs transition-all hover:bg-amber-2 active:scale-95 cursor-pointer min-h-[38px]"
           >
-            <Fingerprint size={17} />
-            <span>Mode Kiosque &amp; Pointage</span>
-            <ChevronRight size={14} />
+            <Fingerprint size={16} />
+            <span>Kiosque &amp; Pointage</span>
+            <ChevronRight size={13} />
           </button>
         </div>
       </div>
@@ -2576,6 +2577,26 @@ function AttendanceEmployeeDetail({ employeeId, date }: { employeeId: string; da
         </div>
       </section>
 
+      {arrival && arrival.lateMinutes > 0 && (
+        <section className="rounded-xl border border-amber/40 bg-amber-wash/40 p-3.5 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber">
+              <AlertTriangle size={14} />
+              Retard constaté · {arrival.lateMinutes} min
+            </span>
+            <span className="font-mono text-xs font-semibold text-ink-soft">
+              Pointé à {timeLabel(arrival.serverAt)}
+            </span>
+          </div>
+          <div className="text-sm text-ink">
+            <span className="font-semibold text-ink-soft">Motif déclaré : </span>
+            <span className="font-medium text-amber-soft">
+              {arrival.reason ? `« ${arrival.reason} »` : 'Aucun motif renseigné par le travailleur.'}
+            </span>
+          </div>
+        </section>
+      )}
+
       {arrival?.selfieUrl ? (
         <section className="overflow-hidden rounded-xl border border-line bg-surface">
           <div className="border-b border-line px-3 py-2.5">
@@ -2799,14 +2820,14 @@ function DrawerContentDetail({
   if (drawer.kind === 'attendance' && data.das04) {
     if (data.das04.detail.length === 0) return <EmptyState title="Aucun travailleur actif" />;
     return (
-      <div className="overflow-x-auto rounded-xl border border-line shadow-xs">
-        <table className="w-full text-left table-rhythm">
-          <thead className="sticky top-0 z-20 border-b border-line bg-paper-2/95 backdrop-blur-xs text-[11px] uppercase font-semibold text-ink-faint shadow-xs">
+      <div className="relative overflow-auto max-h-[calc(100dvh-130px)] rounded-xl border border-line shadow-xs scroll-thin">
+        <table className="w-full text-left table-rhythm min-w-[460px]">
+          <thead className="sticky top-0 z-20 border-b border-line bg-surface-2 text-[11px] uppercase font-bold text-ink-faint shadow-xs">
             <tr>
-              <th className="px-3 py-2.5 col-lead">Travailleur</th>
-              <th className="px-2.5 py-2.5 text-center">Arrivée</th>
-              <th className="px-2.5 py-2.5 text-center">Départ</th>
-              <th className="px-3 py-2.5 text-right whitespace-nowrap">Statut</th>
+              <th className="sticky top-0 bg-surface-2 px-3 py-2.5 col-lead">Travailleur</th>
+              <th className="sticky top-0 bg-surface-2 px-2.5 py-2.5 text-center">Arrivée</th>
+              <th className="sticky top-0 bg-surface-2 px-2.5 py-2.5 text-center">Départ</th>
+              <th className="sticky top-0 bg-surface-2 px-3.5 py-2.5 text-right whitespace-nowrap">Statut</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line text-xs">
@@ -2815,6 +2836,7 @@ function DrawerContentDetail({
               const isAbsent = row.status === 'absent';
               const isConge = row.status === 'conge';
               const isPermission = row.status === 'permission';
+              const isAbsentOrConge = isAbsent || isConge || isPermission || !row.inAt;
               const tone = isLate ? 'amber' : isAbsent ? 'grey' : isConge || isPermission ? 'blue' : 'green';
               const label = isLate
                 ? `Retard ${row.lateMinutes}m`
@@ -2836,33 +2858,41 @@ function DrawerContentDetail({
                   )}
                 >
                   <td className="px-3 py-2.5 font-medium text-ink col-lead">
-                    {row.inAt ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenAttendanceEmployee?.(row.id, row.fullName)}
-                        className="min-h-10 rounded-md text-left font-semibold text-ink underline-offset-2 hover:text-amber hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-                        aria-label={`Voir le pointage et le selfie de ${row.fullName}`}
-                      >
-                        {row.fullName}
-                      </button>
-                    ) : (
-                      row.fullName
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => onOpenAttendanceEmployee?.(row.id, row.fullName)}
+                      className="min-h-10 py-1 rounded-md text-left font-semibold text-ink underline-offset-2 hover:text-amber hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber group block"
+                      aria-label={`Voir le pointage et le selfie de ${row.fullName}`}
+                    >
+                      <span className="group-hover:text-amber transition-colors font-semibold">{row.fullName}</span>
+                      {isLate && (
+                        <span className="block mt-0.5 text-[11px] font-normal text-amber-soft">
+                          <span className="font-semibold text-amber">Motif :</span> {row.lateReason ? `« ${row.lateReason} »` : 'Non renseigné'}
+                        </span>
+                      )}
+                    </button>
                   </td>
                   <td className="px-2.5 py-2.5 text-center font-mono tabular-nums">{row.inAt ?? '—'}</td>
                   <td className="px-2.5 py-2.5 text-center font-mono tabular-nums">
-                    {row.outAt ?? (row.inAt ? <span className="text-green font-medium">En poste</span> : '—')}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <Chip tone={tone}>{label}</Chip>
-                    {isLate && (row as any).lateReason && (
-                      <span
-                        className="block mt-0.5 text-[10px] text-amber-soft font-normal truncate max-w-[150px] ml-auto cursor-help"
-                        title={`Motif de retard : ${(row as any).lateReason}`}
-                      >
-                        « {(row as any).lateReason} »
+                    {row.outAt ? (
+                      row.outAt
+                    ) : row.inAt && !isAbsentOrConge ? (
+                      <span className="inline-flex items-center gap-1 font-medium text-green">
+                        <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
+                        En poste
                       </span>
+                    ) : (
+                      <span className="text-ink-faint">—</span>
                     )}
+                  </td>
+                  <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => onOpenAttendanceEmployee?.(row.id, row.fullName)}
+                      className="inline-block transition-transform active:scale-95 focus-visible:outline-none"
+                    >
+                      <Chip tone={tone}>{label}</Chip>
+                    </button>
                   </td>
                 </tr>
               );

@@ -348,6 +348,15 @@ export async function migrate(): Promise<void> {
     `);
     await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [MAGASINS_PHOTO_POSITION_REVISION]);
   }
+
+  const MAGASINS_PHOTO_ECO_REVISION = '026_magasins_photo_position_economat_v1';
+  if (!(await getDb().one('SELECT name FROM _migrations WHERE name = $1', [MAGASINS_PHOTO_ECO_REVISION]))) {
+    await getDb().query(`
+      ALTER TABLE magasins ADD COLUMN IF NOT EXISTS photo_position text DEFAULT 'center';
+      UPDATE magasins SET photo_position = 'top' WHERE code = 'BUR-ECO' OR photo_path ILIKE '%economat%' OR photo_path ILIKE '%etoga%';
+    `);
+    await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [MAGASINS_PHOTO_ECO_REVISION]);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {

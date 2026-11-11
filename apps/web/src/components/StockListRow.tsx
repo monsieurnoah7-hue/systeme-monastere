@@ -74,23 +74,23 @@ export function StockListRow({
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-mono text-[10px] font-bold text-amber">{item.id}</span>
-              <span className="truncate text-xs font-bold text-ink group-hover:text-amber transition-colors">
+              <span className="font-mono text-xs font-bold text-amber">{item.id}</span>
+              <span className="truncate text-sm font-bold text-ink group-hover:text-amber transition-colors">
                 {item.name}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-ink-soft truncate">
+            <div className="flex items-center gap-1.5 text-xs text-ink-soft truncate mt-0.5">
               <span className="truncate">{item.category}</span>
               {item.brand && (
                 <>
                   <span className="text-ink-faint">·</span>
-                  <span className="font-medium text-ink-faint shrink-0">{item.brand}</span>
+                  <span className="font-medium text-ink-soft shrink-0">{item.brand}</span>
                 </>
               )}
               {item.magasin_name && (
                 <>
                   <span className="text-ink-faint">·</span>
-                  <span className="truncate text-ink-faint">{item.magasin_name}</span>
+                  <span className="truncate text-ink-soft font-medium">{item.magasin_name}</span>
                 </>
               )}
             </div>
@@ -102,22 +102,22 @@ export function StockListRow({
           <div className="text-right">
             <span
               className={cx(
-                'font-mono text-xs font-bold tabular-nums block',
+                'font-mono text-sm sm:text-base font-extrabold tabular-nums block',
                 isOutOfStock ? 'text-red' : isLowStock ? 'text-amber' : 'text-green',
               )}
             >
-              {item.qty} <span className="text-[10px] font-normal text-ink-soft">{item.unit}</span>
+              {item.qty} <span className="text-xs font-bold text-ink-soft">{item.unit}</span>
             </span>
           </div>
 
           <span
             className={cx(
-              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0',
+              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0',
               isOutOfStock
-                ? 'bg-red-wash text-red'
+                ? 'bg-red-wash text-red border border-red/30'
                 : isLowStock
-                  ? 'bg-amber-wash text-amber'
-                  : 'bg-green-wash text-green',
+                  ? 'bg-amber-wash text-amber border border-amber/30'
+                  : 'bg-green-wash text-green border border-green/30',
             )}
           >
             <span
@@ -137,10 +137,10 @@ export function StockListRow({
               e.stopPropagation();
               setExpanded(!expanded);
             }}
-            className="grid h-8 w-8 place-items-center rounded-lg text-ink-faint hover:bg-paper hover:text-ink transition-colors"
+            className="grid h-10 w-10 place-items-center rounded-xl text-ink-faint hover:bg-paper hover:text-ink transition-colors"
             aria-label={expanded ? 'Réduire' : 'Déplier'}
           >
-            {expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+            {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
           </button>
         </div>
       </div>

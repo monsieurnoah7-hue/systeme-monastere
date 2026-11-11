@@ -102,16 +102,16 @@ export function ToolBentoCard({
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-1">
-              <span className="font-mono text-xs font-bold text-amber">{tool.id}</span>
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="font-mono text-xs font-bold text-amber tracking-tight">{tool.id}</span>
               <span
                 className={cx(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0',
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0',
                   tool.status === 'disponible'
-                    ? 'bg-green-wash text-green'
+                    ? 'bg-green-wash text-green border border-green/30'
                     : tool.status === 'en_pret'
-                      ? 'bg-amber-wash text-amber'
-                      : 'bg-red-wash text-red',
+                      ? 'bg-amber-wash text-amber border border-amber/30'
+                      : 'bg-red-wash text-red border border-red/30',
                 )}
               >
                 <span
@@ -124,16 +124,16 @@ export function ToolBentoCard({
               </span>
             </div>
 
-            <h3 className="truncate text-sm font-bold text-ink mt-0.5 group-hover:text-amber transition-colors">
+            <h3 className="truncate text-base font-bold text-ink mt-0.5 group-hover:text-amber transition-colors">
               {tool.name}
             </h3>
 
-            <div className="flex items-center gap-1.5 text-xs text-ink-soft truncate mt-0.5">
-              <span>{tool.category}</span>
+            <div className="flex items-center gap-1.5 text-xs sm:text-sm text-ink-soft truncate mt-0.5">
+              <span className="font-medium">{tool.category}</span>
               {tool.brand && (
                 <>
                   <span className="text-ink-faint">·</span>
-                  <span className="font-semibold text-ink-faint">{tool.brand}</span>
+                  <span className="font-semibold text-ink-soft">{tool.brand}</span>
                 </>
               )}
             </div>
@@ -141,14 +141,14 @@ export function ToolBentoCard({
         </div>
 
         {/* Ligne 2 : Jauge de disponibilité + Localisation */}
-        <div className="rounded-xl border border-line/60 bg-paper/50 p-2.5 text-xs space-y-1.5">
+        <div className="rounded-xl border border-line/60 bg-paper/50 p-3 text-xs space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-ink-faint font-medium">Disponibilité parc</span>
-            <span className="font-mono font-bold tabular-nums">
-              <span className={availableQty > 0 ? 'text-green' : 'text-red'}>{availableQty}</span>
-              <span className="text-ink-faint"> / {totalQty}</span>
+            <span className="text-ink-soft font-semibold">Disponibilité parc</span>
+            <span className="font-mono font-extrabold tabular-nums">
+              <span className={availableQty > 0 ? 'text-green text-sm' : 'text-red text-sm'}>{availableQty}</span>
+              <span className="text-ink-soft text-xs font-normal"> / {totalQty}</span>
               {(tool.loaned_qty ?? 0) > 0 && (
-                <span className="ml-1 text-[10px] text-amber">({tool.loaned_qty} prêté)</span>
+                <span className="ml-1 text-xs font-semibold text-amber">({tool.loaned_qty} prêté)</span>
               )}
             </span>
           </div>
@@ -161,33 +161,33 @@ export function ToolBentoCard({
             />
           </div>
 
-          <div className="flex items-center justify-between text-[11px] pt-0.5 text-ink-faint">
+          <div className="flex items-center justify-between text-xs pt-0.5 text-ink-soft">
             <span className="truncate">
-              Atelier : <strong className="text-ink">{tool.magasin_name || tool.location || 'Central'}</strong>
+              Atelier : <strong className="text-ink font-semibold">{tool.magasin_name || tool.location || 'Central'}</strong>
             </span>
-            <span className="rounded bg-paper px-1.5 py-0.2 text-[9px] font-semibold text-ink-soft border border-line shrink-0">
+            <span className="rounded-md bg-paper px-2 py-0.5 text-xs font-semibold text-ink-soft border border-line shrink-0">
               {CONDITION_LABEL[tool.condition] || tool.condition}
             </span>
           </div>
 
           {canViewFinancial && acc && (
-            <div className="flex items-center justify-between pt-1 border-t border-line/40 text-[10px] text-ink-faint">
-              <span>VNC : <strong className="text-green font-mono">{formatCurrency(acc.vnc)}</strong></span>
+            <div className="flex items-center justify-between pt-1 border-t border-line/40 text-xs text-ink-soft">
+              <span>VNC : <strong className="text-green font-mono font-bold">{formatCurrency(acc.vnc)}</strong></span>
               <span>{acc.progressPercent}% amorti</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Barre d'action tactile (Min 42px touch target) */}
+      {/* Barre d'action tactile (Min 44px touch target) */}
       <div
-        className="mt-3.5 pt-3 border-t border-line/60 flex items-center justify-between gap-1.5 pl-1.5"
+        className="mt-3.5 pt-3 border-t border-line/60 flex items-center justify-between gap-2 pl-1.5"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={onClick}
-          className="flex-1 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-xs font-bold text-ink hover:border-amber/40 hover:text-amber active:scale-95 transition-all shadow-2xs"
+          className="flex-1 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-xs sm:text-sm font-bold text-ink hover:border-amber/40 hover:text-amber active:scale-95 transition-all shadow-2xs"
         >
           Fiche
         </button>
@@ -196,7 +196,7 @@ export function ToolBentoCard({
           <button
             type="button"
             onClick={onLoan}
-            className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-amber/30 bg-amber-wash px-3 py-2 text-xs font-bold text-amber hover:bg-amber hover:text-white active:scale-95 transition-all shadow-2xs"
+            className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-amber/30 bg-amber-wash px-3.5 py-2 text-xs sm:text-sm font-bold text-amber hover:bg-amber hover:text-white active:scale-95 transition-all shadow-2xs"
           >
             Prêter
           </button>
@@ -206,10 +206,10 @@ export function ToolBentoCard({
           <button
             type="button"
             onClick={onMovement}
-            className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-line bg-surface px-2.5 py-2 text-xs font-semibold text-ink-soft hover:text-amber active:scale-95 transition-all shadow-2xs"
+            className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-line bg-surface px-3 py-2 text-xs sm:text-sm font-semibold text-ink-soft hover:text-amber active:scale-95 transition-all shadow-2xs"
             title="Mouvement stock"
           >
-            <Zap size={14} className="text-amber" />
+            <Zap size={15} className="text-amber" />
           </button>
         )}
 
@@ -218,7 +218,7 @@ export function ToolBentoCard({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-surface text-ink-faint hover:text-ink hover:border-amber/40 transition-colors shadow-2xs"
+                className="grid h-11 w-11 place-items-center rounded-xl border border-line bg-surface text-ink-faint hover:text-ink hover:border-amber/40 transition-colors shadow-2xs"
                 aria-label="Options"
               >
                 <MoreVertical size={16} />

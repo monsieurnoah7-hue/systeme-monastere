@@ -36,11 +36,12 @@ import {
   cx,
   useToast,
 } from '../components/ui';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Tabs, TabsContent } from '../components/ui/tabs';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
@@ -62,7 +63,6 @@ import {
   Trash2,
   ArrowRightLeft,
   AlertTriangle,
-  Layers,
   FolderArchive,
   ArrowRight,
   Clock,
@@ -991,147 +991,145 @@ export function Outils({
       ) : null}
 
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-4">
-        {/* Sticky Navigation Bar with Tabs, Real-Time Search, Filters & Options Dropdown */}
-        <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
-          <div className="flex flex-col gap-2">
-            {/* Row 1: Tabs, Search & Priority Actions */}
-            <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-              {/* Left: Radix Navigation Tabs with Live Badges */}
-              <div className="min-w-0 flex-1">
-                <TabsList variant="line" className={cx('grid w-full min-w-0 gap-1 bg-transparent p-0 sm:flex sm:w-auto sm:gap-2.5', canViewTools ? (canViewLoans ? 'grid-cols-3' : 'grid-cols-2') : 'grid-cols-1')}>
-                  {canViewTools && <TabsTrigger
-                    value="tools"
-                    className="min-w-0 gap-1 px-1 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
-                  >
-                    <IconWrench size={15} />
-                    <span className="truncate sm:hidden">Outils</span>
-                    <span className="hidden sm:inline">Matériel &amp; Outils</span>
-                    <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
-                      {tools.length}
+        {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
+        <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+          <div className="flex flex-col gap-1.5">
+            {/* LIGNE 1 : Barre d'action unique (Titre + Recherche + CTA Primaire + Options) */}
+            <div className="flex items-center justify-between gap-2">
+              {/* Titre & Compteur */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-wash border border-amber/30 text-amber shrink-0 shadow-2xs">
+                  <IconWrench size={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="text-sm sm:text-base font-bold text-ink truncate tracking-tight">
+                      {activeTab === 'tools' ? 'Machines & Outils' : activeTab === 'loans' ? 'Prêts d’Outils' : 'Flotte & Groupes'}
+                    </h1>
+                    <span className="rounded-full bg-paper-2 border border-line px-2 py-0.5 text-xs font-bold font-mono text-amber tabular-nums">
+                      {activeTab === 'tools' ? tools.length : activeTab === 'loans' ? activeLoans.length : fleetSummary ? (fleetSummary.vehicles_count + fleetSummary.generators_count) : 0}
                     </span>
-                  </TabsTrigger>}
-
-                  {canViewLoans && <TabsTrigger
-                    value="loans"
-                    className="min-w-0 gap-1 px-1 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
-                  >
-                    <Clock size={15} />
-                    <span className="truncate sm:hidden">Prêts</span>
-                    <span className="hidden sm:inline">Prêts en cours</span>
-                    {activeLoans.length > 0 && (
-                      <span className="ml-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-bold text-amber">
-                        {activeLoans.length}
-                      </span>
-                    )}
-                  </TabsTrigger>}
-
-                  {canViewTools && <TabsTrigger
-                    value="fleet"
-                    className="min-w-0 gap-1 px-1 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
-                  >
-                    <Truck size={15} />
-                    <span className="truncate sm:hidden">Flotte</span>
-                    <span className="hidden sm:inline">Flotte &amp; Groupes</span>
-                    {fleetSummary && fleetSummary.alerts.total_urgent > 0 ? (
-                      <span className="ml-1 rounded-full bg-red-500 text-white px-1.5 py-0.5 text-[10px] font-extrabold animate-pulse">
-                        {fleetSummary.alerts.total_urgent}
-                      </span>
-                    ) : fleetSummary ? (
-                      <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
-                        {fleetSummary.vehicles_count + fleetSummary.generators_count}
-                      </span>
-                    ) : null}
-                  </TabsTrigger>}
-                </TabsList>
+                  </div>
+                </div>
               </div>
 
-              {/* Center: Real-time search on Desktop */}
-              {activeTab === 'tools' && (
-                <div className="relative hidden min-w-0 items-center md:col-start-1 md:row-start-2 md:flex">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                  <input
-                    value={filters.q}
-                    onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
-                    placeholder="Rechercher désignation, QR, marque…"
-                    className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:bg-surface focus:outline-none transition-all shadow-2xs"
-                  />
-                  {filters.q && (
-                    <button
-                      onClick={() => setFilters((f) => ({ ...f, q: '' }))}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
-                      title="Effacer la recherche"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
-              )}
+              {/* Recherche intégrée au centre */}
+              <div className="flex-1 max-w-xs sm:max-w-md relative">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                {activeTab === 'tools' ? (
+                  <>
+                    <input
+                      value={filters.q}
+                      onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+                      placeholder="Rechercher machine, marque, QR..."
+                      className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                    />
+                    {filters.q && (
+                      <button
+                        onClick={() => setFilters((f) => ({ ...f, q: '' }))}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
+                        title="Effacer"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </>
+                ) : activeTab === 'loans' ? (
+                  <>
+                    <input
+                      value={loansSearch}
+                      onChange={(e) => setLoansSearch(e.target.value)}
+                      placeholder="Rechercher emprunteur, outil..."
+                      className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
+                    />
+                    {loansSearch && (
+                      <button
+                        onClick={() => setLoansSearch('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
+                        title="Effacer"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div className="hidden sm:block text-xs text-ink-faint italic truncate">
+                    Supervision globale de la flotte et groupes électrogènes
+                  </div>
+                )}
+              </div>
 
-              {activeTab === 'loans' && (
-                <div className="relative hidden min-w-0 items-center md:col-start-1 md:row-start-2 md:flex">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                  <input
-                    value={loansSearch}
-                    onChange={(e) => setLoansSearch(e.target.value)}
-                    placeholder="Rechercher emprunteur, outil, chantier…"
-                    className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:bg-surface focus:outline-none transition-all shadow-2xs"
-                  />
-                  {loansSearch && (
-                    <button
-                      onClick={() => setLoansSearch('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
-                      title="Effacer la recherche"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
+              {/* Actions de droite : CTA Primaire + Menu Contextuel */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className="hidden lg:inline-flex">
+                  <GroupedQrLabelsModal canViewTools={canViewTools} canViewStock={hasPerm('stock.view')} />
                 </div>
-              )}
-
-              {/* Right: Actions */}
-              <div className="order-3 col-span-full flex w-full min-w-0 flex-wrap items-center justify-end gap-1.5 md:order-none md:col-span-1 md:col-start-2 md:row-start-2 md:w-auto md:flex-nowrap sm:gap-2">
-                <GroupedQrLabelsModal canViewTools={canViewTools} canViewStock={hasPerm('stock.view')} />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={loading}
-                  icon={<RefreshCw size={13} className={cx(loading && 'animate-spin text-amber')} />}
-                  onClick={refresh}
-                  className="h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
-                  title="Actualiser les données"
-                >
-                  <span>{loading ? 'Actualisation…' : 'Actualiser'}</span>
-                </Button>
 
                 {activeTab === 'tools' && canManage && (
                   <Button
                     size="sm"
                     variant="primary"
-                    icon={<IconPlus size={14} />}
+                    icon={<IconPlus size={15} />}
                     onClick={() => setNewOpen(true)}
-                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs"
+                    className="h-9 px-2.5 sm:px-3.5 text-xs sm:text-sm font-bold shadow-xs"
+                    title="Ajouter un nouvel outil ou machine"
                   >
-                    <span className="hidden sm:inline">Nouvel Outil</span>
-                    <span className="sm:hidden">Ajouter</span>
+                    <span className="hidden sm:inline">Nouvelle machine</span>
+                    <span className="sm:hidden">+ Outil</span>
                   </Button>
                 )}
 
-                {/* Options Dropdown Menu */}
+                {/* Menu Options & Outils unique */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="h-8 px-2 sm:px-2.5 text-xs font-semibold border border-line/80 hover:border-amber/40 shadow-2xs gap-1.5"
-                      title="Menu d'opérations et exports"
+                    <button
+                      type="button"
+                      className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-surface text-ink-soft hover:text-ink hover:border-amber/40 transition-colors shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                      title="Options & Outils"
+                      aria-label="Options & Outils"
                     >
-                      <Menu size={14} />
-                      <span className="hidden lg:inline text-[11px]">Options</span>
-                    </Button>
+                      <Menu size={16} />
+                    </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-xl border border-line bg-surface shadow-pop text-xs z-50">
+                    <DropdownMenuLabel className="px-2.5 py-1.5 text-xs font-semibold text-ink-faint uppercase tracking-wider">
+                      Actions &amp; Outils
+                    </DropdownMenuLabel>
+
+                    <DropdownMenuItem
+                      onClick={refresh}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                    >
+                      <RefreshCw size={14} className={cx(loading && 'animate-spin text-amber')} />
+                      <span>Actualiser les données</span>
+                    </DropdownMenuItem>
+
+                    {activeTab === 'tools' && (
+                      <DropdownMenuItem
+                        onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')}
+                        className="flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <div className="flex items-center gap-2">
+                          {viewMode === 'table' ? <LayoutGrid size={14} className="text-amber" /> : <List size={14} className="text-amber" />}
+                          <span>Mode {viewMode === 'table' ? 'Cartes Bento' : 'Tableur Pro'}</span>
+                        </div>
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setPrintPick(Object.fromEntries(tools.map((tool) => [tool.id, false])));
+                        setPrintOpen(true);
+                      }}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                    >
+                      <IconPrinter size={14} className="text-amber" />
+                      <span>Planche A4 QR Codes</span>
+                    </DropdownMenuItem>
+
                     {canExportReports && (
                       <>
+                        <DropdownMenuSeparator className="my-1 border-line" />
                         <DropdownMenuItem
                           onClick={handleExportExcel}
                           className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
@@ -1146,20 +1144,8 @@ export function Outils({
                           <Printer size={14} className="text-blue-500" />
                           <span>Imprimer Registre Officiel (PDF)</span>
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator className="my-1 border-line" />
                       </>
                     )}
-
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setPrintPick(Object.fromEntries(tools.map((tool) => [tool.id, false])));
-                        setPrintOpen(true);
-                      }}
-                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
-                    >
-                      <IconPrinter size={14} className="text-amber" />
-                      <span>Planche A4 QR Codes</span>
-                    </DropdownMenuItem>
 
                     {canManage && (
                       <DropdownMenuItem
@@ -1169,24 +1155,6 @@ export function Outils({
                         <FileSpreadsheet size={14} className="text-emerald-500" />
                         <span>Importer Tableur (Excel/CSV)</span>
                       </DropdownMenuItem>
-                    )}
-
-                    {activeTab === 'tools' && (
-                      <>
-                        <DropdownMenuSeparator className="my-1 border-line" />
-                        <DropdownMenuItem
-                          onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')}
-                          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Layers size={14} className="text-ink-soft" />
-                            <span>Affichage {viewMode === 'table' ? 'Cartes' : 'Tableur Pro'}</span>
-                          </div>
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border bg-surface-2 text-ink-faint border-line">
-                            {viewMode === 'table' ? 'Tableau' : 'Cartes'}
-                          </span>
-                        </DropdownMenuItem>
-                      </>
                     )}
 
                     {canManage && tools.length > 0 && (
@@ -1200,7 +1168,7 @@ export function Outils({
                           className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-red-wash hover:text-red text-red-500"
                         >
                           <Trash2 size={14} />
-                          <span>Tout supprimer</span>
+                          <span>Tout supprimer (Purger)</span>
                         </DropdownMenuItem>
                       </>
                     )}
@@ -1209,14 +1177,106 @@ export function Outils({
               </div>
             </div>
 
-            {/* Sub Row: Filter Chips & Controls */}
-            {activeTab === 'tools' && (
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1 border-t border-line/40 text-xs">
-                {/* Horizontal Status Chips */}
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 py-0.5">
-                  <span className="text-[10px] uppercase font-bold text-ink-faint mr-1 shrink-0 hidden sm:inline">
-                    Filtre :
+            {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Scroll Unique) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 pt-1.5 border-t border-line/40 text-xs">
+              {/* Onglets Principaux de Vue */}
+              {canViewTools && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('tools')}
+                  className={cx(
+                    'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                    activeTab === 'tools'
+                      ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                      : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                  )}
+                >
+                  <IconWrench size={14} />
+                  <span>Matériel</span>
+                  <span className={cx('text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full', activeTab === 'tools' ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint')}>
+                    {tools.length}
                   </span>
+                </button>
+              )}
+
+              {canViewLoans && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('loans')}
+                  className={cx(
+                    'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                    activeTab === 'loans'
+                      ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                      : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                  )}
+                >
+                  <Clock size={14} />
+                  <span>Prêts</span>
+                  {activeLoans.length > 0 && (
+                    <span className={cx('text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full', activeTab === 'loans' ? 'bg-white/20 text-white' : 'bg-amber-wash text-amber')}>
+                      {activeLoans.length}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {canViewTools && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('fleet')}
+                  className={cx(
+                    'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                    activeTab === 'fleet'
+                      ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                      : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                  )}
+                >
+                  <Truck size={14} />
+                  <span>Flotte</span>
+                  {fleetSummary && fleetSummary.alerts.total_urgent > 0 ? (
+                    <span className="ml-1 rounded-full bg-red-500 text-white px-1.5 py-0.2 text-[10px] font-extrabold animate-pulse">
+                      {fleetSummary.alerts.total_urgent}
+                    </span>
+                  ) : fleetSummary ? (
+                    <span className={cx('text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full', activeTab === 'fleet' ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint')}>
+                      {fleetSummary.vehicles_count + fleetSummary.generators_count}
+                    </span>
+                  ) : null}
+                </button>
+              )}
+
+              {activeTab === 'tools' && (
+                <>
+                  <span className="h-4 w-px bg-line shrink-0 mx-0.5" />
+
+                  {/* Scope Chips */}
+                  {[
+                    { id: 'all', label: 'Tout le parc', count: tools.length },
+                    { id: 'active', label: 'Magasins', count: activeTools.length },
+                    ...(draftTools.length > 0 ? [{ id: 'drafts', label: 'À affecter', count: draftTools.length }] : []),
+                  ].map((sc) => (
+                    <button
+                      key={sc.id}
+                      type="button"
+                      onClick={() => {
+                        setScopeFilter(sc.id as any);
+                        setSelectedToolIds(new Set());
+                      }}
+                      className={cx(
+                        'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                        scopeFilter === sc.id
+                          ? 'bg-paper-2 text-ink border-amber shadow-xs font-bold'
+                          : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                      )}
+                    >
+                      <span>{sc.label}</span>
+                      <span className={cx('text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full', scopeFilter === sc.id ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint')}>{sc.count}</span>
+                    </button>
+                  ))}
+
+                  <span className="h-4 w-px bg-line shrink-0 mx-0.5" />
+
+                  {/* Status Chips */}
                   {[
                     { key: '', label: 'Tous', count: stats.total },
                     { key: 'disponible', label: 'Disponibles', count: stats.disponible },
@@ -1227,126 +1287,52 @@ export function Outils({
                   ].map(({ key, label, count }) => (
                     <button
                       key={key}
+                      type="button"
                       onClick={() => setFilters((f) => ({ ...f, status: key }))}
                       className={cx(
-                        'min-h-10 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all border flex items-center gap-1',
+                        'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
                         filters.status === key
-                          ? 'bg-amber text-white border-amber shadow-2xs font-bold'
-                          : 'bg-surface text-ink-soft border-line/70 hover:bg-paper-2 hover:text-ink',
+                          ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                          : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
                       )}
                     >
                       <span>{label}</span>
-                      <span className="opacity-75 text-[10px] tabular-nums font-mono">{count}</span>
+                      <span className={cx('text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full', filters.status === key ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint')}>{count}</span>
                     </button>
                   ))}
-                </div>
 
-                {/* Dropdowns Catégorie & Magasin + View Mode Toggle + Mobile Search */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <select
-                    value={filters.category}
-                    onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}
-                    className="h-7 rounded-lg border border-line bg-surface px-2 text-[11px] text-ink focus:border-amber focus:outline-none shadow-2xs max-w-[130px] sm:max-w-[160px] truncate"
-                    title="Filtrer par catégorie"
-                  >
-                    <option value="">Toutes catégories ({facets.categories.length})</option>
-                    {facets.categories.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={filters.magasin_id}
-                    onChange={(e) => setFilters((f) => ({ ...f, magasin_id: e.target.value }))}
-                    className="h-7 rounded-lg border border-line bg-surface px-2 text-[11px] text-ink focus:border-amber focus:outline-none shadow-2xs max-w-[130px] sm:max-w-[160px] truncate"
-                    title="Filtrer par magasin"
-                  >
-                    <option value="">Tous magasins ({magasins.length})</option>
-                    {magasins.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* View mode toggle button (Mobile & Desktop Dual-Mode) */}
-                  <div className="flex items-center rounded-lg border border-line bg-surface p-0.5 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('cards')}
-                      className={cx(
-                        'inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded px-2 text-xs font-semibold transition-colors',
-                        viewMode === 'cards' ? 'bg-paper-2 text-ink shadow-2xs' : 'text-ink-soft hover:text-ink',
-                      )}
-                      title="Afficher en mode Fiches Bento"
+                  {/* Sélecteur Catégorie en puce */}
+                  {facets.categories.length > 0 && (
+                    <select
+                      value={filters.category}
+                      onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value }))}
+                      className="h-8 rounded-full border border-line bg-surface px-3 text-xs font-semibold text-ink focus:border-amber focus:outline-none shadow-2xs shrink-0 max-w-[160px] truncate"
+                      title="Filtrer par catégorie"
                     >
-                      <LayoutGrid size={12} />
-                      <span className="hidden sm:inline">Grille</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('table')}
-                      className={cx(
-                        'inline-flex min-h-7 min-w-7 items-center justify-center gap-1 rounded px-2 text-xs font-semibold transition-colors',
-                        viewMode === 'table' ? 'bg-paper-2 text-ink shadow-2xs' : 'text-ink-soft hover:text-ink',
-                      )}
-                      title="Afficher en mode Liste"
-                    >
-                      <List size={12} />
-                      <span className="hidden sm:inline">Liste</span>
-                    </button>
-                  </div>
-
-                  {/* Mobile search input */}
-                  <div className="md:hidden flex items-center relative w-32 shrink-0">
-                    <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                    <input
-                      value={filters.q}
-                      onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
-                      placeholder="Chercher…"
-                      className="h-7 w-full rounded-md border border-line bg-surface/90 pl-5 pr-2 text-[11px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
-                    />
-                    {filters.q && (
-                      <button
-                        onClick={() => setFilters((f) => ({ ...f, q: '' }))}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
-                      >
-                        <X size={10} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'loans' && (
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-line/40 text-xs">
-                <span className="text-[11px] font-semibold text-ink-soft">
-                  {filteredActiveLoans.length} prêt{filteredActiveLoans.length > 1 ? 's' : ''} actif{filteredActiveLoans.length > 1 ? 's' : ''} en cours
-                </span>
-
-                {/* Mobile search input */}
-                <div className="md:hidden flex items-center relative w-40 shrink-0">
-                  <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                  <input
-                    value={loansSearch}
-                    onChange={(e) => setLoansSearch(e.target.value)}
-                    placeholder="Chercher prêt…"
-                    className="h-7 w-full rounded-md border border-line bg-surface/90 pl-5 pr-2 text-[11px] text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none shadow-2xs"
-                  />
-                  {loansSearch && (
-                    <button
-                      onClick={() => setLoansSearch('')}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
-                    >
-                      <X size={10} />
-                    </button>
+                      <option value="">Toutes catégories ({facets.categories.length})</option>
+                      {facets.categories.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
                   )}
-                </div>
-              </div>
-            )}
+
+                  {/* Sélecteur Magasin en puce */}
+                  {magasins.length > 0 && (
+                    <select
+                      value={filters.magasin_id}
+                      onChange={(e) => setFilters((f) => ({ ...f, magasin_id: e.target.value }))}
+                      className="h-8 rounded-full border border-line bg-surface px-3 text-xs font-semibold text-ink focus:border-amber focus:outline-none shadow-2xs shrink-0 max-w-[160px] truncate"
+                      title="Filtrer par magasin"
+                    >
+                      <option value="">Tous magasins ({magasins.length})</option>
+                      {magasins.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1518,161 +1504,103 @@ export function Outils({
         </TabsContent>}
 
         {/* Tab 1: Matériel & Machines */}
-        {canViewTools && <TabsContent value="tools" className="space-y-4">
-          {/* Scope Navigation Tabs: Parc Actif vs Brouillons vs Tout */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-2.5">
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-paper-2 border border-line">
-          <button
-            type="button"
-            onClick={() => {
-              setScopeFilter('all');
-              setSelectedToolIds(new Set());
-            }}
-            className={cx(
-              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
-              scopeFilter === 'all'
-                ? 'bg-amber text-white shadow-xs'
-                : 'text-ink-soft hover:text-ink hover:bg-paper',
-            )}
-          >
-            <Layers size={14} />
-            <span>Tout le Parc</span>
-            <span
-              className={cx(
-                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
-                scopeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-surface text-ink-faint',
+        {canViewTools && <TabsContent value="tools" className="space-y-3">
+          {/* Alerte brouillons d'outils si existants */}
+          {draftTools.length > 0 && scopeFilter !== 'drafts' && (
+            <div className="flex items-center justify-between p-2.5 rounded-xl border border-amber/30 bg-amber-wash/30 text-xs">
+              <span className="text-ink font-medium">⚠️ {draftTools.length} outil{draftTools.length > 1 ? 's' : ''} en brouillon sans affectation</span>
+              <button
+                onClick={() => {
+                  setScopeFilter('drafts');
+                  setSelectedToolIds(new Set());
+                }}
+                className="font-bold text-amber hover:underline flex items-center gap-1"
+              >
+                <span>Voir les brouillons</span>
+                <ArrowRight size={13} />
+              </button>
+            </div>
+          )}
+
+          {/* Mini-Bandeau Synthèse Mobile (libère l'écran pour afficher directement les machines sur smartphone !) */}
+          <div className="sm:hidden flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-surface border border-line text-xs shadow-2xs">
+            <div className="flex items-center gap-2 text-ink-soft flex-wrap">
+              <span className="font-semibold text-green">{stats.disponible} dispo</span>
+              <span className="text-line-strong">·</span>
+              <span className="font-semibold text-amber">{stats.en_pret} en prêt</span>
+              <span className="text-line-strong">·</span>
+              <span className="font-semibold text-amber-500">{stats.maintenance} révis.</span>
+              {(stats.manquant + stats.reforme) > 0 && (
+                <>
+                  <span className="text-line-strong">·</span>
+                  <span className="font-semibold text-red">{stats.manquant + stats.reforme} écart</span>
+                </>
               )}
-            >
-              {tools.length}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setScopeFilter('active');
-              setSelectedToolIds(new Set());
-            }}
-            className={cx(
-              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
-              scopeFilter === 'active'
-                ? 'bg-amber text-white shadow-xs'
-                : 'text-ink-soft hover:text-ink hover:bg-paper',
+            </div>
+            {canViewReports && auditSummary.totalVnc > 0 && (
+              <span className="font-mono font-bold text-green text-xs truncate max-w-[120px] ml-1">
+                {formatCurrency(auditSummary.totalVnc)}
+              </span>
             )}
-          >
-            <IconBox size={14} />
-            <span>Parc Actif en Magasins</span>
-            <span
-              className={cx(
-                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
-                scopeFilter === 'active' ? 'bg-white/20 text-white' : 'bg-surface text-green',
-              )}
-            >
-              {activeTools.length}
-            </span>
-          </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setScopeFilter('drafts');
-              setSelectedToolIds(new Set());
-            }}
-            className={cx(
-              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
-              scopeFilter === 'drafts'
-                ? 'bg-amber text-white shadow-xs'
-                : 'text-ink-soft hover:text-ink hover:bg-paper',
-            )}
-          >
-            <FolderArchive size={14} />
-            <span>Brouillons &amp; Non affectés</span>
-            <span
-              className={cx(
-                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
-                scopeFilter === 'drafts'
-                  ? 'bg-white/20 text-white'
-                  : draftTools.length > 0
-                    ? 'bg-amber-wash text-amber border border-amber/30'
-                    : 'bg-surface text-ink-faint',
-              )}
-            >
-              {draftTools.length}
-            </span>
-          </button>
-        </div>
+          {/* KPI Dashboard Cards (Affichés sur Tablette & Desktop) */}
+          <div className="hidden sm:grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Total Parc</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-ink-faint" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-ink tabular-nums">{stats.total}</span>
+                <span className="text-xs text-ink-faint">unités</span>
+              </div>
+            </div>
 
-        {draftTools.length > 0 && scopeFilter !== 'drafts' && (
-          <button
-            onClick={() => {
-              setScopeFilter('drafts');
-              setSelectedToolIds(new Set());
-            }}
-            className="text-xs font-semibold text-amber hover:underline flex items-center gap-1.5"
-          >
-            <span>⚠️ {draftTools.length} outil{draftTools.length > 1 ? 's' : ''} en brouillon sans affectation</span>
-            <ArrowRight size={13} />
-          </button>
-        )}
-      </div>
+            <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Disponibles</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-green" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-ink tabular-nums">{stats.disponible}</span>
+                <span className="text-xs text-ink-faint">en rayon</span>
+              </div>
+            </div>
 
-      {/* KPI Dashboard Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Total Parc</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-ink-faint" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-ink tabular-nums">{stats.total}</span>
-            <span className="text-[11px] text-ink-faint">unités</span>
-          </div>
-        </div>
+            <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">En Prêt</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-amber" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-ink tabular-nums">{stats.en_pret}</span>
+                <span className="text-xs text-ink-faint">sur chantier</span>
+              </div>
+            </div>
 
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Disponibles</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-green" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-ink tabular-nums">{stats.disponible}</span>
-            <span className="text-[11px] text-ink-faint">en rayon</span>
-          </div>
-        </div>
+            <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Maintenance</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-ink tabular-nums">{stats.maintenance}</span>
+                <span className="text-xs text-ink-faint">à réparer</span>
+              </div>
+            </div>
 
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">En Prêt</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-amber" />
+            <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs col-span-2 sm:col-span-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Manquants</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-red" />
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-ink tabular-nums">{stats.manquant + stats.reforme}</span>
+                <span className="text-xs text-ink-faint">perdus/rebut</span>
+              </div>
+            </div>
           </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-ink tabular-nums">{stats.en_pret}</span>
-            <span className="text-[11px] text-ink-faint">sur chantier</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Maintenance</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-ink tabular-nums">{stats.maintenance}</span>
-            <span className="text-[11px] text-ink-faint">à réparer</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-line bg-surface p-3.5 shadow-xs col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Manquants</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-red" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-ink tabular-nums">{stats.manquant + stats.reforme}</span>
-            <span className="text-[11px] text-ink-faint">perdus/rebut</span>
-          </div>
-        </div>
-      </div>
 
       {/* Bandeau d'Amortissement Intelligent & Valorisation Patrimoniale */}
       {canViewReports && (

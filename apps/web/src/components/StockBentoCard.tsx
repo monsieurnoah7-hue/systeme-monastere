@@ -98,16 +98,16 @@ export function StockBentoCard({
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-1">
-              <span className="font-mono text-xs font-bold text-amber">{item.id}</span>
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="font-mono text-xs font-bold text-amber tracking-tight">{item.id}</span>
               <span
                 className={cx(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold shrink-0',
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0',
                   isOutOfStock
-                    ? 'bg-red-wash text-red'
+                    ? 'bg-red-wash text-red border border-red/30'
                     : isLowStock
-                      ? 'bg-amber-wash text-amber'
-                      : 'bg-green-wash text-green',
+                      ? 'bg-amber-wash text-amber border border-amber/30'
+                      : 'bg-green-wash text-green border border-green/30',
                 )}
               >
                 <span
@@ -120,16 +120,16 @@ export function StockBentoCard({
               </span>
             </div>
 
-            <h3 className="truncate text-sm font-bold text-ink mt-0.5 group-hover:text-amber transition-colors">
+            <h3 className="truncate text-base font-bold text-ink mt-0.5 group-hover:text-amber transition-colors">
               {item.name}
             </h3>
 
-            <div className="flex items-center gap-1.5 text-xs text-ink-soft truncate mt-0.5">
-              <span>{item.category}</span>
+            <div className="flex items-center gap-1.5 text-xs sm:text-sm text-ink-soft truncate mt-0.5">
+              <span className="font-medium">{item.category}</span>
               {item.brand && (
                 <>
                   <span className="text-ink-faint">·</span>
-                  <span className="font-semibold text-ink-faint">{item.brand}</span>
+                  <span className="font-semibold text-ink-soft">{item.brand}</span>
                 </>
               )}
             </div>
@@ -139,17 +139,17 @@ export function StockBentoCard({
         {/* Ligne 2 : Jauge Graphique de Stock avec repère de seuil */}
         <div className="rounded-xl border border-line/60 bg-paper/50 p-3 text-xs space-y-2">
           <div className="flex items-baseline justify-between">
-            <span className="text-ink-faint text-[11px] font-medium">Stock en rayon</span>
+            <span className="text-ink-soft text-xs font-semibold">Stock en rayon</span>
             <div className="text-right">
               <span
                 className={cx(
-                  'font-mono text-base font-extrabold tabular-nums',
+                  'font-mono text-lg sm:text-xl font-extrabold tabular-nums',
                   isOutOfStock ? 'text-red' : isLowStock ? 'text-amber' : 'text-green',
                 )}
               >
                 {item.qty}
               </span>
-              <span className="ml-1 text-xs font-semibold text-ink-soft">{item.unit}</span>
+              <span className="ml-1 text-xs sm:text-sm font-bold text-ink-soft">{item.unit}</span>
             </div>
           </div>
 
@@ -170,27 +170,27 @@ export function StockBentoCard({
             />
           </div>
 
-          <div className="flex items-center justify-between text-[11px] pt-0.5 text-ink-faint">
+          <div className="flex items-center justify-between text-xs pt-0.5 text-ink-soft">
             <span className="truncate">
-              Magasin : <strong className="text-ink">{item.magasin_name || item.location || 'Atelier central'}</strong>
+              Magasin : <strong className="text-ink font-semibold">{item.magasin_name || item.location || 'Atelier central'}</strong>
             </span>
             <span>
-              Seuil : <strong className="text-ink-soft">{item.min_qty} {item.unit}</strong>
+              Seuil : <strong className="text-ink font-semibold">{item.min_qty} {item.unit}</strong>
             </span>
           </div>
 
           {canViewFinancial && item.unit_cost ? (
-            <div className="flex items-center justify-between pt-1 border-t border-line/40 text-[10px] text-ink-faint">
-              <span>Valeur : <strong className="text-green font-mono">{formatCurrency(lineValuation)}</strong></span>
+            <div className="flex items-center justify-between pt-1 border-t border-line/40 text-xs text-ink-soft">
+              <span>Valeur : <strong className="text-green font-mono font-bold">{formatCurrency(lineValuation)}</strong></span>
               <span>{formatCurrency(item.unit_cost)}/{item.unit}</span>
             </div>
           ) : null}
         </div>
       </div>
 
-      {/* Barre d'action tactile directe (Boutons au pouce grands et contrastés) */}
+      {/* Barre d'action tactile directe (Boutons au pouce grands et contrastés - 44px min) */}
       <div
-        className="mt-3.5 pt-3 border-t border-line/60 flex items-center justify-between gap-1.5 pl-1.5"
+        className="mt-3.5 pt-3 border-t border-line/60 flex items-center justify-between gap-2 pl-1.5"
         onClick={(e) => e.stopPropagation()}
       >
         {canMove && (
@@ -198,18 +198,18 @@ export function StockBentoCard({
             <button
               type="button"
               onClick={onMoveOut}
-              className="flex-1 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-amber/40 bg-amber-wash px-3 py-2 text-xs font-bold text-amber hover:bg-amber hover:text-white active:scale-95 transition-all shadow-2xs"
+              className="flex-1 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-amber/40 bg-amber-wash px-3 py-2 text-xs sm:text-sm font-bold text-amber hover:bg-amber hover:text-white active:scale-95 transition-all shadow-2xs"
             >
-              <ArrowUpRight size={14} />
+              <ArrowUpRight size={15} />
               <span>Sortie</span>
             </button>
 
             <button
               type="button"
               onClick={onMoveIn}
-              className="flex-1 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-green/40 bg-green/10 px-3 py-2 text-xs font-bold text-green hover:bg-green hover:text-white active:scale-95 transition-all shadow-2xs"
+              className="flex-1 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-green/40 bg-green/10 px-3 py-2 text-xs sm:text-sm font-bold text-green hover:bg-green hover:text-white active:scale-95 transition-all shadow-2xs"
             >
-              <ArrowDownLeft size={14} />
+              <ArrowDownLeft size={15} />
               <span>Entrée</span>
             </button>
           </>
@@ -218,7 +218,7 @@ export function StockBentoCard({
         <button
           type="button"
           onClick={onClick}
-          className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink hover:border-amber/40 hover:text-amber active:scale-95 transition-all shadow-2xs"
+          className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl border border-line bg-surface px-3 py-2 text-xs sm:text-sm font-semibold text-ink hover:border-amber/40 hover:text-amber active:scale-95 transition-all shadow-2xs"
           title="Fiche article"
         >
           Fiche
@@ -229,7 +229,7 @@ export function StockBentoCard({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-surface text-ink-faint hover:text-ink hover:border-amber/40 transition-colors shadow-2xs"
+                className="grid h-11 w-11 place-items-center rounded-xl border border-line bg-surface text-ink-faint hover:text-ink hover:border-amber/40 transition-colors shadow-2xs"
                 aria-label="Options article"
               >
                 <MoreVertical size={16} />
