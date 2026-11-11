@@ -1339,7 +1339,7 @@ export function Stock({
           ) : viewMode === 'list' ? (
             <>
               {/* Tableur Google Sheets Style (Desktop) */}
-              <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden hidden lg:block">
+              <div className="rounded-xl border border-line bg-surface shadow-xs hidden lg:block">
                 <StickyTableScroller>
                   <table className="w-full text-left border-collapse text-xs table-rhythm">
                     <thead>

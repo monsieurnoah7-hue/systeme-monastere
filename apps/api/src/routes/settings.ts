@@ -18,6 +18,8 @@ const putBody = z.object({
   opening_time: hm.optional(),
   late_threshold_time: hm.optional(),
   morning_lockout_time: hm.optional(),
+  afternoon_checkin_start: hm.optional(),
+  afternoon_checkin_end: hm.optional(),
   meal_schedule_mode: z.enum(['normal_12h', 'delayed_13h']).optional(),
   break_start_time: hm.optional(),
   break_end_time: hm.optional(),

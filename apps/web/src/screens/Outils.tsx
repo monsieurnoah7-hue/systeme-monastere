@@ -1763,7 +1763,7 @@ export function Outils({
       ) : viewMode === 'table' ? (
         <>
           {/* Tableur Google Sheets Style */}
-          <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
+          <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs">
             <StickyTableScroller>
               <table className="w-full text-left border-collapse text-xs table-rhythm">
                 <thead>

@@ -715,17 +715,41 @@ export function Pointage({
     const empPunches = todayPunches.filter((p) => p.employee_id === employeeId);
     const hasIn = empPunches.some((p) => p.punch_type === 'in');
     const hasOut = empPunches.some((p) => p.punch_type === 'out');
-    const hasBreakIn = empPunches.some((p) => p.punch_type === 'break_in');
-    const hasBreakOut = empPunches.some((p) => p.punch_type === 'break_out');
-    const onBreak = hasBreakIn && !hasBreakOut;
+    const hasBreakIn = false;
+    const hasBreakOut = false;
+    const onBreak = false;
 
     const currentMin = cameroonMinutes();
+    const earlyCheckinMin = 7 * 60 + 25; // 07:25
     const openedMin = 7 * 60 + 30; // 07:30
-    const lateThresholdMin = 8 * 60; // 08:00
-    const breakStartMin = 12 * 60; // 12:00
-    const lateMinutes = hasIn
-      ? Number(empPunches.find((p) => p.punch_type === 'in')?.late_minutes ?? 0)
-      : Math.max(0, currentMin - openedMin);
+    const lateThresholdMin = 8 * 60 + 10; // 08:10 (seuil motif obligatoire)
+    const morningLockoutMin = 9 * 60 + 30; // 09:30 (clôture matin)
+    const afternoonCheckinStartMin = 13 * 60; // 13:00 (reprise après-midi)
+    const afternoonCheckinEndMin = 14 * 60; // 14:00 (clôture arrivées après-midi)
+
+    const isMorningWindow = currentMin >= earlyCheckinMin && currentMin < morningLockoutMin;
+    const isAfternoonWindow = currentMin >= afternoonCheckinStartMin && currentMin <= afternoonCheckinEndMin;
+    const isMorningLocked = !hasIn && currentMin >= morningLockoutMin && currentMin < afternoonCheckinStartMin;
+    const isAfternoonLocked = !hasIn && currentMin > afternoonCheckinEndMin;
+
+    const canPunchIn = !hasIn && (isMorningWindow || isAfternoonWindow);
+    const canPunchOut = hasIn && !hasOut;
+    const canBreakIn = false;
+    const canBreakOut = false;
+
+    let lateMinutes = 0;
+    if (hasIn) {
+      lateMinutes = Number(empPunches.find((p) => p.punch_type === 'in')?.late_minutes ?? 0);
+    } else if (currentMin < morningLockoutMin) {
+      lateMinutes = Math.max(0, currentMin - openedMin);
+    } else if (isAfternoonWindow) {
+      lateMinutes = Math.max(0, currentMin - afternoonCheckinStartMin);
+    }
+
+    const isLate = !hasIn && (
+      (currentMin >= lateThresholdMin && currentMin < morningLockoutMin) ||
+      (currentMin > afternoonCheckinStartMin + 10 && currentMin <= afternoonCheckinEndMin)
+    );
 
     return {
       isWorkday: true,
@@ -734,36 +758,36 @@ export function Pointage({
       hasBreakIn,
       hasBreakOut,
       onBreak,
-      canPunchIn: !hasIn,
-      canPunchOut: hasIn && !hasOut && !onBreak,
-      canBreakIn: hasIn && !hasBreakIn && !hasBreakOut && !onBreak && currentMin >= breakStartMin,
-      canBreakOut: onBreak,
+      canPunchIn,
+      canPunchOut,
+      canBreakIn,
+      canBreakOut,
       lateMinutes,
-      isLate: !hasIn && (currentMin >= lateThresholdMin || lateMinutes > 10),
-      isTooEarlyForCheckin: !hasIn && currentMin < (7 * 60 + 25),
-      isMorningLocked: false,
+      isLate,
+      isTooEarlyForCheckin: !hasIn && currentMin < earlyCheckinMin,
+      isMorningLocked,
       isResumeLocked: false,
-      isDayClosed: currentMin >= (17 * 60),
-      isLateCriticalBlocked: false,
-      maxLateAllowed: 150,
-      isBreakTimeReached: currentMin >= breakStartMin,
+      isDayClosed: isAfternoonLocked || currentMin >= (17 * 60),
+      isLateCriticalBlocked: isMorningLocked || isAfternoonLocked,
+      maxLateAllowed: 120,
+      isBreakTimeReached: false,
       breakStartTime: '12:00',
-      breakEndTime: '12:25',
+      breakEndTime: '13:00',
       resumeStartTime: '13:00',
-      resumeEndTime: '13:10',
+      resumeEndTime: '14:00',
       resumeLockoutTime: '14:00',
       mealScheduleMode: 'normal_12h' as const,
       isMealDelayed: false,
       afterClosing: currentMin >= (16 * 60 + 30),
       earlyCheckinTime: '07:25',
       openingTime: '07:30',
-      lateThresholdTime: '08:00',
-      morningLockoutTime: '10:00',
+      lateThresholdTime: '08:10',
+      morningLockoutTime: '09:30',
       closingTime: '16:30',
       closingEndTime: '16:40',
       dayCutoffTime: '17:00',
-      toleranceMinutes: 10,
-      lateMotifs: ['Transport', 'Motif familial', 'Mission extérieure', 'Autorisé par la direction', 'Autre'],
+      toleranceMinutes: 40,
+      lateMotifs: ['Transport', 'Santé', 'Famille', 'Pluie', 'Mission extérieure', 'Autorisé par la direction', 'Autre'],
       cardDisplaySeconds: 8,
       isExceptionalWorkday: false,
       activeLeave: null,
@@ -864,18 +888,13 @@ export function Pointage({
         }),
       });
 
-      // Sélection intuitive automatique de l'action selon la situation
+      // Sélection directe et sans équivoque de l'action :
+      // Si l'arrivée est déjà pointée -> Départ (OUT) direct sans pause intermédiaire !
       const sit = identified?.situation;
-      if (sit?.canBreakOut) {
-        setPunchType('break_out');
-      } else if (sit?.canPunchIn && !sit?.isLateCriticalBlocked) {
-        setPunchType('in');
-      } else if (sit?.canBreakIn && sit?.isBreakTimeReached) {
-        setPunchType('break_in');
-      } else if (sit?.canPunchOut && !sit?.onBreak) {
+      if (sit?.hasIn && !sit?.hasOut) {
         setPunchType('out');
       } else {
-        setPunchType(sit?.onBreak ? 'break_out' : 'in');
+        setPunchType('in');
       }
       setSelfie(null);
       setMotif('');
@@ -897,18 +916,12 @@ export function Pointage({
         return;
       }
 
-      // Mode hors-ligne : validation PIN acceptée pour certification différée cryptographique
+      // Mode hors-ligne : sélection Arrivée ou Départ direct
       const sit = identified?.situation;
-      if (sit?.canBreakOut) {
-        setPunchType('break_out');
-      } else if (sit?.canPunchIn && !sit?.isLateCriticalBlocked) {
-        setPunchType('in');
-      } else if (sit?.canBreakIn && sit?.isBreakTimeReached) {
-        setPunchType('break_in');
-      } else if (sit?.canPunchOut && !sit?.onBreak) {
+      if (sit?.hasIn && !sit?.hasOut) {
         setPunchType('out');
       } else {
-        setPunchType(sit?.onBreak ? 'break_out' : 'in');
+        setPunchType('in');
       }
       setSelfie(null);
       setMotif('');
@@ -1399,7 +1412,7 @@ export function Pointage({
           ) : null}
 
           {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
-          <div className={cx('overflow-hidden rounded-xl border border-line bg-surface shadow-card', viewMode === 'cards' && 'hidden sm:block')}>
+          <div className={cx('rounded-xl border border-line bg-surface shadow-card', viewMode === 'cards' && 'hidden sm:block')}>
             <StickyTableScroller tableClassName="scroll-thin">
               <table className={cx('w-full text-left sheet-grid table-rhythm', canCorrectAttendance ? 'min-w-[860px]' : 'min-w-[760px]')}>
                 <thead className="sticky top-0 z-10 bg-paper-2 border-b border-line shadow-xs">
@@ -2055,49 +2068,27 @@ export function Pointage({
                   </button>
                 </div>
 
-                {/* Sélecteur d'action déroulant compact */}
+                {/* Sélecteur d'action déroulant compact à 2 choix : Arrivée et Départ */}
                 {showActionPicker && (
-                  <div className="grid grid-cols-4 gap-1 pt-1.5 border-t border-line/60 animate-in fade-in">
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-line/60 animate-in fade-in">
                     <button
                       type="button"
                       disabled={!situation?.canPunchIn || situation?.isLateCriticalBlocked}
                       onClick={() => { setPunchType('in'); setSelfie(null); setShowActionPicker(false); }}
                       className={cx(
-                        'py-1 px-1 rounded-lg text-[10px] font-bold border transition-all text-center',
-                        punchType === 'in' ? 'bg-amber text-white border-amber shadow-xs' : 'bg-surface-2 border-line text-ink'
+                        'py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center',
+                        punchType === 'in' ? 'bg-green text-white border-green shadow-xs' : 'bg-surface-2 border-line text-ink disabled:opacity-40'
                       )}
                     >
                       Arrivée
                     </button>
                     <button
                       type="button"
-                      disabled={!situation?.canBreakIn || !situation?.isBreakTimeReached}
-                      onClick={() => { setPunchType('break_in'); setSelfie(null); setShowActionPicker(false); }}
-                      className={cx(
-                        'py-1 px-1 rounded-lg text-[10px] font-bold border transition-all text-center',
-                        punchType === 'break_in' ? 'bg-amber text-white border-amber shadow-xs' : 'bg-surface-2 border-line text-ink'
-                      )}
-                    >
-                      Pause
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!situation?.canBreakOut}
-                      onClick={() => { setPunchType('break_out'); setSelfie(null); setShowActionPicker(false); }}
-                      className={cx(
-                        'py-1 px-1 rounded-lg text-[10px] font-bold border transition-all text-center',
-                        punchType === 'break_out' ? 'bg-green text-white border-green shadow-xs' : 'bg-surface-2 border-line text-ink'
-                      )}
-                    >
-                      Reprise
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!situation?.canPunchOut || situation?.onBreak}
+                      disabled={!situation?.canPunchOut}
                       onClick={() => { setPunchType('out'); setSelfie(null); setShowActionPicker(false); }}
                       className={cx(
-                        'py-1 px-1 rounded-lg text-[10px] font-bold border transition-all text-center',
-                        punchType === 'out' ? 'bg-amber text-white border-amber shadow-xs' : 'bg-surface-2 border-line text-ink'
+                        'py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center',
+                        punchType === 'out' ? 'bg-amber text-white border-amber shadow-xs' : 'bg-surface-2 border-line text-ink disabled:opacity-40'
                       )}
                     >
                       Départ
@@ -2163,34 +2154,8 @@ export function Pointage({
                 </div>
               )}
 
-              {/* Capture Selfie / Caméra ou Validation Directe (Pause / Reprise) */}
-              {(punchType === 'break_in' || punchType === 'break_out') ? (
-                <Card className="p-3.5 text-center shadow-card border-line space-y-2.5">
-                  <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-amber-wash text-amber border border-amber/20 shadow-xs">
-                    <Clock size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-ink">
-                      {punchType === 'break_in' ? 'Départ en Pause Déjeuner' : 'Reprise du Travail'}
-                    </h3>
-                    <p className="text-[10px] text-ink-soft">Validation instantanée sans photo.</p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void submitPunch()}
-                    className={cx(
-                      'w-full h-10 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer',
-                      punchType === 'break_in'
-                        ? 'bg-amber text-white hover:bg-amber-deep active:scale-98'
-                        : 'bg-green text-white hover:bg-green-deep active:scale-98',
-                      busy && 'opacity-60 cursor-not-allowed'
-                    )}
-                  >
-                    {busy ? <Spinner /> : <><CheckCircle2 size={16} /><span>Valider {PUNCH_LABEL[punchType]}</span></>}
-                  </button>
-                </Card>
-              ) : !selfie ? (
+              {/* Capture Selfie / Caméra Horodatée */}
+              {!selfie ? (
                 <Card className="p-2 sm:p-2.5 shadow-card border-line space-y-2">
                   {/* Viseur Caméra Rond FaceID Style Apple / Pixel - Hauteur Adaptative */}
                   <div className="relative h-28 w-28 sm:h-36 sm:w-36 mx-auto rounded-3xl overflow-hidden border-2 border-amber/70 bg-charcoal shadow-md flex items-center justify-center">

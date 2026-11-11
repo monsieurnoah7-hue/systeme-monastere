@@ -2943,8 +2943,8 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                       <span>2. Verrou Matin</span>
                       <Lock size={13} className="text-red" />
                     </div>
-                    <p className="mt-1 font-mono text-base font-bold text-red">{effectiveSettings?.morning_lockout_time || '10:00'}</p>
-                    <p className="text-[10px] text-amber mt-0.5">Retard dès {effectiveSettings?.late_threshold_time || '08:00'}</p>
+                    <p className="mt-1 font-mono text-base font-bold text-red">{effectiveSettings?.morning_lockout_time || '09:30'}</p>
+                    <p className="text-[10px] text-amber mt-0.5">Retard dès {effectiveSettings?.late_threshold_time || '08:10'}</p>
                   </div>
 
                   <div className="rounded-xl border border-line bg-surface p-3 transition-all hover:border-blue/30">
@@ -3044,7 +3044,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                       </div>
                       <input
                         type="time"
-                        value={effectiveSettings?.morning_lockout_time || '10:00'}
+                        value={effectiveSettings?.morning_lockout_time || '09:30'}
                         onChange={(e) => updateSettingsDraft({ morning_lockout_time: e.target.value })}
                         className="h-9 w-full rounded-xl border border-red/30 bg-surface px-2.5 font-mono text-xs font-bold text-red focus:border-red focus:outline-none transition-colors"
                       />
@@ -3278,8 +3278,8 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                     updateSettingsDraft({
                       early_checkin_time: '07:25',
                       opening_time: '07:30',
-                      late_threshold_time: '08:00',
-                      morning_lockout_time: '10:00',
+                      late_threshold_time: '08:10',
+                      morning_lockout_time: '09:30',
                       meal_schedule_mode: 'normal_12h',
                       break_normal_start: '12:00',
                       break_normal_end: '12:25',

@@ -854,9 +854,12 @@ export type KioskIdentify = {
     isLate?: boolean;
     isTooEarlyForCheckin?: boolean;
     isMorningLocked?: boolean;
+    isAfternoonLocked?: boolean;
     isResumeLocked?: boolean;
     isDayClosed?: boolean;
     earlyCheckinTime?: string;
+    afternoonCheckinStart?: string;
+    afternoonCheckinEnd?: string;
     breakEndTime?: string;
     resumeStartTime?: string;
     resumeEndTime?: string;

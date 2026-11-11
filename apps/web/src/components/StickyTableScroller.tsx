@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal } from 'lucide-react';
 import { cx } from './ui';
 
 interface StickyTableScrollerProps {
@@ -9,8 +9,9 @@ interface StickyTableScrollerProps {
 }
 
 /**
- * Wrapper de tableur avec barre de défilement horizontal permanente fixée au bas de l'écran.
- * Résout le problème des tables à 100+ lignes où la scrollbar native est enfouie tout en bas.
+ * Wrapper de tableur avec barre de navigation horizontale permanente ancrée au bas de l'écran.
+ * Permet un défilement horizontal fluide et immédiat sur PC (Windows/Mac) et tablette,
+ * sans jamais avoir à scroller tout en bas des 400 lignes de données.
  */
 export function StickyTableScroller({
   children,
@@ -21,13 +22,13 @@ export function StickyTableScroller({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [hasOverflow, setHasOverflow] = useState(false);
+  const [hasOverflow, setHasOverflow] = useState(true);
 
   const checkScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     const { scrollLeft, scrollWidth, clientWidth } = el;
-    const maxScroll = scrollWidth - clientWidth;
+    const maxScroll = Math.max(0, scrollWidth - clientWidth);
     const overflow = maxScroll > 8;
     setHasOverflow(overflow);
     setCanScrollLeft(scrollLeft > 6);
@@ -48,7 +49,13 @@ export function StickyTableScroller({
     const observer = new MutationObserver(() => checkScroll());
     observer.observe(el, { childList: true, subtree: true });
 
+    // Rafraîchir après un délai pour laisser le temps aux tables asynchrones de s'afficher
+    const t1 = setTimeout(checkScroll, 150);
+    const t2 = setTimeout(checkScroll, 600);
+
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
       window.removeEventListener('resize', handleResize);
       el.removeEventListener('scroll', checkScroll);
       observer.disconnect();
@@ -59,6 +66,20 @@ export function StickyTableScroller({
     const el = containerRef.current;
     if (!el) return;
     el.scrollBy({ left: amount, behavior: 'smooth' });
+    setTimeout(checkScroll, 200);
+  };
+
+  const scrollToStart = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.scrollTo({ left: 0, behavior: 'smooth' });
+    setTimeout(checkScroll, 200);
+  };
+
+  const scrollToEnd = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' });
     setTimeout(checkScroll, 200);
   };
 
@@ -77,35 +98,55 @@ export function StickyTableScroller({
       {/* Conteneur défilant du tableau */}
       <div
         ref={containerRef}
-        className={cx('overflow-x-auto scroll-smooth', tableClassName)}
+        className={cx('overflow-x-auto scroll-smooth focus:outline-none', tableClassName)}
+        tabIndex={0}
       >
         {children}
       </div>
 
-      {/* Barre de navigation horizontale flottante permanente au bas */}
+      {/* Barre de navigation horizontale permanente collée au bas du viewport */}
       {hasOverflow && (
-        <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 border-t border-line bg-surface/95 px-3 py-2 text-xs backdrop-blur-md shadow-md rounded-b-xl">
-          {/* Bouton Défiler vers la gauche */}
-          <button
-            type="button"
-            onClick={() => scrollByAmount(-280)}
-            disabled={!canScrollLeft}
-            className={cx(
-              'flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all active:scale-95',
-              canScrollLeft
-                ? 'border-line bg-paper-2 text-ink hover:border-amber/50 hover:bg-paper hover:text-amber shadow-2xs'
-                : 'border-transparent text-ink-faint/40 cursor-not-allowed opacity-50',
-            )}
-            title="Défiler vers les premières colonnes"
-          >
-            <ChevronLeft size={14} />
-            <span className="hidden sm:inline">Colonnes gauche</span>
-          </button>
+        <div className="sticky bottom-0 z-30 flex items-center justify-between gap-2.5 border-t-2 border-amber/50 bg-paper/98 px-3.5 py-2.5 text-xs backdrop-blur-md shadow-[0_-6px_20px_rgba(0,0,0,0.45)] rounded-b-xl">
+          {/* Boutons Gauche : Début + Pas à Pas */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={scrollToStart}
+              disabled={!canScrollLeft}
+              className={cx(
+                'flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold transition-all active:scale-95',
+                canScrollLeft
+                  ? 'border-line bg-surface text-ink hover:border-amber/50 hover:bg-paper hover:text-amber shadow-2xs'
+                  : 'border-transparent text-ink-faint/30 cursor-not-allowed opacity-40',
+              )}
+              title="Revenir au début (Références / Codes QR)"
+            >
+              <ChevronsLeft size={14} />
+              <span className="hidden xl:inline">Début</span>
+            </button>
 
-          {/* Curseur de défilement horizontal synchronisé */}
-          <div className="flex flex-1 items-center gap-2 max-w-md mx-auto">
-            <span className="hidden md:inline text-[11px] font-semibold text-ink-faint shrink-0">
-              Défilement :
+            <button
+              type="button"
+              onClick={() => scrollByAmount(-320)}
+              disabled={!canScrollLeft}
+              className={cx(
+                'flex items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-bold transition-all active:scale-95',
+                canScrollLeft
+                  ? 'border-amber/40 bg-amber-wash/30 text-amber hover:bg-amber hover:text-white shadow-2xs'
+                  : 'border-transparent text-ink-faint/30 cursor-not-allowed opacity-40',
+              )}
+              title="Défiler vers la gauche (Colonnes précédentes)"
+            >
+              <ChevronLeft size={15} />
+              <span className="hidden sm:inline">Colonnes gauche</span>
+            </button>
+          </div>
+
+          {/* Curseur & Jauge de Défilement Synchronisés */}
+          <div className="flex flex-1 items-center gap-2.5 max-w-lg mx-auto px-2">
+            <span className="hidden lg:flex items-center gap-1 text-[11px] font-semibold text-ink-soft shrink-0">
+              <SlidersHorizontal size={12} className="text-amber" />
+              <span>Vue :</span>
             </span>
             <input
               type="range"
@@ -113,30 +154,51 @@ export function StickyTableScroller({
               max="100"
               value={scrollProgress}
               onChange={handleSliderChange}
-              className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-line accent-amber focus:outline-none"
-              title="Faire glisser pour parcourir les colonnes du tableau"
+              className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-line accent-amber focus:outline-none transition-all"
+              title="Faire glisser pour explorer l'ensemble des colonnes du tableur"
             />
-            <span className="font-mono text-[11px] font-bold text-amber shrink-0 tabular-nums">
+            <span className="font-mono text-xs font-bold text-amber shrink-0 tabular-nums min-w-[34px] text-right">
               {Math.round(scrollProgress)}%
+            </span>
+            <span className="hidden xl:inline text-[10px] text-ink-faint shrink-0">
+              (ou Shift + Molette)
             </span>
           </div>
 
-          {/* Bouton Défiler vers la droite */}
-          <button
-            type="button"
-            onClick={() => scrollByAmount(280)}
-            disabled={!canScrollRight}
-            className={cx(
-              'flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all active:scale-95',
-              canScrollRight
-                ? 'border-line bg-paper-2 text-ink hover:border-amber/50 hover:bg-paper hover:text-amber shadow-2xs'
-                : 'border-transparent text-ink-faint/40 cursor-not-allowed opacity-50',
-            )}
-            title="Défiler vers les colonnes d'actions et de statut"
-          >
-            <span className="hidden sm:inline">Colonnes droite</span>
-            <ChevronRight size={14} />
-          </button>
+          {/* Boutons Droite : Pas à Pas + Fin (Actions) */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => scrollByAmount(320)}
+              disabled={!canScrollRight}
+              className={cx(
+                'flex items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-bold transition-all active:scale-95',
+                canScrollRight
+                  ? 'border-amber/40 bg-amber-wash/30 text-amber hover:bg-amber hover:text-white shadow-2xs'
+                  : 'border-transparent text-ink-faint/30 cursor-not-allowed opacity-40',
+              )}
+              title="Défiler vers la droite (Stocks, Statuts, Actions)"
+            >
+              <span className="hidden sm:inline">Colonnes droite</span>
+              <ChevronRight size={15} />
+            </button>
+
+            <button
+              type="button"
+              onClick={scrollToEnd}
+              disabled={!canScrollRight}
+              className={cx(
+                'flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold transition-all active:scale-95',
+                canScrollRight
+                  ? 'border-line bg-surface text-ink hover:border-amber/50 hover:bg-paper hover:text-amber shadow-2xs'
+                  : 'border-transparent text-ink-faint/30 cursor-not-allowed opacity-40',
+              )}
+              title="Aller directement aux dernières colonnes (Actions / Détails)"
+            >
+              <span className="hidden xl:inline">Actions</span>
+              <ChevronsRight size={14} />
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -59,6 +59,8 @@ export type Settings = {
   opening_time: string;
   late_threshold_time: string;
   morning_lockout_time: string;
+  afternoon_checkin_start?: string;
+  afternoon_checkin_end?: string;
   meal_schedule_mode: 'normal_12h' | 'delayed_13h';
   break_start_time: string;
   break_end_time: string;
@@ -86,8 +88,10 @@ export type Settings = {
 export const DEFAULT_SETTINGS: Settings = {
   early_checkin_time: '07:25',
   opening_time: '07:30',
-  late_threshold_time: '08:00',
-  morning_lockout_time: '10:00',
+  late_threshold_time: '08:10',
+  morning_lockout_time: '09:30',
+  afternoon_checkin_start: '13:00',
+  afternoon_checkin_end: '14:00',
   meal_schedule_mode: 'normal_12h',
   break_start_time: '12:00',
   break_end_time: '13:00',
@@ -104,8 +108,8 @@ export const DEFAULT_SETTINGS: Settings = {
   closing_time: '16:30',
   closing_end_time: '16:40',
   day_cutoff_time: '17:00',
-  tolerance_minutes: 10,
-  max_late_minutes_allowed: 150, // 10h00 - 7h30 = 150 min avant verrouillage absolu
+  tolerance_minutes: 40,
+  max_late_minutes_allowed: 120, // 09h30 - 07h30 = 120 min avant verrouillage matin
   workdays: [1, 2, 3, 4, 5, 6],
   late_motifs: ['Transport', 'Motif familial', 'Mission extérieure', 'Autorisé par la direction', 'Autre'],
   selfie_retention_days: 90,
