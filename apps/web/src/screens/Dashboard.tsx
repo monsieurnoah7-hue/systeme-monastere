@@ -2478,6 +2478,7 @@ export function Dashboard({ active = true }: { active?: boolean }) {
         title={drawerTitle(drawer)}
         subtitle={drawerSubtitle(drawer, data)}
         onClose={() => setDrawer(null)}
+        wide={drawer?.kind === 'attendance' || drawer?.kind === 'attendanceEmployee'}
       >
         <DrawerContentDetail
           drawer={drawer}
@@ -2616,7 +2617,11 @@ function AttendanceEmployeeDetail({ employeeId, date }: { employeeId: string; da
                   <p className="mt-0.5 text-xs text-ink-soft">
                     {event.terminalName ?? event.terminalId} · {event.idMode === 'badge' ? 'Badge' : 'Saisie manuelle'}
                   </p>
-                  {event.reason && <p className="mt-1 text-xs text-ink-faint">Motif : {event.reason}</p>}
+                  {event.reason && (
+                    <div className="mt-1.5 rounded-lg border border-amber/30 bg-amber-wash/30 px-2.5 py-1 text-xs text-amber-soft font-medium">
+                      <span className="font-bold text-amber">Motif déclaré :</span> {event.reason}
+                    </div>
+                  )}
                   {event.selfieUrl && event.punchType !== 'in' && (
                     <details className="mt-2">
                       <summary className="cursor-pointer text-xs font-medium text-amber">Voir la photo de {typeLabel[event.punchType].toLowerCase()}</summary>
@@ -2794,45 +2799,74 @@ function DrawerContentDetail({
   if (drawer.kind === 'attendance' && data.das04) {
     if (data.das04.detail.length === 0) return <EmptyState title="Aucun travailleur actif" />;
     return (
-      <div className="overflow-hidden rounded-lg border border-line">
+      <div className="overflow-x-auto rounded-xl border border-line shadow-xs">
         <table className="w-full text-left table-rhythm">
-          <thead className="border-b border-line bg-paper-2 text-[11px] uppercase font-semibold text-ink-faint">
+          <thead className="sticky top-0 z-20 border-b border-line bg-paper-2/95 backdrop-blur-xs text-[11px] uppercase font-semibold text-ink-faint shadow-xs">
             <tr>
-              <th className="px-3 py-2 col-lead">Travailleur</th>
-              <th className="px-3 py-2">Arrivée</th>
-              <th className="px-3 py-2">Départ</th>
-              <th className="px-3 py-2 text-right">Statut</th>
+              <th className="px-3 py-2.5 col-lead">Travailleur</th>
+              <th className="px-2.5 py-2.5 text-center">Arrivée</th>
+              <th className="px-2.5 py-2.5 text-center">Départ</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Statut</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line text-xs">
-            {data.das04.detail.map((row, idx) => (
-              <tr
-                key={row.id}
-                className={cx(
-                  'transition-colors',
-                  idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
-                  row.inAt ? 'hover:bg-amber-wash/20' : '',
-                )}
-              >
-                <td className="px-3 py-2.5 font-medium text-ink col-lead">
-                  {row.inAt ? (
-                    <button
-                      type="button"
-                      onClick={() => onOpenAttendanceEmployee?.(row.id, row.fullName)}
-                      className="min-h-10 rounded-md text-left font-semibold text-ink underline-offset-2 hover:text-amber hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-                      aria-label={`Voir le pointage et le selfie de ${row.fullName}`}
-                    >{row.fullName}</button>
-                  ) : row.fullName}
-                </td>
-                <td className="px-3 py-2.5 font-mono tabular-nums">{row.inAt ?? '—'}</td>
-                <td className="px-3 py-2.5 font-mono tabular-nums">{row.outAt ?? 'En poste'}</td>
-                <td className="px-3 py-2.5 text-right">
-                  <Chip tone={row.status === 'late' ? 'amber' : row.status === 'absent' ? 'grey' : 'green'}>
-                    {row.status === 'late' ? `Retard ${row.lateMinutes}m` : row.status === 'absent' ? 'Absent' : 'Présent'}
-                  </Chip>
-                </td>
-              </tr>
-            ))}
+            {data.das04.detail.map((row, idx) => {
+              const isLate = row.status === 'late';
+              const isAbsent = row.status === 'absent';
+              const isConge = row.status === 'conge';
+              const isPermission = row.status === 'permission';
+              const tone = isLate ? 'amber' : isAbsent ? 'grey' : isConge || isPermission ? 'blue' : 'green';
+              const label = isLate
+                ? `Retard ${row.lateMinutes}m`
+                : isAbsent
+                  ? 'Absent'
+                  : isConge
+                    ? 'Congé'
+                    : isPermission
+                      ? 'Permission'
+                      : 'Présent';
+
+              return (
+                <tr
+                  key={row.id}
+                  className={cx(
+                    'transition-colors',
+                    idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                    row.inAt ? 'hover:bg-amber-wash/20' : '',
+                  )}
+                >
+                  <td className="px-3 py-2.5 font-medium text-ink col-lead">
+                    {row.inAt ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenAttendanceEmployee?.(row.id, row.fullName)}
+                        className="min-h-10 rounded-md text-left font-semibold text-ink underline-offset-2 hover:text-amber hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                        aria-label={`Voir le pointage et le selfie de ${row.fullName}`}
+                      >
+                        {row.fullName}
+                      </button>
+                    ) : (
+                      row.fullName
+                    )}
+                  </td>
+                  <td className="px-2.5 py-2.5 text-center font-mono tabular-nums">{row.inAt ?? '—'}</td>
+                  <td className="px-2.5 py-2.5 text-center font-mono tabular-nums">
+                    {row.outAt ?? (row.inAt ? <span className="text-green font-medium">En poste</span> : '—')}
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <Chip tone={tone}>{label}</Chip>
+                    {isLate && (row as any).lateReason && (
+                      <span
+                        className="block mt-0.5 text-[10px] text-amber-soft font-normal truncate max-w-[150px] ml-auto cursor-help"
+                        title={`Motif de retard : ${(row as any).lateReason}`}
+                      >
+                        « {(row as any).lateReason} »
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

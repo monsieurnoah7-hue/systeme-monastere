@@ -340,6 +340,14 @@ export async function migrate(): Promise<void> {
     `);
     await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [SUPER_OBSERVERS_PHOTOS_REVISION]);
   }
+
+  const MAGASINS_PHOTO_POSITION_REVISION = '025_magasins_photo_position_v1';
+  if (!(await getDb().one('SELECT name FROM _migrations WHERE name = $1', [MAGASINS_PHOTO_POSITION_REVISION]))) {
+    await getDb().query(`
+      ALTER TABLE magasins ADD COLUMN IF NOT EXISTS photo_position text DEFAULT 'center';
+    `);
+    await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [MAGASINS_PHOTO_POSITION_REVISION]);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {

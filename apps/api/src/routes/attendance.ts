@@ -21,12 +21,14 @@ attendanceRoutes.get('/', requirePerm('attendance.view'), async (c) => {
     in_at: string | null;
     out_at: string | null;
     late_minutes: number;
+    late_reason: string | null;
     declared_kind: string | null;
   }>(
     `SELECT e.id, e.full_name, e.job_title, e.photo_path,
             min(CASE WHEN a.punch_type = 'in' THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS in_at,
             max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS out_at,
             coalesce(max(a.late_minutes), 0) AS late_minutes,
+            max(CASE WHEN a.punch_type = 'in' THEN a.reason END) AS late_reason,
             (SELECT ab.kind FROM absences ab
               WHERE ab.employee_id = e.id AND $1 BETWEEN ab.from_date AND ab.to_date AND ab.status = 'approved'
               ORDER BY CASE ab.kind WHEN 'absence' THEN 1 WHEN 'conge' THEN 2 ELSE 3 END
@@ -46,6 +48,7 @@ attendanceRoutes.get('/', requirePerm('attendance.view'), async (c) => {
     inAt: row.in_at,
     outAt: row.out_at,
     lateMinutes: Number(row.late_minutes),
+    lateReason: row.late_reason || null,
     status: row.in_at
       ? Number(row.late_minutes) > 0 ? 'late' : 'present'
       : row.declared_kind === 'absence' || row.declared_kind === 'conge'

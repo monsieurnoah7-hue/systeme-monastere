@@ -451,6 +451,7 @@ export type Magasin = {
   can_transfer?: boolean;
   manager_name?: string | null;
   photo_path?: string | null;
+  photo_position?: 'center' | 'top' | 'bottom' | string | null;
   created_at: string;
   tools_count?: number;
   stock_count?: number;
@@ -683,6 +684,7 @@ export type Dashboard = {
       inAt: string | null;
       outAt: string | null;
       lateMinutes: number;
+      lateReason?: string | null;
       status: string;
     }[];
   } | null;

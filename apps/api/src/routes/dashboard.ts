@@ -61,12 +61,14 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
     in_at: string | null;
     out_at: string | null;
     late_minutes: number;
+    late_reason: string | null;
     status: string;
   }>(
     `SELECT e.id, e.full_name, e.job_title, e.photo_path,
             min(CASE WHEN a.punch_type = 'in'  THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS in_at,
             max(CASE WHEN a.punch_type = 'out' THEN to_char(a.server_at AT TIME ZONE 'Africa/Douala', 'HH24:MI') END) AS out_at,
             coalesce(max(a.late_minutes), 0) AS late_minutes,
+            max(CASE WHEN a.punch_type = 'in' THEN a.reason END) AS late_reason,
             coalesce(max(a.status), 'present') AS status
        FROM employees e
        LEFT JOIN attendance a ON a.employee_id = e.id AND a.punch_date = $1
@@ -396,6 +398,7 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
               inAt: r.in_at,
               outAt: r.out_at,
               lateMinutes: Number(r.late_minutes),
+              lateReason: r.late_reason || null,
               status: r.in_at
                 ? Number(r.late_minutes) > 0
                   ? 'late'

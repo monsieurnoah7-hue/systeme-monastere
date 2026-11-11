@@ -862,15 +862,17 @@ export function Stock({
               </div>
 
               {/* Right: Actions & Options */}
-              <div className="flex w-full flex-wrap items-center gap-1.5 md:w-auto md:justify-end">
-                <GroupedQrLabelsModal canViewTools={hasPerm('tools.view')} canViewStock={hasPerm('stock.view')} />
+              <div className="flex w-full items-center justify-end gap-1.5 md:w-auto">
+                <div className="hidden md:inline-flex">
+                  <GroupedQrLabelsModal canViewTools={hasPerm('tools.view')} canViewStock={hasPerm('stock.view')} />
+                </div>
                 <Button
                   size="sm"
                   variant="secondary"
                   disabled={loading}
                   icon={<RefreshCw size={13} className={loading ? 'animate-spin' : ''} />}
                   onClick={refresh}
-                  className="h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
+                  className="hidden md:inline-flex h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
                   title={loading ? 'Actualisation en cours' : 'Actualiser les données'}
                 >
                   <span>{loading ? 'Actualisation…' : 'Actualiser'}</span>
@@ -883,7 +885,7 @@ export function Stock({
                       variant="primary"
                       icon={<Zap size={13} />}
                       onClick={() => openMove('out')}
-                      className="h-8 px-2 sm:px-3 text-xs shadow-2xs font-bold"
+                      className="hidden md:inline-flex h-8 px-2 sm:px-3 text-xs shadow-2xs font-bold"
                       title="Ouvrir le Hub de Mouvement"
                     >
                       <span>Mouvement</span>
@@ -893,7 +895,7 @@ export function Stock({
                       variant="secondary"
                       icon={<IconArrowIn size={14} />}
                       onClick={() => openMove('in')}
-                      className="hidden sm:inline-flex h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
+                      className="hidden md:inline-flex h-8 px-2 sm:px-2.5 text-xs shadow-2xs"
                       title="Enregistrer un arrivage ou entrée de stock"
                     >
                       <span>Entrée</span>
@@ -907,7 +909,7 @@ export function Stock({
                     variant="primary"
                     icon={<IconPlus size={14} />}
                     onClick={openCreate}
-                    className="h-8 px-2 sm:px-3 text-xs shadow-2xs"
+                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs"
                     title="Créer une nouvelle référence"
                   >
                     <span className="hidden sm:inline">Nouvelle référence</span>
@@ -962,14 +964,31 @@ export function Stock({
                       Actions &amp; Outils
                     </DropdownMenuLabel>
 
+                    <DropdownMenuItem
+                      onClick={refresh}
+                      className="md:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                    >
+                      <RefreshCw size={14} className={loading ? 'animate-spin text-amber' : 'text-ink-soft'} />
+                      <span>Actualiser les données</span>
+                    </DropdownMenuItem>
+
                     {canMove && (
-                      <DropdownMenuItem
-                        onClick={() => openMove('out')}
-                        className="sm:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
-                      >
-                        <IconArrowOut size={14} className="text-amber" />
-                        <span>- Enregistrer une Sortie</span>
-                      </DropdownMenuItem>
+                      <>
+                        <DropdownMenuItem
+                          onClick={() => openMove('in')}
+                          className="md:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                        >
+                          <IconArrowIn size={14} className="text-green" />
+                          <span>+ Enregistrer une Entrée (Arrivage)</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => openMove('out')}
+                          className="md:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                        >
+                          <IconArrowOut size={14} className="text-amber" />
+                          <span>- Enregistrer une Sortie (Chantier)</span>
+                        </DropdownMenuItem>
+                      </>
                     )}
 
                     {canExportReports && (

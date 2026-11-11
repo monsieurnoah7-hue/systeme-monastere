@@ -322,6 +322,7 @@ export function Magasins({
     can_deliver_out: true,
     can_transfer: true,
     photo_path: null as string | null,
+    photo_position: 'center' as 'center' | 'top' | 'bottom',
   });
   const [magasinPhotoOpen, setMagasinPhotoOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -472,6 +473,7 @@ export function Magasins({
       can_deliver_out: true,
       can_transfer: true,
       photo_path: null,
+      photo_position: 'center',
     });
     setFormError(null);
     setFormOpen(true);
@@ -489,6 +491,7 @@ export function Magasins({
       can_deliver_out: m.can_deliver_out ?? true,
       can_transfer: m.can_transfer ?? true,
       photo_path: m.photo_path ?? null,
+      photo_position: ((m as any).photo_position as 'center' | 'top' | 'bottom') || 'center',
     });
     setFormError(null);
     setFormOpen(true);
@@ -929,7 +932,7 @@ export function Magasins({
                 disabled={refreshing}
                 icon={<RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />}
                 onClick={() => void handleRefresh()}
-                className="h-10 rounded-lg px-3 text-sm"
+                className="hidden md:inline-flex h-10 rounded-lg px-3 text-sm"
                 title="Actualiser les dépôts"
                 aria-label={refreshing ? 'Actualisation des dépôts en cours' : 'Actualiser les dépôts'}
               >
@@ -994,6 +997,13 @@ export function Magasins({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
+                  <DropdownMenuItem
+                    onClick={() => void handleRefresh()}
+                    className="md:hidden flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                  >
+                    <RefreshCw size={14} className={refreshing ? 'animate-spin text-amber' : 'text-ink-soft'} />
+                    <span>Actualiser les dépôts</span>
+                  </DropdownMenuItem>
                   <DropdownMenuLabel className="px-2.5 py-1.5 text-[11px] font-semibold text-ink-faint uppercase tracking-wider">
                     Exports &amp; Rapports
                   </DropdownMenuLabel>
@@ -1148,7 +1158,22 @@ export function Magasins({
               >
                 <div className="overflow-hidden rounded-xl border border-line bg-surface transition-colors hover:border-line-strong hover:bg-paper-2/40">
                   <div className="relative h-36 sm:h-40 bg-paper-2">
-                    {m.photo_path ? <img src={m.photo_path} alt={`Vue de ${m.name}`} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" /> : <div className="grid h-full w-full place-items-center bg-paper-2 text-ink-faint"><div className="flex items-center gap-3"><IconComponent size={30} strokeWidth={1.5} /><span className="text-xs font-medium">Photo de l’emplacement à ajouter</span></div></div>}
+                    {m.photo_path ? (
+                      <img
+                        src={m.photo_path}
+                        alt={`Vue de ${m.name}`}
+                        loading="lazy"
+                        style={{ objectPosition: (m as any).photo_position || 'center' }}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center bg-paper-2 text-ink-faint">
+                        <div className="flex items-center gap-3">
+                          <IconComponent size={30} strokeWidth={1.5} />
+                          <span className="text-xs font-medium">Photo de l’emplacement à ajouter</span>
+                        </div>
+                      </div>
+                    )}
                     <span className="absolute left-3 top-3 rounded-md bg-black/65 px-2 py-1 font-mono text-[10px] font-semibold text-white backdrop-blur-sm">{m.code}</span>
                     {!m.active && <span className="absolute right-3 top-3 rounded-md bg-red px-2 py-1 text-[10px] font-semibold text-white">Inactif</span>}
                   </div>
@@ -1914,11 +1939,59 @@ export function Magasins({
       >
         <div className="space-y-3.5">
           {formError && <div className="rounded-xl bg-red-wash px-3 py-2 text-xs text-red font-medium">{formError}</div>}
-          <button type="button" onClick={() => setMagasinPhotoOpen(true)} className="group relative block h-40 w-full overflow-hidden rounded-lg border border-line bg-paper-2 text-left focus-visible:outline-2 focus-visible:outline-amber">
-            {form.photo_path ? <img src={form.photo_path} alt="Aperçu du magasin" className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-sm text-ink-soft"><span className="flex items-center gap-2"><ImagePlus size={18} /> Ajouter une photo du lieu</span></span>}
-            {form.photo_path && <span className="absolute bottom-2 right-2 rounded-md bg-black/70 px-2.5 py-1.5 text-xs font-semibold text-white">Changer la photo</span>}
+          <button type="button" onClick={() => setMagasinPhotoOpen(true)} className="group relative block h-44 w-full overflow-hidden rounded-xl border border-line bg-paper-2 text-left focus-visible:outline-2 focus-visible:outline-amber">
+            {form.photo_path ? (
+              <img
+                src={form.photo_path}
+                alt="Aperçu du magasin"
+                style={{ objectPosition: form.photo_position || 'center' }}
+                className="h-full w-full object-cover transition-all"
+              />
+            ) : (
+              <span className="grid h-full place-items-center text-sm text-ink-soft">
+                <span className="flex items-center gap-2">
+                  <ImagePlus size={18} /> Ajouter une photo du lieu
+                </span>
+              </span>
+            )}
+            {form.photo_path && (
+              <span className="absolute bottom-2 right-2 rounded-md bg-black/75 px-2.5 py-1.5 text-xs font-semibold text-white shadow-xs backdrop-blur-xs">
+                Changer la photo
+              </span>
+            )}
           </button>
-          {form.photo_path && <button type="button" onClick={() => setForm((f) => ({ ...f, photo_path: null }))} className="text-xs font-medium text-ink-soft underline underline-offset-2">Retirer la photo</button>}
+          {form.photo_path && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line/60 bg-surface p-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-ink-soft">Cadrage photo :</span>
+                {(['top', 'center', 'bottom'] as const).map((pos) => {
+                  const isSelected = (form.photo_position || 'center') === pos;
+                  return (
+                    <button
+                      key={pos}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, photo_position: pos }))}
+                      className={cx(
+                        'rounded-md px-2.5 py-1 text-xs font-semibold transition-all',
+                        isSelected
+                          ? 'bg-amber text-white shadow-xs font-bold'
+                          : 'bg-paper text-ink-soft hover:bg-paper-2 hover:text-ink border border-line/50',
+                      )}
+                    >
+                      {pos === 'top' ? 'Haut (Visages / Bureaux)' : pos === 'center' ? 'Centre' : 'Bas'}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, photo_path: null }))}
+                className="text-xs font-medium text-red hover:underline underline-offset-2 ml-auto"
+              >
+                Retirer la photo
+              </button>
+            </div>
+          )}
           <Field
             label="Nom du magasin ou atelier"
             value={form.name}

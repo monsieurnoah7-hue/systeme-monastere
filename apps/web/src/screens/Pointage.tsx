@@ -1419,9 +1419,19 @@ export function Pointage({
                         {/* Ecart / Retard */}
                         <td className="sheet-cell text-center font-mono tabular-nums">
                           {row.lateMinutes > 0 ? (
-                            <span className="inline-block rounded bg-surface-2 border border-line px-1.5 py-0.5 text-[10px] font-bold text-amber">
-                              +{row.lateMinutes} min
-                            </span>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="inline-block rounded bg-surface-2 border border-line px-1.5 py-0.5 text-[10px] font-bold text-amber">
+                                +{row.lateMinutes} min
+                              </span>
+                              {(row as any).lateReason && (
+                                <span
+                                  className="text-[10px] font-sans text-amber-soft font-normal truncate max-w-[120px] cursor-help"
+                                  title={`Motif déclaré : ${(row as any).lateReason}`}
+                                >
+                                  « {(row as any).lateReason} »
+                                </span>
+                              )}
+                            </div>
                           ) : row.inAt ? (
                             <span className="text-green text-[11px]">À l'heure</span>
                           ) : (
@@ -1512,7 +1522,9 @@ export function Pointage({
                   </div>
                   <div>
                     <span className="text-[10px] text-ink-faint block">Départ</span>
-                    <span className="font-mono font-bold text-ink">{row.outAt ?? 'En poste'}</span>
+                    <span className="font-mono font-bold text-ink">
+                      {row.outAt ?? (row.inAt ? <span className="text-green font-medium">En poste</span> : '—')}
+                    </span>
                   </div>
                   <div>
                     <span className="text-[10px] text-ink-faint block font-semibold text-ink">Statut</span>
@@ -1530,6 +1542,12 @@ export function Pointage({
                     </span>
                   </div>
                 </div>
+
+                {row.status === 'late' && (row as any).lateReason && (
+                  <div className="mt-2.5 rounded-lg border border-amber/30 bg-amber-wash/30 px-2.5 py-1 text-xs text-amber-soft">
+                    <span className="font-semibold text-amber">Motif déclaré :</span> {(row as any).lateReason}
+                  </div>
+                )}
                 {canCorrectAttendance && (row.inAt || row.outAt) && (
                   <div className="mt-2 flex justify-end gap-2 border-t border-line/60 pt-2">
                     {row.inAt && <Button size="sm" variant="ghost" onClick={() => openAttendanceCorrection(row, 'in')}>Corriger l’arrivée</Button>}

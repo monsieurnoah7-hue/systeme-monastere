@@ -452,8 +452,8 @@ export function Drawer({
     >
       <DrawerContent
         className={cx(
-          'h-dvh w-[min(92vw,28rem)] gap-0 bg-paper p-0 pb-[env(safe-area-inset-bottom)] shadow-pop',
-          wide ? 'sm:max-w-2xl' : 'sm:max-w-lg',
+          'h-dvh gap-0 bg-paper p-0 pb-[env(safe-area-inset-bottom)] shadow-pop',
+          wide ? 'w-[min(96vw,46rem)] sm:max-w-3xl' : 'w-[min(96vw,36rem)] sm:max-w-xl',
         )}
       >
         <DrawerHeader className="border-b border-line bg-surface px-5 py-4">

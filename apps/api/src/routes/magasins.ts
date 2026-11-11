@@ -18,6 +18,7 @@ export type MagasinRow = {
   can_transfer: boolean;
   manager_name: string | null;
   photo_path?: string | null;
+  photo_position?: string | null;
   created_at: string;
   tools_count?: number;
   stock_count?: number;
@@ -33,6 +34,7 @@ const createBody = z.object({
   can_transfer: z.boolean().optional(),
   manager_name: z.string().optional(),
   photo_path: z.string().nullable().optional(),
+  photo_position: z.string().nullable().optional(),
 });
 
 const patchBody = z.object({
@@ -46,6 +48,7 @@ const patchBody = z.object({
   can_transfer: z.boolean().optional(),
   manager_name: z.string().nullable().optional(),
   photo_path: z.string().nullable().optional(),
+  photo_position: z.string().nullable().optional(),
 });
 
 async function nextMagasinId(): Promise<string> {
@@ -82,8 +85,8 @@ magasinsRoutes.post('/', requirePerm('magasins.manage'), async (c) => {
   if (exists) return c.json({ error: 'Ce code magasin existe déjà.' }, 409);
   const id = await nextMagasinId();
   const magasin = await db.one<MagasinRow>(
-    `INSERT INTO magasins (id, name, code, description, can_lend, can_receive_in, can_deliver_out, can_transfer, manager_name, photo_path)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+    `INSERT INTO magasins (id, name, code, description, can_lend, can_receive_in, can_deliver_out, can_transfer, manager_name, photo_path, photo_position)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
     [
       id,
       body.data.name.trim(),
@@ -95,6 +98,7 @@ magasinsRoutes.post('/', requirePerm('magasins.manage'), async (c) => {
       body.data.can_transfer ?? true,
       body.data.manager_name?.trim() || null,
       body.data.photo_path || null,
+      body.data.photo_position || 'center',
     ],
   );
   await writeAudit(db, {
@@ -132,7 +136,8 @@ magasinsRoutes.patch('/:id', requirePerm('magasins.manage'), async (c) => {
             can_deliver_out = $8,
             can_transfer = $9,
             manager_name = $10,
-            photo_path = $11
+            photo_path = $11,
+            photo_position = $12
       WHERE id = $1
       RETURNING *`,
     [
@@ -147,6 +152,7 @@ magasinsRoutes.patch('/:id', requirePerm('magasins.manage'), async (c) => {
       patch.can_transfer ?? before.can_transfer,
       patch.manager_name === undefined ? before.manager_name : patch.manager_name?.trim() || null,
       patch.photo_path === undefined ? before.photo_path ?? null : patch.photo_path,
+      patch.photo_position === undefined ? (before as any).photo_position ?? 'center' : patch.photo_position,
     ],
   );
   await writeAudit(db, {
