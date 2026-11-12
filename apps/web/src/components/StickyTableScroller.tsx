@@ -1,4 +1,5 @@
-import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, useRef, useState, useEffect, useCallback, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { cx } from './ui';
 
@@ -8,6 +9,38 @@ interface StickyTableScrollerProps {
   tableClassName?: string;
   /** Keep the table viewport pinned immediately below a screen toolbar while the page scrolls. */
   stickyBelow?: string;
+}
+
+type StickyHeaderLayout = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  tableWidth: number;
+  scrollLeft: number;
+  columnWidths: number[];
+};
+
+function cloneHeaderWithWidths(header: ReactElement, widths: number[]): ReactNode {
+  const headerChildren = (header.props as { children?: ReactNode }).children;
+  return cloneElement(header as ReactElement<Record<string, unknown>>, {
+    children: Children.map(headerChildren, (row) => {
+      if (!isValidElement(row)) return row;
+      const rowChildren = (row.props as { children?: ReactNode }).children;
+      let columnIndex = 0;
+      return cloneElement(row as ReactElement<Record<string, unknown>>, {
+        children: Children.map(rowChildren, (cell) => {
+          if (!isValidElement(cell) || cell.type !== 'th') return cell;
+          const width = widths[columnIndex++];
+          if (!width) return cell;
+          const props = cell.props as { style?: CSSProperties };
+          return cloneElement(cell as ReactElement<Record<string, unknown>>, {
+            style: { ...props.style, width, minWidth: width, maxWidth: width },
+          });
+        }),
+      });
+    }),
+  });
 }
 
 /**
@@ -22,12 +55,12 @@ export function StickyTableScroller({
   stickyBelow,
 }: StickyTableScrollerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [stickyTop, setStickyTop] = useState<number | undefined>();
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [hasOverflow, setHasOverflow] = useState(true);
   const [isTableVisible, setIsTableVisible] = useState(false);
+  const [stickyHeaderLayout, setStickyHeaderLayout] = useState<StickyHeaderLayout | null>(null);
 
   const checkScroll = useCallback(() => {
     const el = containerRef.current;
@@ -39,6 +72,7 @@ export function StickyTableScroller({
     setCanScrollLeft(scrollLeft > 6);
     setCanScrollRight(scrollLeft < maxScroll - 6);
     setScrollProgress(maxScroll > 0 ? (scrollLeft / maxScroll) * 100 : 0);
+    setStickyHeaderLayout((current) => current ? { ...current, scrollLeft } : current);
   }, []);
 
   useEffect(() => {
@@ -81,26 +115,77 @@ export function StickyTableScroller({
 
   useEffect(() => {
     if (!stickyBelow) {
-      setStickyTop(undefined);
+      setStickyHeaderLayout(null);
       return;
     }
 
+    const container = containerRef.current;
     const toolbar = document.querySelector<HTMLElement>(stickyBelow);
-    if (!toolbar) return;
+    const main = container?.closest('main');
+    if (!container || !toolbar || !main) return;
 
-    const updateStickyTop = () => {
-      const toolbarTop = Number.parseFloat(window.getComputedStyle(toolbar).top) || 0;
-      setStickyTop(Math.ceil(toolbarTop + toolbar.getBoundingClientRect().height + 8));
+    let frame = 0;
+    const updateStickyHeader = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const table = container.querySelector('table');
+        const thead = table?.tHead;
+        if (!table || !thead) {
+          setStickyHeaderLayout(null);
+          return;
+        }
+
+        const toolbarTop = Number.parseFloat(window.getComputedStyle(toolbar).top) || 0;
+        const top = Math.ceil(toolbarTop + toolbar.getBoundingClientRect().height);
+        const containerRect = container.getBoundingClientRect();
+        const mainRect = main.getBoundingClientRect();
+        const headerRect = thead.getBoundingClientRect();
+        const visible = containerRect.top < top && containerRect.bottom > top + headerRect.height
+          && mainRect.top <= top && mainRect.bottom > top + headerRect.height;
+        if (!visible) {
+          setStickyHeaderLayout(null);
+          return;
+        }
+
+        const headerCells = Array.from(thead.rows[0]?.cells ?? []);
+        const layout: StickyHeaderLayout = {
+          top,
+          left: containerRect.left,
+          width: container.clientWidth,
+          height: headerRect.height,
+          tableWidth: table.getBoundingClientRect().width,
+          scrollLeft: container.scrollLeft,
+          columnWidths: headerCells.map((cell) => cell.getBoundingClientRect().width),
+        };
+        setStickyHeaderLayout((current) => {
+          if (current && current.top === layout.top && current.left === layout.left
+            && current.width === layout.width && current.height === layout.height
+            && current.tableWidth === layout.tableWidth
+            && current.columnWidths.every((width, index) => width === layout.columnWidths[index])) return current;
+          return layout;
+        });
+      });
     };
 
-    updateStickyTop();
-    const observer = new ResizeObserver(updateStickyTop);
+    updateStickyHeader();
+    const observer = new ResizeObserver(updateStickyHeader);
+    observer.observe(container);
     observer.observe(toolbar);
-    window.addEventListener('resize', updateStickyTop, { passive: true });
+    const table = container.querySelector('table');
+    if (table) observer.observe(table);
+    const mutationObserver = new MutationObserver(updateStickyHeader);
+    mutationObserver.observe(container, { childList: true, subtree: true });
+    container.addEventListener('scroll', updateStickyHeader, { passive: true });
+    main.addEventListener('scroll', updateStickyHeader, { passive: true });
+    window.addEventListener('resize', updateStickyHeader, { passive: true });
 
     return () => {
+      cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener('resize', updateStickyTop);
+      mutationObserver.disconnect();
+      container.removeEventListener('scroll', updateStickyHeader);
+      main.removeEventListener('scroll', updateStickyHeader);
+      window.removeEventListener('resize', updateStickyHeader);
     };
   }, [stickyBelow]);
 
@@ -121,16 +206,28 @@ export function StickyTableScroller({
     checkScroll();
   };
 
+  const tableElement = Children.toArray(children).find((child) => isValidElement(child) && child.type === 'table') as ReactElement<Record<string, unknown>> | undefined;
+  const tableChildren = tableElement ? (tableElement.props as { children?: ReactNode }).children : null;
+  const headerElement = Children.toArray(tableChildren).find((child) => isValidElement(child) && child.type === 'thead') as ReactElement | undefined;
+  const stickyHeader = tableElement && headerElement && stickyHeaderLayout
+    ? cloneElement(tableElement, {
+      style: {
+        ...((tableElement.props as { style?: CSSProperties }).style),
+        width: stickyHeaderLayout.tableWidth,
+        minWidth: stickyHeaderLayout.tableWidth,
+        tableLayout: 'fixed',
+      },
+      children: cloneHeaderWithWidths(headerElement, stickyHeaderLayout.columnWidths),
+    })
+    : null;
+
   return (
-    <div
-      className={cx('relative flex flex-col', stickyBelow && 'z-10', className)}
-      style={stickyBelow && stickyTop !== undefined ? { position: 'sticky', top: stickyTop } : undefined}
-    >
+    <div className={cx('relative flex flex-col', className)}>
       {/* Conteneur défilant du tableau */}
       <div
         ref={containerRef}
         className={cx(
-          'overflow-auto scroll-smooth focus:outline-none max-h-[calc(100dvh-200px)] min-h-[440px] scroll-thin hide-horizontal-scrollbar',
+          'table-scroll-viewport overflow-auto scroll-smooth focus:outline-none max-h-[calc(100dvh-200px)] min-h-[440px] scroll-thin',
           hasOverflow && 'pb-16',
           tableClassName,
         )}
@@ -138,6 +235,23 @@ export function StickyTableScroller({
       >
         {children}
       </div>
+
+      {stickyHeader && stickyHeaderLayout && createPortal(
+        <div
+          className="no-print pointer-events-auto fixed z-30 overflow-hidden bg-paper-2 shadow-md"
+          style={{
+            top: stickyHeaderLayout.top,
+            left: stickyHeaderLayout.left,
+            width: stickyHeaderLayout.width,
+            height: stickyHeaderLayout.height,
+          }}
+        >
+          <div style={{ width: stickyHeaderLayout.tableWidth, transform: `translateX(-${stickyHeaderLayout.scrollLeft}px)` }}>
+            {stickyHeader}
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* Barre de navigation horizontale permanente collée au bas du viewport */}
       {hasOverflow && isTableVisible && (

@@ -237,11 +237,13 @@ th.sticky-col {
   }
 }
 
-@utility hide-horizontal-scrollbar {
-  &::-webkit-scrollbar:horizontal {
-    display: none;
-    height: 0;
-  }
+.table-scroll-viewport {
+  overscroll-behavior: contain;
+}
+
+.table-scroll-viewport::-webkit-scrollbar:horizontal {
+  display: none;
+  height: 0;
 }
 
 @utility fade-in {
