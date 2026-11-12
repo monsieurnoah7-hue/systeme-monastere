@@ -1341,7 +1341,7 @@ export function Stock({
           ) : viewMode === 'list' ? (
             <>
               {/* Tableur Google Sheets Style (Desktop) */}
-              <div className="rounded-xl border border-line bg-surface shadow-xs hidden lg:block">
+              <div className="rounded-xl border border-line bg-surface shadow-xs hidden lg:block overflow-hidden isolate">
                 <StickyTableScroller stickyBelow="[data-stock-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
@@ -1358,28 +1358,28 @@ export function Stock({
                           </th>
                         )}
                         <th className={cx(
-                          'sticky top-0 z-30 bg-paper-2 px-2.5 py-2.5 w-12 min-w-12 max-w-12 border-b border-r border-line text-center',
+                          'sticky top-0 z-30 bg-paper-2 px-1.5 py-2.5 w-16 min-w-16 max-w-16 border-b border-r border-line text-center whitespace-nowrap',
                           canManageRefs ? 'left-[40px]' : 'left-0',
                         )}>
                           Photo
                         </th>
                         <th className={cx(
                           'sticky top-0 z-30 bg-paper-2 px-3 py-2.5 min-w-64 border-b freeze-pane-divider',
-                          canManageRefs ? 'left-[88px]' : 'left-[48px]',
+                          canManageRefs ? 'left-[104px]' : 'left-[64px]',
                         )}>
                           Désignation &amp; Marque
                         </th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 border-b border-r border-line">Catégorie</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-32 border-b border-r border-line">Emplacement / Magasin</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-36 border-b border-r border-line">Stock Disponible</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 border-b border-r border-line whitespace-nowrap">Catégorie</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-32 border-b border-r border-line whitespace-nowrap">Emplacement / Magasin</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-36 border-b border-r border-line whitespace-nowrap">Stock Disponible</th>
                         {canViewFinancial && (
                           <>
-                            <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-right">Coût Unit.</th>
-                            <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 border-b border-r border-line text-right">Valeur Stock</th>
+                            <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-right whitespace-nowrap">Coût Unit.</th>
+                            <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 border-b border-r border-line text-right whitespace-nowrap">Valeur Stock</th>
                           </>
                         )}
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center">État</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-36 text-right border-b border-line col-actions">Actions</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center whitespace-nowrap">État</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-36 text-right border-b border-line col-actions whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1428,7 +1428,7 @@ export function Stock({
                             {/* Photo Thumbnail */}
                             <td
                               className={cx(
-                                'sticky z-10 px-2 py-1.5 text-center border-b border-r border-line w-12 min-w-12 max-w-12',
+                                'sticky z-10 px-1.5 py-1.5 text-center border-b border-r border-line w-16 min-w-16 max-w-16',
                                 canManageRefs ? 'left-[40px]' : 'left-0',
                                 frozenBg,
                               )}
@@ -1461,7 +1461,7 @@ export function Stock({
                             <td
                               className={cx(
                                 'sticky z-10 px-3 py-2 font-semibold text-ink border-b freeze-pane-divider min-w-64',
-                                canManageRefs ? 'left-[88px]' : 'left-[48px]',
+                                canManageRefs ? 'left-[104px]' : 'left-[64px]',
                                 frozenBg,
                               )}
                             >

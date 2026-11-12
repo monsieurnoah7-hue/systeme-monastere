@@ -2650,17 +2650,17 @@ export function Employees({
           ) : viewMode === 'list' ? (
             <>
               {/* Desktop Tableur (Vue Liste complète sur grand écran) */}
-              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs">
+              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden isolate">
                 <StickyTableScroller stickyBelow="[data-employees-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
                       <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                        <th className="sticky top-0 left-0 z-30 bg-paper-2 px-2.5 py-2.5 w-12 min-w-12 max-w-12 border-b border-r border-line text-center">Photo</th>
-                        <th className="sticky top-0 left-[48px] z-30 bg-paper-2 px-3 py-2.5 min-w-56 border-b freeze-pane-divider">Identité &amp; Métier</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-32 border-b border-r border-line text-center">État d’aujourd’hui</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center">Badge QR</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center">Statut</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-48 text-right border-b border-line col-actions">Actions rapides</th>
+                        <th className="sticky top-0 left-0 z-30 bg-paper-2 px-1.5 py-2.5 w-16 min-w-16 max-w-16 border-b border-r border-line text-center whitespace-nowrap">Photo</th>
+                        <th className="sticky top-0 left-[64px] z-30 bg-paper-2 px-3 py-2.5 min-w-56 border-b freeze-pane-divider whitespace-nowrap">Identité &amp; Métier</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-32 border-b border-r border-line text-center whitespace-nowrap">État d’aujourd’hui</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center whitespace-nowrap">Badge QR</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center whitespace-nowrap">Statut</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-48 text-right border-b border-line col-actions whitespace-nowrap">Actions rapides</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2678,7 +2678,7 @@ export function Employees({
                         >
                           <td
                             className={cx(
-                              'sticky left-0 z-10 px-2 py-1.5 text-center border-b border-r border-line w-12 min-w-12 max-w-12',
+                              'sticky left-0 z-10 px-1.5 py-1.5 text-center border-b border-r border-line w-16 min-w-16 max-w-16',
                               frozenBg,
                             )}
                             onClick={(e) => {
@@ -2704,7 +2704,7 @@ export function Employees({
                               )}
                             </span>
                           </td>
-                          <td className={cx('sticky left-[48px] z-10 px-3 py-2 border-b freeze-pane-divider min-w-56', frozenBg)}>
+                          <td className={cx('sticky left-[64px] z-10 px-3 py-2 border-b freeze-pane-divider min-w-56', frozenBg)}>
                             <div className="font-semibold text-ink text-xs">{employee.full_name}</div>
                             <div className="text-[11px] text-ink-soft">
                               {employee.job_title} · <span className="font-mono text-ink-faint">{employee.id}</span>

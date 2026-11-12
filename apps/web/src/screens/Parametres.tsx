@@ -2182,16 +2182,16 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
             {/* Accounts List & Table */}
             <CardContent className="p-0">
               {/* Desktop Table (Antigravity Grid with vertical borders) */}
-              <div className="hidden sm:block overflow-x-auto max-h-[calc(100dvh-220px)] min-h-[380px] scroll-thin">
+              <div className="hidden sm:block overflow-x-auto max-h-[calc(100dvh-220px)] min-h-[380px] scroll-thin overflow-hidden isolate">
                 <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                   <thead>
                     <tr className="bg-paper-2 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
-                      <th className="sticky top-0 left-0 z-30 bg-paper-2 py-2.5 px-3 text-center w-12 min-w-12 max-w-12 border-b border-r border-line">Photo</th>
-                      <th className="sticky top-0 left-[48px] z-30 bg-paper-2 py-2.5 px-4 min-w-44 border-b freeze-pane-divider">Utilisateur &amp; Identifiant</th>
-                      <th className="sticky top-0 z-20 bg-paper-2 py-2.5 px-4 border-b border-r border-line">Rôle attribué</th>
-                      <th className="sticky top-0 z-20 bg-paper-2 py-2.5 px-4 border-b border-r border-line">Fiche travailleur liée</th>
-                      <th className="sticky top-0 z-20 bg-paper-2 py-2.5 px-3 text-center border-b border-r border-line">Statut</th>
-                      <th className="sticky top-0 z-20 bg-paper-2 py-2.5 px-4 text-right border-b border-line col-actions">Actions</th>
+                      <th className="sticky top-0 left-0 z-30 bg-paper-2 py-2.5 px-1.5 text-center w-16 min-w-16 max-w-16 border-b border-r border-line whitespace-nowrap">Photo</th>
+                      <th className="sticky top-0 left-[64px] z-30 bg-paper-2 py-2.5 px-4 min-w-44 border-b freeze-pane-divider whitespace-nowrap">Utilisateur &amp; Identifiant</th>
+                      <th className="sticky top-0 z-20 bg-paper-2 py-2.5 px-4 border-b border-r border-line whitespace-nowrap">Rôle attribué</th>
+                      <th className="sticky top-0 z-20 bg-paper-2 py-2.5 px-4 border-b border-r border-line whitespace-nowrap">Fiche travailleur liée</th>
+                      <th className="sticky top-0 z-20 bg-paper-2 py-2.5 px-3 text-center border-b border-r border-line whitespace-nowrap">Statut</th>
+                      <th className="sticky top-0 z-20 bg-paper-2 py-2.5 px-4 text-right border-b border-line col-actions whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2213,7 +2213,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                           )}
                         >
                           {/* Photo Avatar */}
-                          <td className={cx('sticky left-0 z-10 py-2 px-3 text-center border-b border-r border-line w-12 min-w-12 max-w-12', frozenBg)}>
+                          <td className={cx('sticky left-0 z-10 py-2 px-1.5 text-center border-b border-r border-line w-16 min-w-16 max-w-16', frozenBg)}>
                           <div
                             onClick={canManageUsers ? () => {
                                 setProfilePhotoTarget({ type: 'user', userId: account.id, current: account.photo_path, name: account.display_name });
@@ -2237,7 +2237,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                           </td>
 
                           {/* Identity & Login */}
-                          <td className={cx('sticky left-[48px] z-10 py-2.5 px-4 border-b freeze-pane-divider min-w-44', frozenBg)}>
+                          <td className={cx('sticky left-[64px] z-10 py-2.5 px-4 border-b freeze-pane-divider min-w-44', frozenBg)}>
                             <div className="font-semibold text-ink text-xs">{account.display_name}</div>
                             <div className="font-mono text-[11px] text-ink-faint">@{account.login}</div>
                           </td>

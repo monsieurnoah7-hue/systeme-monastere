@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, SlidersHorizontal } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { cx } from './ui';
 
 interface StickyTableScrollerProps {
@@ -111,20 +111,6 @@ export function StickyTableScroller({
     setTimeout(checkScroll, 200);
   };
 
-  const scrollToStart = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    el.scrollTo({ left: 0, behavior: 'smooth' });
-    setTimeout(checkScroll, 200);
-  };
-
-  const scrollToEnd = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' });
-    setTimeout(checkScroll, 200);
-  };
-
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const el = containerRef.current;
     if (!el) return;
@@ -144,7 +130,7 @@ export function StickyTableScroller({
       <div
         ref={containerRef}
         className={cx(
-          'overflow-auto scroll-smooth focus:outline-none max-h-[calc(100dvh-200px)] min-h-[440px] scroll-thin',
+          'overflow-auto scroll-smooth focus:outline-none max-h-[calc(100dvh-200px)] min-h-[440px] scroll-thin hide-horizontal-scrollbar',
           hasOverflow && 'pb-16',
           tableClassName,
         )}
@@ -156,24 +142,8 @@ export function StickyTableScroller({
       {/* Barre de navigation horizontale permanente collée au bas du viewport */}
       {hasOverflow && isTableVisible && (
         <div className="no-print fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 flex w-full items-center justify-between gap-2.5 border-t-2 border-amber/50 bg-paper/98 px-2.5 py-2 text-xs shadow-[0_-6px_20px_rgba(0,0,0,0.45)] backdrop-blur-md sm:px-3.5 sm:py-2.5 lg:bottom-0 lg:left-60 lg:right-0 lg:w-auto">
-          {/* Boutons Gauche : Début + Pas à Pas */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={scrollToStart}
-              disabled={!canScrollLeft}
-              className={cx(
-                'flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold transition-all active:scale-95',
-                canScrollLeft
-                  ? 'border-line bg-surface text-ink hover:border-amber/50 hover:bg-paper hover:text-amber shadow-2xs'
-                  : 'border-transparent text-ink-faint/30 cursor-not-allowed opacity-40',
-              )}
-              title="Revenir au début (Références / Codes QR)"
-            >
-              <ChevronsLeft size={14} />
-              <span className="hidden xl:inline">Début</span>
-            </button>
-
+          {/* Déplacement horizontal par pas */}
+          <div className="flex items-center shrink-0">
             <button
               type="button"
               onClick={() => scrollByAmount(-320)}
@@ -185,6 +155,7 @@ export function StickyTableScroller({
                   : 'border-transparent text-ink-faint/30 cursor-not-allowed opacity-40',
               )}
               title="Défiler vers la gauche (Colonnes précédentes)"
+              aria-label="Défiler vers les colonnes précédentes"
             >
               <ChevronLeft size={15} />
               <span className="hidden sm:inline">Colonnes gauche</span>
@@ -192,7 +163,7 @@ export function StickyTableScroller({
           </div>
 
           {/* Curseur & Jauge de Défilement Synchronisés */}
-          <div className="flex flex-1 items-center gap-2.5 max-w-lg mx-auto px-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 px-1 sm:px-3">
             <span className="hidden lg:flex items-center gap-1 text-[11px] font-semibold text-ink-soft shrink-0">
               <SlidersHorizontal size={12} className="text-amber" />
               <span>Vue :</span>
@@ -214,8 +185,8 @@ export function StickyTableScroller({
             </span>
           </div>
 
-          {/* Boutons Droite : Pas à Pas + Fin (Actions) */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          {/* Déplacement horizontal vers les colonnes suivantes */}
+          <div className="flex items-center shrink-0">
             <button
               type="button"
               onClick={() => scrollByAmount(320)}
@@ -227,25 +198,10 @@ export function StickyTableScroller({
                   : 'border-transparent text-ink-faint/30 cursor-not-allowed opacity-40',
               )}
               title="Défiler vers la droite (Stocks, Statuts, Actions)"
+              aria-label="Défiler vers les colonnes suivantes"
             >
               <span className="hidden sm:inline">Colonnes droite</span>
               <ChevronRight size={15} />
-            </button>
-
-            <button
-              type="button"
-              onClick={scrollToEnd}
-              disabled={!canScrollRight}
-              className={cx(
-                'flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold transition-all active:scale-95',
-                canScrollRight
-                  ? 'border-line bg-surface text-ink hover:border-amber/50 hover:bg-paper hover:text-amber shadow-2xs'
-                  : 'border-transparent text-ink-faint/30 cursor-not-allowed opacity-40',
-              )}
-              title="Aller directement aux dernières colonnes (Actions / Détails)"
-            >
-              <span className="hidden xl:inline">Actions</span>
-              <ChevronsRight size={14} />
             </button>
           </div>
         </div>

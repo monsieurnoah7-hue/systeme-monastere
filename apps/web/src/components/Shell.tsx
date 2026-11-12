@@ -437,7 +437,7 @@ export function Shell({
         ========================================================================= */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Mobile Top Header */}
-          <header className="no-print sticky top-0 z-20 flex min-h-14 items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur sm:px-4 lg:hidden lg:pt-2.5">
+          <header className="no-print sticky top-0 z-40 flex min-h-14 items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur sm:px-4 lg:hidden lg:pt-2.5">
             <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
               <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-charcoal border border-line p-1 shadow-xs">
                 <img src="/emblem-white.png" alt="Croix Bénédictine" className="h-5 w-5 object-contain" />
@@ -553,7 +553,7 @@ export function Shell({
           {/* Main Scrollable Content with Antigravity Top Bar */}
           <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-thin flex flex-col">
             {/* Desktop Topbar Header - macOS / Apple Design */}
-            <div className="no-print hidden lg:flex shrink-0 h-11 items-center justify-between px-6 border-b border-line/60 bg-surface sticky top-0 z-20 text-xs">
+            <div className="no-print hidden lg:flex shrink-0 h-11 items-center justify-between px-6 border-b border-line/60 bg-surface sticky top-0 z-40 text-xs">
               {/* Breadcrumb section */}
               <div className="flex items-center gap-2">
                 <span className="font-bold text-ink tracking-tight">CFTM</span>

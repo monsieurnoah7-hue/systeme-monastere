@@ -237,6 +237,13 @@ th.sticky-col {
   }
 }
 
+@utility hide-horizontal-scrollbar {
+  &::-webkit-scrollbar:horizontal {
+    display: none;
+    height: 0;
+  }
+}
+
 @utility fade-in {
   animation: fade-in var(--duration-normal) var(--ease-out) both;
 }

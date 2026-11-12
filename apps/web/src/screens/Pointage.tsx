@@ -1412,19 +1412,19 @@ export function Pointage({
           ) : null}
 
           {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
-          <div className={cx('rounded-xl border border-line bg-surface shadow-card', viewMode === 'cards' && 'hidden sm:block')}>
+          <div className={cx('rounded-xl border border-line bg-surface shadow-card overflow-hidden isolate', viewMode === 'cards' && 'hidden sm:block')}>
             <StickyTableScroller tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px] scroll-thin">
               <table className={cx('w-full text-left sheet-grid table-rhythm border-separate border-spacing-0', canCorrectAttendance ? 'min-w-[860px]' : 'min-w-[760px]')}>
                 <thead>
                   <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                    <th className="sheet-th sticky top-0 left-0 z-30 min-w-[220px] w-[220px] bg-paper-2 border-b freeze-pane-divider">Travailleur / ID</th>
-                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center">Arrivée (In)</th>
-                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center">Départ (Out)</th>
-                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-32 border-b text-center bg-amber-wash/20 font-bold text-ink">Statut</th>
-                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-32 border-b text-center">Durée travaillée</th>
-                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center">Pause</th>
-                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center">Tolérance / Écart</th>
-                    {canCorrectAttendance && <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-36 border-b text-center">Corriger</th>}
+                    <th className="sheet-th sticky top-0 left-0 z-30 min-w-[220px] w-[220px] bg-paper-2 border-b freeze-pane-divider whitespace-nowrap">Travailleur / ID</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center whitespace-nowrap">Arrivée (In)</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center whitespace-nowrap">Départ (Out)</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-32 border-b text-center bg-amber-wash/20 font-bold text-ink whitespace-nowrap">Statut</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-32 border-b text-center whitespace-nowrap">Durée travaillée</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center whitespace-nowrap">Pause</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center whitespace-nowrap">Tolérance / Écart</th>
+                    {canCorrectAttendance && <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-36 border-b text-center whitespace-nowrap">Corriger</th>}
                   </tr>
                 </thead>
                 <tbody className="text-xs">
