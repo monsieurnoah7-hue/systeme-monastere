@@ -551,7 +551,7 @@ export function Shell({
           />
 
           {/* Main Scrollable Content with Antigravity Top Bar */}
-          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-thin flex flex-col">
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-thin overscroll-y-contain flex flex-col">
             {/* Desktop Topbar Header - macOS / Apple Design */}
             <div className="no-print hidden lg:flex shrink-0 h-11 items-center justify-between px-6 border-b border-line/60 bg-surface sticky top-0 z-40 text-xs">
               {/* Breadcrumb section */}

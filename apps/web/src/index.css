@@ -239,14 +239,42 @@ th.sticky-col {
 
 .table-scroll-viewport {
   overscroll-behavior: contain;
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .table-scroll-viewport::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@media (min-width: 1024px) {
+  .table-scroll-viewport {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(245, 158, 11, 0.45) rgba(255, 255, 255, 0.03);
+  }
+
+  .table-scroll-viewport::-webkit-scrollbar {
+    display: block !important;
+    width: 7px;
+    height: 7px;
+  }
+
+  .table-scroll-viewport::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 9999px;
+  }
+
+  .table-scroll-viewport::-webkit-scrollbar-thumb {
+    background: rgba(245, 158, 11, 0.4);
+    border-radius: 9999px;
+  }
+
+  .table-scroll-viewport::-webkit-scrollbar-thumb:hover {
+    background: rgba(245, 158, 11, 0.8);
+  }
 }
 
 @utility fade-in {
