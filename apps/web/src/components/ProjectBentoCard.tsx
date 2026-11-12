@@ -172,15 +172,26 @@ export function ProjectBentoCard({
         </div>
 
         {/* Coût estimé si retard ou dépassement */}
-        {(hasOvertime || (project.ratio_delayed_workdays || 0) > 0) && (
+        {(hasOvertime || (project.financial_damage_fcfa || 0) > 0 || (project.ratio_delayed_workdays || 0) > 0) && (
           <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-between text-xs text-red-400">
             <span className="font-semibold flex items-center gap-1.5">
               <AlertTriangle size={13} />
               <span>Impact financier estimé :</span>
             </span>
-            <span className="font-mono font-extrabold text-sm">
-              {(project.financial_damage_fcfa || 0).toLocaleString()} FCFA
-            </span>
+            <div className="text-right">
+              <span className="font-mono font-extrabold text-sm block">
+                {(project.financial_damage_fcfa || 0).toLocaleString()} FCFA
+              </span>
+              {((project.penalties_cost_fcfa || 0) > 0 || (project.overtime_cost_fcfa || 0) > 0) && (
+                <span className="text-[10px] text-red-400/80 font-normal block mt-0.5">
+                  {(project.penalties_cost_fcfa || 0) > 0 && (project.overtime_cost_fcfa || 0) > 0
+                    ? `${(project.penalties_cost_fcfa || 0).toLocaleString()} retard + ${(project.overtime_cost_fcfa || 0).toLocaleString()} sup.`
+                    : (project.penalties_cost_fcfa || 0) > 0
+                    ? `${project.delayed_days || 0}j de retard (${(project.penalty_rate_daily_fcfa || 0).toLocaleString()} FCFA/j)`
+                    : `+${project.overtime_hours || 0}h dépassement`}
+                </span>
+              )}
+            </div>
           </div>
         )}
 

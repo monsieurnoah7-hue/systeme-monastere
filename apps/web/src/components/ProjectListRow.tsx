@@ -224,17 +224,23 @@ export function ProjectListRow({
               )}
             </div>
 
-            {/* Impact financier si dépassement */}
+            {/* Impact financier si dépassement ou retard */}
             <div className="p-2.5 rounded-lg bg-surface border border-line">
               <div className="text-[10px] font-semibold uppercase text-ink-faint flex items-center gap-1">
-                <AlertTriangle size={11} className={cx(hasOvertime ? 'text-red-400' : 'text-ink-faint')} />
+                <AlertTriangle size={11} className={cx((project.financial_damage_fcfa || 0) > 0 ? 'text-red-400' : 'text-ink-faint')} />
                 Impact Estimé
               </div>
-              <p className={cx('mt-1 font-mono font-bold', hasOvertime ? 'text-red-400' : 'text-emerald-400')}>
+              <p className={cx('mt-1 font-mono font-bold', (project.financial_damage_fcfa || 0) > 0 ? 'text-red-400' : 'text-emerald-400')}>
                 {(project.financial_damage_fcfa || 0).toLocaleString()} FCFA
               </p>
-              <p className="text-[10px] text-ink-faint mt-0.5">
-                {hasOvertime ? `+${project.overtime_hours}h dépassement` : 'Budget respecté'}
+              <p className="text-[10px] text-ink-faint mt-0.5 truncate">
+                {(project.financial_damage_fcfa || 0) > 0
+                  ? (project.penalties_cost_fcfa || 0) > 0 && (project.overtime_cost_fcfa || 0) > 0
+                    ? `Retard + +${project.overtime_hours}h sup.`
+                    : (project.penalties_cost_fcfa || 0) > 0
+                    ? `Pénalité retard (${project.delayed_days || 0}j)`
+                    : `+${project.overtime_hours}h dépassement`
+                  : 'Budget respecté'}
               </p>
             </div>
           </div>

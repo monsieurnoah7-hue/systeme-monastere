@@ -190,11 +190,17 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
   const overtime = budget > 0 ? Math.max(0, spent - budget) : 0;
   p.overtime_hours = overtime;
   p.overtime_cost_fcfa = overtime * hourlyRate;
+
+  // Pénalités contractuelles de retard (jours de dépassement effectifs x montant journalier)
+  const incidents = context?.excludedIncidentDays.get(p.id) ?? [];
+  const totalExcludedDays = incidents.reduce((sum, incident) => sum + incident.days, 0);
+  const effectiveDelayDays = Math.max(0, (p.delayed_days ?? 0) - totalExcludedDays);
+  let estimatedPenalty = isOverdue && dailyPenalty > 0 ? effectiveDelayDays * dailyPenalty : 0;
+  let ratioDelayedWorkdays = effectiveDelayDays;
+
   const assignedIds = p.assigned_worker_ids ?? [];
   const workerLogs = context?.loggedHours.get(p.id);
   let accountableOvertime = 0;
-  let estimatedPenalty = 0;
-  let ratioDelayedWorkdays = 0;
   if (context && assignedIds.length) {
     const logs = context.workLogsByProject.get(p.id) ?? [];
     const totalLogged = logs.reduce((sum, log) => sum + log.hours, 0);
@@ -232,19 +238,17 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
     p.schedule_at_risk = Boolean(completionDate && p.delivery_deadline && completionDate > p.delivery_deadline);
     const target = completionDate && p.delivery_deadline && completionDate > p.delivery_deadline ? completionDate : p.delivery_deadline;
     if (target && today > new Date(`${target}T23:59:59`)) {
-      ratioDelayedWorkdays = countProjectWorkdays(target, todayIso, weekdays, context.holidays);
+      ratioDelayedWorkdays = Math.max(ratioDelayedWorkdays, countProjectWorkdays(target, todayIso, weekdays, context.holidays));
     }
     if (canAttribute) for (const [employeeId, workerOvertime] of overrunByEmployee) {
       accountableOvertime += workerOvertime;
       const workerDays = context.workdaysByEmployee.get(employeeId) ?? [1, 2, 3, 4, 5, 6];
-      const incidents = context.excludedIncidentDays.get(p.id) ?? [];
       const excludedDays = incidents.reduce((sum, incident) => sum + (!incident.employeeIds.length || incident.employeeIds.includes(employeeId) ? incident.days : 0), 0);
       const adjustedDeadline = p.delivery_deadline ? addWorkdays(p.delivery_deadline, excludedDays, workerDays, context.holidays) : null;
       const workerDelay = adjustedDeadline && todayIso > adjustedDeadline
         ? countProjectWorkdays(adjustedDeadline, todayIso, new Set(workerDays), context.holidays)
         : 0;
       ratioDelayedWorkdays = Math.max(ratioDelayedWorkdays, workerDelay);
-      estimatedPenalty += workerOvertime * dailyPenalty * workerDelay;
     }
   }
   p.attributable_overtime_hours = accountableOvertime;

@@ -344,7 +344,9 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
             CASE WHEN budget_hours > 0 THEN GREATEST(0, spent_hours - budget_hours) ELSE 0 END * hourly_rate_fcfa
             + CASE
                 WHEN status <> 'termine' AND delivery_deadline < CURRENT_DATE
-                THEN (CURRENT_DATE - delivery_deadline) * COALESCE(penalty_rate_daily_fcfa, 0)
+                THEN GREATEST(0, (CURRENT_DATE - delivery_deadline) - COALESCE((
+                  SELECT sum(pi.delay_days)::int FROM project_incidents pi WHERE pi.project_id = projects.id AND pi.excluded_from_accountability = true
+                ), 0)) * COALESCE(penalty_rate_daily_fcfa, 0)
                 ELSE 0
               END
           ), 0)::float AS financial_damage_fcfa,

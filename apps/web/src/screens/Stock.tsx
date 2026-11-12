@@ -817,7 +817,7 @@ export function Stock({
               </div>
 
               {/* Recherche intégrée au centre */}
-              <div className="flex-1 max-w-xs sm:max-w-md relative">
+              <div className="flex-1 min-w-[110px] sm:min-w-[160px] max-w-xs sm:max-w-md relative">
                 <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
                 {activeTab === 'inventory' ? (
                   <>
@@ -865,16 +865,18 @@ export function Stock({
                 </div>
 
                 {canMove && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<Zap size={14} className="text-amber" />}
-                    onClick={() => openMove('out')}
-                    className="hidden sm:inline-flex h-9 px-3 text-xs sm:text-sm font-bold shadow-2xs"
-                    title="Ouvrir le Hub de Mouvement"
-                  >
-                    <span>Mouvement</span>
-                  </Button>
+                  <div className="hidden sm:inline-flex">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<Zap size={14} className="text-amber" />}
+                      onClick={() => openMove('out')}
+                      className="h-9 px-3 text-xs sm:text-sm font-bold shadow-2xs"
+                      title="Ouvrir le Hub de Mouvement"
+                    >
+                      <span>Mouvement</span>
+                    </Button>
+                  </div>
                 )}
 
                 {canManageRefs && (
@@ -883,11 +885,11 @@ export function Stock({
                     variant="primary"
                     icon={<IconPlus size={15} />}
                     onClick={openCreate}
-                    className="h-9 px-2.5 sm:px-3.5 text-xs sm:text-sm font-bold shadow-xs"
+                    className="h-9 px-2.5 sm:px-3.5 text-xs sm:text-sm font-bold shadow-xs shrink-0"
                     title="Créer une nouvelle référence"
                   >
                     <span className="hidden sm:inline">Nouvelle référence</span>
-                    <span className="sm:hidden">+ Réf</span>
+                    <span className="sm:hidden">Réf</span>
                   </Button>
                 )}
 

@@ -426,7 +426,7 @@ export function FleetView({
                 onClick={openCreateVehicle}
                 className="bg-amber hover:bg-amber-2 text-white font-bold"
               >
-                + Nouveau Véhicule
+                Nouveau Véhicule
               </Button>
             ) : (
               <Button
@@ -436,7 +436,7 @@ export function FleetView({
                 onClick={openCreateGenerator}
                 className="bg-amber hover:bg-amber-2 text-white font-bold"
               >
-                + Nouveau Groupe Électrogène
+                Nouveau Groupe Électrogène
               </Button>
             )}
           </div>

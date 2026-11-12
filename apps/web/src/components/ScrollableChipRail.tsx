@@ -75,9 +75,9 @@ export function ScrollableChipRail({
       role="region"
       aria-label={ariaLabel}
     >
-      {/* Bouton défilement Gauche avec masque de dégradé */}
+      {/* Bouton défilement Gauche avec masque de dégradé (desktop uniquement) */}
       {canScrollLeft && (
-        <div className="absolute left-0 top-0 bottom-0 z-10 flex items-center pr-6 bg-gradient-to-r from-paper via-paper/90 to-transparent pointer-events-none">
+        <div className="hidden sm:flex absolute left-0 top-0 bottom-0 z-10 items-center pr-6 bg-gradient-to-r from-paper via-paper/90 to-transparent pointer-events-none">
           <button
             type="button"
             onClick={() => scrollByAmount(-240)}
@@ -98,9 +98,9 @@ export function ScrollableChipRail({
         {children}
       </div>
 
-      {/* Bouton défilement Droite avec masque de dégradé */}
+      {/* Bouton défilement Droite avec masque de dégradé (desktop uniquement) */}
       {canScrollRight && (
-        <div className="absolute right-0 top-0 bottom-0 z-10 flex items-center pl-6 bg-gradient-to-l from-paper via-paper/90 to-transparent pointer-events-none">
+        <div className="hidden sm:flex absolute right-0 top-0 bottom-0 z-10 items-center pl-6 bg-gradient-to-l from-paper via-paper/90 to-transparent pointer-events-none">
           <button
             type="button"
             onClick={() => scrollByAmount(240)}

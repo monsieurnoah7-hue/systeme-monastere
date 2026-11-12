@@ -1010,7 +1010,12 @@ export function Outils({
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h1 className="text-sm sm:text-base font-bold text-ink truncate tracking-tight">
-                      {activeTab === 'tools' ? 'Machines & Outils' : activeTab === 'loans' ? 'Prêts d’Outils' : 'Flotte & Groupes'}
+                      <span className="hidden sm:inline">
+                        {activeTab === 'tools' ? 'Machines & Outils' : activeTab === 'loans' ? 'Prêts d’Outils' : 'Flotte & Groupes'}
+                      </span>
+                      <span className="sm:hidden">
+                        {activeTab === 'tools' ? 'Machines' : activeTab === 'loans' ? 'Prêts' : 'Flotte'}
+                      </span>
                     </h1>
                     <span className="rounded-full bg-paper-2 border border-line px-2 py-0.5 text-xs font-bold font-mono text-amber tabular-nums">
                       {activeTab === 'tools' ? tools.length : activeTab === 'loans' ? activeLoans.length : fleetSummary ? (fleetSummary.vehicles_count + fleetSummary.generators_count) : 0}
@@ -1020,7 +1025,7 @@ export function Outils({
               </div>
 
               {/* Recherche intégrée au centre */}
-              <div className="flex-1 max-w-xs sm:max-w-md relative">
+              <div className="flex-1 min-w-[110px] sm:min-w-[160px] max-w-xs sm:max-w-md relative">
                 <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
                 {activeTab === 'tools' ? (
                   <>
@@ -1077,11 +1082,11 @@ export function Outils({
                     variant="primary"
                     icon={<IconPlus size={15} />}
                     onClick={() => setNewOpen(true)}
-                    className="h-9 px-2.5 sm:px-3.5 text-xs sm:text-sm font-bold shadow-xs"
+                    className="h-9 px-2.5 sm:px-3.5 text-xs sm:text-sm font-bold shadow-xs shrink-0"
                     title="Ajouter un nouvel outil ou machine"
                   >
                     <span className="hidden sm:inline">Nouvelle machine</span>
-                    <span className="sm:hidden">+ Outil</span>
+                    <span className="sm:hidden">Outil</span>
                   </Button>
                 )}
 

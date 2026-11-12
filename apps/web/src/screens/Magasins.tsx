@@ -925,11 +925,11 @@ export function Magasins({
                   variant="primary"
                   icon={<IconPlus size={15} />}
                   onClick={openNew}
-                  className="h-9 px-2.5 sm:px-3.5 text-xs sm:text-sm font-bold shadow-xs"
+                  className="h-9 px-2.5 sm:px-3.5 text-xs sm:text-sm font-bold shadow-xs shrink-0"
                   title="Créer un nouvel atelier ou magasin"
                 >
                   <span className="hidden sm:inline">Nouveau magasin</span>
-                  <span className="sm:hidden">+ Magasin</span>
+                  <span className="sm:hidden">Magasin</span>
                 </Button>
               )}
 
