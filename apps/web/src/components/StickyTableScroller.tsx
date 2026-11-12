@@ -21,6 +21,15 @@ type StickyHeaderLayout = {
   columnWidths: number[];
 };
 
+type VerticalTrackLayout = {
+  top: number;
+  left: number;
+  height: number;
+  thumbTop: number;
+  thumbHeight: number;
+  value: number;
+};
+
 function cloneHeaderWithWidths(header: ReactElement, widths: number[]): ReactNode {
   const headerChildren = (header.props as { children?: ReactNode }).children;
   return cloneElement(header as ReactElement<Record<string, unknown>>, {
@@ -44,9 +53,9 @@ function cloneHeaderWithWidths(header: ReactElement, widths: number[]): ReactNod
 }
 
 /**
- * Wrapper de tableur avec barre de navigation horizontale permanente ancrée au bas de l'écran.
- * Permet un défilement horizontal fluide et immédiat sur PC (Windows/Mac) et tablette,
- * sans jamais avoir à scroller tout en bas des 400 lignes de données.
+ * Wrapper de tableur avec barre de navigation horizontale permanente ancrée au bas de l'écran
+ * et ascenseur vertical fixe synchronisé avec le tableau.
+ * Permet un défilement horizontal et vertical fluide et immédiat sur PC (Windows/Mac) et tablette.
  */
 export function StickyTableScroller({
   children,
@@ -61,6 +70,8 @@ export function StickyTableScroller({
   const [hasOverflow, setHasOverflow] = useState(true);
   const [isTableVisible, setIsTableVisible] = useState(false);
   const [stickyHeaderLayout, setStickyHeaderLayout] = useState<StickyHeaderLayout | null>(null);
+  const [verticalTrack, setVerticalTrack] = useState<VerticalTrackLayout | null>(null);
+  const verticalDrag = useRef<{ pointerId: number; startY: number; startScrollTop: number; trackHeight: number; thumbHeight: number } | null>(null);
 
   const checkScroll = useCallback(() => {
     const el = containerRef.current;
@@ -114,80 +125,116 @@ export function StickyTableScroller({
   }, []);
 
   useEffect(() => {
-    if (!stickyBelow) {
-      setStickyHeaderLayout(null);
-      return;
-    }
-
     const container = containerRef.current;
-    const toolbar = document.querySelector<HTMLElement>(stickyBelow);
+    const toolbar = stickyBelow ? document.querySelector<HTMLElement>(stickyBelow) : null;
     const main = container?.closest('main');
-    if (!container || !toolbar || !main) return;
+    if (!container || !main) return;
 
     let frame = 0;
-    const updateStickyHeader = () => {
+    const updateStickyLayout = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const table = container.querySelector('table');
         const thead = table?.tHead;
-        if (!table || !thead) {
+        if (!table) {
           setStickyHeaderLayout(null);
+          setVerticalTrack(null);
           return;
         }
 
-        const toolbarTop = Number.parseFloat(window.getComputedStyle(toolbar).top) || 0;
-        const top = Math.ceil(toolbarTop + toolbar.getBoundingClientRect().height);
+        const toolbarTop = toolbar ? Number.parseFloat(window.getComputedStyle(toolbar).top) || 0 : main.getBoundingClientRect().top;
+        const top = Math.ceil(toolbar ? toolbarTop + toolbar.getBoundingClientRect().height : toolbarTop);
         const containerRect = container.getBoundingClientRect();
         const mainRect = main.getBoundingClientRect();
-        const headerRect = thead.getBoundingClientRect();
-        const visible = containerRect.top < top && containerRect.bottom > top + headerRect.height
-          && mainRect.top <= top && mainRect.bottom > top + headerRect.height;
-        if (!visible) {
+
+        // 1. En-tête collant (sticky header)
+        if (thead && toolbar) {
+          const headerRect = thead.getBoundingClientRect();
+          const stickyHeaderVisible = containerRect.top < top && containerRect.bottom > top + headerRect.height
+            && mainRect.top <= top && mainRect.bottom > top + headerRect.height;
+
+          if (stickyHeaderVisible) {
+            const headerCells = Array.from(thead.rows[0]?.cells ?? []);
+            const layout: StickyHeaderLayout = {
+              top,
+              left: containerRect.left,
+              width: container.clientWidth,
+              height: headerRect.height,
+              tableWidth: table.getBoundingClientRect().width,
+              scrollLeft: container.scrollLeft,
+              columnWidths: headerCells.map((cell) => cell.getBoundingClientRect().width),
+            };
+            setStickyHeaderLayout((current) => {
+              if (current && current.top === layout.top && current.left === layout.left
+                && current.width === layout.width && current.height === layout.height
+                && current.tableWidth === layout.tableWidth
+                && current.scrollLeft === layout.scrollLeft
+                && current.columnWidths.every((width, index) => width === layout.columnWidths[index])) return current;
+              return layout;
+            });
+          } else {
+            setStickyHeaderLayout(null);
+          }
+        } else {
           setStickyHeaderLayout(null);
+        }
+
+        // 2. Ascenseur vertical synchronisé et visible sous la barre d'outils
+        const scrollRange = Math.max(0, container.scrollHeight - container.clientHeight);
+        const bottomDock = window.innerWidth < 1024 ? 72 : 0;
+        const horizontalBarHeight = hasOverflow ? (window.innerWidth < 1024 ? 52 : 48) : 0;
+        const trackTop = Math.max(containerRect.top, mainRect.top, top);
+        const trackBottom = Math.min(containerRect.bottom, window.innerHeight - bottomDock - horizontalBarHeight);
+        const trackHeight = trackBottom - trackTop;
+
+        if (scrollRange <= 2 || trackHeight < 24 || containerRect.bottom <= top || containerRect.top >= trackBottom) {
+          setVerticalTrack(null);
           return;
         }
 
-        const headerCells = Array.from(thead.rows[0]?.cells ?? []);
-        const layout: StickyHeaderLayout = {
-          top,
-          left: containerRect.left,
-          width: container.clientWidth,
-          height: headerRect.height,
-          tableWidth: table.getBoundingClientRect().width,
-          scrollLeft: container.scrollLeft,
-          columnWidths: headerCells.map((cell) => cell.getBoundingClientRect().width),
+        const thumbHeight = Math.min(trackHeight, Math.max(28, (trackHeight * container.clientHeight) / container.scrollHeight));
+        const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+        const value = Math.round((container.scrollTop / scrollRange) * 100);
+        const verticalLayout: VerticalTrackLayout = {
+          top: trackTop,
+          left: Math.min(containerRect.right - 14, mainRect.right - 14),
+          height: trackHeight,
+          thumbTop: maxThumbTop * (container.scrollTop / scrollRange),
+          thumbHeight,
+          value,
         };
-        setStickyHeaderLayout((current) => {
-          if (current && current.top === layout.top && current.left === layout.left
-            && current.width === layout.width && current.height === layout.height
-            && current.tableWidth === layout.tableWidth
-            && current.columnWidths.every((width, index) => width === layout.columnWidths[index])) return current;
-          return layout;
+        setVerticalTrack((current) => {
+          if (current && current.top === verticalLayout.top && current.left === verticalLayout.left
+            && current.height === verticalLayout.height && current.thumbTop === verticalLayout.thumbTop
+            && current.thumbHeight === verticalLayout.thumbHeight && current.value === verticalLayout.value) {
+            return current;
+          }
+          return verticalLayout;
         });
       });
     };
 
-    updateStickyHeader();
-    const observer = new ResizeObserver(updateStickyHeader);
+    updateStickyLayout();
+    const observer = new ResizeObserver(updateStickyLayout);
     observer.observe(container);
-    observer.observe(toolbar);
+    if (toolbar) observer.observe(toolbar);
     const table = container.querySelector('table');
     if (table) observer.observe(table);
-    const mutationObserver = new MutationObserver(updateStickyHeader);
+    const mutationObserver = new MutationObserver(updateStickyLayout);
     mutationObserver.observe(container, { childList: true, subtree: true });
-    container.addEventListener('scroll', updateStickyHeader, { passive: true });
-    main.addEventListener('scroll', updateStickyHeader, { passive: true });
-    window.addEventListener('resize', updateStickyHeader, { passive: true });
+    container.addEventListener('scroll', updateStickyLayout, { passive: true });
+    main.addEventListener('scroll', updateStickyLayout, { passive: true });
+    window.addEventListener('resize', updateStickyLayout, { passive: true });
 
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
       mutationObserver.disconnect();
-      container.removeEventListener('scroll', updateStickyHeader);
-      main.removeEventListener('scroll', updateStickyHeader);
-      window.removeEventListener('resize', updateStickyHeader);
+      container.removeEventListener('scroll', updateStickyLayout);
+      main.removeEventListener('scroll', updateStickyLayout);
+      window.removeEventListener('resize', updateStickyLayout);
     };
-  }, [stickyBelow]);
+  }, [stickyBelow, hasOverflow]);
 
   const scrollByAmount = (amount: number) => {
     const el = containerRef.current;
@@ -204,6 +251,30 @@ export function StickyTableScroller({
     el.scrollLeft = (percent / 100) * maxScroll;
     setScrollProgress(percent);
     checkScroll();
+  };
+
+  const setVerticalScrollFromPointer = (clientY: number, trackTop: number, trackHeight: number, thumbHeight: number) => {
+    const el = containerRef.current;
+    if (!el) return;
+    const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+    const maxThumbTop = Math.max(1, trackHeight - thumbHeight);
+    const thumbTop = Math.max(0, Math.min(maxThumbTop, clientY - trackTop - thumbHeight / 2));
+    el.scrollTop = (thumbTop / maxThumbTop) * maxScroll;
+    checkScroll();
+  };
+
+  const handleVerticalKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const el = containerRef.current;
+    if (!el) return;
+    const step = Math.max(80, Math.round(el.clientHeight * 0.8));
+    if (event.key === 'ArrowUp') el.scrollBy({ top: -48, behavior: 'smooth' });
+    else if (event.key === 'ArrowDown') el.scrollBy({ top: 48, behavior: 'smooth' });
+    else if (event.key === 'PageUp') el.scrollBy({ top: -step, behavior: 'smooth' });
+    else if (event.key === 'PageDown') el.scrollBy({ top: step, behavior: 'smooth' });
+    else if (event.key === 'Home') el.scrollTo({ top: 0, behavior: 'smooth' });
+    else if (event.key === 'End') el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    else return;
+    event.preventDefault();
   };
 
   const tableElement = Children.toArray(children).find((child) => isValidElement(child) && child.type === 'table') as ReactElement<Record<string, unknown>> | undefined;
@@ -223,11 +294,11 @@ export function StickyTableScroller({
 
   return (
     <div className={cx('relative flex flex-col', className)}>
-      {/* Conteneur défilant du tableau */}
+      {/* Conteneur défilant du tableau sans barres natives */}
       <div
         ref={containerRef}
         className={cx(
-          'table-scroll-viewport overflow-auto scroll-smooth focus:outline-none max-h-[calc(100dvh-200px)] min-h-[440px] scroll-thin',
+          'table-scroll-viewport overflow-auto scroll-smooth focus:outline-none max-h-[calc(100dvh-200px)] min-h-[440px]',
           hasOverflow && 'pb-16',
           tableClassName,
         )}
@@ -249,6 +320,57 @@ export function StickyTableScroller({
           <div style={{ width: stickyHeaderLayout.tableWidth, transform: `translateX(-${stickyHeaderLayout.scrollLeft}px)` }}>
             {stickyHeader}
           </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Ascenseur vertical personnalisé visible et fixé sous la barre d'outils */}
+      {verticalTrack && isTableVisible && createPortal(
+        <div
+          role="scrollbar"
+          aria-label="Défilement vertical du tableau"
+          aria-orientation="vertical"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={verticalTrack.value}
+          tabIndex={0}
+          onKeyDown={handleVerticalKeyDown}
+          onPointerDown={(event) => {
+            const trackRect = event.currentTarget.getBoundingClientRect();
+            const thumbRect = event.currentTarget.firstElementChild?.getBoundingClientRect();
+            if (thumbRect && event.clientY >= thumbRect.top && event.clientY <= thumbRect.bottom) {
+              verticalDrag.current = {
+                pointerId: event.pointerId,
+                startY: event.clientY,
+                startScrollTop: containerRef.current?.scrollTop ?? 0,
+                trackHeight: verticalTrack.height,
+                thumbHeight: verticalTrack.thumbHeight,
+              };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            } else {
+              setVerticalScrollFromPointer(event.clientY, trackRect.top, verticalTrack.height, verticalTrack.thumbHeight);
+            }
+          }}
+          onPointerMove={(event) => {
+            const drag = verticalDrag.current;
+            const el = containerRef.current;
+            if (!drag || drag.pointerId !== event.pointerId || !el) return;
+            const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+            const maxThumbTop = Math.max(1, drag.trackHeight - drag.thumbHeight);
+            const deltaScroll = ((event.clientY - drag.startY) / maxThumbTop) * maxScroll;
+            el.scrollTop = Math.max(0, Math.min(maxScroll, drag.startScrollTop + deltaScroll));
+            checkScroll();
+          }}
+          onPointerUp={() => { verticalDrag.current = null; }}
+          onPointerCancel={() => { verticalDrag.current = null; }}
+          className="no-print fixed z-35 w-3 touch-none cursor-pointer rounded-full bg-paper/85 backdrop-blur-xs border border-line/60 p-[2px] shadow-sm outline-none hover:bg-paper focus-visible:ring-2 focus-visible:ring-amber transition-colors"
+          style={{ top: verticalTrack.top, left: verticalTrack.left, height: verticalTrack.height }}
+          title="Faire défiler verticalement les lignes du tableau"
+        >
+          <div
+            className="absolute left-[2px] right-[2px] rounded-full bg-amber/70 hover:bg-amber transition-colors"
+            style={{ top: verticalTrack.thumbTop, height: verticalTrack.thumbHeight }}
+          />
         </div>,
         document.body,
       )}

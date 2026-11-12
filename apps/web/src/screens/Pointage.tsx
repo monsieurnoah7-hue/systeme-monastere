@@ -1217,7 +1217,7 @@ export function Pointage({
           </div>
 
           {/* Tableur Sticky Toolbar (Ligne 1 Action Bar + Ligne 2 ScrollableChipRail) */}
-          <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+          <div data-pointage-sticky-toolbar="true" className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
             <div className="flex flex-col gap-1.5">
               {/* LIGNE 1 : Barre d'action unifiée */}
               <div className="flex items-center justify-between gap-2">
@@ -1413,7 +1413,7 @@ export function Pointage({
 
           {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
           <div className={cx('rounded-xl border border-line bg-surface shadow-card overflow-hidden isolate', viewMode === 'cards' && 'hidden sm:block')}>
-            <StickyTableScroller tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px] scroll-thin">
+            <StickyTableScroller stickyBelow="[data-pointage-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
               <table className={cx('w-full text-left sheet-grid table-rhythm border-separate border-spacing-0', canCorrectAttendance ? 'min-w-[860px]' : 'min-w-[760px]')}>
                 <thead>
                   <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">

@@ -1384,7 +1384,7 @@ export function Outils({
             <>
               {/* Desktop Loans Table */}
               <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden isolate">
-                <StickyTableScroller tableClassName="max-h-[calc(100dvh-220px)] min-h-[380px]">
+                <StickyTableScroller stickyBelow="[data-tools-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-220px)] min-h-[380px]">
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                   <thead>
                     <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">

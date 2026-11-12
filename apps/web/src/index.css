@@ -239,11 +239,14 @@ th.sticky-col {
 
 .table-scroll-viewport {
   overscroll-behavior: contain;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
-.table-scroll-viewport::-webkit-scrollbar:horizontal {
-  display: none;
-  height: 0;
+.table-scroll-viewport::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 @utility fade-in {
