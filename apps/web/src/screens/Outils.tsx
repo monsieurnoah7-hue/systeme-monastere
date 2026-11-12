@@ -998,7 +998,7 @@ export function Outils({
 
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-4">
         {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
-        <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+        <div data-tools-sticky-toolbar="true" className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
           <div className="flex flex-col gap-1.5">
             {/* LIGNE 1 : Barre d'action unique (Titre + Recherche + CTA Primaire + Options) */}
             <div className="flex items-center justify-between gap-2">
@@ -1771,7 +1771,7 @@ export function Outils({
         <>
           {/* Tableur Google Sheets Style */}
           <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs">
-            <StickyTableScroller tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
+            <StickyTableScroller stickyBelow="[data-tools-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
               <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                 <thead>
                   <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">

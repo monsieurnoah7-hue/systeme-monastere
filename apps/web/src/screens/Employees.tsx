@@ -2134,7 +2134,7 @@ export function Employees({
       {/* Tabs Switcher: Équipe vs Calendrier Time-Off with Sticky Control Navbar */}
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-6">
         {/* Sticky Navigation Bar with Tabs, Real-Time Search, Filters & Hamburger Menu */}
-        <div data-timeoff-sticky-toolbar={activeTab === 'timeoff' ? 'true' : undefined} className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
+        <div data-employees-sticky-toolbar="true" data-timeoff-sticky-toolbar={activeTab === 'timeoff' ? 'true' : undefined} className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
           <div className="flex flex-col gap-2">
             {/* Top Row: Tabs, Search & Priority Actions */}
             <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
@@ -2651,7 +2651,7 @@ export function Employees({
             <>
               {/* Desktop Tableur (Vue Liste complète sur grand écran) */}
               <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs">
-                <StickyTableScroller tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
+                <StickyTableScroller stickyBelow="[data-employees-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
                       <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">

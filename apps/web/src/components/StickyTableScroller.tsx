@@ -6,6 +6,8 @@ interface StickyTableScrollerProps {
   children: ReactNode;
   className?: string;
   tableClassName?: string;
+  /** Keep the table viewport pinned immediately below a screen toolbar while the page scrolls. */
+  stickyBelow?: string;
 }
 
 /**
@@ -17,12 +19,15 @@ export function StickyTableScroller({
   children,
   className,
   tableClassName,
+  stickyBelow,
 }: StickyTableScrollerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [stickyTop, setStickyTop] = useState<number | undefined>();
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [hasOverflow, setHasOverflow] = useState(true);
+  const [isTableVisible, setIsTableVisible] = useState(false);
 
   const checkScroll = useCallback(() => {
     const el = containerRef.current;
@@ -62,6 +67,43 @@ export function StickyTableScroller({
     };
   }, [checkScroll]);
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const main = el.closest('main');
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsTableVisible(Boolean(entry?.isIntersecting)),
+      { root: main, rootMargin: '0px 0px -72px 0px', threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!stickyBelow) {
+      setStickyTop(undefined);
+      return;
+    }
+
+    const toolbar = document.querySelector<HTMLElement>(stickyBelow);
+    if (!toolbar) return;
+
+    const updateStickyTop = () => {
+      const toolbarTop = Number.parseFloat(window.getComputedStyle(toolbar).top) || 0;
+      setStickyTop(Math.ceil(toolbarTop + toolbar.getBoundingClientRect().height + 8));
+    };
+
+    updateStickyTop();
+    const observer = new ResizeObserver(updateStickyTop);
+    observer.observe(toolbar);
+    window.addEventListener('resize', updateStickyTop, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateStickyTop);
+    };
+  }, [stickyBelow]);
+
   const scrollByAmount = (amount: number) => {
     const el = containerRef.current;
     if (!el) return;
@@ -94,12 +136,16 @@ export function StickyTableScroller({
   };
 
   return (
-    <div className={cx('relative flex flex-col', className)}>
+    <div
+      className={cx('relative flex flex-col', stickyBelow && 'z-10', className)}
+      style={stickyBelow && stickyTop !== undefined ? { position: 'sticky', top: stickyTop } : undefined}
+    >
       {/* Conteneur défilant du tableau */}
       <div
         ref={containerRef}
         className={cx(
           'overflow-auto scroll-smooth focus:outline-none max-h-[calc(100dvh-200px)] min-h-[440px] scroll-thin',
+          hasOverflow && 'pb-16',
           tableClassName,
         )}
         tabIndex={0}
@@ -108,8 +154,8 @@ export function StickyTableScroller({
       </div>
 
       {/* Barre de navigation horizontale permanente collée au bas du viewport */}
-      {hasOverflow && (
-        <div className="sticky bottom-0 z-30 flex items-center justify-between gap-2.5 border-t-2 border-amber/50 bg-paper/98 px-3.5 py-2.5 text-xs backdrop-blur-md shadow-[0_-6px_20px_rgba(0,0,0,0.45)] rounded-b-xl">
+      {hasOverflow && isTableVisible && (
+        <div className="no-print fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 flex w-full items-center justify-between gap-2.5 border-t-2 border-amber/50 bg-paper/98 px-2.5 py-2 text-xs shadow-[0_-6px_20px_rgba(0,0,0,0.45)] backdrop-blur-md sm:px-3.5 sm:py-2.5 lg:bottom-0 lg:left-60 lg:right-0 lg:w-auto">
           {/* Boutons Gauche : Début + Pas à Pas */}
           <div className="flex items-center gap-1.5 shrink-0">
             <button

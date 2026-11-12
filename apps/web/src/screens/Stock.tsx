@@ -795,7 +795,7 @@ export function Stock({
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'inventory' | 'journal')} className="w-full">
         {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
-        <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+        <div data-stock-sticky-toolbar="true" className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
           <div className="flex flex-col gap-1.5">
             {/* LIGNE 1 : Barre d'action unique (Titre + Recherche + CTA Primaire + Options) */}
             <div className="flex items-center justify-between gap-2">
@@ -1342,7 +1342,7 @@ export function Stock({
             <>
               {/* Tableur Google Sheets Style (Desktop) */}
               <div className="rounded-xl border border-line bg-surface shadow-xs hidden lg:block">
-                <StickyTableScroller tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
+                <StickyTableScroller stickyBelow="[data-stock-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
                       <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
@@ -1673,7 +1673,7 @@ export function Stock({
             <>
               {/* Desktop Tableur */}
               <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs">
-                <StickyTableScroller tableClassName="max-h-[calc(100dvh-220px)] min-h-[400px]">
+                <StickyTableScroller stickyBelow="[data-stock-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-220px)] min-h-[400px]">
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
                       <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
