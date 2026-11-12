@@ -450,7 +450,22 @@ export function Pointage({
   const [tsLoading, setTsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'late' | 'absent'>('all');
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return 'cards';
+    }
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('mf_pointage_view_mode');
+      if (saved === 'table' || saved === 'cards') return saved;
+    }
+    return 'table';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mf_pointage_view_mode', viewMode);
+    } catch {}
+  }, [viewMode]);
 
   // Kiosk state
   const { terminalId, save, clear } = useStoredTerminal();
@@ -1260,15 +1275,16 @@ export function Pointage({
                 {/* CTA et Menu Options */}
                 <div className="flex items-center gap-1.5 shrink-0">
                   {canAccessKiosk && (
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      icon={<Smartphone size={14} />}
-                      onClick={() => setActiveMainTab('kiosk')}
-                      className="hidden sm:inline-flex"
-                    >
-                      Borne Kiosque
-                    </Button>
+                    <div className="hidden sm:flex shrink-0">
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        icon={<Smartphone size={14} />}
+                        onClick={() => setActiveMainTab('kiosk')}
+                      >
+                        Borne Kiosque
+                      </Button>
+                    </div>
                   )}
 
                   <DropdownMenu>
