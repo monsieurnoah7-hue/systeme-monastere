@@ -4,14 +4,17 @@ import {
   useEffect,
   useCallback,
   type ReactNode,
+  type CSSProperties,
 } from 'react';
 import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { cx } from './ui';
 
 interface StickyTableScrollerProps {
   children: ReactNode;
+  footer?: ReactNode;
   className?: string;
   tableClassName?: string;
+  style?: CSSProperties;
   /** Keep the table viewport pinned immediately below a screen toolbar while the page scrolls. */
   stickyBelow?: string;
 }
@@ -21,21 +24,68 @@ interface StickyTableScrollerProps {
  * - En-tête et colonnes figées 100% natifs CSS (sticky top / sticky left) accélérés par GPU à 120 FPS.
  * - Confinement strict du scroll (overscroll-behavior-y: contain) : aucun rebond, la page ne remonte plus.
  * - Ascenseur vertical natif ultra-fin, fluide et réactif, stylisé en ambre sur Desktop.
+ * - Strictement AUCUNE barre de scroll horizontal native au bas du tableau.
  * - Barre de navigation horizontale permanente avec jauge et boutons au bas d'écran sur Desktop.
- * - Défilement tactile fluide et sans encombrement sur Mobile / Tablette.
+ * - Verrouillage sticky au pixel près sous la barre d'outils sur Desktop.
  */
 export function StickyTableScroller({
   children,
+  footer,
   className,
   tableClassName,
+  style,
+  stickyBelow,
 }: StickyTableScrollerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [toolbarBottom, setToolbarBottom] = useState<number>(0);
+  const [isDesktop, setIsDesktop] = useState<boolean>(false);
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [hasOverflow, setHasOverflow] = useState(false);
   const [isTableVisible, setIsTableVisible] = useState(true);
+
+  // Synchronisation dynamique du positionnement sticky sous la barre d'outils (au pixel près)
+  useEffect(() => {
+    const updateDimensions = () => {
+      const desktop = window.innerWidth >= 1024;
+      setIsDesktop(desktop);
+
+      if (!stickyBelow || !desktop) {
+        setToolbarBottom(0);
+        return;
+      }
+
+      const toolbar = document.querySelector<HTMLElement>(stickyBelow);
+      if (!toolbar) return;
+
+      // Topbar de Shell.tsx sur desktop (h-11 = 44px)
+      const topbarHeight = 44;
+      const toolbarHeight = toolbar.offsetHeight;
+      setToolbarBottom(topbarHeight + toolbarHeight);
+    };
+
+    updateDimensions();
+
+    window.addEventListener('resize', updateDimensions);
+    const timer = setTimeout(updateDimensions, 120);
+
+    let observer: ResizeObserver | null = null;
+    if (stickyBelow && typeof ResizeObserver !== 'undefined') {
+      const toolbar = document.querySelector<HTMLElement>(stickyBelow);
+      if (toolbar) {
+        observer = new ResizeObserver(updateDimensions);
+        observer.observe(toolbar);
+      }
+    }
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateDimensions);
+      observer?.disconnect();
+    };
+  }, [stickyBelow]);
 
   const checkScroll = useCallback(() => {
     const el = containerRef.current;
@@ -103,19 +153,42 @@ export function StickyTableScroller({
     checkScroll();
   };
 
+  const dynamicMaxHeight = isDesktop && toolbarBottom > 0
+    ? `calc(100dvh - ${toolbarBottom + 52}px)`
+    : 'calc(100dvh - 200px)';
+
   return (
-    <div className={cx('relative flex flex-col', className)}>
+    <div
+      className={cx(
+        'relative flex flex-col rounded-xl border border-line bg-surface shadow-xs overflow-hidden isolate',
+        stickyBelow && 'lg:sticky',
+        className,
+      )}
+      style={{
+        ...(isDesktop && stickyBelow && toolbarBottom > 0 ? { top: `${toolbarBottom}px` } : {}),
+        ...style,
+      }}
+    >
       {/* Conteneur défilant du tableau : overscroll-behavior-y: contain empêche tout rebond vers le haut */}
       <div
         ref={containerRef}
         className={cx(
-          'table-scroll-viewport overflow-auto focus:outline-none max-h-[calc(100dvh-200px)] min-h-[440px]',
+          'table-scroll-viewport overflow-auto focus:outline-none min-h-[380px]',
           hasOverflow && 'lg:pb-16',
           tableClassName,
         )}
+        style={{
+          maxHeight: dynamicMaxHeight,
+        }}
       >
         {children}
       </div>
+
+      {footer && (
+        <div className="bg-paper border-t border-line px-4 py-2.5 text-xs flex items-center justify-between font-semibold text-ink-soft shrink-0">
+          {footer}
+        </div>
+      )}
 
       {/* Barre de navigation horizontale permanente : strictement Desktop (PC / Laptop uniquement) */}
       {hasOverflow && isTableVisible && (

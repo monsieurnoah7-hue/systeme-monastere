@@ -1343,8 +1343,11 @@ export function Stock({
           ) : viewMode === 'list' ? (
             <>
               {/* Tableur Google Sheets Style (Desktop) */}
-              <div className="rounded-xl border border-line bg-surface shadow-xs hidden lg:block overflow-hidden isolate">
-                <StickyTableScroller stickyBelow="[data-stock-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
+              <StickyTableScroller
+                stickyBelow="[data-stock-sticky-toolbar]"
+                className="hidden lg:block"
+                tableClassName="min-h-[460px]"
+              >
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
                       <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
@@ -1604,15 +1607,6 @@ export function Stock({
                   </table>
                 </StickyTableScroller>
 
-                {/* Spreadsheet Summary Footer */}
-                <div className="bg-paper border-t border-line px-4 py-2.5 text-xs flex items-center justify-between font-semibold text-ink-soft">
-                  <span>Affichés : {filtered.length} référence(s){canViewFinancial ? ` · Valeur Stock : ${formatCurrency(totalStockValuation)}` : ''}</span>
-                  <span className="text-[11px] text-ink-faint">
-                    Cochez des articles pour les affecter ou les transférer par lot vers un magasin
-                  </span>
-                </div>
-              </div>
-
               {/* Mobile & Tablet Mode Liste Accordéon */}
               <div className="lg:hidden space-y-2">
                 {filtered.map((ref) => (
@@ -1674,8 +1668,11 @@ export function Stock({
           ) : (
             <>
               {/* Desktop Tableur */}
-              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs">
-                <StickyTableScroller stickyBelow="[data-stock-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-220px)] min-h-[400px]">
+              <StickyTableScroller
+                stickyBelow="[data-stock-sticky-toolbar]"
+                className="hidden lg:block"
+                tableClassName="min-h-[400px]"
+              >
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
                       <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
@@ -1731,7 +1728,6 @@ export function Stock({
                     </tbody>
                   </table>
                 </StickyTableScroller>
-              </div>
 
               {/* Mobile & Tablet Movement Cards */}
               <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">

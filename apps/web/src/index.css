@@ -245,34 +245,41 @@ th.sticky-col {
 }
 
 .table-scroll-viewport::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 @media (min-width: 1024px) {
   .table-scroll-viewport {
     scrollbar-width: thin;
-    scrollbar-color: rgba(245, 158, 11, 0.45) rgba(255, 255, 255, 0.03);
+    scrollbar-color: rgba(245, 158, 11, 0.45) transparent;
   }
 
-  .table-scroll-viewport::-webkit-scrollbar {
+  /* Strictement aucune barre de defilement horizontal native */
+  .table-scroll-viewport::-webkit-scrollbar:horizontal {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  /* Ascenseur vertical natif ultra-fin et fluide */
+  .table-scroll-viewport::-webkit-scrollbar:vertical {
     display: block !important;
-    width: 7px;
-    height: 7px;
+    width: 6px !important;
   }
 
-  .table-scroll-viewport::-webkit-scrollbar-track {
+  .table-scroll-viewport::-webkit-scrollbar-track:vertical {
     background: rgba(255, 255, 255, 0.02);
     border-radius: 9999px;
   }
 
-  .table-scroll-viewport::-webkit-scrollbar-thumb {
+  .table-scroll-viewport::-webkit-scrollbar-thumb:vertical {
     background: rgba(245, 158, 11, 0.4);
     border-radius: 9999px;
   }
 
-  .table-scroll-viewport::-webkit-scrollbar-thumb:hover {
+  .table-scroll-viewport::-webkit-scrollbar-thumb:vertical:hover {
     background: rgba(245, 158, 11, 0.8);
   }
 }

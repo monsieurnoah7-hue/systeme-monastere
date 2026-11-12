@@ -1388,8 +1388,11 @@ export function Outils({
           ) : (
             <>
               {/* Desktop Loans Table */}
-              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden isolate">
-                <StickyTableScroller stickyBelow="[data-tools-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-220px)] min-h-[380px]">
+              <StickyTableScroller
+                stickyBelow="[data-tools-sticky-toolbar]"
+                className="hidden lg:block"
+                tableClassName="min-h-[380px]"
+              >
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                   <thead>
                     <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
@@ -1493,7 +1496,6 @@ export function Outils({
                   </tbody>
                   </table>
                 </StickyTableScroller>
-              </div>
 
             {/* Mobile & Tablet Loans Cards View */}
             <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1775,8 +1777,11 @@ export function Outils({
       ) : viewMode === 'table' ? (
         <>
           {/* Tableur Google Sheets Style */}
-          <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden isolate">
-            <StickyTableScroller stickyBelow="[data-tools-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
+          <StickyTableScroller
+            stickyBelow="[data-tools-sticky-toolbar]"
+            className="hidden lg:block"
+            tableClassName="min-h-[460px]"
+          >
               <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                 <thead>
                   <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
@@ -2116,15 +2121,6 @@ export function Outils({
                 </tbody>
               </table>
             </StickyTableScroller>
-
-            {/* Tableur Footer Total */}
-            <div className="bg-paper border-t border-line px-4 py-2.5 text-xs flex items-center justify-between font-semibold text-ink-soft">
-              <span>Affichés : {displayedTools.length} référence(s) {canViewFinancial ? (scopeFilter === 'drafts' ? '(brouillons)' : `· VNC : ${formatCurrency(auditSummary.totalVnc)}`) : ''}</span>
-              <span className="text-[11px] text-ink-faint">
-                Cochez des outils pour les affecter ou les transférer par lot vers un magasin
-              </span>
-            </div>
-          </div>
 
           {/* Mobile & Tablet Mode Liste Accordéon */}
           <div className="lg:hidden space-y-2">

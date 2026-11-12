@@ -1428,8 +1428,11 @@ export function Pointage({
           ) : null}
 
           {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
-          <div className={cx('rounded-xl border border-line bg-surface shadow-card overflow-hidden isolate', viewMode === 'cards' && 'hidden sm:block')}>
-            <StickyTableScroller stickyBelow="[data-pointage-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
+          <StickyTableScroller
+            stickyBelow="[data-pointage-sticky-toolbar]"
+            className={cx('shadow-card', viewMode === 'cards' && 'hidden sm:block')}
+            tableClassName="min-h-[460px]"
+          >
               <table className={cx('w-full text-left sheet-grid table-rhythm border-separate border-spacing-0', canCorrectAttendance ? 'min-w-[860px]' : 'min-w-[760px]')}>
                 <thead>
                   <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
@@ -1578,7 +1581,6 @@ export function Pointage({
                 </tfoot>
               </table>
             </StickyTableScroller>
-          </div>
 
           {/* MOBILE CARDS VIEW (Mobile-First alternate) */}
           <div className={cx('space-y-3 sm:hidden', viewMode === 'table' && 'hidden')}>

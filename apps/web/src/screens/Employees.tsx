@@ -2650,8 +2650,11 @@ export function Employees({
           ) : viewMode === 'list' ? (
             <>
               {/* Desktop Tableur (Vue Liste complète sur grand écran) */}
-              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden isolate">
-                <StickyTableScroller stickyBelow="[data-employees-sticky-toolbar]" tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
+              <StickyTableScroller
+                stickyBelow="[data-employees-sticky-toolbar]"
+                className="hidden lg:block"
+                tableClassName="min-h-[460px]"
+              >
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
                       <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
@@ -2781,7 +2784,6 @@ export function Employees({
                     </tbody>
                   </table>
                 </StickyTableScroller>
-              </div>
 
               {/* Mobile & Tablet Accordion List View (Mode Liste Haute Densité) */}
               <div className="lg:hidden space-y-2">
