@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   api,
+  getCachedApiResponse,
   ApiError,
   type Magasin,
   type ScanResult,
@@ -264,9 +265,10 @@ export function Magasins({
   const canLendGlobal = hasPerm('loans.create') || (!permissions && ['magasinier', 'direction', 'chef_atelier'].includes(user.role));
   const canMoveStockGlobal = hasPerm('stock.move') || (!permissions && ['magasinier', 'direction', 'chef_atelier'].includes(user.role));
 
-  const [magasins, setMagasins] = useState<Magasin[]>([]);
+  const cachedMags = useMemo(() => getCachedApiResponse<{ magasins: Magasin[] }>('/api/magasins')?.magasins ?? [], []);
+  const [magasins, setMagasins] = useState<Magasin[]>(cachedMags);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => cachedMags.length === 0);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);

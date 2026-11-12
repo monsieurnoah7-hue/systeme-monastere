@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { api, clearApiCache, isApiCacheFresh, setApiCacheUser, syncOfflineMutations, type ScanResult, type User } from './lib/api';
+import { api, clearApiCache, setApiCacheUser, syncOfflineMutations, type ScanResult, type User } from './lib/api';
 import { computeAllowedViews, Shell, type ViewId } from './components/Shell';
 import { EmptyState, Spinner, ToastHost, useToast } from './components/ui';
 import { UndoProvider } from './components/UndoToast';
@@ -18,9 +18,46 @@ const Magasins = lazy(() => import('./screens/Magasins').then((m) => ({ default:
 const Espace = lazy(() => import('./screens/Espace').then((m) => ({ default: m.Espace })));
 const Parametres = lazy(() => import('./screens/Parametres').then((m) => ({ default: m.Parametres })));
 
+function preloadAllScreens() {
+  const loaders = [
+    () => import('./screens/Stock'),
+    () => import('./screens/Outils'),
+    () => import('./screens/Employees'),
+    () => import('./screens/Dashboard'),
+    () => import('./screens/Magasins'),
+    () => import('./screens/Pointage'),
+    () => import('./screens/Projets'),
+    () => import('./screens/Espace'),
+    () => import('./screens/Parametres'),
+  ];
+  const run = () => {
+    loaders.forEach((fn) => {
+      try { void fn(); } catch {}
+    });
+  };
+  if (typeof window !== 'undefined') {
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(run, { timeout: 1500 });
+    } else {
+      setTimeout(run, 300);
+    }
+  }
+}
+
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [booting, setBooting] = useState(true);
+  const initialOfflineUser = useMemo(() => {
+    if (isOfflineLogoutPending()) return null;
+    const u = getOfflineUser<User>();
+    if (u) setApiCacheUser(u.id);
+    return u;
+  }, []);
+
+  const [user, setUser] = useState<User | null>(initialOfflineUser);
+  const [booting, setBooting] = useState(() => !initialOfflineUser);
+
+  useEffect(() => {
+    preloadAllScreens();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,29 +75,32 @@ export default function App() {
         }
         return;
       }
-      if (!navigator.onLine) {
-        const offlineUser = getOfflineUser<User>();
-        if (offlineUser) setApiCacheUser(offlineUser.id);
-        if (!cancelled) {
-          setUser(offlineUser);
-          setBooting(false);
-        }
-        return;
-      }
+
+      // Si l'utilisateur est déjà chargé hors ligne, vérifier la session en arrière-plan sans bloquer
       try {
-        const res = await api<{ user: User | null }>('/api/auth/me', { timeoutMs: 4_000 });
+        const res = await api<{ user: User | null }>('/api/auth/me', { timeoutMs: 3_000 });
         if (res.user) {
           setApiCacheUser(res.user.id);
           saveOfflineUser(res.user);
+          if (!cancelled) setUser(res.user);
         } else {
           clearOfflineUser();
           setApiCacheUser(null);
+          if (!cancelled) setUser(null);
         }
-        if (!cancelled) setUser(res.user);
       } catch (error) {
-        const offlineUser = error instanceof ApiError ? null : getOfflineUser<User>();
-        if (offlineUser) setApiCacheUser(offlineUser.id);
-        if (!cancelled) setUser(offlineUser);
+        if (error instanceof ApiError && error.status === 401) {
+          clearOfflineUser();
+          setApiCacheUser(null);
+          if (!cancelled) setUser(null);
+        } else {
+          // Hors-ligne ou connexion faible : conserver l'utilisateur local
+          const offlineUser = getOfflineUser<User>();
+          if (offlineUser) {
+            setApiCacheUser(offlineUser.id);
+            if (!cancelled) setUser(offlineUser);
+          }
+        }
       } finally {
         if (!cancelled) setBooting(false);
       }
@@ -161,25 +201,21 @@ export default function App() {
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const toast = useToast();
-  const [permissions, setPermissions] = useState<Record<string, boolean> | null>(null);
+  const [permissions, setPermissions] = useState<Record<string, boolean> | null>(() => getOfflinePermissions(user.id) ?? null);
 
   useEffect(() => {
     let cancelled = false;
     function fetchPermissions() {
-      api<{ role: string; superAdmin: boolean; permissions: Record<string, boolean> }>('/api/permissions/me', { bypassCache: true })
+      api<{ role: string; superAdmin: boolean; permissions: Record<string, boolean> }>('/api/permissions/me', { timeoutMs: 3_500 })
         .then((res) => {
           if (!cancelled && res?.permissions) {
-            if (isApiCacheFresh('/api/permissions/me', 12 * 60 * 60 * 1000)) {
-              setPermissions(res.permissions);
-              saveOfflinePermissions(user.id, res.permissions);
-            } else {
-              setPermissions(getOfflinePermissions(user.id) ?? {});
-            }
+            setPermissions(res.permissions);
+            saveOfflinePermissions(user.id, res.permissions);
           }
         })
         .catch(() => {
           const saved = getOfflinePermissions(user.id);
-          if (!cancelled) setPermissions(saved ?? {});
+          if (!cancelled && saved) setPermissions(saved);
         });
     }
     fetchPermissions();

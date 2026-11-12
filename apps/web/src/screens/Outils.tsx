@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   api,
+  getCachedApiResponse,
   type Employee,
   type Magasin,
   type ScanResult,
@@ -279,10 +280,13 @@ export function Outils({
   const canExportReports = hasPerm('reports.export');
 
   const [filters, setFilters] = useState({ q: '', status: '', category: '', location: '', magasin_id: '' });
-  const [tools, setTools] = useState<Tool[]>([]);
-  const [facets, setFacets] = useState<Facets>({ categories: [], locations: [] });
-  const [magasins, setMagasins] = useState<Magasin[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedTools = useMemo(() => getCachedApiResponse<{ tools: Tool[]; facets: Facets }>('/api/tools')?.tools ?? [], []);
+  const cachedFacets = useMemo(() => getCachedApiResponse<{ tools: Tool[]; facets: Facets }>('/api/tools')?.facets ?? { categories: [], locations: [] }, []);
+  const cachedMags = useMemo(() => getCachedApiResponse<{ magasins: Magasin[] }>('/api/magasins')?.magasins ?? [], []);
+  const [tools, setTools] = useState<Tool[]>(cachedTools);
+  const [facets, setFacets] = useState<Facets>(cachedFacets);
+  const [magasins, setMagasins] = useState<Magasin[]>(cachedMags);
+  const [loading, setLoading] = useState(() => cachedTools.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {

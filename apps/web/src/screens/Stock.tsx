@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, type Employee, type Magasin, type ScanResult, type StockMovement, type StockRef, type User } from '../lib/api';
+import { api, getCachedApiResponse, type Employee, type Magasin, type ScanResult, type StockMovement, type StockRef, type User } from '../lib/api';
 import { QR_PREFIX, getCachedQr, qrDataUrl } from '../lib/qr';
 import { MOVE_LABEL, MOVE_TONE, formatDateTime } from '../lib/labels';
 import {
@@ -290,10 +290,12 @@ export function Stock({
     const subLabel = activeTab === 'journal' ? 'Journal des Flux' : 'Matières & Quincaillerie';
     window.dispatchEvent(new CustomEvent('subview-changed', { detail: { view: 'stock', subSection: subLabel } }));
   }, [activeTab]);
-  const [refs, setRefs] = useState<StockRef[]>([]);
+  const cachedRefs = useMemo(() => getCachedApiResponse<{ refs: StockRef[] }>('/api/stock/refs')?.refs ?? [], []);
+  const cachedMags = useMemo(() => getCachedApiResponse<{ magasins: Magasin[] }>('/api/magasins')?.magasins ?? [], []);
+  const [refs, setRefs] = useState<StockRef[]>(cachedRefs);
   const [movements, setMovements] = useState<StockMovement[]>([]);
-  const [magasins, setMagasins] = useState<Magasin[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [magasins, setMagasins] = useState<Magasin[]>(cachedMags);
+  const [loading, setLoading] = useState(() => cachedRefs.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [q, setQ] = useState('');

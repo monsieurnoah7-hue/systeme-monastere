@@ -100,6 +100,19 @@ function setStoredCache(path: string, entry: CacheEntry): void {
   }
 }
 
+export function getCachedApiResponse<T>(path: string): T | null {
+  const mem = RAM_CACHE.get(path);
+  if (mem) return mem.data as T;
+  if (isPersistable(path)) {
+    const disk = getStoredCache<T>(path);
+    if (disk) {
+      RAM_CACHE.set(path, disk as CacheEntry);
+      return disk.data;
+    }
+  }
+  return null;
+}
+
 export function clearApiCache(prefix?: string): void {
   if (!prefix) {
     RAM_CACHE.clear();
@@ -136,8 +149,8 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   const method = (options.method ?? 'GET').toUpperCase();
   const isGet = method === 'GET';
   const bypassCache = options.bypassCache ?? false;
-  const ttl = options.cacheTtlMs ?? 20_000; // 20s en mémoire
-  const timeoutMs = options.timeoutMs ?? 12_000;
+  const ttl = options.cacheTtlMs ?? 300_000; // 5 min en mémoire (invalidé immédiatement lors des mutations)
+  const timeoutMs = options.timeoutMs ?? 6_000;
 
   // Mutations (POST, PATCH, PUT, DELETE)
   if (!isGet) {

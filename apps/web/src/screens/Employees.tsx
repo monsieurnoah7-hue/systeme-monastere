@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   api,
+  getCachedApiResponse,
   type Employee,
   type EmployeeDetail,
   type Leave,
@@ -1434,10 +1435,12 @@ export function Employees({
     else if (activeTab === 'timeoff' && !canViewLeaves && canViewEmployees) setActiveTab('people');
   }, [activeTab, canViewEmployees, canViewLeaves]);
 
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [todayStatus, setTodayStatus] = useState<TodayEmployee[]>([]);
+  const cachedEmps = useMemo(() => getCachedApiResponse<{ employees: Employee[] }>('/api/employees')?.employees ?? [], []);
+  const cachedToday = useMemo(() => getCachedApiResponse<{ today: TodayEmployee[] }>('/api/attendance/today')?.today ?? [], []);
+  const [employees, setEmployees] = useState<Employee[]>(cachedEmps);
+  const [todayStatus, setTodayStatus] = useState<TodayEmployee[]>(cachedToday);
   const [leaves, setLeaves] = useState<Leave[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => cachedEmps.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [q, setQ] = useState('');

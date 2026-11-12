@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api, type Dashboard as DashboardType, type StockRef, type Tool, type EtabliKit, type EtabliKitItem, fetchFleetSummary, type FleetSummary } from '../lib/api';
+import { api, getCachedApiResponse, type Dashboard as DashboardType, type StockRef, type Tool, type EtabliKit, type EtabliKitItem, fetchFleetSummary, type FleetSummary } from '../lib/api';
 import {
   MOVE_LABEL,
   STATUS_LABEL,
@@ -1668,9 +1668,10 @@ function KitInspectionModal({
 
 export function Dashboard({ active = true }: { active?: boolean }) {
   const toast = useToast();
-  const [data, setData] = useState<DashboardType | null>(null);
+  const cachedInitial = getCachedApiResponse<DashboardType>('/api/dashboard');
+  const [data, setData] = useState<DashboardType | null>(cachedInitial);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedInitial);
   const [reload, setReload] = useState(0);
   const [drawer, setDrawer] = useState<DrawerKind | null>(null);
 
@@ -1743,9 +1744,8 @@ export function Dashboard({ active = true }: { active?: boolean }) {
   useEffect(() => {
     let cancelled = false;
     if (!data) setLoading(true);
-    // Le tableau de bord est décisionnel : ne jamais réutiliser une structure
-    // mise en cache lorsqu’un module vient d’ajouter de nouveaux indicateurs.
-    api<DashboardType>('/api/dashboard', { bypassCache: true })
+    // Le tableau de bord utilise le cache SWR pour un affichage instantané à 0ms
+    api<DashboardType>('/api/dashboard')
       .then((res) => {
         if (!cancelled) {
           setData(res);
