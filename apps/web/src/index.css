@@ -204,6 +204,26 @@
   background-color: transparent; /* Fluidité unifiée au survol */
 }
 
+/* =========================================================================
+   Freeze Panes / Volet Figé Excel & Google Sheets (Sticky Columns & Headers)
+   ========================================================================= */
+
+.sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
+th.sticky-col {
+  z-index: 30;
+}
+
+/* Ombre d'élévation et séparateur net sur la bordure droite du volet figé */
+.freeze-pane-divider {
+  border-right: 2px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 6px 0 16px -2px rgba(0, 0, 0, 0.5) !important;
+}
+
 @utility scroll-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--color-line-strong) transparent;

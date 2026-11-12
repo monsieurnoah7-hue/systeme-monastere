@@ -2480,6 +2480,7 @@ export function Dashboard({ active = true }: { active?: boolean }) {
         subtitle={drawerSubtitle(drawer, data)}
         onClose={() => setDrawer(null)}
         wide={drawer?.kind === 'attendance' || drawer?.kind === 'attendanceEmployee'}
+        bodyClassName={drawer?.kind === 'attendance' ? 'p-0 flex flex-col min-h-0 overflow-hidden' : undefined}
       >
         <DrawerContentDetail
           drawer={drawer}
@@ -2820,17 +2821,17 @@ function DrawerContentDetail({
   if (drawer.kind === 'attendance' && data.das04) {
     if (data.das04.detail.length === 0) return <EmptyState title="Aucun travailleur actif" />;
     return (
-      <div className="relative overflow-x-auto max-h-[calc(100dvh-130px)] rounded-xl border border-line shadow-xs scroll-thin bg-surface">
-        <table className="w-full text-left table-rhythm">
-          <thead className="sticky top-0 z-20 border-b border-line bg-surface-2 text-[11px] uppercase font-bold text-ink-faint shadow-xs">
+      <div className="relative overflow-auto flex-1 h-full scroll-thin bg-surface">
+        <table className="w-full text-left table-rhythm border-separate border-spacing-0">
+          <thead className="sticky top-0 z-30 bg-surface-2 text-[11px] uppercase font-bold text-ink-faint shadow-xs">
             <tr>
-              <th className="sticky top-0 bg-surface-2 px-3 py-2.5">Travailleur</th>
-              <th className="sticky top-0 bg-surface-2 px-2 py-2.5 text-center w-16">Arrivée</th>
-              <th className="sticky top-0 bg-surface-2 px-2 py-2.5 text-center w-20">Départ</th>
-              <th className="sticky top-0 bg-surface-2 px-3 py-2.5 text-right w-24 whitespace-nowrap">Statut</th>
+              <th className="sticky top-0 z-30 bg-surface-2 px-3.5 py-3 border-b border-line text-ink-faint">Travailleur</th>
+              <th className="sticky top-0 z-30 bg-surface-2 px-2 py-3 text-center w-20 border-b border-line text-ink-faint">Arrivée</th>
+              <th className="sticky top-0 z-30 bg-surface-2 px-2 py-3 text-center w-24 border-b border-line text-ink-faint">Départ</th>
+              <th className="sticky top-0 z-30 bg-surface-2 px-3.5 py-3 text-right w-28 whitespace-nowrap border-b border-line text-ink-faint">Statut</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-line text-xs">
+          <tbody className="text-xs">
             {data.das04.detail.map((row, idx) => {
               const isLate = row.status === 'late';
               const isAbsent = row.status === 'absent';
@@ -2857,7 +2858,7 @@ function DrawerContentDetail({
                     row.inAt ? 'hover:bg-amber-wash/20' : '',
                   )}
                 >
-                  <td className="px-3 py-2.5 font-medium text-ink col-lead">
+                  <td className="px-3.5 py-2.5 font-medium text-ink col-lead border-b border-line">
                     <button
                       type="button"
                       onClick={() => onOpenAttendanceEmployee?.(row.id, row.fullName)}
@@ -2872,8 +2873,8 @@ function DrawerContentDetail({
                       )}
                     </button>
                   </td>
-                  <td className="px-2 py-2.5 text-center font-mono tabular-nums text-xs">{row.inAt ?? '—'}</td>
-                  <td className="px-2 py-2.5 text-center font-mono tabular-nums text-xs">
+                  <td className="px-2 py-2.5 text-center font-mono tabular-nums text-xs border-b border-line">{row.inAt ?? '—'}</td>
+                  <td className="px-2 py-2.5 text-center font-mono tabular-nums text-xs border-b border-line">
                     {row.outAt ? (
                       row.outAt
                     ) : row.inAt && !isAbsentOrConge ? (
@@ -2885,7 +2886,7 @@ function DrawerContentDetail({
                       <span className="text-ink-faint">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                  <td className="px-3.5 py-2.5 text-right whitespace-nowrap border-b border-line">
                     <button
                       type="button"
                       onClick={() => onOpenAttendanceEmployee?.(row.id, row.fullName)}

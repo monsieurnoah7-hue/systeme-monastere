@@ -1340,12 +1340,12 @@ export function Stock({
             <>
               {/* Tableur Google Sheets Style (Desktop) */}
               <div className="rounded-xl border border-line bg-surface shadow-xs hidden lg:block">
-                <StickyTableScroller>
-                  <table className="w-full text-left border-collapse text-xs table-rhythm">
+                <StickyTableScroller tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
+                  <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
-                      <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                      <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
                         {canManageRefs && (
-                          <th className="px-2.5 py-2.5 w-10 text-center border-r border-line col-lead">
+                          <th className="sticky top-0 left-0 z-30 bg-paper-2 px-2.5 py-2.5 w-10 min-w-10 max-w-10 text-center border-b border-r border-line">
                             <input
                               type="checkbox"
                               checked={filtered.length > 0 && selectedRefIds.size === filtered.length}
@@ -1355,28 +1355,42 @@ export function Stock({
                             />
                           </th>
                         )}
-                        <th className="px-2.5 py-2.5 w-12 border-r border-line text-center col-lead">Photo</th>
-                        <th className="px-3 py-2.5 min-w-64 border-r border-line col-lead">
+                        <th className={cx(
+                          'sticky top-0 z-30 bg-paper-2 px-2.5 py-2.5 w-12 min-w-12 max-w-12 border-b border-r border-line text-center',
+                          canManageRefs ? 'left-[40px]' : 'left-0',
+                        )}>
+                          Photo
+                        </th>
+                        <th className={cx(
+                          'sticky top-0 z-30 bg-paper-2 px-3 py-2.5 min-w-64 border-b freeze-pane-divider',
+                          canManageRefs ? 'left-[88px]' : 'left-[48px]',
+                        )}>
                           Désignation &amp; Marque
                         </th>
-                        <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
-                        <th className="px-3 py-2.5 min-w-32 border-r border-line">Emplacement / Magasin</th>
-                        <th className="px-3 py-2.5 min-w-36 border-r border-line">Stock Disponible</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 border-b border-r border-line">Catégorie</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-32 border-b border-r border-line">Emplacement / Magasin</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-36 border-b border-r border-line">Stock Disponible</th>
                         {canViewFinancial && (
                           <>
-                            <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Coût Unit.</th>
-                            <th className="px-3 py-2.5 min-w-28 border-r border-line text-right">Valeur Stock</th>
+                            <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-right">Coût Unit.</th>
+                            <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 border-b border-r border-line text-right">Valeur Stock</th>
                           </>
                         )}
-                        <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
-                        <th className="px-3 py-2.5 min-w-36 text-right col-actions">Actions</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center">État</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-36 text-right border-b border-line col-actions">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-line">
+                    <tbody>
                       {filtered.map((ref, idx) => {
                         const state = stockState(ref);
                         const lineValuation = Number(ref.qty || 0) * Number(ref.unit_cost || 0);
                         const isSelected = selectedRefIds.has(ref.id);
+                        const frozenBg = isSelected
+                          ? 'bg-[#2a2216] group-hover:bg-[#342a1b]'
+                          : idx % 2 === 0
+                          ? 'bg-[#12151c] group-hover:bg-[#201c18]'
+                          : 'bg-[#181d28] group-hover:bg-[#25201c]';
+
                         return (
                           <tr
                             key={ref.id}
@@ -1393,7 +1407,13 @@ export function Stock({
                           >
                             {/* Checkbox */}
                             {canManageRefs && (
-                              <td className="px-2.5 py-2 text-center border-r border-line" onClick={(e) => e.stopPropagation()}>
+                              <td
+                                className={cx(
+                                  'sticky left-0 z-10 px-2.5 py-2 text-center border-b border-r border-line w-10 min-w-10 max-w-10',
+                                  frozenBg,
+                                )}
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={isSelected}
@@ -1405,7 +1425,11 @@ export function Stock({
 
                             {/* Photo Thumbnail */}
                             <td
-                              className="px-2 py-1.5 text-center border-r border-line"
+                              className={cx(
+                                'sticky z-10 px-2 py-1.5 text-center border-b border-r border-line w-12 min-w-12 max-w-12',
+                                canManageRefs ? 'left-[40px]' : 'left-0',
+                                frozenBg,
+                              )}
                               onClick={(e) => {
                                 if (canPhoto) {
                                   e.stopPropagation();
@@ -1432,7 +1456,13 @@ export function Stock({
                             </td>
 
                             {/* Designation & Marque */}
-                            <td className="px-3 py-2 font-semibold text-ink border-r border-line">
+                            <td
+                              className={cx(
+                                'sticky z-10 px-3 py-2 font-semibold text-ink border-b freeze-pane-divider min-w-64',
+                                canManageRefs ? 'left-[88px]' : 'left-[48px]',
+                                frozenBg,
+                              )}
+                            >
                               <div className="flex items-center gap-1.5">
                                 <span>{ref.name}</span>
                                 {ref.brand ? (
@@ -1447,14 +1477,14 @@ export function Stock({
                             </td>
 
                             {/* Category */}
-                            <td className="px-3 py-2 text-ink-soft border-r border-line">
+                            <td className="px-3 py-2 text-ink-soft border-b border-r border-line">
                               <span className="inline-block rounded bg-paper px-1.5 py-0.5 text-[11px] font-medium border border-line">
                                 {ref.category}
                               </span>
                             </td>
 
                             {/* Emplacement / Magasin */}
-                            <td className="px-3 py-2 text-ink-soft border-r border-line">
+                            <td className="px-3 py-2 text-ink-soft border-b border-r border-line">
                               {ref.magasin_name ? (
                                 <div>
                                   <div className="font-semibold text-ink">{ref.magasin_name}</div>
@@ -1468,26 +1498,26 @@ export function Stock({
                             </td>
 
                             {/* Stock Bar Gauge */}
-                            <td className="px-3 py-2 border-r border-line">
+                            <td className="px-3 py-2 border-b border-r border-line">
                               <StockBar ref={ref} />
                             </td>
 
                             {canViewFinancial && (
                               <>
                                 {/* Coût Unitaire */}
-                                <td className="px-3 py-2 text-right font-mono text-ink-soft border-r border-line tabular-nums">
+                                <td className="px-3 py-2 text-right font-mono text-ink-soft border-b border-r border-line tabular-nums">
                                   {ref.unit_cost ? formatCurrency(ref.unit_cost) : '—'}
                                 </td>
 
                                 {/* Valeur Totale */}
-                                <td className="px-3 py-2 text-right font-mono font-bold text-ink border-r border-line tabular-nums">
+                                <td className="px-3 py-2 text-right font-mono font-bold text-ink border-b border-r border-line tabular-nums">
                                   {ref.unit_cost ? formatCurrency(lineValuation) : '—'}
                                 </td>
                               </>
                             )}
 
                             {/* State Badge */}
-                            <td className="px-3 py-2 text-center border-r border-line">
+                            <td className="px-3 py-2 text-center border-b border-r border-line">
                               <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft">
                                 <span
                                   className={cx(
@@ -1500,7 +1530,7 @@ export function Stock({
                             </td>
 
                             {/* Quick In / Out / Manage Buttons */}
-                            <td className="px-3 py-2 text-right">
+                            <td className="px-3 py-2 text-right border-b border-line">
                               <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                 {canMove ? (
                                   <>
@@ -1640,60 +1670,63 @@ export function Stock({
           ) : (
             <>
               {/* Desktop Tableur */}
-              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs table-rhythm">
+              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs">
+                <StickyTableScroller tableClassName="max-h-[calc(100dvh-220px)] min-h-[400px]">
+                  <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
-                      <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                        <th className="px-3 py-2.5 min-w-36 border-r border-line col-lead">Date &amp; Heure</th>
-                        <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Type</th>
-                        <th className="px-3 py-2.5 min-w-44 border-r border-line col-lead">Article</th>
-                        <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">Quantité</th>
-                        <th className="px-3 py-2.5 min-w-36 border-r border-line">Bénéficiaire / Motif</th>
-                        <th className="px-3 py-2.5 min-w-28 text-right col-actions">Agent</th>
+                      <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                        <th className="sticky top-0 left-0 z-30 bg-paper-2 px-3 py-2.5 w-36 min-w-36 max-w-36 border-b border-r border-line">Date &amp; Heure</th>
+                        <th className="sticky top-0 left-[144px] z-30 bg-paper-2 px-3 py-2.5 w-28 min-w-28 max-w-28 border-b border-r border-line text-center">Type</th>
+                        <th className="sticky top-0 left-[256px] z-30 bg-paper-2 px-3 py-2.5 min-w-44 border-b freeze-pane-divider">Article</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-right">Quantité</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-36 border-b border-r border-line">Bénéficiaire / Motif</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 text-right border-b border-line col-actions">Agent</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-line">
-                      {movements.map((move, idx) => (
-                        <tr
-                          key={move.id}
-                          className={cx(
-                            'transition-colors',
-                            idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
-                            'hover:bg-amber-wash/20',
-                          )}
-                        >
-                          <td className="px-3 py-2 font-mono text-ink-faint tabular-nums border-r border-line">
-                            {formatDateTime(move.created_at)}
-                          </td>
-                          <td className="px-3 py-2 text-center border-r border-line">
-                            <Chip tone={MOVE_TONE[move.move_type]}>{MOVE_LABEL[move.move_type]}</Chip>
-                          </td>
-                          <td className="px-3 py-2 font-semibold text-ink border-r border-line">
-                            {move.ref_name}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono font-bold text-ink border-r border-line tabular-nums">
-                            {move.move_type === 'out' || move.move_type === 'transfer' ? `-${move.qty}` : `+${move.qty}`} {move.unit ?? 'u'}
-                          </td>
-                          <td className="px-3 py-2 text-ink-soft border-r border-line">
-                            {move.move_type === 'transfer' ? (
-                              <div className="font-semibold text-blue">
-                                Vers {move.target_magasin_name ?? 'autre magasin / atelier'}
-                              </div>
-                            ) : (
-                              <div>{move.beneficiary ?? '—'}</div>
+                    <tbody>
+                      {movements.map((move, idx) => {
+                        const frozenBg = idx % 2 === 0 ? 'bg-[#12151c] group-hover:bg-[#201c18]' : 'bg-[#181d28] group-hover:bg-[#25201c]';
+                        return (
+                          <tr
+                            key={move.id}
+                            className={cx(
+                              'transition-colors group',
+                              idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
+                              'hover:bg-amber-wash/20',
                             )}
-                            {move.doc_ref ? <div className="text-[10px] font-mono text-ink-soft">Doc: {move.doc_ref}</div> : null}
-                            {move.note ? <div className="text-[10px] text-ink-faint">{move.note}</div> : null}
-                          </td>
-                          <td className="px-3 py-2 text-right text-ink-faint">
-                            {move.actor}
-                          </td>
-                        </tr>
-                      ))}
+                          >
+                            <td className={cx('sticky left-0 z-10 px-3 py-2 font-mono text-ink-faint tabular-nums border-b border-r border-line w-36 min-w-36 max-w-36', frozenBg)}>
+                              {formatDateTime(move.created_at)}
+                            </td>
+                            <td className={cx('sticky left-[144px] z-10 px-3 py-2 text-center border-b border-r border-line w-28 min-w-28 max-w-28', frozenBg)}>
+                              <Chip tone={MOVE_TONE[move.move_type]}>{MOVE_LABEL[move.move_type]}</Chip>
+                            </td>
+                            <td className={cx('sticky left-[256px] z-10 px-3 py-2 font-semibold text-ink border-b freeze-pane-divider min-w-44', frozenBg)}>
+                              {move.ref_name}
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono font-bold text-ink border-b border-r border-line tabular-nums">
+                              {move.move_type === 'out' || move.move_type === 'transfer' ? `-${move.qty}` : `+${move.qty}`} {move.unit ?? 'u'}
+                            </td>
+                            <td className="px-3 py-2 text-ink-soft border-b border-r border-line">
+                              {move.move_type === 'transfer' ? (
+                                <div className="font-semibold text-blue">
+                                  Vers {move.target_magasin_name ?? 'autre magasin / atelier'}
+                                </div>
+                              ) : (
+                                <div>{move.beneficiary ?? '—'}</div>
+                              )}
+                              {move.doc_ref ? <div className="text-[10px] font-mono text-ink-soft">Doc: {move.doc_ref}</div> : null}
+                              {move.note ? <div className="text-[10px] text-ink-faint">{move.note}</div> : null}
+                            </td>
+                            <td className="px-3 py-2 text-right text-ink-faint border-b border-line">
+                              {move.actor}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
-                </div>
+                </StickyTableScroller>
               </div>
 
               {/* Mobile & Tablet Movement Cards */}

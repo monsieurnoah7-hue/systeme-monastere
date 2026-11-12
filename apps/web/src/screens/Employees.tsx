@@ -24,6 +24,7 @@ import { CreateEtabliKitModal } from '../components/CreateEtabliKitModal';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { EmployeeListRow } from '../components/EmployeeListRow';
 import { EmployeeBentoCard } from '../components/EmployeeBentoCard';
+import { StickyTableScroller } from '../components/StickyTableScroller';
 import { useUndo } from '../components/UndoToast';
 import {
   Banner,
@@ -2646,21 +2647,23 @@ export function Employees({
           ) : viewMode === 'list' ? (
             <>
               {/* Desktop Tableur (Vue Liste complète sur grand écran) */}
-              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
-                <div className="overflow-x-auto scroll-thin">
-                  <table className="w-full text-left border-collapse text-xs table-rhythm">
+              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs">
+                <StickyTableScroller tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
+                  <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
-                      <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                        <th className="px-2.5 py-2.5 w-12 border-r border-line text-center col-lead">Photo</th>
-                        <th className="px-3 py-2.5 min-w-44 border-r border-line col-lead">Identité &amp; Métier</th>
-                        <th className="px-3 py-2.5 min-w-32 border-r border-line text-center">État d’aujourd’hui</th>
-                        <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">Badge QR</th>
-                        <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">Statut</th>
-                        <th className="px-3 py-2.5 min-w-48 text-right col-actions">Actions rapides</th>
+                      <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                        <th className="sticky top-0 left-0 z-30 bg-paper-2 px-2.5 py-2.5 w-12 min-w-12 max-w-12 border-b border-r border-line text-center">Photo</th>
+                        <th className="sticky top-0 left-[48px] z-30 bg-paper-2 px-3 py-2.5 min-w-56 border-b freeze-pane-divider">Identité &amp; Métier</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-32 border-b border-r border-line text-center">État d’aujourd’hui</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center">Badge QR</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center">Statut</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-48 text-right border-b border-line col-actions">Actions rapides</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-line">
-                      {filtered.map((employee, idx) => (
+                    <tbody>
+                      {filtered.map((employee, idx) => {
+                        const frozenBg = idx % 2 === 0 ? 'bg-[#12151c] group-hover:bg-[#201c18]' : 'bg-[#181d28] group-hover:bg-[#25201c]';
+                        return (
                         <tr
                           key={employee.id}
                           onClick={() => setDetailFor(employee)}
@@ -2671,7 +2674,10 @@ export function Employees({
                           )}
                         >
                           <td
-                            className="px-2 py-1.5 text-center border-r border-line col-lead"
+                            className={cx(
+                              'sticky left-0 z-10 px-2 py-1.5 text-center border-b border-r border-line w-12 min-w-12 max-w-12',
+                              frozenBg,
+                            )}
                             onClick={(e) => {
                               if (canPhoto) {
                                 e.stopPropagation();
@@ -2695,21 +2701,21 @@ export function Employees({
                               )}
                             </span>
                           </td>
-                          <td className="px-3 py-2 border-r border-line col-lead">
+                          <td className={cx('sticky left-[48px] z-10 px-3 py-2 border-b freeze-pane-divider min-w-56', frozenBg)}>
                             <div className="font-semibold text-ink text-xs">{employee.full_name}</div>
                             <div className="text-[11px] text-ink-soft">
                               {employee.job_title} · <span className="font-mono text-ink-faint">{employee.id}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2 border-r border-line text-center">
+                          <td className="px-3 py-2 border-b border-r border-line text-center">
                             {dayChip(employee)}
                           </td>
-                          <td className="px-3 py-2 border-r border-line text-center">
+                          <td className="px-3 py-2 border-b border-r border-line text-center">
                             <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-paper-2 border border-line text-slate-200 tabular-nums shadow-2xs">
                               {employee.badge_token ?? '—'}
                             </span>
                           </td>
-                          <td className="px-3 py-2 border-r border-line text-center">
+                          <td className="px-3 py-2 border-b border-r border-line text-center">
                             <span
                               className={cx(
                                 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold border tracking-wider uppercase shadow-2xs',
@@ -2722,7 +2728,7 @@ export function Employees({
                               {employee.active ? 'Actif' : 'Inactif'}
                             </span>
                           </td>
-                          <td className="px-3 py-1.5 text-right col-actions" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-3 py-1.5 text-right border-b border-line col-actions" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1.5">
                               <Button size="sm" variant="secondary" className="text-xs font-bold border border-line shadow-xs hover:border-amber" onClick={() => setDetailFor(employee)}>
                                 Détail
@@ -2767,10 +2773,11 @@ export function Employees({
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
-                </div>
+                </StickyTableScroller>
               </div>
 
               {/* Mobile & Tablet Accordion List View (Mode Liste Haute Densité) */}

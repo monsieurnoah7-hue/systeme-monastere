@@ -1379,47 +1379,49 @@ export function Outils({
           ) : (
             <>
               {/* Desktop Loans Table */}
-              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs table-rhythm">
+              <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs">
+                <StickyTableScroller tableClassName="max-h-[calc(100dvh-220px)] min-h-[380px]">
+                  <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                   <thead>
-                    <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                      <th className="px-3 py-2.5 min-w-28 border-r border-line col-lead">Réf. Outil</th>
-                      <th className="px-3 py-2.5 min-w-44 border-r border-line col-lead">Désignation Matériel</th>
-                      <th className="px-3 py-2.5 min-w-36 border-r border-line">Travailleur Emprunteur</th>
-                      <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Quantité Prêtée</th>
-                      <th className="px-3 py-2.5 min-w-32 border-r border-line">Date de Sortie</th>
-                      <th className="px-3 py-2.5 min-w-44 border-r border-line">Motif / Chantier</th>
-                      <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État Sortie</th>
-                      <th className="px-3 py-2.5 min-w-44 text-right col-actions">Actions</th>
+                    <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                      <th className="sticky top-0 left-0 z-30 bg-paper-2 px-3 py-2.5 w-28 min-w-28 max-w-28 border-b border-r border-line">Réf. Outil</th>
+                      <th className="sticky top-0 left-[112px] z-30 bg-paper-2 px-3 py-2.5 min-w-44 border-b freeze-pane-divider">Désignation Matériel</th>
+                      <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-36 border-b border-r border-line">Travailleur Emprunteur</th>
+                      <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 border-b border-r border-line text-center">Quantité Prêtée</th>
+                      <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-32 border-b border-r border-line">Date de Sortie</th>
+                      <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-44 border-b border-r border-line">Motif / Chantier</th>
+                      <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center">État Sortie</th>
+                      <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-44 text-right border-b border-line col-actions">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-line">
-                    {filteredActiveLoans.map((loan, idx) => (
+                  <tbody>
+                    {filteredActiveLoans.map((loan, idx) => {
+                      const frozenLoanBg = idx % 2 === 0 ? 'bg-[#12151c] group-hover:bg-[#201c18]' : 'bg-[#181d28] group-hover:bg-[#25201c]';
+                      return (
                       <tr
                         key={loan.id}
                         className={cx(
-                          'transition-colors',
+                          'transition-colors group',
                           idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
                           'hover:bg-amber-wash/20',
                         )}
                       >
-                        <td className="px-3 py-2 font-mono font-bold text-amber border-r border-line">
+                        <td className={cx('sticky left-0 z-10 px-3 py-2 font-mono font-bold text-amber border-b border-r border-line w-28 min-w-28 max-w-28', frozenLoanBg)}>
                           <div className="flex items-center gap-1.5">
                             <IconQr size={13} className="text-ink-faint shrink-0" />
                             <span>{loan.tool_id}</span>
                           </div>
                         </td>
-                        <td className="px-3 py-2 font-medium text-ink border-r border-line">
+                        <td className={cx('sticky left-[112px] z-10 px-3 py-2 font-medium text-ink border-b freeze-pane-divider min-w-44', frozenLoanBg)}>
                           <span className="font-semibold">{loan.tool_name ?? 'Matériel'}</span>
                           {loan.tool_category ? (
                             <span className="block text-[10px] text-ink-faint">{loan.tool_category}</span>
                           ) : null}
                         </td>
-                        <td className="px-3 py-2 font-medium text-ink border-r border-line">
+                        <td className="px-3 py-2 font-medium text-ink border-b border-r border-line">
                           <span className="font-semibold">{loan.employee_name ?? loan.full_name ?? '—'}</span>
                         </td>
-                        <td className="px-3 py-2 text-center border-r border-line">
+                        <td className="px-3 py-2 text-center border-b border-r border-line">
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-wash border border-amber/30 px-2.5 py-0.5 text-xs font-bold text-amber tabular-nums">
                             {loan.qty ?? 1} unité{(loan.qty ?? 1) > 1 ? 's' : ''}
                           </span>
@@ -1429,18 +1431,18 @@ export function Outils({
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-ink-soft border-r border-line font-mono text-[11px] tabular-nums">
+                        <td className="px-3 py-2 text-ink-soft border-b border-r border-line font-mono text-[11px] tabular-nums">
                           {formatDateTime(loan.out_at)}
                         </td>
-                        <td className="px-3 py-2 text-ink border-r border-line">
+                        <td className="px-3 py-2 text-ink border-b border-r border-line">
                           <span className="font-medium">{loan.motive}</span>
                         </td>
-                        <td className="px-3 py-2 text-center border-r border-line">
+                        <td className="px-3 py-2 text-center border-b border-r border-line">
                           <span className="inline-block rounded bg-paper px-2 py-0.5 text-[10px] font-medium text-ink-soft border border-line">
                             {loan.out_condition ?? 'bon'}
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-3 py-2 text-right border-b border-line">
                           <div className="flex items-center justify-end gap-1.5">
                             {canManage && (
                               <button
@@ -1477,11 +1479,12 @@ export function Outils({
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    );
+                  })}
                   </tbody>
-                </table>
+                  </table>
+                </StickyTableScroller>
               </div>
-            </div>
 
             {/* Mobile & Tablet Loans Cards View */}
             <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1764,12 +1767,12 @@ export function Outils({
         <>
           {/* Tableur Google Sheets Style */}
           <div className="hidden lg:block rounded-xl border border-line bg-surface shadow-xs">
-            <StickyTableScroller>
-              <table className="w-full text-left border-collapse text-xs table-rhythm">
+            <StickyTableScroller tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px]">
+              <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                 <thead>
-                  <tr className="bg-paper-2 border-b border-line text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                  <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
                     {canManage && (
-                      <th className="px-2.5 py-2.5 w-10 text-center border-r border-line col-lead">
+                      <th className="sticky top-0 left-0 z-30 bg-paper-2 px-2.5 py-2.5 w-10 min-w-10 max-w-10 text-center border-b border-r border-line">
                         <input
                           type="checkbox"
                           checked={displayedTools.length > 0 && selectedToolIds.size === displayedTools.length}
@@ -1779,24 +1782,43 @@ export function Outils({
                         />
                       </th>
                     )}
-                    <th className="px-2.5 py-2.5 w-12 border-r border-line text-center col-lead">Photo</th>
-                    <th className="px-3 py-2.5 min-w-36 border-r border-line col-lead">
+                    <th className={cx(
+                      'sticky top-0 z-30 bg-paper-2 px-2.5 py-2.5 w-12 min-w-12 max-w-12 border-b border-r border-line text-center',
+                      canManage ? 'left-[40px]' : 'left-0',
+                    )}>
+                      Photo
+                    </th>
+                    <th className={cx(
+                      'sticky top-0 z-30 bg-paper-2 px-3 py-2.5 w-36 min-w-36 max-w-36 border-b border-r border-line',
+                      canManage ? 'left-[88px]' : 'left-[48px]',
+                    )}>
                       Réf / Code QR
                     </th>
-                    <th className="px-3 py-2.5 min-w-64 border-r border-line col-lead">Désignation &amp; Marque</th>
-                    <th className="px-3 py-2.5 min-w-28 border-r border-line">Catégorie</th>
-                    <th className="px-3 py-2.5 min-w-36 border-r border-line">Emplacement / Magasin</th>
-                    <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Stock &amp; Dispo</th>
-                    {canViewFinancial && <th className="px-3 py-2.5 min-w-24 border-r border-line text-right">VNC Nette</th>}
-                    <th className="px-3 py-2.5 min-w-24 border-r border-line text-center">État</th>
-                    <th className="px-3 py-2.5 min-w-28 border-r border-line text-center">Statut</th>
-                    <th className="px-3 py-2.5 min-w-44 text-right col-actions">Actions</th>
+                    <th className={cx(
+                      'sticky top-0 z-30 bg-paper-2 px-3 py-2.5 min-w-64 border-b freeze-pane-divider',
+                      canManage ? 'left-[232px]' : 'left-[192px]',
+                    )}>
+                      Désignation &amp; Marque
+                    </th>
+                    <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 border-b border-r border-line">Catégorie</th>
+                    <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-36 border-b border-r border-line">Emplacement / Magasin</th>
+                    <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 border-b border-r border-line text-center">Stock &amp; Dispo</th>
+                    {canViewFinancial && <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-right">VNC Nette</th>}
+                    <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center">État</th>
+                    <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 border-b border-r border-line text-center">Statut</th>
+                    <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-44 text-right border-b border-line col-actions">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line">
+                <tbody>
                   {displayedTools.map((tool, idx) => {
                     const acc = computeToolAccounting(tool);
                     const isSelected = selectedToolIds.has(tool.id);
+                    const frozenBg = isSelected
+                      ? 'bg-[#2a2216] group-hover:bg-[#342a1b]'
+                      : idx % 2 === 0
+                      ? 'bg-[#12151c] group-hover:bg-[#201c18]'
+                      : 'bg-[#181d28] group-hover:bg-[#25201c]';
+
                     return (
                       <tr
                         key={tool.id}
@@ -1813,7 +1835,13 @@ export function Outils({
                       >
                         {/* Checkbox */}
                         {canManage && (
-                          <td className="px-2.5 py-2 text-center border-r border-line" onClick={(e) => e.stopPropagation()}>
+                          <td
+                            className={cx(
+                              'sticky left-0 z-10 px-2.5 py-2 text-center border-b border-r border-line w-10 min-w-10 max-w-10',
+                              frozenBg,
+                            )}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -1824,13 +1852,20 @@ export function Outils({
                         )}
 
                         {/* Photo Thumbnail */}
-                        <td className="px-2 py-1.5 text-center border-r border-line" onClick={(e) => {
-                          if (canPhoto) {
-                            e.stopPropagation();
-                            setPhotoTarget({ id: tool.id, current: tool.photo_path, name: tool.name });
-                            setPhotoModalOpen(true);
-                          }
-                        }}>
+                        <td
+                          className={cx(
+                            'sticky z-10 px-2 py-1.5 text-center border-b border-r border-line w-12 min-w-12 max-w-12',
+                            canManage ? 'left-[40px]' : 'left-0',
+                            frozenBg,
+                          )}
+                          onClick={(e) => {
+                            if (canPhoto) {
+                              e.stopPropagation();
+                              setPhotoTarget({ id: tool.id, current: tool.photo_path, name: tool.name });
+                              setPhotoModalOpen(true);
+                            }
+                          }}
+                        >
                           {tool.photo_path ? (
                             <img
                               src={tool.photo_path}
@@ -1849,7 +1884,13 @@ export function Outils({
                         </td>
 
                         {/* ID Code QR */}
-                        <td className="px-3 py-2 font-mono font-bold text-amber border-r border-line">
+                        <td
+                          className={cx(
+                            'sticky z-10 px-3 py-2 font-mono font-bold text-amber border-b border-r border-line w-36 min-w-36 max-w-36',
+                            canManage ? 'left-[88px]' : 'left-[48px]',
+                            frozenBg,
+                          )}
+                        >
                           <div className="flex items-center gap-1.5">
                             <IconQr size={13} className="text-ink-faint shrink-0" />
                             <span>{tool.id}</span>
@@ -1857,7 +1898,13 @@ export function Outils({
                         </td>
 
                         {/* Designation & Marque */}
-                        <td className="px-3 py-2 font-medium text-ink border-r border-line">
+                        <td
+                          className={cx(
+                            'sticky z-10 px-3 py-2 font-medium text-ink border-b freeze-pane-divider min-w-64',
+                            canManage ? 'left-[232px]' : 'left-[192px]',
+                            frozenBg,
+                          )}
+                        >
                           <div className="flex items-center gap-1.5">
                             <span className="font-semibold">{tool.name}</span>
                             {tool.brand ? (
@@ -1872,14 +1919,14 @@ export function Outils({
                         </td>
 
                         {/* Catégorie */}
-                        <td className="px-3 py-2 text-ink-soft border-r border-line">
+                        <td className="px-3 py-2 text-ink-soft border-b border-r border-line">
                           <span className="inline-block rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium border border-line text-ink-soft">
                             {tool.category}
                           </span>
                         </td>
 
                         {/* Magasin & Location */}
-                        <td className="px-3 py-2 text-ink-soft border-r border-line">
+                        <td className="px-3 py-2 text-ink-soft border-b border-r border-line">
                           {tool.magasin_name ? (
                             <div>
                               <div className="font-semibold text-ink">{tool.magasin_name}</div>
@@ -1893,7 +1940,7 @@ export function Outils({
                         </td>
 
                         {/* Stock & Dispo */}
-                        <td className="px-3 py-2 text-center border-r border-line">
+                        <td className="px-3 py-2 text-center border-b border-r border-line">
                           <div className="flex flex-col items-center">
                             <div className="flex items-center gap-1 font-mono font-bold">
                               <span
@@ -1923,7 +1970,7 @@ export function Outils({
 
                         {/* VNC Nette */}
                         {canViewFinancial && (
-                          <td className="px-3 py-2 text-right font-mono font-semibold text-ink border-r border-line">
+                          <td className="px-3 py-2 text-right font-mono font-semibold text-ink border-b border-r border-line">
                             {acc ? (
                               <div>
                                 <span className={acc.isFullyAmortized ? 'text-purple-400' : 'text-green'}>
@@ -1938,7 +1985,7 @@ export function Outils({
                         )}
 
                         {/* État */}
-                        <td className="px-3 py-2 text-center border-r border-line">
+                        <td className="px-3 py-2 text-center border-b border-r border-line">
                           <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-soft">
                             <span
                               className={cx(
@@ -1951,7 +1998,7 @@ export function Outils({
                         </td>
 
                         {/* Statut Chip */}
-                        <td className="px-3 py-2 text-center border-r border-line">
+                        <td className="px-3 py-2 text-center border-b border-r border-line">
                           <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] font-medium text-ink-soft">
                             <span
                               className={cx(
@@ -1970,7 +2017,7 @@ export function Outils({
                         </td>
 
                         {/* Actions Rapides */}
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-3 py-2 text-right border-b border-line">
                           <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                             {canEdit && (
                               <button

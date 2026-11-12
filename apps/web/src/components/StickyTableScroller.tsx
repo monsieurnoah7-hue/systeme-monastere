@@ -98,7 +98,10 @@ export function StickyTableScroller({
       {/* Conteneur défilant du tableau */}
       <div
         ref={containerRef}
-        className={cx('overflow-x-auto scroll-smooth focus:outline-none', tableClassName)}
+        className={cx(
+          'overflow-auto scroll-smooth focus:outline-none max-h-[calc(100dvh-200px)] min-h-[440px] scroll-thin',
+          tableClassName,
+        )}
         tabIndex={0}
       >
         {children}

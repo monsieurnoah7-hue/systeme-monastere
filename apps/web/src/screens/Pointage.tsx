@@ -1413,35 +1413,36 @@ export function Pointage({
 
           {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
           <div className={cx('rounded-xl border border-line bg-surface shadow-card', viewMode === 'cards' && 'hidden sm:block')}>
-            <StickyTableScroller tableClassName="scroll-thin">
-              <table className={cx('w-full text-left sheet-grid table-rhythm', canCorrectAttendance ? 'min-w-[860px]' : 'min-w-[760px]')}>
-                <thead className="sticky top-0 z-10 bg-paper-2 border-b border-line shadow-xs">
-                  <tr>
-                    <th className="sheet-th sticky-col min-w-[190px] col-lead">Travailleur / ID</th>
-                    <th className="sheet-th w-28 text-center">Arrivée (In)</th>
-                    <th className="sheet-th w-28 text-center">Départ (Out)</th>
-                    <th className="sheet-th w-32 text-center bg-amber-wash/20 font-bold text-ink">Statut</th>
-                    <th className="sheet-th w-32 text-center">Durée travaillée</th>
-                    <th className="sheet-th w-28 text-center">Pause</th>
-                    <th className="sheet-th w-28 text-center">Tolérance / Écart</th>
-                    {canCorrectAttendance && <th className="sheet-th w-36 text-center">Corriger</th>}
+            <StickyTableScroller tableClassName="max-h-[calc(100dvh-200px)] min-h-[460px] scroll-thin">
+              <table className={cx('w-full text-left sheet-grid table-rhythm border-separate border-spacing-0', canCorrectAttendance ? 'min-w-[860px]' : 'min-w-[760px]')}>
+                <thead>
+                  <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="sheet-th sticky top-0 left-0 z-30 min-w-[220px] w-[220px] bg-paper-2 border-b freeze-pane-divider">Travailleur / ID</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center">Arrivée (In)</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center">Départ (Out)</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-32 border-b text-center bg-amber-wash/20 font-bold text-ink">Statut</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-32 border-b text-center">Durée travaillée</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center">Pause</th>
+                    <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-28 border-b text-center">Tolérance / Écart</th>
+                    {canCorrectAttendance && <th className="sheet-th sticky top-0 z-20 bg-paper-2 w-36 border-b text-center">Corriger</th>}
                   </tr>
                 </thead>
-                <tbody className="text-xs divide-y divide-line">
+                <tbody className="text-xs">
                   {filteredAttendance.map((row, idx) => {
                     const isPresent = row.status === 'present';
                     const isLate = row.status === 'late';
+                    const frozenBg = idx % 2 === 0 ? 'bg-[#12151c] group-hover:bg-[#201c18]' : 'bg-[#181d28] group-hover:bg-[#25201c]';
                     return (
                       <tr
                         key={row.id}
                         className={cx(
-                          'transition-colors',
+                          'transition-colors group',
                           idx % 2 === 0 ? 'bg-surface/95' : 'bg-surface-2/45',
                           'hover:bg-amber-wash/20',
                         )}
                       >
                         {/* Sticky Worker Column */}
-                        <td className={cx('sheet-cell sticky-col col-lead', idx % 2 === 0 ? 'bg-surface' : 'bg-[#181d28]')}>
+                        <td className={cx('sheet-cell sticky left-0 z-10 min-w-[220px] w-[220px] border-b freeze-pane-divider', frozenBg)}>
                           <div className="flex items-center gap-2.5">
                             <AttendanceAvatar employee={row} size="h-8 w-8" />
                             <div className="min-w-0">
@@ -1539,7 +1540,7 @@ export function Pointage({
                 {/* Spreadsheet Totals Footer */}
                 <tfoot>
                   <tr className="bg-paper-2/80 font-bold text-xs text-ink">
-                    <td className="sheet-cell sticky-col bg-paper-2 text-ink">
+                    <td className="sheet-cell sticky left-0 z-10 min-w-[220px] w-[220px] bg-paper-2 text-ink border-t border-b freeze-pane-divider font-bold">
                       TOTAL ({filteredAttendance.length} collaborateurs)
                     </td>
                     <td className="sheet-cell text-center font-mono tabular-nums text-green">
