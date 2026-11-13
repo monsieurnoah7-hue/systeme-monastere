@@ -467,6 +467,37 @@ export function Pointage({
     } catch {}
   }, [viewMode]);
 
+  // Détection haute précision de l'état sticky de la barre d'outils Pointage (standard Apple / Google à 120 FPS)
+  const [isToolbarSticky, setIsToolbarSticky] = useState(false);
+  const stickySentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = stickySentinelRef.current;
+    if (!sentinel) return;
+    const main = sentinel.closest('main') || window;
+
+    let rafId: number | null = null;
+    const checkSticky = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const topOffset = window.innerWidth >= 1024 ? 46 : 2;
+        const rect = sentinel.getBoundingClientRect();
+        setIsToolbarSticky(rect.top <= topOffset);
+      });
+    };
+
+    checkSticky();
+
+    main.addEventListener('scroll', checkSticky, { passive: true });
+    window.addEventListener('resize', checkSticky, { passive: true });
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      main.removeEventListener('scroll', checkSticky);
+      window.removeEventListener('resize', checkSticky);
+    };
+  }, [activeMainTab]);
+
   // Kiosk state
   const { terminalId, save, clear } = useStoredTerminal();
   const [terminals, setTerminals] = useState<Terminal[]>([]);
@@ -1231,6 +1262,9 @@ export function Pointage({
             </Card>
           </div>
 
+          {/* Sentinelle invisible pour détection haute performance de l'état sticky */}
+          <div ref={stickySentinelRef} className="h-0 w-full pointer-events-none opacity-0 -mb-4" aria-hidden="true" />
+
           {/* Tableur Sticky Toolbar (Ligne 1 Action Bar + Ligne 2 ScrollableChipRail) */}
           <div data-pointage-sticky-toolbar="true" className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
             <div className="flex flex-col gap-1.5">
@@ -1275,12 +1309,20 @@ export function Pointage({
                 {/* CTA et Menu Options */}
                 <div className="flex items-center gap-1.5 shrink-0">
                   {canAccessKiosk && (
-                    <div className="hidden sm:flex shrink-0">
+                    <div
+                      className={cx(
+                        'hidden sm:flex shrink-0 transition-all duration-300 ease-out origin-right',
+                        isToolbarSticky
+                          ? 'opacity-100 scale-100 translate-x-0 max-w-[160px] pointer-events-auto'
+                          : 'opacity-0 scale-95 translate-x-2 max-w-0 pointer-events-none overflow-hidden m-0 p-0',
+                      )}
+                    >
                       <Button
                         size="sm"
                         variant="primary"
                         icon={<Smartphone size={14} />}
                         onClick={() => setActiveMainTab('kiosk')}
+                        className="whitespace-nowrap shadow-xs hover:shadow-sm"
                       >
                         Borne Kiosque
                       </Button>
