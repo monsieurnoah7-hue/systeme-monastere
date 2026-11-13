@@ -173,13 +173,15 @@ export function StickyTableScroller({
       <div
         ref={containerRef}
         className={cx(
-          'table-scroll-viewport overflow-auto focus:outline-none min-h-[380px]',
+          'table-scroll-viewport no-scrollbar overflow-auto focus:outline-none min-h-[380px]',
           hasOverflow && 'lg:pb-16',
           tableClassName,
         )}
         style={{
           height: isDesktop && toolbarBottom > 0 ? dynamicMaxHeight : undefined,
           maxHeight: dynamicMaxHeight,
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
         }}
       >
         {children}
