@@ -2654,6 +2654,41 @@ export function Employees({
                 stickyBelow="[data-employees-sticky-toolbar]"
                 className="hidden lg:block"
                 tableClassName="min-h-[460px]"
+                footer={
+                  <div className="flex items-center gap-3 text-xs flex-wrap font-semibold">
+                    <span className="text-ink">
+                      Affichés : <strong className="text-amber font-mono font-bold">{filtered.length}</strong> collaborateur(s)
+                    </span>
+                    <span className="h-3 w-px bg-line" />
+                    <span className="text-ink-soft">
+                      Actifs : <strong className="text-ink font-mono">{employees.filter((e) => e.active).length}</strong>
+                    </span>
+                    <span className="h-3 w-px bg-line" />
+                    <span className="text-ink-soft">
+                      Présents : <strong className="text-green font-mono">{counts.present}</strong>
+                    </span>
+                    {counts.late > 0 && (
+                      <>
+                        <span className="h-3 w-px bg-line" />
+                        <span className="text-ink-soft">
+                          Retards : <strong className="text-amber font-mono">{counts.late}</strong>
+                        </span>
+                      </>
+                    )}
+                    {counts.absent > 0 && (
+                      <>
+                        <span className="h-3 w-px bg-line" />
+                        <span className="text-ink-soft">
+                          Absents : <strong className="text-ink-faint font-mono">{counts.absent}</strong>
+                        </span>
+                      </>
+                    )}
+                    <span className="h-3 w-px bg-line" />
+                    <span className="text-[11px] text-ink-faint font-normal hidden 2xl:inline">
+                      Cliquez sur une ligne pour ouvrir la fiche détaillée
+                    </span>
+                  </div>
+                }
               >
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>

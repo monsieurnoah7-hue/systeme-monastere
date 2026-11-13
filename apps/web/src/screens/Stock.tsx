@@ -1349,6 +1349,48 @@ export function Stock({
                 stickyBelow="[data-stock-sticky-toolbar]"
                 className="hidden lg:block"
                 tableClassName="min-h-[460px]"
+                footer={
+                  <div className="flex items-center gap-3 text-xs flex-wrap font-semibold">
+                    <span className="text-ink">
+                      Affichés : <strong className="text-amber font-mono font-bold">{filtered.length}</strong> référence(s)
+                    </span>
+                    {canViewFinancial && (
+                      <>
+                        <span className="h-3 w-px bg-line" />
+                        <span className="text-ink-soft">
+                          Valeur Stock : <strong className="text-ink font-mono font-bold">{formatCurrency(totalStockValuation)}</strong>
+                        </span>
+                      </>
+                    )}
+                    <span className="h-3 w-px bg-line" />
+                    <span className="text-ink-soft">
+                      En stock : <strong className="text-green font-mono">{filtered.filter((i) => i.qty > 0).length}</strong>
+                    </span>
+                    {filtered.some((i) => i.qty <= 0) && (
+                      <>
+                        <span className="h-3 w-px bg-line" />
+                        <span className="text-ink-soft">
+                          Épuisés : <strong className="text-red font-mono">{filtered.filter((i) => i.qty <= 0).length}</strong>
+                        </span>
+                      </>
+                    )}
+                    {selectedRefIds.size > 0 ? (
+                      <>
+                        <span className="h-3 w-px bg-line" />
+                        <span className="rounded bg-amber-wash border border-amber/30 px-2 py-0.5 text-xs font-bold text-amber">
+                          {selectedRefIds.size} article(s) sélectionné(s)
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="h-3 w-px bg-line" />
+                        <span className="text-[11px] text-ink-faint font-normal hidden 2xl:inline">
+                          Cochez des articles pour les affecter ou transférer par lot
+                        </span>
+                      </>
+                    )}
+                  </div>
+                }
               >
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>

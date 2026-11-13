@@ -1431,6 +1431,41 @@ export function Pointage({
             stickyBelow="[data-pointage-sticky-toolbar]"
             className={cx('shadow-card hidden lg:block', viewMode === 'cards' && 'lg:!hidden')}
             tableClassName="min-h-[460px]"
+            footer={
+              <div className="flex items-center gap-3 text-xs flex-wrap font-semibold">
+                <span className="text-ink">
+                  TOTAL : <strong className="text-amber font-mono font-bold">{filteredAttendance.length}</strong> pointage(s)
+                </span>
+                <span className="h-3 w-px bg-line" />
+                <span className="text-ink-soft">
+                  Arrivées : <strong className="text-green font-mono">{totalPresent + totalLate}</strong>
+                </span>
+                <span className="h-3 w-px bg-line" />
+                <span className="text-ink-soft">
+                  À l'heure : <strong className="text-green font-mono">{totalPresent}</strong>
+                </span>
+                {totalLate > 0 && (
+                  <>
+                    <span className="h-3 w-px bg-line" />
+                    <span className="text-ink-soft">
+                      Retards : <strong className="text-amber font-mono">{totalLate}</strong>
+                    </span>
+                  </>
+                )}
+                {attendanceDetail.filter((r) => r.status === 'absent').length > 0 && (
+                  <>
+                    <span className="h-3 w-px bg-line" />
+                    <span className="text-ink-soft">
+                      Absents : <strong className="text-ink-faint font-mono">{attendanceDetail.filter((r) => r.status === 'absent').length}</strong>
+                    </span>
+                  </>
+                )}
+                <span className="h-3 w-px bg-line" />
+                <span className="text-ink-soft">
+                  Heures cumulées : <strong className="text-ink font-mono font-bold">{((totalPresent + totalLate) * 7.75).toFixed(1)}h</strong>
+                </span>
+              </div>
+            }
           >
               <table className={cx('w-full text-left sheet-grid table-rhythm border-separate border-spacing-0', canCorrectAttendance ? 'min-w-[860px]' : 'min-w-[760px]')}>
                 <thead>
