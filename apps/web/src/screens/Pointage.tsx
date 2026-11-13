@@ -1187,7 +1187,7 @@ export function Pointage({
           </div>
 
           {/* Desktop KPI Grid */}
-          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className={cx('hidden sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3', 'lg:hidden')}>
             <Card className="p-4 shadow-card">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
                 Présents à l'heure
@@ -1406,13 +1406,12 @@ export function Pointage({
                   </button>
                 ))}
 
-                <span className="h-4 w-px bg-line shrink-0 mx-0.5" />
-
-                {/* Switcher vue Tableur / Fiches */}
+                {/* Switcher vue Tableur / Fiches : strictement réservé au grand écran Desktop (supprimé sur mobile & tablette) */}
+                <span className="hidden lg:block h-4 w-px bg-line shrink-0 mx-0.5" />
                 <button
                   type="button"
                   onClick={() => setViewMode(viewMode === 'table' ? 'cards' : 'table')}
-                  className="h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border border-line bg-surface text-ink-soft hover:text-ink shadow-2xs"
+                  className="hidden lg:flex h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all items-center gap-1.5 border border-line bg-surface text-ink-soft hover:text-ink shadow-2xs"
                 >
                   {viewMode === 'table' ? <Users size={14} /> : <FileSpreadsheet size={14} />}
                   <span>Mode {viewMode === 'table' ? 'Fiches mobiles' : 'Tableur'}</span>
@@ -1427,10 +1426,10 @@ export function Pointage({
             </div>
           ) : null}
 
-          {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) */}
+          {/* SPREADSHEET TABLEUR VIEW (GOOGLE SHEETS STYLE) - Strictement Desktop (exclu sur smartphone & tablette) */}
           <StickyTableScroller
             stickyBelow="[data-pointage-sticky-toolbar]"
-            className={cx('shadow-card', viewMode === 'cards' && 'hidden sm:block')}
+            className={cx('shadow-card hidden lg:block', viewMode === 'cards' && 'lg:!hidden')}
             tableClassName="min-h-[460px]"
           >
               <table className={cx('w-full text-left sheet-grid table-rhythm border-separate border-spacing-0', canCorrectAttendance ? 'min-w-[860px]' : 'min-w-[760px]')}>
@@ -1582,8 +1581,8 @@ export function Pointage({
               </table>
             </StickyTableScroller>
 
-          {/* MOBILE CARDS VIEW (Mobile-First alternate) */}
-          <div className={cx('space-y-3 sm:hidden', viewMode === 'table' && 'hidden')}>
+          {/* MOBILE CARDS VIEW (Smartphone & Tablette par défaut, ou bascule manuelle sur Desktop) */}
+          <div className={cx('space-y-3', viewMode === 'table' ? 'lg:hidden' : 'block')}>
             {filteredAttendance.map((row) => (
               <Card key={row.id} className="p-3.5 shadow-card">
                 <div className="flex items-center justify-between">

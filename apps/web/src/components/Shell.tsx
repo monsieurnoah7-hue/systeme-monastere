@@ -591,6 +591,7 @@ export function Shell({
               className={cx(
                 'w-full min-w-0 px-3 py-3 sm:px-6 lg:px-8 lg:py-6 lg:pb-12 flex-1',
                 view === 'pointage' ? 'pb-18' : 'pb-24',
+                ['pointage', 'employees', 'stock', 'tools'].includes(view) && 'lg:py-2 lg:pb-4',
               )}
             >
               {(!isOnline || pendingOfflineCount > 0 || failedOfflineCount > 0) && (

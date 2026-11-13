@@ -178,6 +178,7 @@ export function StickyTableScroller({
           tableClassName,
         )}
         style={{
+          height: isDesktop && toolbarBottom > 0 ? dynamicMaxHeight : undefined,
           maxHeight: dynamicMaxHeight,
         }}
       >

@@ -2611,8 +2611,8 @@ export function Employees({
             TAB 1: PEOPLE / EQUIPE
         ========================================================================= */}
         {canViewEmployees && <TabsContent value="people" className="space-y-4">
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {/* Quick Metrics (masquées en mode Liste sur grand écran pour laisser le tableur au pixel près sous la barre d'outils, Image 3) */}
+          <div className={cx('grid grid-cols-2 gap-3 sm:grid-cols-4', viewMode === 'list' && 'lg:hidden')}>
             <Card className="p-3.5 shadow-card">
               <span className="text-[10px] uppercase font-bold text-ink-faint">Effectif de l'atelier</span>
               <p className="mt-1 font-mono text-2xl font-bold text-ink tabular-nums">{employees.filter((e) => e.active).length}</p>

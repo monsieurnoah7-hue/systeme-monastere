@@ -244,26 +244,38 @@ th.sticky-col {
   -ms-overflow-style: none;
 }
 
+/* Suppression TOTAL du scrollbar horizontal natif WebKit/Chromium (Image 1) */
 .table-scroll-viewport::-webkit-scrollbar {
+  width: 6px !important;
+  height: 0 !important;
+}
+
+.table-scroll-viewport::-webkit-scrollbar-button {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
 }
 
+.table-scroll-viewport::-webkit-scrollbar:horizontal {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.table-scroll-viewport::-webkit-scrollbar-track:horizontal,
+.table-scroll-viewport::-webkit-scrollbar-thumb:horizontal,
+.table-scroll-viewport::-webkit-scrollbar-corner {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Ascenseur vertical natif 6px ambre uniquement sur Desktop */
 @media (min-width: 1024px) {
   .table-scroll-viewport {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(245, 158, 11, 0.45) transparent;
+    scrollbar-width: auto;
   }
 
-  /* Strictement aucune barre de defilement horizontal native */
-  .table-scroll-viewport::-webkit-scrollbar:horizontal {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-  }
-
-  /* Ascenseur vertical natif ultra-fin et fluide */
   .table-scroll-viewport::-webkit-scrollbar:vertical {
     display: block !important;
     width: 6px !important;
@@ -275,12 +287,12 @@ th.sticky-col {
   }
 
   .table-scroll-viewport::-webkit-scrollbar-thumb:vertical {
-    background: rgba(245, 158, 11, 0.4);
+    background: rgba(245, 158, 11, 0.45);
     border-radius: 9999px;
   }
 
   .table-scroll-viewport::-webkit-scrollbar-thumb:vertical:hover {
-    background: rgba(245, 158, 11, 0.8);
+    background: rgba(245, 158, 11, 0.85);
   }
 }
 

@@ -986,9 +986,11 @@ export function Outils({
 
   return (
     <div className="space-y-4 pb-12">
-      <PageHeader
-        title="Parc Matériel & Machines"
-      />
+      <div className={cx(viewMode === 'table' && 'lg:hidden')}>
+        <PageHeader
+          title="Parc Matériel & Machines"
+        />
+      </div>
 
       {error ? (
         <div className="mb-4">

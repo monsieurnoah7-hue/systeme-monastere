@@ -788,10 +788,12 @@ export function Stock({
   return (
     <div className="space-y-4 pb-12">
       {/* Top Page Header */}
-      <PageHeader
-        title="Matières & Quincaillerie"
-        hint="Bois massif, visserie, colles & fournitures consommées de menuiserie"
-      />
+      <div className={cx(viewMode === 'list' && 'lg:hidden')}>
+        <PageHeader
+          title="Matières & Quincaillerie"
+          hint="Bois massif, visserie, colles & fournitures consommées de menuiserie"
+        />
+      </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'inventory' | 'journal')} className="w-full">
         {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
