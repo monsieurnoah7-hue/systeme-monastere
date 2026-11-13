@@ -4287,9 +4287,29 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
           <p className="text-[8pt] font-bold tracking-wide text-gray-950">CFTM</p>
           <p className="text-[5.5pt] font-medium text-gray-600">Bénédictins du Mont‑Fébé</p>
         </div>
-        <span className="rounded bg-gray-100 border border-gray-200 px-1 py-0.5 text-[5pt] font-bold uppercase tracking-wider text-gray-600">
-          Personnel
-        </span>
+        {/* Drapeau officiel de la République du Cameroun (Style CNI camerounaise) */}
+        <div
+          className={cx(
+            'shrink-0 overflow-hidden rounded-[0.5mm] border border-black/15 shadow-2xs',
+            isPreview ? 'h-[20px] w-[30px]' : 'h-[4.8mm] w-[7.2mm]',
+          )}
+          title="République du Cameroun"
+          aria-label="Drapeau du Cameroun"
+        >
+          <svg viewBox="0 0 30 20" className="block h-full w-full" aria-hidden="true">
+            {/* Bande verte */}
+            <rect x="0" y="0" width="10" height="20" fill="#007a5e" />
+            {/* Bande rouge */}
+            <rect x="10" y="0" width="10" height="20" fill="#ce1126" />
+            {/* Bande jaune */}
+            <rect x="20" y="0" width="10" height="20" fill="#fcd116" />
+            {/* Étoile d'or à 5 branches centrée sur la bande rouge */}
+            <polygon
+              points="15.00,6.70 15.76,8.95 18.14,8.98 16.24,10.40 16.94,12.67 15.00,11.30 13.06,12.67 13.76,10.40 11.86,8.98 14.24,8.95"
+              fill="#fcd116"
+            />
+          </svg>
+        </div>
       </div>
 
       {/* Corps : Identité & Photo à gauche, QR Code à droite */}
@@ -4345,9 +4365,23 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
       </div>
 
       {/* Pied : Mention officielle */}
-      <div className="flex items-center justify-between border-t border-gray-200 pt-0.5 text-[5pt] font-medium text-gray-500">
-        <span>Carte professionnelle</span>
-        <span className="font-semibold uppercase tracking-wider text-[#ff5500]">Pointage & Outillage</span>
+      <div className="flex items-center justify-between border-t border-gray-200 pt-0.5 text-gray-500">
+        <span
+          className={cx(
+            'font-semibold text-gray-700 tracking-tight',
+            isPreview ? 'text-[11px]' : 'text-[6.5pt]',
+          )}
+        >
+          Carte professionnelle
+        </span>
+        <span
+          className={cx(
+            'font-semibold uppercase tracking-wider text-[#ff5500]',
+            isPreview ? 'text-[9px]' : 'text-[5pt]',
+          )}
+        >
+          Pointage & Outillage
+        </span>
       </div>
     </div>
   );
