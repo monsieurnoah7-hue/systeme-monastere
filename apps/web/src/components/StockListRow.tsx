@@ -73,9 +73,9 @@ export function StockListRow({
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-mono text-xs font-bold text-amber">{item.id}</span>
-              <span className="truncate text-sm font-bold text-ink group-hover:text-amber transition-colors">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-mono text-xs font-bold text-amber shrink-0">{item.id}</span>
+              <span className="truncate text-sm font-bold text-ink group-hover:text-amber transition-colors min-w-0">
                 {item.name}
               </span>
             </div>

@@ -78,9 +78,9 @@ export function ToolListRow({
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-mono text-[10px] font-bold text-amber">{tool.id}</span>
-              <span className="truncate text-xs font-bold text-ink group-hover:text-amber transition-colors">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-mono text-[10px] font-bold text-amber shrink-0">{tool.id}</span>
+              <span className="truncate text-xs font-bold text-ink group-hover:text-amber transition-colors min-w-0">
                 {tool.name}
               </span>
             </div>

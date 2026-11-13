@@ -116,7 +116,7 @@ export function Chip({
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap',
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap shrink-0',
         'transition-colors duration-[120ms]',
         conf.chip,
         className,

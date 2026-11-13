@@ -489,13 +489,13 @@ function TerminalManager() {
           {terminals.map((terminal) => (
             <Card key={terminal.id} className="border-line bg-surface">
               <CardContent className="flex items-start justify-between gap-3 p-4">
-                <div className="min-w-0">
-                  <p className="font-semibold text-ink">{terminal.name}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-ink truncate">{terminal.name}</p>
                   <p className="mt-1 font-mono text-xs text-ink-soft">{terminal.id}</p>
                   <p className="mt-2 text-xs text-ink-faint">{terminal.punches_today} pointage(s) aujourd’hui</p>
                   {terminal.last_used ? <p className="mt-1 text-xs text-ink-faint">Dernière activité : {formatDateTime(terminal.last_used)}</p> : null}
                 </div>
-                <Button size="sm" variant={terminal.active ? 'outline-danger' : 'secondary'} onClick={() => void toggleTerminal(terminal)}>
+                <Button size="sm" className="shrink-0" variant={terminal.active ? 'outline-danger' : 'secondary'} onClick={() => void toggleTerminal(terminal)}>
                   {terminal.active ? 'Désactiver' : 'Activer'}
                 </Button>
               </CardContent>

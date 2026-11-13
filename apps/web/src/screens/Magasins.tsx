@@ -1169,7 +1169,7 @@ export function Magasins({
                   </div>
                   <div className="space-y-2.5 p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0"><h3 className="truncate text-[15px] font-semibold tracking-tight text-ink group-hover:text-ink-soft">{m.name}</h3><p className="mt-0.5 text-xs text-ink-soft">{visuals.categoryLabel}{m.manager_name ? ` · ${m.manager_name}` : ''}</p></div>
+                      <div className="min-w-0 flex-1"><h3 className="truncate text-[15px] font-semibold tracking-tight text-ink group-hover:text-ink-soft">{m.name}</h3><p className="mt-0.5 text-xs text-ink-soft">{visuals.categoryLabel}{m.manager_name ? ` · ${m.manager_name}` : ''}</p></div>
                       <ChevronRight size={16} className="mt-1 shrink-0 text-ink-faint group-hover:translate-x-0.5 group-hover:text-ink transition-all" />
                     </div>
                     <div className="flex items-center gap-2 border-t border-line pt-2 text-xs text-ink-soft">

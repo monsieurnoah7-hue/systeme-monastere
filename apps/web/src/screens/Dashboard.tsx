@@ -2730,7 +2730,7 @@ function DrawerContentDetail({
       <ul className="divide-y divide-line rounded-lg border border-line">
         {tools.map((tool) => (
           <li key={tool.id} className="flex items-center justify-between gap-3 bg-surface px-3 py-2.5">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="font-mono text-[11px] text-ink-faint">{tool.id}</p>
               <p className="truncate text-xs font-semibold text-ink">{tool.name}</p>
             </div>
@@ -2926,7 +2926,7 @@ function DrawerContentDetail({
         <ul className="divide-y divide-line rounded-lg border border-line">
           {overdueList.map((loan) => (
             <li key={loan.id} className="bg-surface px-3 py-2.5 text-xs flex items-center justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold text-ink">{loan.tool_name}</p>
                 <p className="text-ink-soft">
                   <span className="font-mono text-ink-faint">{loan.tool_id}</span> · Emprunté par <strong>{loan.employee_name}</strong> le {formatDate(loan.out_date)}
@@ -3020,7 +3020,7 @@ function DrawerContentDetail({
         <ul className="divide-y divide-line rounded-lg border border-line">
           {unclosed.map((worker) => (
             <li key={`${worker.id}-${worker.punch_date ?? ''}`} className="bg-surface px-3 py-2.5 text-xs flex items-center justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold text-ink">{worker.full_name}</p>
                 <p className="text-[11px] text-ink-soft">
                   <span className="font-mono text-ink-faint">{worker.id}</span> · Arrivée à {worker.in_at ?? '—'}

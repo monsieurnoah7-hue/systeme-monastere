@@ -1315,7 +1315,7 @@ export function Espace({
                 {leaves.map((l) => (
                   <article key={l.id} className="rounded-xl border border-line bg-surface p-3">
                     <div className="flex items-start justify-between gap-2">
-                      <div><h3 className="text-sm font-semibold text-ink">{l.kind === 'conge' ? 'Congé annuel' : l.kind === 'permission' ? 'Permission exceptionnelle' : 'Absence autorisée'}</h3><p className="mt-1 text-xs text-ink-soft">Du {formatDate(l.from_date)} au {formatDate(l.to_date)}</p></div>
+                      <div className="min-w-0 flex-1"><h3 className="text-sm font-semibold text-ink truncate">{l.kind === 'conge' ? 'Congé annuel' : l.kind === 'permission' ? 'Permission exceptionnelle' : 'Absence autorisée'}</h3><p className="mt-1 text-xs text-ink-soft">Du {formatDate(l.from_date)} au {formatDate(l.to_date)}</p></div>
                       <Chip tone={l.status === 'approved' ? 'green' : l.status === 'pending' ? 'amber' : 'red'}>{l.status === 'approved' ? 'Accordé' : l.status === 'pending' ? 'En examen' : 'Refusé'}</Chip>
                     </div>
                     {l.note && <p className="mt-2 border-t border-line pt-2 text-xs text-ink-soft">{l.note}</p>}
@@ -1389,9 +1389,9 @@ export function Espace({
               <div className="grid gap-3 sm:grid-cols-2">
                 {openLoans.map((l) => (
                   <div key={l.id} className="rounded-xl border border-line bg-surface p-3.5 shadow-xs">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-sm font-bold text-ink">{l.tool_name}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-ink truncate">{l.tool_name}</p>
                         <p className="text-xs text-ink-soft">{l.tool_id} · {l.category}</p>
                       </div>
                       <Chip tone="amber">En cours</Chip>
@@ -1419,7 +1419,7 @@ export function Espace({
               <div className="space-y-2 p-3 md:hidden">
                 {loansHistory.map((l) => (
                   <article key={l.id} className="rounded-xl border border-line bg-surface p-3">
-                    <div className="flex items-start justify-between gap-2"><div><h3 className="text-sm font-semibold text-ink">{l.tool_name}</h3><p className="text-[11px] font-mono text-ink-faint">{l.tool_id}</p></div>{l.returned_at ? <Chip tone={l.return_condition === 'bon' ? 'green' : 'amber'}>{LOAN_COND_LABEL[l.return_condition ?? 'bon'] ?? l.return_condition}</Chip> : <Chip tone="amber">À rendre</Chip>}</div>
+                    <div className="flex items-start justify-between gap-2"><div className="min-w-0 flex-1"><h3 className="text-sm font-semibold text-ink truncate">{l.tool_name}</h3><p className="text-[11px] font-mono text-ink-faint">{l.tool_id}</p></div>{l.returned_at ? <Chip tone={l.return_condition === 'bon' ? 'green' : 'amber'}>{LOAN_COND_LABEL[l.return_condition ?? 'bon'] ?? l.return_condition}</Chip> : <Chip tone="amber">À rendre</Chip>}</div>
                     <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line pt-2 text-xs"><div><p className="text-ink-faint">Sortie</p><p className="mt-0.5 text-ink">{formatDate(l.out_at)}</p></div><div><p className="text-ink-faint">Retour</p><p className="mt-0.5 text-ink">{l.returned_at ? formatDate(l.returned_at) : 'En cours'}</p></div></div>
                     {l.motive && <p className="mt-2 text-xs text-ink-soft">Motif : {l.motive}</p>}
                   </article>

@@ -1286,7 +1286,7 @@ export function Pointage({
                 </div>
 
                 {/* Recherche intégrée au centre */}
-                <div className="flex-1 max-w-xs sm:max-w-md relative">
+                <div className="flex-1 max-w-xs sm:max-w-md relative min-w-0">
                   <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
                   <input
                     type="text"
@@ -1661,11 +1661,11 @@ export function Pointage({
           {/* MOBILE CARDS VIEW (Smartphone & Tablette par défaut, ou bascule manuelle sur Desktop) */}
           <div className={cx('space-y-3', viewMode === 'table' ? 'lg:hidden' : 'block')}>
             {filteredAttendance.map((row) => (
-              <Card key={row.id} className="p-3.5 shadow-card">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
+              <Card key={row.id} className="p-3.5 shadow-card overflow-hidden">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <AttendanceAvatar employee={row} />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="font-bold text-sm text-ink truncate">{row.fullName}</p>
                       <p className="text-xs text-ink-soft truncate">{row.jobTitle}</p>
                     </div>
@@ -1688,18 +1688,18 @@ export function Pointage({
                 </div>
 
                 <div className="mt-3 grid grid-cols-4 gap-2 border-t border-line/60 pt-2.5 text-xs text-center">
-                  <div>
-                    <span className="text-xs text-ink-faint block">Arrivée</span>
-                    <span className="font-mono font-bold text-sm text-ink">{row.inAt ?? '—'}</span>
+                  <div className="min-w-0">
+                    <span className="text-xs text-ink-faint block truncate">Arrivée</span>
+                    <span className="font-mono font-bold text-sm text-ink block truncate">{row.inAt ?? '—'}</span>
                   </div>
-                  <div>
-                    <span className="text-xs text-ink-faint block">Départ</span>
-                    <span className="font-mono font-bold text-sm text-ink">
+                  <div className="min-w-0">
+                    <span className="text-xs text-ink-faint block truncate">Départ</span>
+                    <span className="font-mono font-bold text-sm text-ink block truncate">
                       {row.outAt ? row.outAt : (row.inAt && row.status !== 'absent' ? <span className="text-green font-medium">En poste</span> : '—')}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-xs text-ink-faint block font-semibold text-ink">Statut</span>
+                  <div className="min-w-0">
+                    <span className="text-xs text-ink-faint block font-semibold text-ink truncate">Statut</span>
                     <span className={cx(
                       'font-semibold text-xs block truncate',
                       row.status === 'present' ? 'text-green' : row.status === 'late' ? 'text-amber' : 'text-ink-faint'
@@ -1707,9 +1707,9 @@ export function Pointage({
                       {row.status === 'present' ? 'Validé' : row.status === 'late' ? 'Retard' : 'Non pointé'}
                     </span>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs text-ink-faint block">Tolérance</span>
-                    <span className={cx('font-mono font-bold text-sm', row.lateMinutes > 0 ? 'text-amber' : 'text-green')}>
+                  <div className="text-right min-w-0">
+                    <span className="text-xs text-ink-faint block truncate">Tolérance</span>
+                    <span className={cx('font-mono font-bold text-sm block truncate', row.lateMinutes > 0 ? 'text-amber' : 'text-green')}>
                       {row.lateMinutes > 0 ? `+${row.lateMinutes} min` : row.inAt ? 'À l’heure' : '—'}
                     </span>
                   </div>

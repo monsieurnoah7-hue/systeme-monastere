@@ -75,12 +75,12 @@ export function EmployeeListRow({
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="truncate text-xs font-bold text-ink group-hover:text-amber transition-colors">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="truncate text-xs font-bold text-ink group-hover:text-amber transition-colors min-w-0">
                 {employee.full_name}
               </span>
               {!employee.active && (
-                <span className="rounded bg-red-wash px-1.5 py-0.2 text-[9px] font-bold text-red border border-red/20 uppercase">
+                <span className="shrink-0 rounded bg-red-wash px-1.5 py-0.2 text-[9px] font-bold text-red border border-red/20 uppercase">
                   Inactif
                 </span>
               )}

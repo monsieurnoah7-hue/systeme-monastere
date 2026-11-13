@@ -61,7 +61,7 @@ export function EmployeeBentoCard({
       <div className="space-y-3 pl-1.5">
         {/* Ligne 1 : Avatar tactile + Présence du jour + Menu rapide */}
         <div className="flex items-start justify-between gap-2.5">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div
               onClick={(e) => {
                 if (canPhoto && onPhotoClick) {
@@ -88,7 +88,7 @@ export function EmployeeBentoCard({
               )}
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h3 className="truncate text-sm font-bold text-ink group-hover:text-amber transition-colors">
                 {employee.full_name}
               </h3>
