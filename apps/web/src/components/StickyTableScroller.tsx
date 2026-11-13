@@ -6,7 +6,7 @@ import {
   type ReactNode,
   type CSSProperties,
 } from 'react';
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { cx } from './ui';
 
 interface StickyTableScrollerProps {
@@ -240,6 +240,7 @@ export function StickyTableScroller({
     <div
       className={cx(
         'relative flex flex-col rounded-xl border border-line bg-surface shadow-xs overflow-hidden isolate',
+        hasOverflow && 'mb-14',
         stickyBelow && 'lg:sticky',
         className,
       )}
@@ -327,66 +328,77 @@ export function StickyTableScroller({
         )}
       </div>
 
-      {/* Barre d'état inférieure unifiée (Footer) : Métriques & Chiffres clés + Contrôles horizontaux */}
-      {(footer || hasOverflow) && (
-        <div className="bg-paper border-t border-line px-3.5 py-2 text-xs flex flex-wrap items-center justify-between gap-3 shrink-0 z-30 shadow-[0_-2px_10px_rgba(0,0,0,0.15)]">
-          {/* Section Gauche : Indicateurs textuels & Chiffres clés */}
-          <div className="flex items-center gap-2.5 flex-wrap min-w-0 flex-1">
-            {footer}
+      {footer && (
+        <div className="bg-paper border-t border-line px-4 py-2.5 text-xs flex items-center justify-between font-semibold text-ink-soft shrink-0">
+          {footer}
+        </div>
+      )}
+
+      {/* Barre de navigation horizontale permanente : strictement Desktop (PC / Laptop uniquement) - Toujours visible sans masquage */}
+      {hasOverflow && (
+        <div className="no-print hidden lg:flex fixed inset-x-0 bottom-0 left-60 right-0 z-40 items-center justify-between gap-2.5 border-t-2 border-amber/50 bg-paper/98 px-3.5 py-2.5 text-xs shadow-[0_-6px_20px_rgba(0,0,0,0.45)] backdrop-blur-md">
+          {/* Déplacement horizontal par pas vers la gauche */}
+          <div className="flex items-center shrink-0">
+            <button
+              type="button"
+              onClick={() => scrollByAmount(-320)}
+              disabled={!canScrollLeft}
+              className={cx(
+                'flex items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-bold transition-all active:scale-95',
+                canScrollLeft
+                  ? 'border-amber/40 bg-amber-wash/30 text-amber hover:bg-amber hover:text-white shadow-2xs cursor-pointer'
+                  : 'border-transparent text-ink-faint/30 cursor-not-allowed opacity-40',
+              )}
+              title="Défiler vers la gauche (Colonnes précédentes)"
+              aria-label="Défiler vers les colonnes précédentes"
+            >
+              <ChevronLeft size={15} />
+              <span>Colonnes gauche</span>
+            </button>
           </div>
 
-          {/* Section Droite : Navigation horizontale avec jauge et boutons */}
-          {hasOverflow && (
-            <div className="hidden lg:flex items-center gap-2 shrink-0 bg-surface px-2.5 py-1 rounded-lg border border-line shadow-2xs">
-              <button
-                type="button"
-                onClick={() => scrollByAmount(-320)}
-                disabled={!canScrollLeft}
-                className={cx(
-                  'flex items-center gap-1 rounded px-2 py-0.5 text-xs font-bold transition-all',
-                  canScrollLeft
-                    ? 'text-amber hover:bg-amber-wash cursor-pointer active:scale-95'
-                    : 'text-ink-faint/30 cursor-not-allowed',
-                )}
-                title="Défiler vers la gauche (Colonnes précédentes)"
-              >
-                <ChevronLeft size={14} />
-                <span className="hidden sm:inline">Colonnes gauche</span>
-              </button>
+          {/* Curseur & Jauge de Défilement Synchronisés */}
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3">
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-ink-soft shrink-0">
+              <SlidersHorizontal size={12} className="text-amber" />
+              <span>Vue :</span>
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={scrollProgress}
+              onChange={handleSliderChange}
+              className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-line accent-amber focus:outline-none transition-all"
+              title="Faire glisser pour explorer l'ensemble des colonnes du tableur"
+            />
+            <span className="font-mono text-xs font-bold text-amber shrink-0 tabular-nums min-w-[34px] text-right">
+              {Math.round(scrollProgress)}%
+            </span>
+            <span className="hidden xl:inline text-[10px] text-ink-faint shrink-0">
+              (ou Shift + Molette)
+            </span>
+          </div>
 
-              <div className="flex items-center gap-1.5 w-28 xl:w-40">
-                <span className="text-[10px] text-ink-faint hidden xl:inline shrink-0">Vue :</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={scrollProgress}
-                  onChange={handleSliderChange}
-                  className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-line accent-amber focus:outline-none"
-                  title="Glisser pour explorer l'ensemble des colonnes"
-                />
-                <span className="font-mono text-xs font-bold text-amber shrink-0 tabular-nums min-w-[32px] text-right">
-                  {Math.round(scrollProgress)}%
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => scrollByAmount(320)}
-                disabled={!canScrollRight}
-                className={cx(
-                  'flex items-center gap-1 rounded px-2 py-0.5 text-xs font-bold transition-all',
-                  canScrollRight
-                    ? 'text-amber hover:bg-amber-wash cursor-pointer active:scale-95'
-                    : 'text-ink-faint/30 cursor-not-allowed',
-                )}
-                title="Défiler vers la droite (Colonnes suivantes)"
-              >
-                <span className="hidden sm:inline">Colonnes droite</span>
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          )}
+          {/* Déplacement horizontal vers les colonnes suivantes */}
+          <div className="flex items-center shrink-0">
+            <button
+              type="button"
+              onClick={() => scrollByAmount(320)}
+              disabled={!canScrollRight}
+              className={cx(
+                'flex items-center gap-1.5 rounded-lg border px-3 py-1 text-xs font-bold transition-all active:scale-95',
+                canScrollRight
+                  ? 'border-amber/40 bg-amber-wash/30 text-amber hover:bg-amber hover:text-white shadow-2xs cursor-pointer'
+                  : 'border-transparent text-ink-faint/30 cursor-not-allowed opacity-40',
+              )}
+              title="Défiler vers la droite (Stocks, Statuts, Actions)"
+              aria-label="Défiler vers les colonnes suivantes"
+            >
+              <span>Colonnes droite</span>
+              <ChevronRight size={15} />
+            </button>
+          </div>
         </div>
       )}
     </div>
