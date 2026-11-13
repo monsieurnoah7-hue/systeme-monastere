@@ -4287,10 +4287,10 @@ function BadgeCard({ employee, isPreview }: { employee: Employee; isPreview?: bo
           <p className="text-[8pt] font-bold tracking-wide text-gray-950">CFTM</p>
           <p className="text-[5.5pt] font-medium text-gray-600">Bénédictins du Mont‑Fébé</p>
         </div>
-        {/* Drapeau officiel de la République du Cameroun (Style CNI camerounaise) */}
+        {/* Drapeau officiel de la République du Cameroun (Style CNI camerounaise - sans contour ni bordure) */}
         <div
           className={cx(
-            'shrink-0 overflow-hidden rounded-[0.5mm] border border-black/15 shadow-2xs',
+            'shrink-0 overflow-hidden',
             isPreview ? 'h-[20px] w-[30px]' : 'h-[4.8mm] w-[7.2mm]',
           )}
           title="République du Cameroun"
