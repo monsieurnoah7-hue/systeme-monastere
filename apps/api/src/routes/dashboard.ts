@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { hasPermission, requirePerm } from '../middleware/permissions.js';
 import { businessDate, businessMinutes, parseHm } from '../lib/time.js';
 import { loadSettings } from '../lib/settings.js';
+import { getProjectsDashboardSummary } from './projects.js';
 
 export const dashboardRoutes = new Hono();
 
@@ -314,66 +315,8 @@ dashboardRoutes.get('/', requirePerm('dashboard.view'), async (c) => {
   `).catch(() => []);
 
   // 8. Commandes & chantiers : visible uniquement aux rôles autorisés.
-  // Les montants financiers restent masqués sans le droit financial.view.
-  type ProjectDashboardSummary = {
-    total_count: number;
-    active_count: number;
-    delayed_count: number;
-    overtime_hours: number;
-    financial_damage_fcfa: number;
-    pending_incident_count: number;
-  };
-  type ProjectAttention = {
-    code: string;
-    title: string;
-    category: string | null;
-    status: string;
-    delivery_deadline: string;
-    days_late: number;
-    overtime_hours: number;
-  };
-
-  const projectSummary = canViewProjects
-    ? await db.one<ProjectDashboardSummary>(`
-        SELECT
-          count(*)::int AS total_count,
-          count(*) FILTER (WHERE status <> 'termine')::int AS active_count,
-          count(*) FILTER (WHERE status <> 'termine' AND delivery_deadline < CURRENT_DATE)::int AS delayed_count,
-          COALESCE(sum(CASE WHEN budget_hours > 0 THEN GREATEST(0, spent_hours - budget_hours) ELSE 0 END), 0)::float AS overtime_hours,
-          COALESCE(sum(
-            CASE WHEN budget_hours > 0 THEN GREATEST(0, spent_hours - budget_hours) ELSE 0 END * hourly_rate_fcfa
-            + CASE
-                WHEN status <> 'termine' AND delivery_deadline < CURRENT_DATE
-                THEN GREATEST(0, (CURRENT_DATE - delivery_deadline) - COALESCE((
-                  SELECT sum(pi.delay_days)::int FROM project_incidents pi WHERE pi.project_id = projects.id AND pi.excluded_from_accountability = true
-                ), 0)) * COALESCE(penalty_rate_daily_fcfa, 0)
-                ELSE 0
-              END
-          ), 0)::float AS financial_damage_fcfa,
-          (SELECT count(*)::int FROM project_incidents i WHERE i.review_status = 'pending') AS pending_incident_count
-        FROM projects
-      `).catch((error) => {
-        console.error('[dashboard] synthèse projets indisponible:', error);
-        return null;
-      })
-    : null;
-
-  const projectAttention = canViewProjects && projectSummary
-    ? await db.query<ProjectAttention>(`
-        SELECT code, title, category, status,
-               delivery_deadline::text AS delivery_deadline,
-               GREATEST(0, CURRENT_DATE - delivery_deadline)::int AS days_late,
-               CASE WHEN budget_hours > 0 THEN GREATEST(0, spent_hours - budget_hours) ELSE 0 END::float AS overtime_hours
-          FROM projects
-         WHERE status <> 'termine'
-           AND (delivery_deadline < CURRENT_DATE OR (budget_hours > 0 AND spent_hours > budget_hours))
-         ORDER BY
-           CASE WHEN delivery_deadline < CURRENT_DATE THEN 0 ELSE 1 END,
-           delivery_deadline ASC,
-           (spent_hours - budget_hours) DESC
-         LIMIT 3
-      `).catch(() => [] as ProjectAttention[])
-    : [];
+  // Utilise le même moteur de calcul métier que l'écran Projets (fuseau Mont Fébé, jours ouvrés, exclusions).
+  const { summary: projectSummary, attention: projectAttention } = await getProjectsDashboardSummary(canViewProjects);
 
   return c.json({
     role,

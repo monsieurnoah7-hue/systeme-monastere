@@ -7,6 +7,7 @@ import { hasPermission, requirePerm } from '../middleware/permissions.js';
 import { DEFAULT_PERMISSIONS } from '../lib/permissions.js';
 import { randomUUID } from 'node:crypto';
 import { withOfflineIdempotency } from '../lib/offline-idempotency.js';
+import { businessDate } from '../lib/time.js';
 
 type WorkPlanEntry = { employee_id: string; weekday: number; planned_hours: number };
 
@@ -159,14 +160,12 @@ async function loadProjectMetricContext(projects: ProjectRow[]): Promise<Project
 }
 
 function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): ProjectRow {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const todayIso = today.toISOString().slice(0, 10);
+  const todayIso = businessDate();
   const weekdays = projectWorkdays(p, context);
   const holidays = context?.holidays ?? new Set<string>();
-  const deadline = p.delivery_deadline ? new Date(`${p.delivery_deadline}T00:00:00`) : null;
-  const diffDays = deadline ? Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
+  const deadline = p.delivery_deadline ? new Date(`${p.delivery_deadline}T12:00:00`) : null;
+  const today = new Date(`${todayIso}T12:00:00`);
+  const diffDays = deadline ? Math.round((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
   p.days_to_deadline = deadline && diffDays !== null
     ? diffDays >= 0
       ? countProjectWorkdays(todayIso, p.delivery_deadline!, weekdays, holidays, true)
@@ -214,7 +213,7 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
       if (excess > 0) overrunByEmployee.set(log.employeeId, (overrunByEmployee.get(log.employeeId) ?? 0) + excess);
     }
     let remaining = budget;
-    const from = p.start_date || new Date().toISOString().slice(0, 10);
+    const from = p.start_date || todayIso;
     const plan = Array.isArray(p.work_plan) ? p.work_plan : [];
     const weeklyHours = plan.reduce((sum, entry) => sum + Number(entry.planned_hours || 0), 0);
     p.planned_weekly_hours = weeklyHours;
@@ -237,7 +236,7 @@ function computeProjectMetrics(p: ProjectRow, context?: ProjectMetricContext): P
     p.planned_completion_date = completionDate;
     p.schedule_at_risk = Boolean(completionDate && p.delivery_deadline && completionDate > p.delivery_deadline);
     const target = completionDate && p.delivery_deadline && completionDate > p.delivery_deadline ? completionDate : p.delivery_deadline;
-    if (target && today > new Date(`${target}T23:59:59`)) {
+    if (target && target < todayIso) {
       ratioDelayedWorkdays = Math.max(ratioDelayedWorkdays, countProjectWorkdays(target, todayIso, weekdays, context.holidays));
     }
     if (canAttribute) for (const [employeeId, workerOvertime] of overrunByEmployee) {
@@ -354,6 +353,85 @@ async function validateWorkPlan(projectId: string | null, assignedIds: string[],
     }
   }
   return null;
+}
+
+export async function getProjectsDashboardSummary(canViewProjects: boolean): Promise<{
+  summary: {
+    total_count: number;
+    active_count: number;
+    delayed_count: number;
+    overtime_hours: number;
+    financial_damage_fcfa: number;
+    pending_incident_count: number;
+  } | null;
+  attention: {
+    code: string;
+    title: string;
+    category: string | null;
+    status: string;
+    delivery_deadline: string;
+    days_late: number;
+    overtime_hours: number;
+  }[];
+}> {
+  if (!canViewProjects) return { summary: null, attention: [] };
+  const db = getDb();
+  const rows = await db.query<ProjectRow>(`
+    SELECT id, code, title, client_name, site_location, category,
+           start_date::text AS start_date, work_plan, assigned_worker_ids, assigned_worker_names,
+           budget_hours, spent_hours, hourly_rate_fcfa, penalty_rate_daily_fcfa,
+           ratio_value, ratio_unit, ratio_basis, ratio_quantity,
+           ratio_deadline::text AS ratio_deadline,
+           delivery_deadline::text AS delivery_deadline,
+           installation_start_date::text AS installation_start_date,
+           installation_days, status, notes,
+           created_at::text AS created_at, updated_at::text AS updated_at
+    FROM projects
+    ORDER BY delivery_deadline ASC NULLS LAST, created_at DESC
+  `).catch(() => [] as ProjectRow[]);
+
+  const [context, pendingIncidents] = await Promise.all([
+    loadProjectMetricContext(rows),
+    db.one<{ count: number }>(
+      `SELECT count(*)::int AS count FROM project_incidents WHERE review_status = 'pending'`
+    ).catch(() => ({ count: 0 })),
+  ]);
+
+  const projects = rows.map((row) => computeProjectMetrics(row, context));
+  const activeProjects = projects.filter((p) => p.status !== 'termine');
+  const delayedProjects = projects.filter((p) => p.is_delayed);
+  const totalFinancialDamage = projects.reduce((acc, p) => acc + (p.financial_damage_fcfa || 0), 0);
+  const totalOvertimeHours = projects.reduce((acc, p) => acc + (p.overtime_hours || 0), 0);
+
+  const attention = activeProjects
+    .filter((p) => p.is_delayed || (p.overtime_hours && p.overtime_hours > 0))
+    .sort((a, b) => {
+      if (a.is_delayed && !b.is_delayed) return -1;
+      if (!a.is_delayed && b.is_delayed) return 1;
+      return (b.delayed_days ?? 0) - (a.delayed_days ?? 0) || (b.overtime_hours ?? 0) - (a.overtime_hours ?? 0);
+    })
+    .slice(0, 3)
+    .map((p) => ({
+      code: p.code,
+      title: p.title || 'Projet à compléter',
+      category: p.category,
+      status: p.status,
+      delivery_deadline: p.delivery_deadline || '',
+      days_late: p.delayed_days ?? 0,
+      overtime_hours: p.overtime_hours ?? 0,
+    }));
+
+  return {
+    summary: {
+      total_count: projects.length,
+      active_count: activeProjects.length,
+      delayed_count: delayedProjects.length,
+      overtime_hours: totalOvertimeHours,
+      financial_damage_fcfa: totalFinancialDamage,
+      pending_incident_count: pendingIncidents?.count ?? 0,
+    },
+    attention,
+  };
 }
 
 projectsRoutes.get('/', requireAuth, requirePerm('projects.view'), async (c) => {
