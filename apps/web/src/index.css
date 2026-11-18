@@ -598,3 +598,76 @@ th.sticky-col {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* =========================================================================
+   ACCESSIBILITÉ & ERGONOMIE MOBILE / ATELIER PARAMÉTRABLES
+   ========================================================================= */
+
+/* Échelle typographique globale */
+html[data-text-size="large"] {
+  font-size: 17.5px;
+}
+html[data-text-size="xlarge"] {
+  font-size: 19.5px;
+}
+
+/* Mode Confort (+15% échelle tactile sur mobile) */
+html[data-ui-density="confort"] {
+  --touch-target-min: 48px;
+}
+@media (max-width: 1024px) {
+  html[data-ui-density="confort"] button[data-slot="button"]:not([data-size="xs"]):not([data-size="icon-xs"]),
+  html[data-ui-density="confort"] button.min-h-11,
+  html[data-ui-density="confort"] .touch-manipulation,
+  html[data-ui-density="confort"] input:not([type="checkbox"]):not([type="radio"]),
+  html[data-ui-density="confort"] select {
+    min-height: 48px;
+  }
+  html[data-ui-density="confort"] .kiosk-key {
+    min-height: 50px;
+    font-size: 1.15rem;
+  }
+}
+
+/* Mode Atelier / Chantier (Grands Boutons 52-56px, cibles d'appui maximales) */
+html[data-ui-density="atelier"] {
+  --touch-target-min: 54px;
+}
+@media (max-width: 1024px) {
+  html[data-ui-density="atelier"] button[data-slot="button"]:not([data-size="xs"]):not([data-size="icon-xs"]),
+  html[data-ui-density="atelier"] button.min-h-11,
+  html[data-ui-density="atelier"] .touch-manipulation,
+  html[data-ui-density="atelier"] input:not([type="checkbox"]):not([type="radio"]),
+  html[data-ui-density="atelier"] select {
+    min-height: 52px;
+  }
+  html[data-ui-density="atelier"] .kiosk-key {
+    min-height: 56px;
+    font-size: 1.25rem;
+  }
+  html[data-ui-density="atelier"] .tool-row-touch,
+  html[data-ui-density="atelier"] .stock-row-touch {
+    min-height: 64px;
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+  }
+}
+
+/* Mode Contraste Écran Atelier (Renforcement des bordures et séparations) */
+html[data-high-contrast="true"] {
+  --color-paper: #000000;
+  --color-surface: #0a0d14;
+  --color-surface-2: #141822;
+  --color-surface-3: #1e2432;
+  --color-ink: #ffffff;
+  --color-ink-soft: #d1d5db;
+  --color-ink-faint: #9ca3af;
+  --color-line: #374151;
+  --color-line-strong: #4b5563;
+  --color-border: #4b5563;
+}
+html[data-high-contrast="true"] input,
+html[data-high-contrast="true"] select,
+html[data-high-contrast="true"] button {
+  border-width: 1.5px;
+}

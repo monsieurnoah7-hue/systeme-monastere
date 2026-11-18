@@ -9,6 +9,7 @@ import {
   Package,
   QrCode,
   Settings,
+  SlidersHorizontal,
   User as UserIcon,
   Users,
   Warehouse,
@@ -20,6 +21,7 @@ import {
 import type { MyPermissions, Role, User } from '../lib/api';
 import { ROLE_LABEL, initials } from '../lib/labels';
 import { CommandPalette } from './CommandPalette';
+import { ErgonomicsModal } from './ErgonomicsModal';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from './ui/drawer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { cx, Modal } from './ui';
@@ -250,6 +252,7 @@ export function Shell({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [ergonomicsOpen, setErgonomicsOpen] = useState(false);
   const [subSection, setSubSection] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installHelpOpen, setInstallHelpOpen] = useState(false);
@@ -467,6 +470,15 @@ export function Shell({
               )}
               <button
                 type="button"
+                onClick={() => setErgonomicsOpen(true)}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                aria-label="Ajuster la taille des boutons et l'affichage"
+                title="Ajuster l'affichage (Tailles, Zoom, Contraste)"
+              >
+                <SlidersHorizontal size={19} />
+              </button>
+              <button
+                type="button"
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-expanded={menuOpen}
                 aria-controls="mobile-primary-menu"
@@ -514,6 +526,22 @@ export function Shell({
                 </div>
 
                 <nav className="space-y-1">
+                  <div className="mb-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setErgonomicsOpen(true);
+                      }}
+                      className="flex min-h-11 w-full items-center justify-between rounded-lg border border-line bg-surface-2/60 px-3 py-2 text-xs font-semibold text-ink transition-colors hover:border-amber/40 hover:bg-surface-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <SlidersHorizontal size={16} className="text-amber" />
+                        <span>Affichage & Tailles (Confort)</span>
+                      </div>
+                      <span className="text-[10px] text-ink-faint font-medium">Ajuster</span>
+                    </button>
+                  </div>
                   {installButton('mb-3 flex min-h-11 w-full items-center gap-2.5 rounded-lg border border-amber/30 bg-amber-wash/40 px-3 py-2 text-sm font-semibold text-amber transition-colors hover:bg-amber-wash')}
                   {items.map((item) => (
                     <NavButton
@@ -584,6 +612,16 @@ export function Shell({
                     <span>Scanner QR</span>
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => setErgonomicsOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface border border-line text-xs font-semibold text-ink-soft hover:text-ink hover:border-line-strong transition-all shadow-xs"
+                  title="Confort visuel et tailles des textes"
+                >
+                  <SlidersHorizontal size={13} className="text-amber" />
+                  <span>Affichage</span>
+                </button>
               </div>
             </div>
 
@@ -721,6 +759,10 @@ export function Shell({
         onSelect={(id) => onView(id as ViewId)}
         onScan={onScan}
         onLogout={onLogout}
+      />
+      <ErgonomicsModal
+        open={ergonomicsOpen}
+        onClose={() => setErgonomicsOpen(false)}
       />
     </TooltipProvider>
   );

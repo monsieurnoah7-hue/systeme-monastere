@@ -48,7 +48,7 @@ export function ToolListRow({
       {/* Ligne tactile principale (58px) */}
       <div
         onClick={onClick}
-        className="flex min-h-[58px] items-center justify-between gap-2.5 p-2.5 sm:px-3.5 cursor-pointer active:bg-surface-2/60 select-none"
+        className="tool-row-touch flex min-h-[58px] items-center justify-between gap-2.5 p-2.5 sm:px-3.5 cursor-pointer active:bg-surface-2/60 select-none"
       >
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           {canManage && onSelect && (

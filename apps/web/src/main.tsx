@@ -2,6 +2,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { applyUiPreferences, getUiPreferences } from './lib/ui-preferences';
+
+// Appliquer immédiatement les réglages d'ergonomie (évite tout saut visuel)
+applyUiPreferences(getUiPreferences());
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {

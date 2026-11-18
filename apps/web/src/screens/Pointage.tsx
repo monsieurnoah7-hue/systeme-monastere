@@ -18,10 +18,12 @@ import {
   RefreshCw,
   Search,
   Smartphone,
+  SlidersHorizontal,
   Users,
   X,
   Menu,
 } from 'lucide-react';
+import { ErgonomicsModal } from '../components/ErgonomicsModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -539,6 +541,7 @@ export function Pointage({
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlockBusy, setUnlockBusy] = useState(false);
+  const [ergonomicsOpen, setErgonomicsOpen] = useState(false);
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 1000);
@@ -1156,6 +1159,14 @@ export function Pointage({
               <span className="hidden sm:inline">Feuille des Présences</span>
               <span className="sm:hidden">Présences</span>
             </button>}
+            <button
+              onClick={() => setErgonomicsOpen(true)}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold text-ink-soft hover:text-ink bg-surface border border-line shadow-2xs transition-colors flex items-center gap-1"
+              title="Ajuster la taille des boutons et l'affichage"
+            >
+              <SlidersHorizontal size={12} className="text-amber" />
+              <span className="hidden sm:inline">Affichage</span>
+            </button>
             {!isKioskLocked && (
               <button
                 onClick={lockKiosk}
@@ -1937,6 +1948,24 @@ export function Pointage({
                   </div>
                 </form>
 
+                {terminalId ? (
+                  <div className="flex items-center justify-between text-[11px] text-ink-faint pt-1 border-t border-line/60">
+                    <span className="font-mono truncate">
+                      Borne : <strong className="text-ink">{terminals.find((t) => t.id === terminalId)?.name || terminalId}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clear();
+                        setStage('terminal');
+                      }}
+                      className="text-amber hover:underline font-semibold ml-2 shrink-0"
+                    >
+                      Changer
+                    </button>
+                  </div>
+                ) : null}
+
                 {error ? (
                   <div className="mt-1">
                     <Banner tone="error" title={locked ? 'Terminal verrouillé' : 'Identification refusée'}>
@@ -2505,6 +2534,11 @@ export function Pointage({
           </div>
         )}
       </Modal>
+
+      <ErgonomicsModal
+        open={ergonomicsOpen}
+        onClose={() => setErgonomicsOpen(false)}
+      />
     </div>
   );
 }

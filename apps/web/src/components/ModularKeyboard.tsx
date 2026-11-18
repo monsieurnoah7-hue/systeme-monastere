@@ -493,7 +493,7 @@ function KeyButton({
       type="button"
       onClick={onClick}
       className={cx(
-        'h-11 sm:h-13 min-w-0 rounded-xl border border-line/60 bg-[#1e1e27] text-base sm:text-lg font-semibold text-ink shadow-xs transition-all duration-75',
+        'kiosk-key h-11 sm:h-13 min-w-0 rounded-xl border border-line/60 bg-[#1e1e27] text-base sm:text-lg font-semibold text-ink shadow-xs transition-all duration-75',
         'hover:bg-[#292934] hover:border-line-strong active:scale-90 active:bg-amber/25 active:text-amber active:border-amber/40',
         'flex items-center justify-center',
         className
@@ -524,7 +524,7 @@ function FunctionButton({
       onClick={onClick}
       title={title}
       className={cx(
-        'h-11 sm:h-13 min-w-0 rounded-xl border border-line bg-[#16161d] text-ink-soft shadow-xs transition-all duration-75',
+        'kiosk-key h-11 sm:h-13 min-w-0 rounded-xl border border-line bg-[#16161d] text-ink-soft shadow-xs transition-all duration-75',
         'hover:bg-[#22222d] hover:text-ink active:scale-90 active:bg-amber-wash active:text-amber',
         'flex items-center justify-center',
         className

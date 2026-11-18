@@ -43,7 +43,9 @@ import {
   Briefcase,
   Wrench,
   Package,
+  SlidersHorizontal,
 } from 'lucide-react';
+import { ErgonomicsModal } from '../components/ErgonomicsModal';
 
 const SITUATION_LABEL: Record<string, string> = {
   present: 'Présent(e)',
@@ -102,6 +104,7 @@ export function Espace({
 
   // Mobile-first ergonomics & live presence
   const [mobileTab, setMobileTab] = useState<'gouvernance' | 'profil'>('gouvernance');
+  const [ergonomicsOpen, setErgonomicsOpen] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState<Array<{
     id: number;
     login: string;
@@ -1683,6 +1686,31 @@ export function Espace({
               </Button>
             </form>
           </Card>
+
+          {/* Carte Confort Visuel & Ergonomie Mobile */}
+          <Card className="mt-4 p-5 shadow-card">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <div>
+                <h2 className="text-base font-bold text-ink">Confort Visuel &amp; Taille d'Affichage</h2>
+                <p className="text-xs text-ink-soft">Adaptez la taille des boutons et des textes pour votre appareil</p>
+              </div>
+              <SlidersHorizontal size={20} className="text-amber" />
+            </div>
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-ink-soft">
+                Si vous trouvez les boutons trop petits ou difficiles à presser sur votre smartphone en atelier, vous pouvez basculer en mode <strong>Confort (+15%)</strong> ou <strong>Atelier (Grands boutons 54px)</strong>.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setErgonomicsOpen(true)}
+                icon={<SlidersHorizontal size={15} className="text-amber" />}
+                className="w-full sm:w-auto"
+              >
+                Personnaliser la taille des composants
+              </Button>
+            </div>
+          </Card>
         </div>
       )}
 
@@ -1747,6 +1775,11 @@ export function Espace({
           </div>
         </div>
       </Modal>
+
+      <ErgonomicsModal
+        open={ergonomicsOpen}
+        onClose={() => setErgonomicsOpen(false)}
+      />
     </div>
   );
 }
