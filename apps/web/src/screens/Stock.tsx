@@ -2055,7 +2055,7 @@ export function Stock({
             label="Désignation de l’article"
             value={refForm.name}
             onChange={(e) => setRefForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="ex. Vis bois tête fraisée 4x40 inox"
+            placeholder="ex. Vis bois 4x40 inox"
           />
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -2063,13 +2063,13 @@ export function Stock({
               label="Marque / Fabricant"
               value={refForm.brand}
               onChange={(e) => setRefForm((f) => ({ ...f, brand: e.target.value }))}
-              placeholder="ex. Spax, Wurth, Sika..."
+              placeholder="ex. Spax, Wurth"
             />
             <Field
               label="Fournisseur habituel"
               value={refForm.supplier}
               onChange={(e) => setRefForm((f) => ({ ...f, supplier: e.target.value }))}
-              placeholder="ex. Quincaillerie Moderne, BTP Dépôt..."
+              placeholder="ex. BTP Dépôt, Spax"
             />
           </div>
 
@@ -2547,7 +2547,7 @@ export function Stock({
                   label="Fournisseur / Provenance"
                   value={moveForm.beneficiary}
                   onChange={(e) => setMoveForm((f) => ({ ...f, beneficiary: e.target.value }))}
-                  placeholder={currentRef?.supplier ? `ex. ${currentRef.supplier}` : 'ex. Quincaillerie Centrale, Spax...'}
+                  placeholder={currentRef?.supplier ? `ex. ${currentRef.supplier}` : 'ex. Spax, Wurth'}
                 />
               )}
 
@@ -2556,7 +2556,8 @@ export function Stock({
                 label="N° bon / Référence document (optionnel)"
                 value={moveForm.doc_ref}
                 onChange={(e) => setMoveForm((f) => ({ ...f, doc_ref: e.target.value }))}
-                placeholder="ex. Facture FAC-2024-88, Bon de livraison BL-042..."
+                placeholder="ex. FAC-2024-88, BL-042"
+                hint="Facture, bon de livraison ou référence du bon"
               />
 
               {/* Common Fields : Note / Observations */}
@@ -2564,7 +2565,7 @@ export function Stock({
                 label="Motif / Observations"
                 value={moveForm.note}
                 onChange={(e) => setMoveForm((f) => ({ ...f, note: e.target.value }))}
-                placeholder="Observations ou détails sur le mouvement…"
+                placeholder="Observations éventuelles…"
               />
             </div>
           );

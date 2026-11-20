@@ -4180,10 +4180,11 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                 data-lpignore="true"
                 data-1p-ignore="true"
                 value={userForm.password}
-                placeholder="Au moins 6 caractères"
+                placeholder="••••••••"
                 onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
                 className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
               />
+              <span className="mt-1 block text-xs text-ink-faint">Au moins 6 caractères</span>
             </div>
           </div>
 
@@ -4196,10 +4197,11 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
               data-lpignore="true"
               data-1p-ignore="true"
               value={userForm.confirmPassword}
-              placeholder="Répétez le mot de passe"
+              placeholder="••••••••"
               onChange={(e) => setUserForm({ ...userForm, confirmPassword: e.target.value })}
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
             />
+            <span className="mt-1 block text-xs text-ink-faint">Répétez le mot de passe</span>
           </div>
 
           <div>
@@ -4369,19 +4371,21 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
             <label className="mb-1.5 block text-xs font-medium text-ink-soft">Nouveau mot de passe</label>
             <PasswordInput
               value={resetPassword}
-              placeholder="Minimum 6 caractères"
+              placeholder="••••••••"
               onChange={(e) => setResetPassword(e.target.value)}
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
             />
+            <span className="mt-1 block text-xs text-ink-faint">Au moins 6 caractères</span>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-ink-soft">Confirmer le mot de passe</label>
             <PasswordInput
               value={resetPasswordConfirm}
-              placeholder="Répétez le mot de passe"
+              placeholder="••••••••"
               onChange={(e) => setResetPasswordConfirm(e.target.value)}
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-sm text-ink focus:border-amber focus:outline-none"
             />
+            <span className="mt-1 block text-xs text-ink-faint">Répétez le mot de passe</span>
           </div>
         </div>
       </Modal>
@@ -4713,7 +4717,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
               type="text"
               value={newActionForm.group_label}
               onChange={(e) => setNewActionForm({ ...newActionForm, group_label: e.target.value })}
-              placeholder="Ex: Vigile & Pointage Borne, Comptabilité, etc."
+              placeholder="Ex: Vigile, Comptabilité"
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
             />
             {permMatrix?.groups && permMatrix.groups.length > 0 && (
@@ -4758,7 +4762,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                 const autoAction = groupSlug && slug ? `${groupSlug}.${slug}` : slug;
                 setNewActionForm({ ...newActionForm, label, action: autoAction });
               }}
-              placeholder="Ex: Valider pointage vigile, Clôturer caisse, etc."
+              placeholder="Ex: Valider pointage vigile"
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
             />
           </div>
@@ -4771,7 +4775,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
               type="text"
               value={newActionForm.action}
               onChange={(e) => setNewActionForm({ ...newActionForm, action: e.target.value.toLowerCase().trim() })}
-              placeholder="Ex: vigile.pointer_borne"
+              placeholder="ex. vigile.pointer_borne"
               className="h-10 w-full rounded-btn border border-line-strong bg-surface px-3 font-mono text-xs text-ink focus:border-amber focus:outline-none"
             />
             <p className="mt-1 text-[11px] text-ink-faint">

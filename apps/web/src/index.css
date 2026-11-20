@@ -671,3 +671,34 @@ html[data-high-contrast="true"] select,
 html[data-high-contrast="true"] button {
   border-width: 1.5px;
 }
+
+/* =========================================================================
+   NORMES D'ACCESSIBILITÉ & PLACEHOLDERS (APPLE HIG / GOOGLE MATERIAL 3)
+   ========================================================================= */
+
+/* Harmonisation universelle des placeholders pour tous les champs */
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-ink-faint);
+  opacity: 1; /* Empêche l'opacité atténuée 54% par défaut de certains navigateurs */
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Renforcement de contraste pour les placeholders en mode Contraste Élevé */
+html[data-high-contrast="true"] input::placeholder,
+html[data-high-contrast="true"] textarea::placeholder {
+  color: var(--color-ink-soft);
+  opacity: 1;
+}
+
+/* Hauteurs minimales adaptatives selon l'échelle de texte pour éviter tout rognage vertical */
+html[data-text-size="large"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-text-size="large"] select {
+  min-height: 44px;
+}
+html[data-text-size="xlarge"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-text-size="xlarge"] select {
+  min-height: 48px;
+}

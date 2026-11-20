@@ -1988,7 +1988,8 @@ export function Magasins({
             label="Nom du magasin ou atelier"
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="ex. Atelier Menuiserie 1, Magasin Bois, Salle Machines…"
+            placeholder="ex. Atelier Menuiserie 1"
+            hint="Nom usuel du local ou de l'atelier"
             required
           />
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1996,21 +1997,22 @@ export function Magasins({
               label="Code abrégé"
               value={form.code}
               onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
-              placeholder="ex. MAG-001, BOIS, ATEL-1…"
+              placeholder="ex. MAG-001, BOIS"
+              hint="Identifiant court (ex: MAG-001)"
               required
             />
             <Field
               label="Responsable référent"
               value={form.manager_name}
               onChange={(e) => setForm((f) => ({ ...f, manager_name: e.target.value }))}
-              placeholder="ex. Frère Économe ou Paul N."
+              placeholder="ex. Frère Économe, Paul N."
             />
           </div>
           <TextArea
             label="Description &amp; localisation"
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            placeholder="Précisions utiles sur le bâtiment, casiers, clés d'accès…"
+            placeholder="Précisions sur le bâtiment, casiers, clés d'accès…"
           />
 
           <div className="pt-2 border-t border-line space-y-2">

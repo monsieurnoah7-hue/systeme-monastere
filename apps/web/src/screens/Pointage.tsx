@@ -1902,7 +1902,7 @@ export function Pointage({
                         autoFocus
                         value={code}
                         onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, MAX_CODE_LENGTH))}
-                        placeholder="Tapez votre code (ex: EMP-008 ou badge)..."
+                        placeholder="Code ouvrier ou badge..."
                         className="w-full rounded-xl border-2 border-line-strong bg-paper-2 px-3.5 py-2.5 sm:py-3 pr-10 font-mono text-lg sm:text-xl font-extrabold tracking-wider text-center text-ink placeholder:text-ink-faint/60 placeholder:text-xs sm:placeholder:text-sm placeholder:font-sans placeholder:tracking-normal shadow-inner transition-colors focus:border-amber focus:outline-none"
                         disabled={busy}
                         autoComplete="off"
@@ -1924,6 +1924,9 @@ export function Pointage({
                         </button>
                       )}
                     </div>
+                    <p className="mt-1 text-center text-[11px] text-ink-faint">
+                      Matricule ouvrier (ex. EMP-008) ou scan de badge
+                    </p>
                   </div>
 
                   <div className="flex gap-2 pt-0.5">
@@ -2526,7 +2529,7 @@ export function Pointage({
                 onChange={(event) => setCorrectionReason(event.target.value)}
                 rows={3}
                 minLength={5}
-                placeholder="Ex. Heure vérifiée sur le registre papier après panne de la borne."
+                placeholder="Ex. Registre papier, panne borne…"
                 className="mt-1.5 w-full rounded-btn border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-amber focus:outline-none"
               />
             </label>

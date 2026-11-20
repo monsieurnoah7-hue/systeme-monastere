@@ -3634,21 +3634,24 @@ export function Employees({
                               .toLowerCase()
                               .replace(/[^a-z0-9]+/g, '.')
                               .replace(/^\.+|\.+$/g, '')
-                              .slice(0, 24)}`
+                              .slice(0, 16)}`
                           : 'Ex : landry.onana'
                       }
                       onChange={(e) => setForm({ ...form, account_login: e.target.value.toLowerCase() })}
-                      className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
+                      className="min-h-10 h-10 w-full rounded-lg border border-line bg-surface px-2.5 font-mono text-xs text-ink focus:border-amber focus:outline-none"
                     />
                   </div>
                   <div>
                     <label className="mb-1 block text-[11px] font-medium text-ink-soft">Mot de passe temporaire</label>
                     <PasswordInput
                       value={form.account_password}
-                      placeholder="Par défaut : identique au PIN ou Monastere2026!"
+                      placeholder="••••••••"
                       onChange={(e) => setForm({ ...form, account_password: e.target.value })}
-                      className="h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
+                      className="min-h-10 h-10 w-full rounded-lg border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none"
                     />
+                    <p className="mt-1 text-[10px] text-ink-faint leading-tight">
+                      Par défaut : identique au PIN ou Monastere2026!
+                    </p>
                   </div>
                 </div>
               )}
@@ -3967,10 +3970,13 @@ export function Employees({
               <textarea
                 value={leaveForm.note}
                 onChange={(e) => setLeaveForm((f) => ({ ...f, note: e.target.value }))}
-                placeholder="Ex : Mariage, décès familial, convocation administrative, consultation médicale…"
+                placeholder="Ex : Événement familial, convocation, santé…"
                 rows={2}
                 className="w-full rounded-lg border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
               />
+              <p className="mt-1 text-[11px] text-ink-faint">
+                Précisez la raison pour l'examen et la validation par la Direction.
+              </p>
             </div>
           )}
         </div>
@@ -4065,10 +4071,10 @@ export function Employees({
               onChange={(e) => setDecreeForm((f) => ({ ...f, name: e.target.value }))}
               placeholder={
                 decreeForm.kind === 'religious'
-                  ? 'Ex : Fête de Saint-Benoît (Patron du Monastère)'
+                  ? 'Ex : Fête de Saint-Benoît'
                   : decreeForm.kind === 'presidential_decree'
-                  ? 'Ex : Férié accordé par Décret Présidentiel'
-                  : 'Ex : Pont exceptionnel accordé par la Direction'
+                  ? 'Ex : Férié Décret Présidentiel'
+                  : 'Ex : Pont exceptionnel Direction'
               }
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
             />
@@ -4082,10 +4088,10 @@ export function Employees({
               onChange={(e) => setDecreeForm((f) => ({ ...f, decree_ref: e.target.value }))}
               placeholder={
                 decreeForm.kind === 'religious'
-                  ? 'Ex : Solennité monastique - Prieuré du Mont Fébé'
+                  ? 'Ex : Solennité monastique'
                   : decreeForm.kind === 'presidential_decree'
-                  ? 'Ex : Décret N° 2026/048 du Président de la République'
-                  : 'Ex : Décision de Direction CFTM'
+                  ? 'Ex : Décret N° 2026/048'
+                  : 'Ex : Décision de Direction'
               }
               className="h-10 w-full rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:border-amber focus:outline-none"
             />

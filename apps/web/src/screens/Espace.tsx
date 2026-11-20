@@ -586,7 +586,8 @@ export function Espace({
                     autoComplete="off"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Requis uniquement si vous changez le mot de passe"
+                    placeholder="••••••••"
+                    hint="Requis uniquement si vous changez le mot de passe"
                   />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -598,7 +599,8 @@ export function Espace({
                       autoComplete="new-password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Min. 6 caractères"
+                      placeholder="••••••••"
+                      hint="Au moins 6 caractères"
                     />
                     <Field
                       label="Confirmer le mot de passe"
@@ -608,7 +610,8 @@ export function Espace({
                       autoComplete="new-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Répétez le mot de passe"
+                      placeholder="••••••••"
+                      hint="Répétez le nouveau mot de passe"
                     />
                   </div>
                 </div>
@@ -632,8 +635,8 @@ export function Espace({
                         maxLength={6}
                         value={newPin}
                         onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                        placeholder="ex. 2332 (4 chiffres)"
-                        hint="Code secret à saisir sur la borne de pointage"
+                        placeholder="••••"
+                        hint="Code secret pour la borne de pointage"
                       />
                       <Field
                         label="Confirmer le code PIN"
@@ -645,7 +648,8 @@ export function Espace({
                         maxLength={6}
                         value={confirmPin}
                         onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                        placeholder="Répétez le code PIN"
+                        placeholder="••••"
+                        hint="Répétez le code secret"
                       />
                     </div>
                   </div>
@@ -1606,7 +1610,8 @@ export function Espace({
                     autoComplete="off"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Requis uniquement si vous changez le mot de passe"
+                    placeholder="••••••••"
+                    hint="Requis uniquement si vous changez le mot de passe"
                   />
                   <Field
                     label="Nouveau mot de passe"
@@ -1616,7 +1621,8 @@ export function Espace({
                     autoComplete="new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Minimum 6 caractères"
+                    placeholder="••••••••"
+                    hint="Au moins 6 caractères"
                   />
                   <Field
                     label="Confirmer le nouveau mot de passe"
@@ -1626,7 +1632,8 @@ export function Espace({
                     autoComplete="new-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Répétez le mot de passe"
+                    placeholder="••••••••"
+                    hint="Répétez le nouveau mot de passe"
                   />
                 </div>
               </div>
@@ -1650,8 +1657,8 @@ export function Espace({
                       maxLength={6}
                       value={newPin}
                       onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder="ex. 2332 (4 chiffres)"
-                      hint="Code utilisé sur la borne de pointage d’atelier"
+                      placeholder="••••"
+                      hint="Code utilisé sur la borne de pointage"
                     />
                     <Field
                       label="Confirmer le code PIN"
@@ -1663,7 +1670,8 @@ export function Espace({
                       maxLength={6}
                       value={confirmPin}
                       onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder="Répétez le code PIN"
+                      placeholder="••••"
+                      hint="Répétez le code secret"
                     />
                   </div>
                 </div>
@@ -1768,10 +1776,13 @@ export function Espace({
             <textarea
               value={permForm.note}
               onChange={(e) => setPermForm((f) => ({ ...f, note: e.target.value }))}
-              placeholder="Ex : Urgence médicale familiale, convocation officielle, événement exceptionnel…"
+              placeholder="Ex : Urgence, motif familial, santé…"
               rows={3}
               className="w-full rounded-lg border border-line bg-surface p-2.5 text-xs text-ink focus:border-amber focus:outline-none"
             />
+            <p className="mt-1 text-[11px] text-ink-faint">
+              Précisez la raison pour l'examen et la décision de la Direction.
+            </p>
           </div>
         </div>
       </Modal>

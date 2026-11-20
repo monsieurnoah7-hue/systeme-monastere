@@ -2939,7 +2939,8 @@ export function Outils({
             label="Motif / Chantier"
             value={loanForm.motive}
             onChange={(event) => setLoanForm((f) => ({ ...f, motive: event.target.value }))}
-            placeholder="ex. Pose des menuiseries chapelle nord"
+            placeholder="ex. Pose menuiseries"
+            hint="Destination, atelier ou chantier concerné"
           />
 
           <SelectField
@@ -3139,7 +3140,7 @@ export function Outils({
               label="Motif / Chantier"
               value={editLoanForm.motive}
               onChange={(e) => setEditLoanForm((f) => ({ ...f, motive: e.target.value }))}
-              placeholder="ex. Travaux menuiserie chantier Fébé"
+              placeholder="ex. Chantier Fébé"
             />
           </div>
         )}
@@ -3272,14 +3273,15 @@ export function Outils({
               label="N° Bon / Pièce justificative"
               value={movementForm.doc_ref}
               onChange={(e) => setMovementForm((f) => ({ ...f, doc_ref: e.target.value }))}
-              placeholder="ex. BL-2026-042 ou BC-MENUISERIE-08"
+              placeholder="ex. BL-2026-042"
+              hint="Référence du bon de commande ou de livraison"
             />
 
             <TextArea
               label="Motif / Observation"
               value={movementForm.note}
               onChange={(e) => setMovementForm((f) => ({ ...f, note: e.target.value }))}
-              placeholder="Détail du mouvement, destination chantier, état..."
+              placeholder="Détail du mouvement, destination..."
             />
           </div>
         )}

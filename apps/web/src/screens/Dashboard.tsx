@@ -1484,9 +1484,12 @@ function FlashAuditModal({
             type="text"
             value={auditNotes}
             onChange={(e) => setAuditNotes(e.target.value)}
-            placeholder="Ex : Ciseau 16mm légèrement ébréché remis pour affûtage au Magasin Léo..."
-            className="w-full h-8 rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:outline-none focus:border-amber"
+            placeholder="Ex : Ciseau 16mm à affûter…"
+            className="w-full min-h-10 h-10 rounded-lg border border-line bg-surface px-3 text-xs text-ink focus:outline-none focus:border-amber"
           />
+          <p className="mt-1 text-[11px] text-ink-faint">
+            Précisez l'état, usure ou transfert d'outils constatés lors du contrôle.
+          </p>
         </div>
 
         {/* Checklist */}

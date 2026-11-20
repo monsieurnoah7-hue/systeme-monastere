@@ -253,7 +253,7 @@ export function Field({
           aria-invalid={ariaInvalid}
           aria-describedby={combinedDescribedBy}
           className={cx(
-            'h-11 w-full min-w-0 rounded-btn border bg-surface px-3 text-base text-ink placeholder:text-ink-faint sm:text-sm',
+            'min-h-11 h-11 w-full min-w-0 rounded-btn border bg-surface px-3 text-base text-ink placeholder:text-ink-faint placeholder:truncate sm:text-sm',
             isPassword ? 'pr-9 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden' : '',
             'transition-colors duration-[120ms] focus:outline-none focus:ring-2',
             ariaInvalid
@@ -275,7 +275,7 @@ export function Field({
           </button>
         )}
       </div>
-      {hint ? <span id={hintId} className="mt-1 block text-xs text-ink-faint">{hint}</span> : null}
+      {hint ? <span id={hintId} className="mt-1.5 block text-xs leading-relaxed text-ink-faint">{hint}</span> : null}
     </div>
   );
 }
