@@ -492,16 +492,16 @@ export function Stock({
         await api(`/api/stock/refs/${editing.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            name: refForm.name,
-            category: refForm.category,
-            unit: refForm.unit,
-            location: refForm.location,
-            magasin_id: refForm.magasin_id || null,
+            name: refForm.name.trim(),
+            category: refForm.category.trim(),
+            unit: refForm.unit.trim(),
+            location: refForm.location.trim(),
+            magasin_id: refForm.magasin_id ? refForm.magasin_id.trim() : null,
             min_qty: Number(refForm.min_qty || 0),
-            supplier: refForm.supplier,
+            supplier: refForm.supplier ? refForm.supplier.trim() : null,
             brand: refForm.brand.trim() || null,
-            unit_cost: refForm.unit_cost ? Number(refForm.unit_cost) : null,
-            photo_path: refForm.photo_path,
+            unit_cost: refForm.unit_cost !== '' && !isNaN(Number(refForm.unit_cost)) ? Number(refForm.unit_cost) : null,
+            photo_path: refForm.photo_path ? refForm.photo_path.trim() : null,
           }),
         });
         toast('Référence mise à jour avec succès.', 'success');
@@ -509,16 +509,16 @@ export function Stock({
         await api('/api/stock/refs', {
           method: 'POST',
           body: JSON.stringify({
-            name: refForm.name,
-            category: refForm.category || 'Divers',
-            unit: refForm.unit || 'u',
-            location: refForm.location || 'Quincaillerie',
-            magasin_id: refForm.magasin_id || undefined,
+            name: refForm.name.trim(),
+            category: refForm.category.trim() || 'Divers',
+            unit: refForm.unit.trim() || 'u',
+            location: refForm.location.trim() || 'Quincaillerie',
+            magasin_id: refForm.magasin_id ? refForm.magasin_id.trim() : undefined,
             min_qty: Number(refForm.min_qty || 0),
-            supplier: refForm.supplier,
+            supplier: refForm.supplier ? refForm.supplier.trim() : undefined,
             brand: refForm.brand.trim() || undefined,
-            unit_cost: refForm.unit_cost ? Number(refForm.unit_cost) : undefined,
-            photo_path: refForm.photo_path || undefined,
+            unit_cost: refForm.unit_cost !== '' && !isNaN(Number(refForm.unit_cost)) ? Number(refForm.unit_cost) : undefined,
+            photo_path: refForm.photo_path ? refForm.photo_path.trim() : undefined,
             initial_qty: Number(refForm.initial_qty || 0),
           }),
         });
@@ -2066,30 +2066,26 @@ export function Stock({
               placeholder="ex. Spax, Wurth, Sika..."
             />
             <Field
+              label="Fournisseur habituel"
+              value={refForm.supplier}
+              onChange={(e) => setRefForm((f) => ({ ...f, supplier: e.target.value }))}
+              placeholder="ex. Quincaillerie Moderne, BTP Dépôt..."
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
               label="Catégorie"
               value={refForm.category}
               onChange={(e) => setRefForm((f) => ({ ...f, category: e.target.value }))}
               placeholder="ex. Visserie, Colle, Abrasif..."
             />
-          </div>
-
-          <div className={cx('grid gap-3', canViewFinancial ? 'sm:grid-cols-2' : 'sm:grid-cols-1')}>
             <Field
               label="Unité de comptage"
               value={refForm.unit}
               onChange={(e) => setRefForm((f) => ({ ...f, unit: e.target.value }))}
               placeholder="u, kg, boîte, l, m..."
             />
-            {canViewFinancial && (
-              <Field
-                label="Coût unitaire d'achat (FCFA)"
-                type="number"
-                value={refForm.unit_cost}
-                onChange={(e) => setRefForm((f) => ({ ...f, unit_cost: e.target.value }))}
-                placeholder="ex. 150"
-                hint="Pour le calcul de la valeur globale du stock"
-              />
-            )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -2111,30 +2107,78 @@ export function Stock({
             </SelectField>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          {canViewFinancial && (
             <Field
-              label="Seuil d'alerte minimal"
+              label="Coût unitaire d'achat (FCFA)"
               type="number"
-              placeholder="0"
-              value={refForm.min_qty}
-              onChange={(e) => setRefForm((f) => ({ ...f, min_qty: e.target.value }))}
+              value={refForm.unit_cost}
+              onChange={(e) => setRefForm((f) => ({ ...f, unit_cost: e.target.value }))}
+              placeholder="ex. 150"
+              hint="Pour le calcul de la valeur globale du stock"
             />
-            {!editing ? (
+          )}
+
+          {!editing ? (
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Stock initial"
+                label="Seuil d'alerte réapprovisionnement"
+                type="number"
+                placeholder="0"
+                value={refForm.min_qty}
+                onChange={(e) => setRefForm((f) => ({ ...f, min_qty: e.target.value }))}
+                hint="Niveau minimum déclenchant l'alerte"
+              />
+              <Field
+                label="Stock initial en réserve"
                 type="number"
                 placeholder="0"
                 value={refForm.initial_qty}
                 onChange={(e) => setRefForm((f) => ({ ...f, initial_qty: e.target.value }))}
+                hint="Quantité physique présente à la création"
               />
-            ) : (
+            </div>
+          ) : (
+            <div className="space-y-3 pt-1">
               <Field
-                label="Fournisseur habituel"
-                value={refForm.supplier}
-                onChange={(e) => setRefForm((f) => ({ ...f, supplier: e.target.value }))}
+                label="Seuil d'alerte réapprovisionnement"
+                type="number"
+                placeholder="0"
+                value={refForm.min_qty}
+                onChange={(e) => setRefForm((f) => ({ ...f, min_qty: e.target.value }))}
+                hint="Déclenche l'alerte de réapprovisionnement (ne modifie pas le stock physique)."
               />
-            )}
-          </div>
+
+              <div className="rounded-xl border border-line bg-paper-2/70 p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-ink-soft">Stock physique disponible :</span>
+                  <span className="font-mono text-base font-bold text-ink">
+                    {editing.qty} {editing.unit}
+                  </span>
+                </div>
+                <p className="text-[11px] text-ink-faint leading-relaxed">
+                  Pour garantir la traçabilité comptable et l'historique d'inventaire, la quantité physique en stock ne se modifie pas en texte direct.
+                </p>
+                {canCorrect && (
+                  <div className="pt-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="w-full justify-center border-amber/40 hover:bg-amber-wash/40 text-amber font-semibold"
+                      onClick={() => {
+                        const target = editing;
+                        setRefOpen(false);
+                        openMove('correction', target);
+                      }}
+                    >
+                      <Scale size={13} className="mr-1.5" />
+                      Régulariser / Ajuster le stock réel
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
 

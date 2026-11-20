@@ -52,17 +52,17 @@ const editBody = z.object({
   name: z.string().min(2).optional(),
   category: z.string().min(1).optional(),
   location: z.string().min(1).optional(),
-  magasin_id: z.string().optional(),
+  magasin_id: z.string().nullable().optional(),
   total_qty: z.coerce.number().int().min(1).optional(),
-  observations: z.string().optional(),
+  observations: z.string().nullable().optional(),
   photo_path: z.string().nullable().optional(),
-  brand: z.string().optional(),
-  model: z.string().optional(),
-  serial_number: z.string().optional(),
+  brand: z.string().nullable().optional(),
+  model: z.string().nullable().optional(),
+  serial_number: z.string().nullable().optional(),
   acquisition_cost: z.coerce.number().min(0).nullable().optional(),
   acquisition_year: z.coerce.number().int().min(1950).max(2100).nullable().optional(),
   acquisition_date: z.string().nullable().optional(),
-  lifespan_years: z.coerce.number().int().min(1).max(50).optional(),
+  lifespan_years: z.coerce.number().int().min(1).max(50).nullable().optional(),
 });
 
 const statusBody = z.object({
@@ -283,6 +283,9 @@ toolsRoutes.patch('/:id', requirePerm('tools.edit'), async (c) => {
   const before = await db.one<ToolRow>('SELECT * FROM tools WHERE id = $1', [id]);
   if (!before) return c.json({ error: 'Outil introuvable.' }, 404);
   const p = body.data;
+  const toNullableText = (v: string | null | undefined) =>
+    v === undefined ? null : (v === null || v.trim() === '' ? '' : v.trim());
+
   const updated = await db.one<ToolRow>(
     `UPDATE tools SET
        name = coalesce($2, name),
@@ -295,28 +298,28 @@ toolsRoutes.patch('/:id', requirePerm('tools.edit'), async (c) => {
        brand = CASE WHEN $9::text IS NOT NULL THEN (CASE WHEN $9 = '' THEN NULL ELSE $9 END) ELSE brand END,
        model = CASE WHEN $10::text IS NOT NULL THEN (CASE WHEN $10 = '' THEN NULL ELSE $10 END) ELSE model END,
        serial_number = CASE WHEN $11::text IS NOT NULL THEN (CASE WHEN $11 = '' THEN NULL ELSE $11 END) ELSE serial_number END,
-       acquisition_cost = CASE WHEN $12::numeric IS NOT NULL THEN $12::numeric ELSE acquisition_cost END,
-       acquisition_year = CASE WHEN $13::int IS NOT NULL THEN $13::int ELSE acquisition_year END,
+       acquisition_cost = CASE WHEN $12::numeric IS NOT NULL THEN (CASE WHEN $12 < 0 THEN NULL ELSE $12::numeric END) ELSE acquisition_cost END,
+       acquisition_year = CASE WHEN $13::int IS NOT NULL THEN (CASE WHEN $13 = 0 THEN NULL ELSE $13::int END) ELSE acquisition_year END,
        acquisition_date = CASE WHEN $14::date IS NOT NULL THEN $14::date ELSE acquisition_date END,
-       lifespan_years = CASE WHEN $15::int IS NOT NULL THEN $15::int ELSE lifespan_years END
+       lifespan_years = CASE WHEN $15::int IS NOT NULL THEN (CASE WHEN $15 = 0 THEN NULL ELSE $15::int END) ELSE lifespan_years END
      WHERE id = $1
      RETURNING *`,
     [
       id,
-      p.name?.trim() ?? null,
-      p.category?.trim() ?? null,
-      p.location?.trim() ?? null,
+      p.name?.trim() || null,
+      p.category?.trim() || null,
+      p.location?.trim() || null,
       p.total_qty !== undefined ? p.total_qty : null,
-      p.magasin_id !== undefined ? p.magasin_id : null,
-      p.observations !== undefined ? p.observations?.trim() : null,
-      p.photo_path !== undefined ? p.photo_path?.trim() : null,
-      p.brand !== undefined ? p.brand?.trim() : null,
-      p.model !== undefined ? p.model?.trim() : null,
-      p.serial_number !== undefined ? p.serial_number?.trim() : null,
-      p.acquisition_cost !== undefined ? p.acquisition_cost : null,
-      p.acquisition_year !== undefined ? p.acquisition_year : null,
-      p.acquisition_date !== undefined ? p.acquisition_date : null,
-      p.lifespan_years !== undefined ? p.lifespan_years : null,
+      toNullableText(p.magasin_id),
+      toNullableText(p.observations),
+      toNullableText(p.photo_path),
+      toNullableText(p.brand),
+      toNullableText(p.model),
+      toNullableText(p.serial_number),
+      p.acquisition_cost !== undefined ? (p.acquisition_cost === null ? -1 : p.acquisition_cost) : null,
+      p.acquisition_year !== undefined ? (p.acquisition_year === null ? 0 : p.acquisition_year) : null,
+      p.acquisition_date !== undefined ? (p.acquisition_date ? p.acquisition_date : null) : null,
+      p.lifespan_years !== undefined ? (p.lifespan_years === null ? 0 : p.lifespan_years) : null,
     ],
   );
   await db.query(

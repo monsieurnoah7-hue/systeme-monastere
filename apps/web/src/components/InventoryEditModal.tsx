@@ -3,8 +3,8 @@ import { api, type StockRef, type Tool } from '../lib/api';
 import { Button, Field, Modal, TextArea, useToast } from './ui';
 
 export type InventoryEditTarget =
-  | { kind: 'tool'; item: Pick<Tool, 'id' | 'name' | 'category' | 'location'> & Partial<Pick<Tool, 'brand' | 'model' | 'serial_number' | 'observations'>> }
-  | { kind: 'stock'; item: Pick<StockRef, 'id' | 'name' | 'category' | 'unit' | 'location' | 'min_qty'> & Partial<Pick<StockRef, 'brand' | 'supplier'>> };
+  | { kind: 'tool'; item: Pick<Tool, 'id' | 'name' | 'category' | 'location'> & Partial<Pick<Tool, 'brand' | 'model' | 'serial_number' | 'observations' | 'total_qty'>> }
+  | { kind: 'stock'; item: Pick<StockRef, 'id' | 'name' | 'category' | 'unit' | 'location' | 'min_qty'> & Partial<Pick<StockRef, 'brand' | 'supplier' | 'unit_cost' | 'qty'>> };
 
 type EditForm = {
   name: string;
@@ -14,6 +14,7 @@ type EditForm = {
   model: string;
   serial_number: string;
   observations: string;
+  total_qty: string;
   unit: string;
   min_qty: string;
   supplier: string;
@@ -21,7 +22,7 @@ type EditForm = {
 
 const EMPTY_FORM: EditForm = {
   name: '', category: '', location: '', brand: '', model: '', serial_number: '',
-  observations: '', unit: '', min_qty: '0', supplier: '',
+  observations: '', total_qty: '1', unit: '', min_qty: '0', supplier: '',
 };
 
 export function InventoryEditModal({
@@ -52,6 +53,7 @@ export function InventoryEditModal({
           model: target.item.model ?? '',
           serial_number: target.item.serial_number ?? '',
           observations: target.item.observations ?? '',
+          total_qty: target.item.total_qty ? String(target.item.total_qty) : '1',
         }
       : {
           ...common,
@@ -72,16 +74,22 @@ export function InventoryEditModal({
     setError('');
     try {
       if (target.kind === 'tool') {
+        const parsedQty = form.total_qty.trim() ? Number(form.total_qty) : undefined;
+        if (parsedQty !== undefined && (!Number.isInteger(parsedQty) || parsedQty < 1)) {
+          setError('La quantité totale doit être un nombre entier supérieur ou égal à 1.');
+          return;
+        }
         await api(`/api/tools/${target.item.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
             name: form.name.trim(),
             category: form.category.trim(),
             location: form.location.trim(),
-            brand: form.brand.trim(),
-            model: form.model.trim(),
-            serial_number: form.serial_number.trim(),
-            observations: form.observations.trim(),
+            brand: form.brand.trim() || null,
+            model: form.model.trim() || null,
+            serial_number: form.serial_number.trim() || null,
+            observations: form.observations.trim() || null,
+            total_qty: parsedQty,
           }),
         });
       } else {
@@ -97,8 +105,8 @@ export function InventoryEditModal({
             category: form.category.trim(),
             location: form.location.trim(),
             unit: form.unit.trim(),
-            brand: form.brand.trim(),
-            supplier: form.supplier.trim(),
+            brand: form.brand.trim() || null,
+            supplier: form.supplier.trim() || null,
             min_qty: minQty,
           }),
         });
@@ -129,9 +137,24 @@ export function InventoryEditModal({
       {target && (
         <div className="space-y-4">
           {error && <p role="alert" className="rounded-lg border border-red/30 bg-red-wash px-3 py-2 text-sm text-red">{error}</p>}
-          <p className="text-sm text-ink-soft">
-            Les changements mettent à jour cette même fiche partout où elle est utilisée. Le stock réel se corrige avec une entrée, une sortie ou un transfert.
-          </p>
+          <div className="rounded-lg border border-amber/30 bg-amber-wash/40 p-3 text-xs text-ink-soft space-y-1">
+            <p className="font-semibold text-ink">
+              ℹ️ Information sur la mise à jour :
+            </p>
+            <p>
+              {isTool
+                ? 'Cette fiche met à jour les caractéristiques de l’équipement ou outillage. Vous pouvez également ajuster la quantité totale d’exemplaires.'
+                : 'La modification met à jour les métadonnées de la référence. Le seuil ci-dessous est le seuil d’alerte de réapprovisionnement (le stock physique réel s’ajuste par entrée/sortie ou régularisation).'}
+            </p>
+          </div>
+
+          {!isTool && target.item.qty !== undefined && (
+            <div className="rounded-lg border border-line bg-paper-2/60 p-3 flex items-center justify-between text-xs">
+              <span className="text-ink-soft">Stock physique disponible :</span>
+              <span className="font-mono font-bold text-ink">{target.item.qty} {form.unit || target.item.unit}</span>
+            </div>
+          )}
+
           <Field label="Nom / Désignation" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Catégorie" value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} />
@@ -142,18 +165,35 @@ export function InventoryEditModal({
             {isTool ? (
               <Field label="Modèle" value={form.model} onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))} />
             ) : (
-              <Field label="Unité" value={form.unit} onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))} />
+              <Field label="Unité de comptage" value={form.unit} onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))} />
             )}
           </div>
           {isTool ? (
             <>
-              <Field label="Numéro de série" value={form.serial_number} onChange={(event) => setForm((current) => ({ ...current, serial_number: event.target.value }))} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Numéro de série" value={form.serial_number} onChange={(event) => setForm((current) => ({ ...current, serial_number: event.target.value }))} />
+                <Field
+                  label="Quantité totale du matériel"
+                  type="number"
+                  min="1"
+                  value={form.total_qty}
+                  onChange={(event) => setForm((current) => ({ ...current, total_qty: event.target.value }))}
+                  hint="Nombre d'exemplaires de cet équipement"
+                />
+              </div>
               <TextArea label="Observations" value={form.observations} onChange={(event) => setForm((current) => ({ ...current, observations: event.target.value }))} rows={3} />
             </>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Seuil d’alerte" type="number" min="0" value={form.min_qty} onChange={(event) => setForm((current) => ({ ...current, min_qty: event.target.value }))} />
-              <Field label="Fournisseur" value={form.supplier} onChange={(event) => setForm((current) => ({ ...current, supplier: event.target.value }))} />
+              <Field
+                label="Seuil d’alerte réapprovisionnement"
+                type="number"
+                min="0"
+                value={form.min_qty}
+                onChange={(event) => setForm((current) => ({ ...current, min_qty: event.target.value }))}
+                hint="Alerte quand le stock descend sous cette valeur"
+              />
+              <Field label="Fournisseur habituel" value={form.supplier} onChange={(event) => setForm((current) => ({ ...current, supplier: event.target.value }))} />
             </div>
           )}
         </div>

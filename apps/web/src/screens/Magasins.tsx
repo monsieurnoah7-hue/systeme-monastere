@@ -1592,6 +1592,7 @@ export function Magasins({
                                   model: t.model,
                                   serial_number: t.serial_number,
                                   observations: t.observations,
+                                  total_qty: t.total_qty,
                                 },
                               })}
                               className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-[11px] font-medium text-ink-soft transition-colors hover:bg-paper-2 hover:text-ink"
@@ -1690,6 +1691,7 @@ export function Magasins({
                                     min_qty: s.min_qty,
                                     brand: s.brand,
                                     supplier: s.supplier,
+                                    qty: s.qty,
                                   },
                                 })}
                                 className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-line bg-surface px-2 text-xs font-medium text-ink-soft transition-colors hover:bg-paper-2 hover:text-ink"

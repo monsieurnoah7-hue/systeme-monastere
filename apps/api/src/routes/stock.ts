@@ -31,10 +31,10 @@ const patchRefBody = z.object({
   category: z.string().min(1).optional(),
   unit: z.string().min(1).optional(),
   location: z.string().min(1).optional(),
-  magasin_id: z.string().optional(),
-  min_qty: z.number().min(0).optional(),
-  supplier: z.string().optional(),
-  brand: z.string().optional(),
+  magasin_id: z.string().nullable().optional(),
+  min_qty: z.coerce.number().min(0).optional(),
+  supplier: z.string().nullable().optional(),
+  brand: z.string().nullable().optional(),
   unit_cost: z.coerce.number().min(0).nullable().optional(),
   photo_path: z.string().nullable().optional(),
 });
@@ -230,6 +230,9 @@ stockRoutes.patch('/refs/:id', requirePerm('stock.edit_ref'), async (c) => {
   if (!before) return c.json({ error: 'Référence introuvable.' }, 404);
 
   const patch = body.data;
+  const toNullableText = (v: string | null | undefined) =>
+    v === undefined ? null : (v === null || v.trim() === '' ? '' : v.trim());
+
   const updated = await db.one<StockRefRow>(
     `UPDATE stock_refs SET
        name = coalesce($2, name),
@@ -240,22 +243,22 @@ stockRoutes.patch('/refs/:id', requirePerm('stock.edit_ref'), async (c) => {
        min_qty = coalesce($7, min_qty),
        supplier = CASE WHEN $8::text IS NOT NULL THEN (CASE WHEN $8 = '' THEN NULL ELSE $8 END) ELSE supplier END,
        brand = CASE WHEN $9::text IS NOT NULL THEN (CASE WHEN $9 = '' THEN NULL ELSE $9 END) ELSE brand END,
-       unit_cost = CASE WHEN $10::numeric IS NOT NULL THEN $10::numeric ELSE unit_cost END,
+       unit_cost = CASE WHEN $10::numeric IS NOT NULL THEN (CASE WHEN $10 < 0 THEN NULL ELSE $10::numeric END) ELSE unit_cost END,
        photo_path = CASE WHEN $11::text IS NOT NULL THEN (CASE WHEN $11 = '' THEN NULL ELSE $11 END) ELSE photo_path END
      WHERE id = $1
      RETURNING *`,
     [
       id,
-      patch.name?.trim() ?? null,
-      patch.category?.trim() ?? null,
-      patch.unit?.trim() ?? null,
-      patch.location?.trim() ?? null,
-      patch.magasin_id !== undefined ? patch.magasin_id : null,
+      patch.name?.trim() || null,
+      patch.category?.trim() || null,
+      patch.unit?.trim() || null,
+      patch.location?.trim() || null,
+      toNullableText(patch.magasin_id),
       patch.min_qty !== undefined ? patch.min_qty : null,
-      patch.supplier !== undefined ? patch.supplier.trim() : null,
-      patch.brand !== undefined ? patch.brand.trim() : null,
-      patch.unit_cost !== undefined ? patch.unit_cost : null,
-      patch.photo_path !== undefined ? (patch.photo_path ? patch.photo_path.trim() : null) : null,
+      toNullableText(patch.supplier),
+      toNullableText(patch.brand),
+      patch.unit_cost !== undefined ? (patch.unit_cost === null ? -1 : patch.unit_cost) : null,
+      toNullableText(patch.photo_path),
     ],
   );
   await writeAudit(db, {
