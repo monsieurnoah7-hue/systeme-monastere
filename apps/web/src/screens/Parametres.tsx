@@ -1791,14 +1791,177 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                     variant="secondary"
                     icon={<Menu size={14} />}
                     className="h-11 w-11 justify-center p-0 sm:h-8 sm:w-auto sm:px-2.5 sm:py-0 text-xs shadow-2xs gap-1.5"
-                    title="Options &amp; Exports"
-                    aria-label="Options et exports"
+                    title="Sous-onglets &amp; Options"
+                    aria-label="Sous-onglets et options"
                   >
                     <span className="hidden sm:inline">Options</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
-                  <DropdownMenuLabel className="px-2.5 py-1.5 text-[11px] font-semibold text-ink-faint uppercase tracking-wider">
+                <DropdownMenuContent align="end" className="w-64 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
+                  {/* =========================================================
+                      SECTION 1 : SOUS-ONGLETS & VUES DU 3E NIVEAU (STICKY OVERFLOW)
+                  ========================================================= */}
+                  {activeTab === 'comptes' && canViewUsers && (
+                    <>
+                      <DropdownMenuLabel className="px-2.5 py-1 text-[10px] font-bold text-amber uppercase tracking-wider flex items-center justify-between">
+                        <span>Vues &amp; Filtres Comptes</span>
+                        <span className="text-[10px] text-ink-faint font-normal lowercase">sous-onglets</span>
+                      </DropdownMenuLabel>
+                      {[
+                        { key: 'all', label: 'Tous les comptes', count: users.length },
+                        { key: 'active', label: 'Comptes actifs', count: activeUsersCount },
+                        { key: 'inactive', label: 'Comptes inactifs', count: users.length - activeUsersCount },
+                        { key: 'unlinked', label: 'Comptes à rattacher', count: unlinkedStaffAccounts.length },
+                        { key: 'direction', label: 'Direction & Admin', count: users.filter((u) => u.role === 'direction').length },
+                      ].map(({ key, label, count }) => (
+                        <DropdownMenuItem
+                          key={key}
+                          onClick={() => setKpiCardFilter(key as any)}
+                          className={cx(
+                            'flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors text-xs',
+                            kpiCardFilter === key ? 'bg-amber/15 text-amber font-semibold' : 'hover:bg-paper-2 text-ink',
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            {kpiCardFilter === key ? <Check size={13} className="text-amber shrink-0" /> : <div className="w-3.5 shrink-0" />}
+                            <span>{label}</span>
+                          </div>
+                          <span className="rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-mono text-ink-soft">
+                            {count}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator className="my-1 border-line" />
+                    </>
+                  )}
+
+                  {activeTab === 'permissions' && canViewPermissions && (
+                    <>
+                      <DropdownMenuLabel className="px-2.5 py-1 text-[10px] font-bold text-amber uppercase tracking-wider flex items-center justify-between">
+                        <span>Sous-vues Permissions</span>
+                        <span className="text-[10px] text-ink-faint font-normal lowercase">sous-onglets</span>
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => setRbacView('roles')}
+                        className={cx(
+                          'flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors text-xs',
+                          rbacView === 'roles' ? 'bg-amber/15 text-amber font-semibold' : 'hover:bg-paper-2 text-ink',
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          {rbacView === 'roles' ? <Check size={13} className="text-amber shrink-0" /> : <div className="w-3.5 shrink-0" />}
+                          <span>Gestion des Rôles métiers</span>
+                        </div>
+                        <span className="rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-mono text-ink-soft">
+                          {availableRoles.length}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setRbacView('matrix')}
+                        className={cx(
+                          'flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors text-xs',
+                          rbacView === 'matrix' ? 'bg-amber/15 text-amber font-semibold' : 'hover:bg-paper-2 text-ink',
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          {rbacView === 'matrix' ? <Check size={13} className="text-amber shrink-0" /> : <div className="w-3.5 shrink-0" />}
+                          <span>Matrice complète des Droits</span>
+                        </div>
+                        <span className="rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-mono text-ink-soft">
+                          {permMatrix?.actions.length ?? 0}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="my-1 border-line" />
+                    </>
+                  )}
+
+                  {activeTab === 'kiosk' && canViewKiosk && (
+                    <>
+                      <DropdownMenuLabel className="px-2.5 py-1 text-[10px] font-bold text-amber uppercase tracking-wider flex items-center justify-between">
+                        <span>Sous-onglets Kiosque</span>
+                        <span className="text-[10px] text-ink-faint font-normal lowercase">navigation</span>
+                      </DropdownMenuLabel>
+                      {[
+                        ...(canViewSettings ? [{ key: 'horaires', label: 'Horaires & Présences' }] : []),
+                        ...(canManageTerminals ? [{ key: 'bornes', label: `Bornes d'Atelier (${terminals.length})` }] : []),
+                        ...(canViewSettings ? [{ key: 'regles', label: 'Règles & Retards' }] : []),
+                      ].map(({ key, label }) => (
+                        <DropdownMenuItem
+                          key={key}
+                          onClick={() => setKioskSubTab(key as any)}
+                          className={cx(
+                            'flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors text-xs',
+                            kioskSubTab === key ? 'bg-amber/15 text-amber font-semibold' : 'hover:bg-paper-2 text-ink',
+                          )}
+                        >
+                          {kioskSubTab === key ? <Check size={13} className="text-amber shrink-0" /> : <div className="w-3.5 shrink-0" />}
+                          <span>{label}</span>
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator className="my-1 border-line" />
+                    </>
+                  )}
+
+                  {activeTab === 'securite' && (
+                    <>
+                      <DropdownMenuLabel className="px-2.5 py-1 text-[10px] font-bold text-amber uppercase tracking-wider flex items-center justify-between">
+                        <span>Sections Sécurité</span>
+                        <span className="text-[10px] text-ink-faint font-normal lowercase">accès direct</span>
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          document.getElementById('sec-profil')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink text-xs"
+                      >
+                        <ShieldCheck size={13} className="text-blue shrink-0" />
+                        <span>Profil actif &amp; Identité</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          document.getElementById('sec-password')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink text-xs"
+                      >
+                        <KeyRound size={13} className="text-amber shrink-0" />
+                        <span>Modifier mon mot de passe</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="my-1 border-line" />
+                    </>
+                  )}
+
+                  {activeTab === 'sauvegardes' && canUseBackups && (
+                    <>
+                      <DropdownMenuLabel className="px-2.5 py-1 text-[10px] font-bold text-amber uppercase tracking-wider flex items-center justify-between">
+                        <span>Sections Sauvegardes</span>
+                        <span className="text-[10px] text-ink-faint font-normal lowercase">accès direct</span>
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          document.getElementById('sauv-metrics')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink text-xs"
+                      >
+                        <Database size={13} className="text-blue shrink-0" />
+                        <span>Volume Cloud &amp; Statut</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          document.getElementById('sauv-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink text-xs"
+                      >
+                        <HardDrive size={13} className="text-emerald-500 shrink-0" />
+                        <span>Instantanés &amp; Restauration</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="my-1 border-line" />
+                    </>
+                  )}
+
+                  {/* =========================================================
+                      SECTION 2 : ACTIONS & OUTILS CONTEXTUELS
+                  ========================================================= */}
+                  <DropdownMenuLabel className="px-2.5 py-1 text-[10px] font-bold text-ink-faint uppercase tracking-wider">
                     Actions &amp; Outils
                   </DropdownMenuLabel>
 
@@ -3604,7 +3767,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
         <TabsContent value="securite" className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             {/* Identity Card */}
-            <Card className="shadow-card">
+            <Card id="sec-profil" className="shadow-card scroll-mt-24">
               <CardHeader className="border-b border-line pb-4">
                 <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
                   <ShieldCheck size={18} className="text-blue" /> Profil actif
@@ -3666,7 +3829,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
             </Card>
 
             {/* Password Change Card */}
-            <Card className="shadow-card">
+            <Card id="sec-password" className="shadow-card scroll-mt-24">
               <CardHeader className="border-b border-line pb-4">
                 <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">
                   <KeyRound size={18} className="text-amber" /> Modifier mon mot de passe
@@ -3726,7 +3889,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
         ========================================================================= */}
         {canUseBackups && <TabsContent value="sauvegardes" className="space-y-6">
           {/* Quick Metrics for Backups */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div id="sauv-metrics" className="grid grid-cols-1 gap-3 sm:grid-cols-3 scroll-mt-24">
             <Card className="p-4 shadow-card">
               <div className="flex items-center justify-between">
                 <p className="text-[12px] font-medium uppercase tracking-wider text-ink-faint">Instantanés Stockés</p>
@@ -3762,7 +3925,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
           </div>
 
           {/* Cloud Backups Card */}
-          <Card className="shadow-card">
+          <Card id="sauv-list" className="shadow-card scroll-mt-24">
             <CardHeader className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-base font-semibold text-ink">

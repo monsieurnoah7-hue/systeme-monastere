@@ -1,5 +1,6 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import {
+  ArrowUp,
   Briefcase,
   Clock,
   Download,
@@ -263,8 +264,30 @@ export function Shell({
   const [offlineMutations, setOfflineMutations] = useState<OfflineMutation[]>([]);
   const [offlineHistory, setOfflineHistory] = useState<OfflineSyncHistory[]>([]);
   const [lastServerSync, setLastServerSync] = useState<number | null>(() => getLastServerSync(user.id));
+  const mainRef = useRef<HTMLElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const effectiveAllowed = allowedList ?? allowedViews(user.role);
   const items = NAV.filter((item) => effectiveAllowed.includes(item.id));
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      setShowScrollTop(el.scrollTop > 260);
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    setShowScrollTop(false);
+  }, [view]);
+
+  const scrollToTop = () => {
+    mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const handleSubView = (e: Event) => {
@@ -572,7 +595,7 @@ export function Shell({
           />
 
           {/* Main Scrollable Content with Antigravity Top Bar */}
-          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-thin overscroll-y-contain flex flex-col">
+          <main ref={mainRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden scroll-thin overscroll-y-contain flex flex-col">
             {/* Desktop Topbar Header - macOS / Apple Design */}
             <div className="no-print hidden lg:flex shrink-0 h-11 items-center justify-between px-6 border-b border-line/60 bg-surface sticky top-0 z-40 text-xs">
               {/* Breadcrumb section */}
@@ -658,6 +681,28 @@ export function Shell({
               {children}
             </div>
           </main>
+
+          {/* =========================================================================
+              FLOATING ACTION BUTTON: SMOOTH SCROLL TO TOP
+          ========================================================================= */}
+          <button
+            type="button"
+            onClick={scrollToTop}
+            aria-label="Remonter tout en haut de la page"
+            title="Remonter en haut"
+            className={cx(
+              'no-print fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 group',
+              'flex h-11 w-11 items-center justify-center rounded-full cursor-pointer',
+              'bg-surface/90 backdrop-blur-md border border-line text-amber shadow-float',
+              'hover:bg-amber hover:text-white hover:border-amber transition-all duration-300 ease-out active:scale-90',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber',
+              showScrollTop
+                ? 'opacity-100 translate-y-0 pointer-events-auto scale-100'
+                : 'opacity-0 translate-y-4 pointer-events-none scale-75',
+            )}
+          >
+            <ArrowUp size={18} className="transition-transform duration-200 group-hover:-translate-y-0.5" />
+          </button>
 
           {/* =========================================================================
               MOBILE BOTTOM NAVIGATION BAR
