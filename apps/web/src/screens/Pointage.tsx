@@ -1180,41 +1180,48 @@ export function Pointage({
           </div>
         </div>
       ) : (
-        <div className="hidden sm:block">
-          <PageHeader
-            title="Pointage & Présences"
-            hint="Feuilles d’émargement quotidiennes, retards constatés, régularisations et accès borne kiosque"
-            actions={
-              <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1 shadow-xs">
-                {canViewAttendance && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveMainTab('timesheets')}
-                    className={cx(
-                      'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
-                      activeMainTab === 'timesheets'
-                        ? 'bg-amber text-white shadow-xs font-bold'
-                        : 'text-ink-soft hover:text-ink',
-                    )}
-                  >
-                    <FileSpreadsheet size={15} />
-                    <span>Présences</span>
-                  </button>
-                )}
-                {canAccessKiosk && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveMainTab('kiosk')}
-                    className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all text-ink-soft hover:text-ink"
-                  >
-                    <Smartphone size={15} />
-                    <span>Borne Kiosque</span>
-                  </button>
-                )}
-              </div>
-            }
-          />
-        </div>
+        <>
+          <div className="hidden sm:block">
+            <PageHeader
+              title="Pointage & Présences"
+              eyebrow="CFTM · Présences & Émargement"
+              hint="Feuilles d’émargement quotidiennes, retards constatés, régularisations et accès borne kiosque"
+              actions={
+                <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1 shadow-xs">
+                  {canViewAttendance && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveMainTab('timesheets')}
+                      className={cx(
+                        'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
+                        activeMainTab === 'timesheets'
+                          ? 'bg-amber text-white shadow-xs font-bold'
+                          : 'text-ink-soft hover:text-ink',
+                      )}
+                    >
+                      <FileSpreadsheet size={15} />
+                      <span>Présences</span>
+                    </button>
+                  )}
+                  {canAccessKiosk && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveMainTab('kiosk')}
+                      className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all text-ink-soft hover:text-ink"
+                    >
+                      <Smartphone size={15} />
+                      <span>Borne Kiosque</span>
+                    </button>
+                  )}
+                </div>
+              }
+            />
+          </div>
+          <div className="sm:hidden border-b border-line pb-2 mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">CFTM · Atelier &amp; Équipe</p>
+            <h1 className="text-lg font-bold text-ink">Pointage &amp; Présences</h1>
+          </div>
+        </>
       )}
 
       {/* =========================================================================

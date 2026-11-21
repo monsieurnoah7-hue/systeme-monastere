@@ -1035,8 +1035,9 @@ export function Espace({
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 pb-4 sm:space-y-5">
       <PageHeader
-        title="Mon espace"
-        hint={`${employee.full_name} · ${employee.id} · ${employee.job_title}`}
+        title="Mon Espace"
+        eyebrow="CFTM · Espace Personnel & Pointages"
+        hint={`${employee.full_name} · Matricule ${employee.id} · ${employee.job_title}`}
       />
 
       <Card className="overflow-hidden border-line bg-surface p-0 shadow-card">

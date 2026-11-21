@@ -2161,12 +2161,14 @@ export function Dashboard({ active = true }: { active?: boolean }) {
             <span className="text-line-strong">·</span>
             <span className="capitalize text-ink-soft font-medium text-xs">{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
           </div>
+          <p className="mt-1 text-[11px] font-semibold tracking-[0.14em] text-blue uppercase hidden sm:block">CFTM · Superviseur &amp; Pilotage</p>
           <div className="flex items-baseline gap-2.5 mt-0.5">
             <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-ink font-heading">
               Vue d'ensemble
             </h1>
             <LiveClock active={active} />
           </div>
+          <p className="mt-0.5 text-xs text-ink-soft hidden sm:block">Tableau de bord opérationnel, indicateurs vitaux et activité en temps réel de l'atelier CFTM</p>
         </div>
 
         <div className="flex items-center gap-2 justify-between sm:justify-end">

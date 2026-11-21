@@ -323,7 +323,9 @@ export function Shell({
   );
 
   // Keep the most-used destinations in the dock and always include the active screen.
-  const mobilePriority: ViewId[] = ['dashboard', 'pointage', 'projets', 'outils', 'stock', 'employes', 'magasins', 'espace', 'parametres'];
+  const mobilePriority: ViewId[] = user.role === 'travailleur'
+    ? ['espace', 'pointage', 'projets', 'outils', 'stock', 'magasins', 'dashboard', 'employes', 'parametres']
+    : ['dashboard', 'pointage', 'projets', 'outils', 'stock', 'employes', 'magasins', 'espace', 'parametres'];
   const mobileNavBase = mobilePriority
     .map((id) => items.find((item) => item.id === id))
     .filter((item): item is NavItem => Boolean(item))

@@ -68,7 +68,8 @@ export function ProjectsHeaderBar({
             )}
           >
             <Wrench size={14} className={cx(activeTab === 'production' ? 'text-amber' : 'text-ink-faint')} />
-            <span>Commandes &amp; Chantiers</span>
+            <span className="hidden sm:inline">Commandes &amp; Chantiers</span>
+            <span className="sm:hidden">Chantiers</span>
             <span className={cx(
               'ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono tabular-nums',
               activeTab === 'production' ? 'bg-paper text-ink font-bold' : 'bg-surface text-ink-faint'
@@ -88,7 +89,8 @@ export function ProjectsHeaderBar({
             )}
           >
             <Calendar size={14} className={cx(activeTab === 'planning' ? 'text-blue' : 'text-ink-faint')} />
-            <span>Charge &amp; Planning</span>
+            <span className="hidden sm:inline">Charge &amp; Planning</span>
+            <span className="sm:hidden">Planning</span>
           </button>
         </div>
 

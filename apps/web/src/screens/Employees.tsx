@@ -2118,8 +2118,13 @@ export function Employees({
       <div className="hidden sm:block">
         <PageHeader
           title="Registre des Travailleurs"
+          eyebrow="CFTM · Ressources Humaines & Atelier"
           hint="Effectif de l'atelier, métiers, affectations et gestion des plannings de congés"
         />
+      </div>
+      <div className="sm:hidden border-b border-line pb-2 mb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">CFTM · Atelier</p>
+        <h1 className="text-lg font-bold text-ink">Registre des Travailleurs</h1>
       </div>
 
       {error ? (

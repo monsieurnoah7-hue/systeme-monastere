@@ -872,6 +872,7 @@ export function Magasins({
       <div className="hidden sm:block">
         <PageHeader
           title="Magasins & Dépôts"
+          eyebrow="CFTM · Lieux de Stockage & Ateliers"
           hint="Gestion des ateliers, locaux de stockage, parcs locaux et affectations"
         />
       </div>

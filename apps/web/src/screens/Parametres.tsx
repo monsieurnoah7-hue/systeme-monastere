@@ -1593,6 +1593,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
       <div className="hidden sm:block">
         <PageHeader
           title="Paramètres & Administration"
+          eyebrow="CFTM · Configuration & Sécurité"
           hint="Gestion des comptes d'accès, permissions des rôles, bornes kiosque et sauvegardes CFTM"
         />
       </div>
