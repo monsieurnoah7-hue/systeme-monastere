@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ROLES_OPTION } from '../lib/roles';
 import {
   api,
@@ -44,8 +44,6 @@ import {
   Check,
   CheckCheck,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Copy,
   Database,
@@ -572,62 +570,6 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
   const [savingSettings, setSavingSettings] = useState(false);
   const [motifDraft, setMotifDraft] = useState('');
   const [kioskSubTab, setKioskSubTab] = useState<'horaires' | 'bornes' | 'regles'>(canViewSettings ? 'horaires' : 'bornes');
-
-  // Contrôle de défilement horizontal fluide et détection de bord pour les onglets
-  const tabsListRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const checkTabsScroll = useCallback(() => {
-    const el = tabsListRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 6);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 6);
-  }, []);
-
-  useEffect(() => {
-    const el = tabsListRef.current;
-    if (!el) return;
-    checkTabsScroll();
-    el.addEventListener('scroll', checkTabsScroll, { passive: true });
-    window.addEventListener('resize', checkTabsScroll);
-
-    let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(() => checkTabsScroll());
-      ro.observe(el);
-      if (el.parentElement) {
-        ro.observe(el.parentElement);
-      }
-    }
-
-    const t = setTimeout(checkTabsScroll, 200);
-
-    return () => {
-      clearTimeout(t);
-      el.removeEventListener('scroll', checkTabsScroll);
-      window.removeEventListener('resize', checkTabsScroll);
-      ro?.disconnect();
-    };
-  }, [checkTabsScroll]);
-
-  // Centrage automatique de l'onglet actif et garantie d'atteignabilité
-  useEffect(() => {
-    const el = tabsListRef.current;
-    if (!el) return;
-    const activeEl = el.querySelector<HTMLElement>('[data-state="active"]');
-    if (activeEl) {
-      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-    }
-    checkTabsScroll();
-  }, [activeTab, checkTabsScroll]);
-
-  const scrollTabs = (offset: number) => {
-    const el = tabsListRef.current;
-    if (!el) return;
-    el.scrollBy({ left: offset, behavior: 'smooth' });
-    setTimeout(checkTabsScroll, 250);
-  };
 
   // Breadcrumb synchronization with MobileBreadcrumb
   useEffect(() => {
@@ -1636,34 +1578,18 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
           <div className="grid min-w-0 grid-cols-1 items-center gap-2 2xl:grid-cols-[minmax(0,1fr)_auto]">
             {/* All primary sections stay visible on narrow screens with horizontal scroll; desktop keeps a compact row. */}
             <div className="relative min-w-0 flex-1">
-              {/* Bouton de retour rapide à gauche (si onglets défilés) */}
-              {canScrollLeft && (
-                <div className="flex absolute left-0 top-0 bottom-0 z-10 items-center pr-4 bg-gradient-to-r from-paper via-paper/95 to-transparent pointer-events-none">
-                  <button
-                    type="button"
-                    onClick={() => scrollTabs(-200)}
-                    className="pointer-events-auto grid h-7 w-7 place-items-center rounded-full bg-surface border border-line text-ink-soft hover:text-ink hover:bg-paper-2 hover:border-amber/50 shadow-sm transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-                    aria-label="Faire défiler les onglets vers la gauche"
-                    title="Revenir au premier onglet"
-                  >
-                    <ChevronLeft size={15} />
-                  </button>
-                </div>
-              )}
-
               <TabsList
-                ref={tabsListRef}
                 variant="line"
-                className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden scroll-smooth bg-transparent p-0 lg:grid lg:grid-cols-5 lg:gap-1.5"
+                className="grid grid-cols-5 w-full items-center gap-1 sm:gap-1.5 bg-transparent p-0"
               >
                 {canViewUsers && (
                   <TabsTrigger
                     value="comptes"
-                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap lg:min-h-11 lg:px-2 lg:text-xs xl:text-sm"
+                    className="min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 py-1.5 text-xs font-semibold sm:px-2.5 sm:py-2"
                   >
                     <Users size={14} className="text-amber shrink-0" />
                     <span>Comptes</span>
-                    <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
+                    <span className="hidden sm:inline-block ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
                       {activeUsersCount}/{users.length}
                     </span>
                   </TabsTrigger>
@@ -1672,7 +1598,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                 {canManagePermissions && (
                   <TabsTrigger
                     value="permissions"
-                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap lg:min-h-11 lg:px-2 lg:text-xs xl:text-sm"
+                    className="min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 py-1.5 text-xs font-semibold sm:px-2.5 sm:py-2"
                   >
                     <ShieldCheck size={14} className="text-amber shrink-0" />
                     <span className="hidden 2xl:inline">Rôles &amp; Permissions</span>
@@ -1687,12 +1613,12 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                 {canViewKiosk && (
                   <TabsTrigger
                     value="kiosk"
-                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap lg:min-h-11 lg:px-2 lg:text-xs xl:text-sm"
+                    className="min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 py-1.5 text-xs font-semibold sm:px-2.5 sm:py-2"
                   >
                     <Clock size={14} className="text-amber shrink-0" />
                     <span className="hidden 2xl:inline">Pointage &amp; Kiosque</span>
                     <span className="2xl:hidden">Kiosque</span>
-                    <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
+                    <span className="hidden sm:inline-block ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
                       {activeTerminalsCount} act.
                     </span>
                   </TabsTrigger>
@@ -1700,7 +1626,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
                 <TabsTrigger
                   value="securite"
-                  className="shrink-0 min-h-10 min-w-0 gap-1.5 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap lg:min-h-11 lg:px-2 lg:text-xs xl:text-sm"
+                  className="min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 py-1.5 text-xs font-semibold sm:px-2.5 sm:py-2"
                 >
                   <KeyRound size={14} className="text-amber shrink-0" />
                   <span className="hidden 2xl:inline">Sécurité &amp; Profil</span>
@@ -1710,32 +1636,18 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                 {canUseBackups && (
                   <TabsTrigger
                     value="sauvegardes"
-                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap lg:min-h-11 lg:px-2 lg:text-xs xl:text-sm"
+                    className="min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 py-1.5 text-xs font-semibold sm:px-2.5 sm:py-2"
                   >
                     <HardDrive size={14} className="text-amber shrink-0" />
                     <span className="hidden 2xl:inline">Sauvegardes &amp; Système</span>
-                    <span className="2xl:hidden">Sauvegardes</span>
-                    <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
+                    <span className="hidden sm:inline 2xl:hidden">Sauvegardes</span>
+                    <span className="sm:hidden">Sauv.</span>
+                    <span className="hidden sm:inline-block ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
                       {backups.length}
                     </span>
                   </TabsTrigger>
                 )}
               </TabsList>
-
-              {/* Bouton de défilement vers la droite */}
-              {canScrollRight && (
-                <div className="flex absolute right-0 top-0 bottom-0 z-10 items-center pl-4 bg-gradient-to-l from-paper via-paper/95 to-transparent pointer-events-none">
-                  <button
-                    type="button"
-                    onClick={() => scrollTabs(200)}
-                    className="pointer-events-auto grid h-7 w-7 place-items-center rounded-full bg-surface border border-line text-ink-soft hover:text-ink hover:bg-paper-2 hover:border-amber/50 shadow-sm transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-                    aria-label="Faire défiler les onglets vers la droite"
-                    title="Voir les onglets suivants"
-                  >
-                    <ChevronRight size={15} />
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Global Utilities & Master CTAs */}

@@ -472,15 +472,6 @@ export function Shell({
               )}
               <button
                 type="button"
-                onClick={() => setErgonomicsOpen(true)}
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
-                aria-label="Ajuster la taille des boutons et l'affichage"
-                title="Ajuster l'affichage (Tailles, Zoom, Contraste)"
-              >
-                <SlidersHorizontal size={19} />
-              </button>
-              <button
-                type="button"
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-expanded={menuOpen}
                 aria-controls="mobile-primary-menu"
@@ -595,7 +586,6 @@ export function Shell({
 
               {/* Action & Status right section */}
               <div className="flex items-center gap-2.5">
-                {installButton('inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink-soft transition-colors hover:border-amber/40 hover:text-ink')}
                 {/* Offline pill indicator shown ONLY when disconnected */}
                 {!isOnline && (
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-wash border border-amber/30 text-[11px] text-amber font-medium shadow-xs">

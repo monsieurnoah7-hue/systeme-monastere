@@ -2151,13 +2151,13 @@ export function Employees({
             <div className="flex items-center justify-between gap-2">
               {/* Left: Radix Navigation Tabs with Live Badges */}
               <div className="min-w-0 flex-1 sm:flex-initial">
-                <TabsList variant="line" className="flex w-full sm:w-auto min-w-0 items-center gap-1 sm:gap-2 bg-transparent p-0">
+                <TabsList variant="line" className="flex w-full sm:w-auto min-w-0 items-center gap-1 sm:gap-2 bg-transparent p-0 pl-0.5">
                   {canViewEmployees && (
                     <TabsTrigger
                       value="people"
-                      className="shrink-0 gap-1 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
+                      className="shrink-0 gap-1 px-2 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
                     >
-                      <Users size={15} />
+                      <Users size={14} />
                       <span className="2xl:hidden">Équipe</span>
                       <span className="hidden 2xl:inline">Répertoire de l’Équipe</span>
                       <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold text-ink-soft">
@@ -2169,9 +2169,9 @@ export function Employees({
                   {canViewLeaves && (
                     <TabsTrigger
                       value="timeoff"
-                      className="shrink-0 gap-1 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
+                      className="shrink-0 gap-1 px-2 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
                     >
-                      <CalendarIcon size={15} />
+                      <CalendarIcon size={14} />
                       <span className="2xl:hidden">Congés</span>
                       <span className="hidden 2xl:inline">Planning des Congés</span>
                       {leaves.filter((l) => l.status === 'pending').length > 0 && (
@@ -2208,20 +2208,22 @@ export function Employees({
 
               {/* Right: Actions */}
               <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={loading}
-                  icon={<RefreshCw size={13} className={cx(loading && 'animate-spin text-amber')} />}
-                  onClick={() => {
-                    setLoading(true);
-                    setReload((value) => value + 1);
-                  }}
-                  className="hidden 2xl:inline-flex h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
-                  title="Actualiser les données"
-                >
-                  <span className="hidden 2xl:inline">{loading ? 'Actualisation…' : 'Actualiser'}</span>
-                </Button>
+                <div className="hidden 2xl:inline-flex">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={loading}
+                    icon={<RefreshCw size={13} className={cx(loading && 'animate-spin text-amber')} />}
+                    onClick={() => {
+                      setLoading(true);
+                      setReload((value) => value + 1);
+                    }}
+                    className="h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
+                    title="Actualiser les données"
+                  >
+                    <span>{loading ? 'Actualisation…' : 'Actualiser'}</span>
+                  </Button>
+                </div>
 
                 {activeTab === 'people' && canCreate && (
                   <Button
@@ -2229,30 +2231,33 @@ export function Employees({
                     variant="primary"
                     icon={<UserPlus size={14} />}
                     onClick={openCreate}
-                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs shrink-0"
+                    className="h-8 px-2 sm:px-3 text-xs font-bold shadow-2xs shrink-0"
                   >
+                    <span className="hidden sm:inline 2xl:hidden">Nouveau</span>
                     <span className="hidden 2xl:inline">Nouveau travailleur</span>
-                    <span className="2xl:hidden">Nouveau</span>
+                    <span className="sm:hidden">Nouveau</span>
                   </Button>
                 )}
 
-                {activeTab === 'people' && canPrintBadge && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<Printer size={14} />}
-                    onClick={() => {
-                      setBatchBadgeQuery('');
-                      setBatchBadgeCopies({});
-                      setBatchBadgeOpen(true);
-                    }}
-                    className="hidden 2xl:inline-flex h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-2.5 text-xs"
-                    aria-label="Imprimer plusieurs badges travailleurs"
-                    title="Imprimer plusieurs badges"
-                  >
-                    <span className="hidden sm:inline">Badges</span>
-                  </Button>
-                )}
+                <div className="hidden 2xl:inline-flex">
+                  {activeTab === 'people' && canPrintBadge && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<Printer size={14} />}
+                      onClick={() => {
+                        setBatchBadgeQuery('');
+                        setBatchBadgeCopies({});
+                        setBatchBadgeOpen(true);
+                      }}
+                      className="h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-2.5 text-xs"
+                      aria-label="Imprimer plusieurs badges travailleurs"
+                      title="Imprimer plusieurs badges"
+                    >
+                      <span className="hidden sm:inline">Badges</span>
+                    </Button>
+                  )}
+                </div>
 
                 {activeTab === 'people' && (
                   <div className="hidden lg:flex items-center rounded-lg border border-line bg-surface p-0.5">
