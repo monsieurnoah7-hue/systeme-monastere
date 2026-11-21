@@ -591,9 +591,23 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
     checkTabsScroll();
     el.addEventListener('scroll', checkTabsScroll, { passive: true });
     window.addEventListener('resize', checkTabsScroll);
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => checkTabsScroll());
+      ro.observe(el);
+      if (el.parentElement) {
+        ro.observe(el.parentElement);
+      }
+    }
+
+    const t = setTimeout(checkTabsScroll, 200);
+
     return () => {
+      clearTimeout(t);
       el.removeEventListener('scroll', checkTabsScroll);
       window.removeEventListener('resize', checkTabsScroll);
+      ro?.disconnect();
     };
   }, [checkTabsScroll]);
 
@@ -1640,12 +1654,12 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
               <TabsList
                 ref={tabsListRef}
                 variant="line"
-                className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden scroll-smooth bg-transparent p-0 xl:grid xl:grid-cols-5 xl:gap-1.5"
+                className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden scroll-smooth bg-transparent p-0 lg:grid lg:grid-cols-5 lg:gap-1.5"
               >
                 {canViewUsers && (
                   <TabsTrigger
                     value="comptes"
-                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap xl:min-h-11 xl:px-2 xl:text-sm"
+                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap lg:min-h-11 lg:px-2 lg:text-xs xl:text-sm"
                   >
                     <Users size={14} className="text-amber shrink-0" />
                     <span>Comptes</span>
@@ -1658,10 +1672,11 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                 {canManagePermissions && (
                   <TabsTrigger
                     value="permissions"
-                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap xl:min-h-11 xl:px-2 xl:text-sm"
+                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap lg:min-h-11 lg:px-2 lg:text-xs xl:text-sm"
                   >
                     <ShieldCheck size={14} className="text-amber shrink-0" />
-                    <span className="hidden sm:inline">Rôles &amp; Permissions</span>
+                    <span className="hidden 2xl:inline">Rôles &amp; Permissions</span>
+                    <span className="hidden sm:inline 2xl:hidden">Permissions</span>
                     <span className="sm:hidden">Accès</span>
                     {hasUnsavedPerms ? (
                       <span className="h-2 w-2 rounded-full bg-amber animate-pulse shrink-0" title="Modifications en attente" />
@@ -1672,11 +1687,11 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                 {canViewKiosk && (
                   <TabsTrigger
                     value="kiosk"
-                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap xl:min-h-11 xl:px-2 xl:text-sm"
+                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap lg:min-h-11 lg:px-2 lg:text-xs xl:text-sm"
                   >
                     <Clock size={14} className="text-amber shrink-0" />
-                    <span className="hidden sm:inline">Pointage &amp; Kiosque</span>
-                    <span className="sm:hidden">Kiosque</span>
+                    <span className="hidden 2xl:inline">Pointage &amp; Kiosque</span>
+                    <span className="2xl:hidden">Kiosque</span>
                     <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
                       {activeTerminalsCount} act.
                     </span>
@@ -1685,21 +1700,21 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
                 <TabsTrigger
                   value="securite"
-                  className="shrink-0 min-h-10 min-w-0 gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap xl:min-h-11 xl:px-2 xl:text-sm"
+                  className="shrink-0 min-h-10 min-w-0 gap-1.5 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap lg:min-h-11 lg:px-2 lg:text-xs xl:text-sm"
                 >
                   <KeyRound size={14} className="text-amber shrink-0" />
-                  <span className="hidden sm:inline">Sécurité &amp; Profil</span>
-                  <span className="sm:hidden">Sécurité</span>
+                  <span className="hidden 2xl:inline">Sécurité &amp; Profil</span>
+                  <span className="2xl:hidden">Sécurité</span>
                 </TabsTrigger>
 
                 {canUseBackups && (
                   <TabsTrigger
                     value="sauvegardes"
-                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-3 py-1.5 text-xs font-semibold whitespace-nowrap xl:min-h-11 xl:px-2 xl:text-sm"
+                    className="shrink-0 min-h-10 min-w-0 gap-1.5 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap lg:min-h-11 lg:px-2 lg:text-xs xl:text-sm"
                   >
                     <HardDrive size={14} className="text-amber shrink-0" />
-                    <span className="hidden sm:inline">Sauvegardes &amp; Système</span>
-                    <span className="sm:hidden">Sauvegardes</span>
+                    <span className="hidden 2xl:inline">Sauvegardes &amp; Système</span>
+                    <span className="2xl:hidden">Sauvegardes</span>
                     <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-ink-soft">
                       {backups.length}
                     </span>
@@ -2263,7 +2278,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
             {/* Accounts List & Table */}
             <CardContent className="p-0">
               {/* Desktop Table (Antigravity Grid with vertical borders) */}
-              <div className="hidden sm:block overflow-x-auto max-h-[calc(100dvh-220px)] min-h-[380px] scroll-thin overflow-hidden isolate">
+              <div className="hidden lg:block overflow-x-auto max-h-[calc(100dvh-220px)] min-h-[380px] scroll-thin isolate">
                 <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                   <thead>
                     <tr className="bg-paper-2 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
@@ -2412,8 +2427,8 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                 </table>
               </div>
 
-              {/* Mobile Cards (sm:hidden) */}
-              <div className="sm:hidden space-y-3 p-3">
+              {/* Mobile & Tablet Cards (lg:hidden) */}
+              <div className="lg:hidden space-y-3 p-3">
                 {filteredUsers.map((account) => {
                   const employee = account.employee_id ? employeesById.get(account.employee_id) : undefined;
                   const theme = ROLE_THEME[account.role] ?? DEFAULT_ROLE_THEME;

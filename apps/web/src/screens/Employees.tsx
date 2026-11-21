@@ -67,13 +67,16 @@ import {
   Search,
   Trash2,
   User as UserIcon,
+  UserCheck,
   UserPlus,
   Users,
+  UserX,
   X,
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
   List,
+  MoreVertical,
 } from 'lucide-react';
 import { ImagePickerModal } from '../components/ImagePickerModal';
 import { exportToExcel, exportToPdf } from '../lib/export';
@@ -2155,8 +2158,8 @@ export function Employees({
                       className="shrink-0 gap-1 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
                     >
                       <Users size={15} />
-                      <span className="xl:hidden">Équipe</span>
-                      <span className="hidden xl:inline">Répertoire de l’Équipe</span>
+                      <span className="2xl:hidden">Équipe</span>
+                      <span className="hidden 2xl:inline">Répertoire de l’Équipe</span>
                       <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold text-ink-soft">
                         {employees.filter((e) => e.active).length}
                       </span>
@@ -2169,8 +2172,8 @@ export function Employees({
                       className="shrink-0 gap-1 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
                     >
                       <CalendarIcon size={15} />
-                      <span className="xl:hidden">Congés</span>
-                      <span className="hidden xl:inline">Planning des Congés</span>
+                      <span className="2xl:hidden">Congés</span>
+                      <span className="hidden 2xl:inline">Planning des Congés</span>
                       {leaves.filter((l) => l.status === 'pending').length > 0 && (
                         <span className="ml-1 rounded-full bg-amber-wash px-1.5 py-0.2 text-[10px] font-bold text-amber">
                           {leaves.filter((l) => l.status === 'pending').length} att.
@@ -2214,10 +2217,10 @@ export function Employees({
                     setLoading(true);
                     setReload((value) => value + 1);
                   }}
-                  className="hidden xl:inline-flex h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
+                  className="hidden 2xl:inline-flex h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
                   title="Actualiser les données"
                 >
-                  <span className="hidden xl:inline">{loading ? 'Actualisation…' : 'Actualiser'}</span>
+                  <span className="hidden 2xl:inline">{loading ? 'Actualisation…' : 'Actualiser'}</span>
                 </Button>
 
                 {activeTab === 'people' && canCreate && (
@@ -2228,8 +2231,8 @@ export function Employees({
                     onClick={openCreate}
                     className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs shrink-0"
                   >
-                    <span className="hidden xl:inline">Nouveau travailleur</span>
-                    <span className="xl:hidden">Nouveau</span>
+                    <span className="hidden 2xl:inline">Nouveau travailleur</span>
+                    <span className="2xl:hidden">Nouveau</span>
                   </Button>
                 )}
 
@@ -2243,7 +2246,7 @@ export function Employees({
                       setBatchBadgeCopies({});
                       setBatchBadgeOpen(true);
                     }}
-                    className="hidden lg:inline-flex h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-2.5 text-xs"
+                    className="hidden 2xl:inline-flex h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-2.5 text-xs"
                     aria-label="Imprimer plusieurs badges travailleurs"
                     title="Imprimer plusieurs badges"
                   >
@@ -2263,7 +2266,7 @@ export function Employees({
                       title="Affichage en Grille Bento"
                     >
                       <LayoutGrid size={13} />
-                      <span className="hidden xl:inline">Grille</span>
+                      <span className="hidden 2xl:inline">Grille</span>
                     </button>
                     <button
                       type="button"
@@ -2275,7 +2278,7 @@ export function Employees({
                       title="Affichage en Liste"
                     >
                       <List size={13} />
-                      <span className="hidden xl:inline">Liste</span>
+                      <span className="hidden 2xl:inline">Liste</span>
                     </button>
                   </div>
                 )}
@@ -2748,12 +2751,12 @@ export function Employees({
                   <table className="w-full text-left border-separate border-spacing-0 text-xs table-rhythm">
                     <thead>
                       <tr className="bg-paper-2 text-ink-faint font-semibold uppercase tracking-wider text-[11px]">
-                        <th className="sticky top-0 left-0 z-30 bg-paper-2 px-1.5 py-2.5 w-16 min-w-16 max-w-16 border-b border-r border-line text-center whitespace-nowrap">Photo</th>
-                        <th className="sticky top-0 left-[64px] z-30 bg-paper-2 px-3 py-2.5 min-w-56 border-b freeze-pane-divider whitespace-nowrap">Identité &amp; Métier</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-32 border-b border-r border-line text-center whitespace-nowrap">État d’aujourd’hui</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center whitespace-nowrap">Badge QR</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-24 border-b border-r border-line text-center whitespace-nowrap">Statut</th>
-                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-48 text-right border-b border-line col-actions whitespace-nowrap">Actions rapides</th>
+                        <th className="sticky top-0 left-0 z-30 bg-paper-2 px-1.5 py-2.5 w-14 min-w-14 max-w-14 border-b border-r border-line text-center whitespace-nowrap">Photo</th>
+                        <th className="sticky top-0 left-[56px] z-30 bg-paper-2 px-3 py-2.5 min-w-44 border-b freeze-pane-divider whitespace-nowrap">Identité &amp; Métier</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-2.5 py-2.5 min-w-28 border-b border-r border-line text-center whitespace-nowrap">État d’aujourd’hui</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-2 py-2.5 min-w-20 border-b border-r border-line text-center whitespace-nowrap">Badge QR</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-2 py-2.5 min-w-20 border-b border-r border-line text-center whitespace-nowrap">Statut</th>
+                        <th className="sticky top-0 z-20 bg-paper-2 px-3 py-2.5 min-w-28 text-right border-b border-line col-actions whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2771,7 +2774,7 @@ export function Employees({
                         >
                           <td
                             className={cx(
-                              'sticky left-0 z-10 px-1.5 py-1.5 text-center border-b border-r border-line w-16 min-w-16 max-w-16',
+                              'sticky left-0 z-10 px-1.5 py-1.5 text-center border-b border-r border-line w-14 min-w-14 max-w-14',
                               frozenBg,
                             )}
                             onClick={(e) => {
@@ -2797,21 +2800,21 @@ export function Employees({
                               )}
                             </span>
                           </td>
-                          <td className={cx('sticky left-[64px] z-10 px-3 py-2 border-b freeze-pane-divider min-w-56', frozenBg)}>
+                          <td className={cx('sticky left-[56px] z-10 px-3 py-2 border-b freeze-pane-divider min-w-44', frozenBg)}>
                             <div className="font-semibold text-ink text-xs">{employee.full_name}</div>
                             <div className="text-[11px] text-ink-soft">
                               {employee.job_title} · <span className="font-mono text-ink-faint">{employee.id}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2 border-b border-r border-line text-center">
+                          <td className="px-2.5 py-2 border-b border-r border-line text-center">
                             {dayChip(employee)}
                           </td>
-                          <td className="px-3 py-2 border-b border-r border-line text-center">
+                          <td className="px-2 py-2 border-b border-r border-line text-center">
                             <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-paper-2 border border-line text-slate-200 tabular-nums shadow-2xs">
                               {employee.badge_token ?? '—'}
                             </span>
                           </td>
-                          <td className="px-3 py-2 border-b border-r border-line text-center">
+                          <td className="px-2 py-2 border-b border-r border-line text-center">
                             <span
                               className={cx(
                                 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold border tracking-wider uppercase shadow-2xs',
@@ -2826,46 +2829,101 @@ export function Employees({
                           </td>
                           <td className="px-3 py-1.5 text-right border-b border-line col-actions" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1.5">
-                              <Button size="sm" variant="secondary" className="text-xs font-bold border border-line shadow-xs hover:border-amber" onClick={() => setDetailFor(employee)}>
-                                Détail
-                              </Button>
-                              {(canEdit || canPrintBadge) && (
-                                <>
-                                  {canEdit && (
-                                    <Button size="sm" variant="ghost" onClick={() => openEdit(employee)}>
-                                      Modifier
-                                    </Button>
-                                  )}
+                              {canEdit ? (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-7 px-2.5 text-xs font-semibold border border-line shadow-2xs hover:border-amber/50 hover:text-amber"
+                                  onClick={() => openEdit(employee)}
+                                  title={`Modifier ${employee.full_name}`}
+                                >
+                                  Modifier
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-7 px-2.5 text-xs font-semibold border border-line shadow-2xs hover:border-amber"
+                                  onClick={() => setDetailFor(employee)}
+                                  title="Voir la fiche détaillée"
+                                >
+                                  Détail
+                                </Button>
+                              )}
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="grid h-7 w-7 place-items-center rounded-lg border border-line/70 bg-paper text-ink-soft hover:text-ink hover:border-amber/50 hover:bg-paper-2 transition-colors shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber"
+                                    title={`Options pour ${employee.full_name}`}
+                                    aria-label={`Options pour ${employee.full_name}`}
+                                  >
+                                    <MoreVertical size={13} />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
+                                  <DropdownMenuItem
+                                    onClick={() => setDetailFor(employee)}
+                                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                                  >
+                                    <UserIcon size={13} className="text-amber" />
+                                    <span>Voir la fiche détaillée</span>
+                                  </DropdownMenuItem>
+
                                   {canPrintBadge && (
-                                    <Button size="sm" variant="ghost" onClick={() => { setBadgeCopies(1); setBadgeFor(employee); }}>
-                                      Badge
-                                    </Button>
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setBadgeCopies(1);
+                                        setBadgeFor(employee);
+                                      }}
+                                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                                    >
+                                      <Printer size={13} className="text-sky-500" />
+                                      <span>Imprimer le badge QR</span>
+                                    </DropdownMenuItem>
                                   )}
+
+                                  {canPhoto && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setPhotoTarget({ id: employee.id, current: employee.photo_path, name: employee.full_name });
+                                        setPhotoModalOpen(true);
+                                      }}
+                                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                                    >
+                                      <Camera size={13} className="text-emerald-500" />
+                                      <span>Modifier la photo</span>
+                                    </DropdownMenuItem>
+                                  )}
+
                                   {canEdit && (
                                     <>
-                                      <Button
-                                        size="sm"
-                                        variant={employee.active ? 'outline-danger' : 'secondary'}
+                                      <DropdownMenuSeparator className="my-1 border-line" />
+                                      <DropdownMenuItem
                                         onClick={() => void toggleActive(employee)}
+                                        className={cx(
+                                          'flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer',
+                                          employee.active ? 'text-amber hover:bg-amber-wash/30' : 'text-green hover:bg-green-wash/30',
+                                        )}
                                       >
-                                        {employee.active ? 'Désactiver' : 'Activer'}
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
+                                        {employee.active ? <UserX size={13} /> : <UserCheck size={13} />}
+                                        <span>{employee.active ? 'Désactiver le travailleur' : 'Activer le travailleur'}</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
                                         onClick={() => {
                                           setDeleteEmployeeFor(employee);
                                           setDeleteError(null);
                                         }}
-                                        className="h-7 w-7 p-0 text-ink-faint hover:text-red hover:bg-red/10"
-                                        title={`Supprimer définitivement ${employee.full_name}`}
+                                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer text-red hover:bg-red/10"
                                       >
                                         <Trash2 size={13} />
-                                      </Button>
+                                        <span>Supprimer définitivement</span>
+                                      </DropdownMenuItem>
                                     </>
                                   )}
-                                </>
-                              )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </td>
                         </tr>
