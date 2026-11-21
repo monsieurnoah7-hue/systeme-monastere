@@ -1545,11 +1545,13 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
   return (
     <div className="space-y-6">
-      {/* Top Header */}
-      <PageHeader
-        title="Paramètres"
-        hint="Configuration générale de l'atelier, des accès, bornes de pointage et sauvegardes CFTM"
-      />
+      {/* Top Header (masqué sur mobile pour laisser place directement à la barre d'onglets) */}
+      <div className="hidden sm:block">
+        <PageHeader
+          title="Paramètres"
+          hint="Configuration générale de l'atelier, des accès, bornes de pointage et sauvegardes CFTM"
+        />
+      </div>
 
       {settingsError ? (
         <div className="mb-4">

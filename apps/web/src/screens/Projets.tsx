@@ -56,13 +56,13 @@ export default function Projets({
   return (
     <div className="space-y-6">
       {/* En-tête de la page */}
-      <div className="flex flex-col gap-2 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-1 border-b border-line pb-3 sm:pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint">Atelier · projets · interventions</p>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+          <p className="mb-0.5 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint">Atelier · projets · interventions</p>
+          <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-3xl">
             Commandes &amp; chantiers
           </h1>
-          <p className="mt-1 max-w-2xl text-sm text-ink-soft">
+          <p className="hidden sm:block mt-1 max-w-2xl text-sm text-ink-soft">
             Une vue opérationnelle pour suivre les projets configurés par la Direction, les équipes et les échéances.
           </p>
         </div>

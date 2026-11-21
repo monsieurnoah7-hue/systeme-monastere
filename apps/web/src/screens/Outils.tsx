@@ -986,7 +986,8 @@ export function Outils({
 
   return (
     <div className="space-y-4 pb-12">
-      <div className={cx(viewMode === 'table' && 'lg:hidden')}>
+      {/* Top Page Header (masqué sur mobile pour laisser place directement à la barre d'outils tactile) */}
+      <div className={cx('hidden sm:block', viewMode === 'table' && 'lg:hidden')}>
         <PageHeader
           title="Parc Matériel & Machines"
         />

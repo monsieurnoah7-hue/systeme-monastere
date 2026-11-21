@@ -2115,9 +2115,11 @@ export function Employees({
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Registre des Travailleurs"
-      />
+      <div className="hidden sm:block">
+        <PageHeader
+          title="Registre des Travailleurs"
+        />
+      </div>
 
       {error ? (
         <div className="mb-4">
@@ -2134,44 +2136,48 @@ export function Employees({
       {/* Tabs Switcher: Équipe vs Calendrier Time-Off with Sticky Control Navbar */}
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-6">
         {/* Sticky Navigation Bar with Tabs, Real-Time Search, Filters & Hamburger Menu */}
-        <div data-employees-sticky-toolbar="true" data-timeoff-sticky-toolbar={activeTab === 'timeoff' ? 'true' : undefined} className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2.5 bg-paper border-b border-line shadow-xs">
-          <div className="flex flex-col gap-2">
+        <div data-employees-sticky-toolbar="true" data-timeoff-sticky-toolbar={activeTab === 'timeoff' ? 'true' : undefined} className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5 bg-paper border-b border-line shadow-xs">
+          <div className="flex flex-col gap-1.5 sm:gap-2">
             {/* Top Row: Tabs, Search & Priority Actions */}
-            <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+            <div className="flex items-center justify-between gap-2">
               {/* Left: Radix Navigation Tabs with Live Badges */}
-              <div className="min-w-0 flex-1">
-                <TabsList variant="line" className="grid w-full min-w-0 grid-cols-2 gap-1 bg-transparent p-0 sm:flex sm:w-auto sm:gap-2.5">
-                  {canViewEmployees && <TabsTrigger
-                    value="people"
-                    className="min-w-0 gap-1 px-1.5 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
-                  >
-                    <Users size={15} />
-                    <span className="truncate sm:hidden">Équipe</span>
-                    <span className="hidden sm:inline">Répertoire de l’Équipe</span>
-                    <span className="ml-1 rounded-full bg-paper-2 px-2 py-0.5 text-[10px] font-bold text-ink-soft">
-                      {employees.filter((e) => e.active).length}
-                    </span>
-                  </TabsTrigger>}
-
-                  {canViewLeaves && <TabsTrigger
-                    value="timeoff"
-                    className="min-w-0 gap-1 px-1.5 py-2 text-xs font-semibold whitespace-normal sm:shrink-0 sm:whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
-                  >
-                    <CalendarIcon size={15} />
-                    <span className="truncate sm:hidden">Congés</span>
-                    <span className="hidden sm:inline">Planning des Congés</span>
-                    {leaves.filter((l) => l.status === 'pending').length > 0 && (
-                      <span className="ml-1 rounded-full bg-amber-wash px-2 py-0.5 text-[10px] font-bold text-amber">
-                        {leaves.filter((l) => l.status === 'pending').length} attente
+              <div className="min-w-0 flex-1 sm:flex-initial">
+                <TabsList variant="line" className="flex w-full sm:w-auto min-w-0 items-center gap-1 sm:gap-2.5 bg-transparent p-0">
+                  {canViewEmployees && (
+                    <TabsTrigger
+                      value="people"
+                      className="min-w-0 gap-1 px-2 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
+                    >
+                      <Users size={15} />
+                      <span className="truncate sm:hidden">Équipe</span>
+                      <span className="hidden sm:inline">Répertoire de l’Équipe</span>
+                      <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold text-ink-soft">
+                        {employees.filter((e) => e.active).length}
                       </span>
-                    )}
-                  </TabsTrigger>}
+                    </TabsTrigger>
+                  )}
+
+                  {canViewLeaves && (
+                    <TabsTrigger
+                      value="timeoff"
+                      className="min-w-0 gap-1 px-2 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
+                    >
+                      <CalendarIcon size={15} />
+                      <span className="truncate sm:hidden">Congés</span>
+                      <span className="hidden sm:inline">Planning des Congés</span>
+                      {leaves.filter((l) => l.status === 'pending').length > 0 && (
+                        <span className="ml-1 rounded-full bg-amber-wash px-1.5 py-0.2 text-[10px] font-bold text-amber">
+                          {leaves.filter((l) => l.status === 'pending').length} att.
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  )}
                 </TabsList>
               </div>
 
-              {/* Center: Integrated Real-Time Search Input (People only) */}
-          {activeTab === 'people' && canViewEmployees && (
-                <div className="relative hidden min-w-0 items-center md:col-start-1 md:row-start-2 md:flex">
+              {/* Center: Integrated Real-Time Search Input (Desktop) */}
+              {activeTab === 'people' && canViewEmployees && (
+                <div className="relative hidden min-w-0 items-center md:flex md:flex-1 md:max-w-xs lg:max-w-sm">
                   <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
                   <input
                     value={q}
@@ -2191,8 +2197,8 @@ export function Employees({
                 </div>
               )}
 
-              {/* Right: Actions (Actualiser, Nouveau Travailleur / Poser Congé, Hamburger Menu) */}
-              <div className="order-3 col-span-full flex w-full min-w-0 flex-wrap items-center justify-end gap-1.5 md:order-none md:col-span-1 md:col-start-2 md:row-start-2 md:w-auto md:flex-nowrap sm:gap-2">
+              {/* Right: Actions */}
+              <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -2202,7 +2208,7 @@ export function Employees({
                     setLoading(true);
                     setReload((value) => value + 1);
                   }}
-                  className="h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
+                  className="hidden sm:inline-flex h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
                   title="Actualiser les données"
                 >
                   <span className="hidden xl:inline">{loading ? 'Actualisation…' : 'Actualiser'}</span>
@@ -2214,7 +2220,7 @@ export function Employees({
                     variant="primary"
                     icon={<UserPlus size={14} />}
                     onClick={openCreate}
-                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs"
+                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs shrink-0"
                   >
                     <span className="hidden sm:inline">Nouveau travailleur</span>
                     <span className="sm:hidden">Nouveau</span>
@@ -2231,7 +2237,7 @@ export function Employees({
                       setBatchBadgeCopies({});
                       setBatchBadgeOpen(true);
                     }}
-                    className="h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-2.5 text-xs"
+                    className="hidden sm:inline-flex h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-2.5 text-xs"
                     aria-label="Imprimer plusieurs badges travailleurs"
                     title="Imprimer plusieurs badges"
                   >
@@ -2240,7 +2246,7 @@ export function Employees({
                 )}
 
                 {activeTab === 'people' && (
-                  <div className="flex items-center rounded-lg border border-line bg-surface p-0.5">
+                  <div className="hidden sm:flex items-center rounded-lg border border-line bg-surface p-0.5">
                     <button
                       type="button"
                       onClick={() => setViewMode('grid')}
@@ -2274,7 +2280,7 @@ export function Employees({
                     variant="primary"
                     icon={<Plus size={14} />}
                     onClick={openLeave}
-                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs"
+                    className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs shrink-0"
                   >
                     <span className="hidden sm:inline">Poser un Congé</span>
                     <span className="sm:hidden">Congé</span>
@@ -2287,14 +2293,53 @@ export function Employees({
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="h-8 px-2 sm:px-2.5 text-xs font-semibold border border-line/80 hover:border-amber/40 shadow-2xs gap-1.5"
-                      title="Menu d'opérations et exports"
+                      className="h-8 px-2 sm:px-2.5 text-xs font-semibold border border-line/80 hover:border-amber/40 shadow-2xs gap-1.5 shrink-0"
+                      title="Menu d'opérations et options"
                     >
                       <Menu size={14} />
                       <span className="hidden lg:inline text-[11px]">Options</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-xl border border-line bg-surface shadow-pop text-xs z-50">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setLoading(true);
+                        setReload((value) => value + 1);
+                      }}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                    >
+                      <RefreshCw size={14} className={loading ? 'animate-spin text-amber' : 'text-ink-soft'} />
+                      <span>Actualiser les données</span>
+                    </DropdownMenuItem>
+
+                    {activeTab === 'people' && (
+                      <DropdownMenuItem
+                        onClick={() => setViewMode((v) => (v === 'grid' ? 'list' : 'grid'))}
+                        className="flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <div className="flex items-center gap-2">
+                          {viewMode === 'grid' ? <List size={14} className="text-amber" /> : <LayoutGrid size={14} className="text-amber" />}
+                          <span>Mode {viewMode === 'grid' ? 'Liste tactile' : 'Grille Bento'}</span>
+                        </div>
+                      </DropdownMenuItem>
+                    )}
+
+                    {activeTab === 'people' && canPrintBadge && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setBatchBadgeQuery('');
+                          setBatchBadgeCopies({});
+                          setBatchBadgeOpen(true);
+                        }}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <Printer size={14} className="text-amber" />
+                        <span>Imprimer les badges</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuSeparator className="my-1 border-line" />
+
                     {canExportReports && (
                       <>
                         <DropdownMenuItem
@@ -2314,13 +2359,15 @@ export function Employees({
                         <DropdownMenuSeparator className="my-1 border-line" />
                       </>
                     )}
-                    {canManageLeaves && <DropdownMenuItem
-                      onClick={openLeave}
-                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
-                    >
-                      <CalendarCheck2 size={14} className="text-amber" />
-                      <span>Poser un Congé / Permission</span>
-                    </DropdownMenuItem>}
+                    {canManageLeaves && (
+                      <DropdownMenuItem
+                        onClick={openLeave}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-paper-2 text-ink"
+                      >
+                        <CalendarCheck2 size={14} className="text-amber" />
+                        <span>Poser un Congé / Permission</span>
+                      </DropdownMenuItem>
+                    )}
                     {activeTab === 'timeoff' && canManageLeaves && (
                       <>
                         <DropdownMenuItem
@@ -2393,19 +2440,21 @@ export function Employees({
                       )}
                     >
                       <span>{f.label}</span>
-                      {f.value !== 'all' && (
-                        <span className="opacity-75 text-[10px] tabular-nums font-mono">
-                          {f.value === 'present'
-                            ? counts.present + counts.late
-                            : f.value === 'late'
-                            ? counts.late
-                            : f.value === 'conge'
-                            ? counts.conge
-                            : f.value === 'permission'
-                            ? counts.permission
-                            : ''}
-                        </span>
-                      )}
+                      <span className="opacity-75 text-[10px] tabular-nums font-mono ml-0.5">
+                        {f.value === 'all'
+                          ? employees.filter((e) => e.active).length
+                          : f.value === 'present'
+                          ? counts.present + counts.late
+                          : f.value === 'late'
+                          ? counts.late
+                          : f.value === 'absent'
+                          ? counts.absent
+                          : f.value === 'conge'
+                          ? counts.conge
+                          : f.value === 'permission'
+                          ? counts.permission
+                          : ''}
+                      </span>
                     </button>
                   ))}
 
@@ -2611,8 +2660,8 @@ export function Employees({
             TAB 1: PEOPLE / EQUIPE
         ========================================================================= */}
         {canViewEmployees && <TabsContent value="people" className="space-y-4">
-          {/* Quick Metrics (masquées en mode Liste sur grand écran pour laisser le tableur au pixel près sous la barre d'outils, Image 3) */}
-          <div className={cx('grid grid-cols-2 gap-3 sm:grid-cols-4', viewMode === 'list' && 'lg:hidden')}>
+          {/* Quick Metrics (masquées sur mobile car les puces de filtres affichent déjà les compteurs, masquées en mode Liste sur grand écran) */}
+          <div className={cx('hidden sm:grid sm:grid-cols-4 gap-3', viewMode === 'list' && 'lg:hidden')}>
             <Card className="p-3.5 shadow-card">
               <span className="text-[10px] uppercase font-bold text-ink-faint">Effectif de l'atelier</span>
               <p className="mt-1 font-mono text-2xl font-bold text-ink tabular-nums">{employees.filter((e) => e.active).length}</p>

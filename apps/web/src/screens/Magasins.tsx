@@ -868,11 +868,13 @@ export function Magasins({
     <div className="space-y-4 sm:space-y-5 pb-10">
       {portal}
 
-      {/* Top Page Header */}
-      <PageHeader
-        title="Magasins & Dépôts"
-        hint="Gestion des ateliers, locaux de stockage, parcs locaux et affectations"
-      />
+      {/* Top Page Header (masqué sur mobile pour laisser place directement à la barre d'outils tactile) */}
+      <div className="hidden sm:block">
+        <PageHeader
+          title="Magasins & Dépôts"
+          hint="Gestion des ateliers, locaux de stockage, parcs locaux et affectations"
+        />
+      </div>
 
       {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
       <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">

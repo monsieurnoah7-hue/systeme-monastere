@@ -787,8 +787,8 @@ export function Stock({
 
   return (
     <div className="space-y-4 pb-12">
-      {/* Top Page Header */}
-      <div className={cx(viewMode === 'list' && 'lg:hidden')}>
+      {/* Top Page Header (masqué sur mobile pour laisser place directement à la barre d'outils tactile) */}
+      <div className={cx('hidden sm:block', viewMode === 'list' && 'lg:hidden')}>
         <PageHeader
           title="Matières & Quincaillerie"
           hint="Bois massif, visserie, colles & fournitures consommées de menuiserie"

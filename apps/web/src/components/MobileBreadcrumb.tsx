@@ -36,7 +36,7 @@ export function MobileBreadcrumb({
     <nav
       aria-label="Fil d'Ariane mobile"
       className={cx(
-        'no-print lg:hidden sticky top-14 z-15 flex min-h-10 h-10 w-full items-center justify-between gap-2 border-b border-line bg-paper/98 px-3 sm:px-4 backdrop-blur-md shadow-2xs transition-all',
+        'no-print hidden sm:flex lg:hidden sticky top-14 z-15 min-h-10 h-10 w-full items-center justify-between gap-2 border-b border-line bg-paper/98 px-3 sm:px-4 backdrop-blur-md shadow-2xs transition-all',
         className,
       )}
     >
