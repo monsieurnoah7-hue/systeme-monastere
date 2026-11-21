@@ -5,7 +5,7 @@ import { listOfflineMutations } from '../lib/offline';
 import { QR_PREFIX, getCachedQr, qrDataUrl } from '../lib/qr';
 import { usePrintSheet } from '../lib/print';
 import { initials } from '../lib/labels';
-import { Banner, Button, Card, Modal, PasswordInput, Spinner, cx } from '../components/ui';
+import { Banner, Button, Card, Modal, PageHeader, PasswordInput, Spinner, cx } from '../components/ui';
 import {
   Camera,
   CheckCircle2,
@@ -1180,33 +1180,40 @@ export function Pointage({
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-ink tracking-tight">Pointage</h1>
-          </div>
-
-          {/* Mode Toggle Switcher */}
-          <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1 shadow-xs">
-            {canViewAttendance && <button
-              onClick={() => setActiveMainTab('timesheets')}
-              className={cx(
-                'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
-                activeMainTab === 'timesheets'
-                  ? 'bg-amber text-white shadow-xs'
-                  : 'text-ink-soft hover:text-ink',
-              )}
-            >
-              <FileSpreadsheet size={15} />
-              <span>Présences</span>
-            </button>}
-            {canAccessKiosk && <button
-              onClick={() => setActiveMainTab('kiosk')}
-              className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all text-ink-soft hover:text-ink"
-            >
-              <Smartphone size={15} />
-              <span>Borne Kiosque</span>
-            </button>}
-          </div>
+        <div className="hidden sm:block">
+          <PageHeader
+            title="Pointage & Présences"
+            hint="Feuilles d’émargement quotidiennes, retards constatés, régularisations et accès borne kiosque"
+            actions={
+              <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1 shadow-xs">
+                {canViewAttendance && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveMainTab('timesheets')}
+                    className={cx(
+                      'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all',
+                      activeMainTab === 'timesheets'
+                        ? 'bg-amber text-white shadow-xs font-bold'
+                        : 'text-ink-soft hover:text-ink',
+                    )}
+                  >
+                    <FileSpreadsheet size={15} />
+                    <span>Présences</span>
+                  </button>
+                )}
+                {canAccessKiosk && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveMainTab('kiosk')}
+                    className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all text-ink-soft hover:text-ink"
+                  >
+                    <Smartphone size={15} />
+                    <span>Borne Kiosque</span>
+                  </button>
+                )}
+              </div>
+            }
+          />
         </div>
       )}
 

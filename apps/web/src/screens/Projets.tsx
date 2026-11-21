@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import type { Employee, ProjectsResponse, User } from '../lib/api';
 import { api, fetchProjects } from '../lib/api';
 import { ProjectsView } from '../components/ProjectsView';
-import { Banner, Spinner } from '../components/ui';
+import { Banner, PageHeader, Spinner } from '../components/ui';
 
 export default function Projets({
   user,
@@ -55,17 +55,17 @@ export default function Projets({
 
   return (
     <div className="space-y-6">
-      {/* En-tête de la page */}
-      <div className="flex flex-col gap-1 border-b border-line pb-3 sm:pb-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="mb-0.5 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint">Atelier · projets · interventions</p>
-          <h1 className="text-xl font-semibold tracking-tight text-ink sm:text-3xl">
-            Commandes &amp; chantiers
-          </h1>
-          <p className="hidden sm:block mt-1 max-w-2xl text-sm text-ink-soft">
-            Une vue opérationnelle pour suivre les projets configurés par la Direction, les équipes et les échéances.
-          </p>
-        </div>
+      {/* En-tête de la page Unifié (Standard CFTM) */}
+      <div className="hidden sm:block">
+        <PageHeader
+          title="Commandes & Chantiers"
+          hint="Vue opérationnelle pour suivre les commandes en cours, les équipes affectées et les échéances"
+          eyebrow="Atelier · Projets · Interventions"
+        />
+      </div>
+      <div className="sm:hidden border-b border-line pb-2 mb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-faint">Atelier · Projets</p>
+        <h1 className="text-lg font-bold text-ink">Commandes &amp; chantiers</h1>
       </div>
 
       {error && <Banner tone="error">{error}</Banner>}

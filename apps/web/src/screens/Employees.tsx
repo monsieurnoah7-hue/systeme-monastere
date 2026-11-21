@@ -2118,6 +2118,7 @@ export function Employees({
       <div className="hidden sm:block">
         <PageHeader
           title="Registre des Travailleurs"
+          hint="Effectif de l'atelier, métiers, affectations et gestion des plannings de congés"
         />
       </div>
 
@@ -2142,15 +2143,15 @@ export function Employees({
             <div className="flex items-center justify-between gap-2">
               {/* Left: Radix Navigation Tabs with Live Badges */}
               <div className="min-w-0 flex-1 sm:flex-initial">
-                <TabsList variant="line" className="flex w-full sm:w-auto min-w-0 items-center gap-1 sm:gap-2.5 bg-transparent p-0">
+                <TabsList variant="line" className="flex w-full sm:w-auto min-w-0 items-center gap-1 sm:gap-2 bg-transparent p-0">
                   {canViewEmployees && (
                     <TabsTrigger
                       value="people"
-                      className="min-w-0 gap-1 px-2 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
+                      className="shrink-0 gap-1 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
                     >
                       <Users size={15} />
-                      <span className="truncate sm:hidden">Équipe</span>
-                      <span className="hidden sm:inline">Répertoire de l’Équipe</span>
+                      <span className="xl:hidden">Équipe</span>
+                      <span className="hidden xl:inline">Répertoire de l’Équipe</span>
                       <span className="ml-1 rounded-full bg-paper-2 px-1.5 py-0.2 text-[10px] font-bold text-ink-soft">
                         {employees.filter((e) => e.active).length}
                       </span>
@@ -2160,11 +2161,11 @@ export function Employees({
                   {canViewLeaves && (
                     <TabsTrigger
                       value="timeoff"
-                      className="min-w-0 gap-1 px-2 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
+                      className="shrink-0 gap-1 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap sm:gap-1.5 sm:px-3 sm:py-2 sm:text-sm"
                     >
                       <CalendarIcon size={15} />
-                      <span className="truncate sm:hidden">Congés</span>
-                      <span className="hidden sm:inline">Planning des Congés</span>
+                      <span className="xl:hidden">Congés</span>
+                      <span className="hidden xl:inline">Planning des Congés</span>
                       {leaves.filter((l) => l.status === 'pending').length > 0 && (
                         <span className="ml-1 rounded-full bg-amber-wash px-1.5 py-0.2 text-[10px] font-bold text-amber">
                           {leaves.filter((l) => l.status === 'pending').length} att.
@@ -2175,9 +2176,9 @@ export function Employees({
                 </TabsList>
               </div>
 
-              {/* Center: Integrated Real-Time Search Input (Desktop) */}
+              {/* Center: Integrated Real-Time Search Input (Desktop lg+) */}
               {activeTab === 'people' && canViewEmployees && (
-                <div className="relative hidden min-w-0 items-center md:flex md:flex-1 md:max-w-xs lg:max-w-sm">
+                <div className="relative hidden min-w-0 items-center lg:flex lg:flex-1 lg:max-w-xs xl:max-w-sm">
                   <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
                   <input
                     value={q}
@@ -2208,7 +2209,7 @@ export function Employees({
                     setLoading(true);
                     setReload((value) => value + 1);
                   }}
-                  className="hidden sm:inline-flex h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
+                  className="hidden xl:inline-flex h-8 px-2 sm:px-2.5 text-xs border border-line/70 hover:border-amber/50 hover:bg-paper-2 transition-all shadow-2xs"
                   title="Actualiser les données"
                 >
                   <span className="hidden xl:inline">{loading ? 'Actualisation…' : 'Actualiser'}</span>
@@ -2222,8 +2223,8 @@ export function Employees({
                     onClick={openCreate}
                     className="h-8 px-2.5 sm:px-3 text-xs font-bold shadow-2xs shrink-0"
                   >
-                    <span className="hidden sm:inline">Nouveau travailleur</span>
-                    <span className="sm:hidden">Nouveau</span>
+                    <span className="hidden xl:inline">Nouveau travailleur</span>
+                    <span className="xl:hidden">Nouveau</span>
                   </Button>
                 )}
 
@@ -2237,7 +2238,7 @@ export function Employees({
                       setBatchBadgeCopies({});
                       setBatchBadgeOpen(true);
                     }}
-                    className="hidden sm:inline-flex h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-2.5 text-xs"
+                    className="hidden lg:inline-flex h-8 shrink-0 gap-1 px-2 sm:gap-1.5 sm:px-2.5 text-xs"
                     aria-label="Imprimer plusieurs badges travailleurs"
                     title="Imprimer plusieurs badges"
                   >
@@ -2246,7 +2247,7 @@ export function Employees({
                 )}
 
                 {activeTab === 'people' && (
-                  <div className="hidden sm:flex items-center rounded-lg border border-line bg-surface p-0.5">
+                  <div className="hidden lg:flex items-center rounded-lg border border-line bg-surface p-0.5">
                     <button
                       type="button"
                       onClick={() => setViewMode('grid')}
@@ -2257,7 +2258,7 @@ export function Employees({
                       title="Affichage en Grille Bento"
                     >
                       <LayoutGrid size={13} />
-                      <span className="hidden sm:inline">Grille</span>
+                      <span className="hidden xl:inline">Grille</span>
                     </button>
                     <button
                       type="button"
@@ -2269,7 +2270,7 @@ export function Employees({
                       title="Affichage en Liste"
                     >
                       <List size={13} />
-                      <span className="hidden sm:inline">Liste</span>
+                      <span className="hidden xl:inline">Liste</span>
                     </button>
                   </div>
                 )}

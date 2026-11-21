@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ROLES_OPTION } from '../lib/roles';
 import {
   api,
@@ -44,6 +44,8 @@ import {
   Check,
   CheckCheck,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Copy,
   Database,
@@ -570,6 +572,48 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
   const [savingSettings, setSavingSettings] = useState(false);
   const [motifDraft, setMotifDraft] = useState('');
   const [kioskSubTab, setKioskSubTab] = useState<'horaires' | 'bornes' | 'regles'>(canViewSettings ? 'horaires' : 'bornes');
+
+  // Contrôle de défilement horizontal fluide et détection de bord pour les onglets
+  const tabsListRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkTabsScroll = useCallback(() => {
+    const el = tabsListRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 6);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 6);
+  }, []);
+
+  useEffect(() => {
+    const el = tabsListRef.current;
+    if (!el) return;
+    checkTabsScroll();
+    el.addEventListener('scroll', checkTabsScroll, { passive: true });
+    window.addEventListener('resize', checkTabsScroll);
+    return () => {
+      el.removeEventListener('scroll', checkTabsScroll);
+      window.removeEventListener('resize', checkTabsScroll);
+    };
+  }, [checkTabsScroll]);
+
+  // Centrage automatique de l'onglet actif et garantie d'atteignabilité
+  useEffect(() => {
+    const el = tabsListRef.current;
+    if (!el) return;
+    const activeEl = el.querySelector<HTMLElement>('[data-state="active"]');
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+    checkTabsScroll();
+  }, [activeTab, checkTabsScroll]);
+
+  const scrollTabs = (offset: number) => {
+    const el = tabsListRef.current;
+    if (!el) return;
+    el.scrollBy({ left: offset, behavior: 'smooth' });
+    setTimeout(checkTabsScroll, 250);
+  };
 
   // Breadcrumb synchronization with MobileBreadcrumb
   useEffect(() => {
@@ -1548,8 +1592,8 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
       {/* Top Header (masqué sur mobile pour laisser place directement à la barre d'onglets) */}
       <div className="hidden sm:block">
         <PageHeader
-          title="Paramètres"
-          hint="Configuration générale de l'atelier, des accès, bornes de pointage et sauvegardes CFTM"
+          title="Paramètres & Administration"
+          hint="Gestion des comptes d'accès, permissions des rôles, bornes kiosque et sauvegardes CFTM"
         />
       </div>
 
@@ -1576,8 +1620,27 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
           {/* Row 1: Master Navigation Tabs + Grouped Master Actions */}
           <div className="grid min-w-0 grid-cols-1 items-center gap-2 2xl:grid-cols-[minmax(0,1fr)_auto]">
             {/* All primary sections stay visible on narrow screens with horizontal scroll; desktop keeps a compact row. */}
-            <div className="min-w-0 flex-1">
-              <TabsList variant="line" className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto scroll-none bg-transparent p-0 xl:grid xl:grid-cols-5 xl:gap-1.5">
+            <div className="relative min-w-0 flex-1">
+              {/* Bouton de retour rapide à gauche (si onglets défilés) */}
+              {canScrollLeft && (
+                <div className="flex absolute left-0 top-0 bottom-0 z-10 items-center pr-4 bg-gradient-to-r from-paper via-paper/95 to-transparent pointer-events-none">
+                  <button
+                    type="button"
+                    onClick={() => scrollTabs(-200)}
+                    className="pointer-events-auto grid h-7 w-7 place-items-center rounded-full bg-surface border border-line text-ink-soft hover:text-ink hover:bg-paper-2 hover:border-amber/50 shadow-sm transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                    aria-label="Faire défiler les onglets vers la gauche"
+                    title="Revenir au premier onglet"
+                  >
+                    <ChevronLeft size={15} />
+                  </button>
+                </div>
+              )}
+
+              <TabsList
+                ref={tabsListRef}
+                variant="line"
+                className="flex w-full min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden scroll-smooth bg-transparent p-0 xl:grid xl:grid-cols-5 xl:gap-1.5"
+              >
                 {canViewUsers && (
                   <TabsTrigger
                     value="comptes"
@@ -1642,6 +1705,21 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                   </TabsTrigger>
                 )}
               </TabsList>
+
+              {/* Bouton de défilement vers la droite */}
+              {canScrollRight && (
+                <div className="flex absolute right-0 top-0 bottom-0 z-10 items-center pl-4 bg-gradient-to-l from-paper via-paper/95 to-transparent pointer-events-none">
+                  <button
+                    type="button"
+                    onClick={() => scrollTabs(200)}
+                    className="pointer-events-auto grid h-7 w-7 place-items-center rounded-full bg-surface border border-line text-ink-soft hover:text-ink hover:bg-paper-2 hover:border-amber/50 shadow-sm transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                    aria-label="Faire défiler les onglets vers la droite"
+                    title="Voir les onglets suivants"
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Global Utilities & Master CTAs */}
@@ -2040,8 +2118,8 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
             TAB 1: COMPTES UTILISATEURS
         ========================================================================= */}
         {canViewUsers && <TabsContent value="comptes" className="space-y-6">
-          {/* Quick Interactive Metrics */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {/* Quick Interactive Metrics (masquées sur mobile car les filtres affichent déjà les compteurs) */}
+          <div className="hidden sm:grid sm:grid-cols-4 gap-3">
             <Card
               onClick={() => setKpiCardFilter('all')}
               className={cx(
