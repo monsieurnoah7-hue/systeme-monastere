@@ -3223,7 +3223,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                       <span>4. Clôture</span>
                       <Moon size={13} className="text-emerald" />
                     </div>
-                    <p className="mt-1 font-mono text-base font-bold text-ink">{effectiveSettings?.day_cutoff_time || '17:00'}</p>
+                    <p className="mt-1 font-mono text-base font-bold text-ink">{effectiveSettings?.day_cutoff_time || '18:00'}</p>
                     <p className="text-[10px] text-ink-faint mt-0.5">Départ dès {effectiveSettings?.closing_time || '16:30'}</p>
                   </div>
                 </div>
@@ -3303,7 +3303,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                         className="h-9 w-full rounded-xl border border-red/30 bg-surface px-2.5 font-mono text-xs font-bold text-red focus:border-red focus:outline-none transition-colors"
                       />
                       <span className="text-[10px] text-ink-faint mt-1 block leading-tight">
-                        Pointage direct bloqué après cette heure. Nécessite l'autorisation du surveillant.
+                        Seuil indicatif. Les arrivées restent autorisées en continu avec saisie obligatoire du motif de retard.
                       </span>
                     </div>
                   </CardContent>
@@ -3505,16 +3505,16 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                           <Lock size={12} className="text-red" />
                           Clôture système journalier
                         </label>
-                        <span className="text-[10px] text-ink font-mono font-bold">17h00</span>
+                        <span className="text-[10px] text-ink font-mono font-bold">18h00</span>
                       </div>
                       <input
                         type="time"
-                        value={effectiveSettings?.day_cutoff_time || '17:00'}
+                        value={effectiveSettings?.day_cutoff_time || '18:00'}
                         onChange={(e) => updateSettingsDraft({ day_cutoff_time: e.target.value })}
                         className="h-9 w-full rounded-xl border border-line bg-surface px-2.5 font-mono text-xs font-bold text-ink focus:border-amber focus:outline-none transition-colors"
                       />
                       <span className="text-[10px] text-ink-faint mt-1 block">
-                        Clôture automatique par le système. Tout oubli génère une alerte non-pointé.
+                        Clôture automatique par le système à 18h00. Arrivées et sorties autorisées jusqu'à cette heure.
                       </span>
                     </div>
                   </CardContent>
@@ -3524,7 +3524,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
               {/* Raccourci de réinitialisation canonique CFTM */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-dashed border-line p-3.5 bg-surface/50 text-xs">
                 <span className="text-ink-soft">
-                  Besoin de revenir aux créneaux nominaux du monastère (07h25 → 17h00) ?
+                  Besoin de revenir aux créneaux nominaux du monastère (07h25 → 18h00) ?
                 </span>
                 <button
                   type="button"
@@ -3547,7 +3547,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                       resume_delayed_lockout_time: '14:30',
                       closing_time: '16:30',
                       closing_end_time: '16:40',
-                      day_cutoff_time: '17:00',
+                      day_cutoff_time: '18:00',
                     });
                     toast('Créneaux officiels CFTM appliqués au brouillon.', 'info');
                   }}

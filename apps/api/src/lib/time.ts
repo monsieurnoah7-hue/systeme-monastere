@@ -107,7 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
   resume_delayed_lockout_time: '14:30',
   closing_time: '16:30',
   closing_end_time: '16:40',
-  day_cutoff_time: '17:00',
+  day_cutoff_time: '18:00',
   tolerance_minutes: 40,
   max_late_minutes_allowed: 120, // 09h30 - 07h30 = 120 min avant verrouillage matin
   workdays: [1, 2, 3, 4, 5, 6],

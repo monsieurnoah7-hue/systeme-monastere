@@ -772,33 +772,23 @@ export function Pointage({
     const earlyCheckinMin = 7 * 60 + 25; // 07:25
     const openedMin = 7 * 60 + 30; // 07:30
     const lateThresholdMin = 8 * 60 + 10; // 08:10 (seuil motif obligatoire)
-    const morningLockoutMin = 9 * 60 + 30; // 09:30 (clôture matin)
-    const afternoonCheckinStartMin = 13 * 60; // 13:00 (reprise après-midi)
-    const afternoonCheckinEndMin = 14 * 60; // 14:00 (clôture arrivées après-midi)
+    const dayCutoffMin = 18 * 60; // 18:00 (clôture journalière)
 
-    const isMorningWindow = currentMin >= earlyCheckinMin && currentMin < morningLockoutMin;
-    const isAfternoonWindow = currentMin >= afternoonCheckinStartMin && currentMin <= afternoonCheckinEndMin;
-    const isMorningLocked = !hasIn && currentMin >= morningLockoutMin && currentMin < afternoonCheckinStartMin;
-    const isAfternoonLocked = !hasIn && currentMin > afternoonCheckinEndMin;
-
-    const canPunchIn = !hasIn && (isMorningWindow || isAfternoonWindow);
-    const canPunchOut = hasIn && !hasOut;
+    const isDayClosed = currentMin >= dayCutoffMin;
+    // L'arrivée est ouverte en continu de 07h25 jusqu'à 18h00
+    const canPunchIn = !hasIn && currentMin >= earlyCheckinMin && !isDayClosed;
+    const canPunchOut = hasIn && !hasOut && !isDayClosed;
     const canBreakIn = false;
     const canBreakOut = false;
 
     let lateMinutes = 0;
     if (hasIn) {
       lateMinutes = Number(empPunches.find((p) => p.punch_type === 'in')?.late_minutes ?? 0);
-    } else if (currentMin < morningLockoutMin) {
+    } else {
       lateMinutes = Math.max(0, currentMin - openedMin);
-    } else if (isAfternoonWindow) {
-      lateMinutes = Math.max(0, currentMin - afternoonCheckinStartMin);
     }
 
-    const isLate = !hasIn && (
-      (currentMin >= lateThresholdMin && currentMin < morningLockoutMin) ||
-      (currentMin > afternoonCheckinStartMin + 10 && currentMin <= afternoonCheckinEndMin)
-    );
+    const isLate = !hasIn && currentMin >= lateThresholdMin && !isDayClosed;
 
     return {
       isWorkday: true,
@@ -814,10 +804,10 @@ export function Pointage({
       lateMinutes,
       isLate,
       isTooEarlyForCheckin: !hasIn && currentMin < earlyCheckinMin,
-      isMorningLocked,
+      isMorningLocked: false,
       isResumeLocked: false,
-      isDayClosed: isAfternoonLocked || currentMin >= (17 * 60),
-      isLateCriticalBlocked: isMorningLocked || isAfternoonLocked,
+      isDayClosed,
+      isLateCriticalBlocked: false,
       maxLateAllowed: 120,
       isBreakTimeReached: false,
       breakStartTime: '12:00',
@@ -834,7 +824,7 @@ export function Pointage({
       morningLockoutTime: '09:30',
       closingTime: '16:30',
       closingEndTime: '16:40',
-      dayCutoffTime: '17:00',
+      dayCutoffTime: '18:00',
       toleranceMinutes: 40,
       lateMotifs: ['Transport', 'Santé', 'Famille', 'Pluie', 'Mission extérieure', 'Autorisé par la direction', 'Autre'],
       cardDisplaySeconds: 8,
@@ -999,8 +989,8 @@ export function Pointage({
       setError('Choisissez un motif de retard ou saisissez une précision avant de valider.');
       return;
     }
-    if (punchType === 'in' && identified.situation?.isLateCriticalBlocked) {
-      setError(`Pointage direct bloqué : retard critique (${identified.situation.lateMinutes} min > max autorisée ${identified.situation.maxLateAllowed || 60} min). Veuillez contacter la Direction.`);
+    if (punchType === 'in' && identified.situation?.isDayClosed) {
+      setError(`Pointage impossible : la journée de travail a été clôturée par le système à ${identified.situation.dayCutoffTime || '18:00'}.`);
       return;
     }
     if (punchType === 'break_in' && !identified.situation?.isBreakTimeReached) {
@@ -2214,7 +2204,7 @@ export function Pointage({
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-line/60 animate-in fade-in">
                     <button
                       type="button"
-                      disabled={!situation?.canPunchIn || situation?.isLateCriticalBlocked}
+                      disabled={!situation?.canPunchIn}
                       onClick={() => { setPunchType('in'); setSelfie(null); setShowActionPicker(false); }}
                       className={cx(
                         'py-2 px-2 rounded-xl text-xs font-bold border transition-all text-center',
@@ -2289,9 +2279,14 @@ export function Pointage({
               )}
 
               {/* Bannières d'alerte réglementaire */}
-              {situation?.isLateCriticalBlocked && (
+              {situation?.isDayClosed && (
                 <div className="rounded-xl border border-red/40 bg-red-wash/40 p-2 text-xs text-red shadow-xs">
-                  ⛔ Retard critique ({situation.lateMinutes}m). Veuillez contacter la Direction.
+                  ⛔ Journée de travail clôturée par le système ({situation.dayCutoffTime || '18:00'}).
+                </div>
+              )}
+              {situation?.isLate && !situation.hasIn && (
+                <div className="rounded-xl border border-amber/40 bg-amber-wash/30 p-2 text-xs text-amber font-semibold shadow-xs">
+                  ⚠️ Arrivée avec retard (+{situation.lateMinutes} min) · Motif obligatoire ci-dessus.
                 </div>
               )}
 

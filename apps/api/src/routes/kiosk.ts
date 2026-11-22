@@ -212,7 +212,7 @@ kioskRoutes.post('/identify', requirePerm('terminals.access'), async (c) => {
 
   const closedMin = parseHm(settings.closing_time || '16:30');
   const closingEndMin = parseHm((settings as any).closing_end_time || '16:40');
-  const dayCutoffMin = parseHm((settings as any).day_cutoff_time || '17:00');
+  const dayCutoffMin = parseHm((settings as any).day_cutoff_time || '18:00');
 
   const todayMin = businessMinutes(now);
   const isWorkday = settings.workdays.includes(businessDayOfWeek(now));
@@ -223,16 +223,12 @@ kioskRoutes.post('/identify', requirePerm('terminals.access'), async (c) => {
   // Plus de contrainte de pause pour le départ du soir
   const onBreak = false;
 
-  // Calcul du retard d'arrivée :
+  // Calcul du retard d'arrivée (ouvert en continu, retard calculé par rapport à l'heure d'ouverture) :
   let lateMinutes = 0;
   if (hasIn) {
     lateMinutes = Number(todayRows.find((r) => r.punch_type === 'in')?.late_minutes ?? 0);
   } else if (isWorkday) {
-    if (todayMin < morningLockoutMin) {
-      lateMinutes = todayMin <= openedMin ? 0 : todayMin - openedMin;
-    } else if (todayMin >= afternoonCheckinStartMin && todayMin <= afternoonCheckinEndMin) {
-      lateMinutes = todayMin <= afternoonCheckinStartMin ? 0 : todayMin - afternoonCheckinStartMin;
-    }
+    lateMinutes = todayMin <= openedMin ? 0 : todayMin - openedMin;
   }
 
   // Recherche d'un congé ou d'une permission validée pour aujourd'hui
@@ -246,25 +242,20 @@ kioskRoutes.post('/identify', requirePerm('terminals.access'), async (c) => {
     [employee.id, today],
   ).catch(() => null);
 
-  const isMorningWindow = todayMin >= earlyCheckinMin && todayMin < morningLockoutMin;
-  const isAfternoonWindow = todayMin >= afternoonCheckinStartMin && todayMin <= afternoonCheckinEndMin;
   const isTooEarlyForCheckin = !hasIn && isWorkday && todayMin < earlyCheckinMin;
-  const isMorningLocked = !hasIn && isWorkday && todayMin >= morningLockoutMin && todayMin < afternoonCheckinStartMin;
-  const isAfternoonLocked = !hasIn && isWorkday && todayMin > afternoonCheckinEndMin;
+  const isMorningLocked = false;
+  const isAfternoonLocked = false;
   const isDayClosed = todayMin >= dayCutoffMin;
 
-  // Le travailleur peut pointer son arrivée le matin (07h25 - 09h30) ou l'après-midi (13h00 - 14h00 s'il n'était pas là le matin)
-  const canPunchIn = !hasIn && (!isWorkday || isMorningWindow || isAfternoonWindow) && !isDayClosed;
-  // Départ direct dès que l'arrivée est effectuée, sans exiger de pause
-  const canPunchOut = hasIn && !hasOut;
+  // L'arrivée est ouverte dès 07h25 jusqu'à la clôture journalière de 18h00 (plus de blocage à 09h30/10h)
+  const canPunchIn = !hasIn && (!isWorkday || todayMin >= earlyCheckinMin) && !isDayClosed;
+  // Départ direct dès que l'arrivée est effectuée, jusqu'à 18h00
+  const canPunchOut = hasIn && !hasOut && !isDayClosed;
   // Pointages de pause et reprise désactivés
   const canBreakIn = false;
   const canBreakOut = false;
 
-  const isLate = isWorkday && !hasIn && (
-    (todayMin >= lateThresholdMin && todayMin < morningLockoutMin) ||
-    (todayMin > afternoonCheckinStartMin + 10 && todayMin <= afternoonCheckinEndMin)
-  );
+  const isLate = isWorkday && !hasIn && todayMin >= lateThresholdMin && !isDayClosed;
 
   return c.json({
     employee: {
@@ -311,7 +302,7 @@ kioskRoutes.post('/identify', requirePerm('terminals.access'), async (c) => {
       afternoonCheckinEnd: (settings as any).afternoon_checkin_end || '14:00',
       closingTime: settings.closing_time || '16:30',
       closingEndTime: (settings as any).closing_end_time || '16:40',
-      dayCutoffTime: (settings as any).day_cutoff_time || '17:00',
+      dayCutoffTime: (settings as any).day_cutoff_time || '18:00',
       toleranceMinutes: settings.tolerance_minutes,
       lateMotifs: settings.late_motifs,
       cardDisplaySeconds: settings.card_display_seconds,
@@ -462,7 +453,7 @@ kioskRoutes.post('/punch', requirePerm('terminals.access'), async (c) => {
   const afternoonCheckinEndMin = parseHm((settings as any).afternoon_checkin_end || '14:00');
 
   const closedMin = parseHm(settings.closing_time || '16:30');
-  const dayCutoffMin = parseHm((settings as any).day_cutoff_time || '17:00');
+  const dayCutoffMin = parseHm((settings as any).day_cutoff_time || '18:00');
   const isWorkday = settings.workdays.includes(businessDayOfWeek(punchTime));
 
   const existing = await db.query<{ punch_type: string }>(
@@ -472,60 +463,35 @@ kioskRoutes.post('/punch', requirePerm('terminals.access'), async (c) => {
   const hasIn = existing.some((r) => r.punch_type === 'in');
   const hasOut = existing.some((r) => r.punch_type === 'out');
 
-  // Calcul du retard d'arrivée :
+  // Calcul du retard d'arrivée (continu et sans blocage matinal) :
   let lateMinutes = 0;
   if (pt === 'in' && isWorkday) {
-    if (todayMin < morningLockoutMin) {
-      lateMinutes = todayMin <= openedMin ? 0 : todayMin - openedMin;
-    } else if (todayMin >= afternoonCheckinStartMin && todayMin <= afternoonCheckinEndMin) {
-      lateMinutes = todayMin <= afternoonCheckinStartMin ? 0 : todayMin - afternoonCheckinStartMin;
-    }
+    lateMinutes = todayMin <= openedMin ? 0 : todayMin - openedMin;
   }
 
   if (pt === 'in') {
     if (hasIn) return c.json({ error: 'Arrivée déjà pointée aujourd’hui.' }, 409);
-    if (isWorkday) {
-      if (todayMin < earlyCheckinMin) {
-        return c.json({ error: `Pointage non ouvert : les enregistrements débutent à ${formatHm(earlyCheckinMin)}.` }, 403);
-      }
-      if (todayMin >= morningLockoutMin && todayMin < afternoonCheckinStartMin) {
-        return c.json(
-          {
-            error: `Pointage du matin clos à ${formatHm(morningLockoutMin)}. Pour les travailleurs embauchant l'après-midi, le pointage réouvre de ${formatHm(afternoonCheckinStartMin)} à ${formatHm(afternoonCheckinEndMin)}. Veuillez contacter la Direction si nécessaire.`,
-            isMorningLocked: true,
-          },
-          403,
-        );
-      }
-      if (todayMin > afternoonCheckinEndMin) {
-        return c.json(
-          {
-            error: `Pointage des arrivées clos pour la journée (fermeture des arrivées à ${formatHm(afternoonCheckinEndMin)}). Veuillez vous présenter auprès de la Direction.`,
-            isDayClosed: true,
-          },
-          403,
-        );
-      }
-    }
     if (todayMin >= dayCutoffMin) {
       return c.json({ error: `Pointage impossible : la journée de travail a été clôturée par le système à ${formatHm(dayCutoffMin)}.` }, 403);
+    }
+    if (isWorkday && todayMin < earlyCheckinMin) {
+      return c.json({ error: `Pointage non ouvert : les enregistrements débutent à ${formatHm(earlyCheckinMin)}.` }, 403);
     }
   }
 
   if (pt === 'out') {
     if (!hasIn) return c.json({ error: 'Pointage du départ impossible sans arrivée préalable.' }, 409);
     if (hasOut) return c.json({ error: 'Départ déjà pointé en fin de journée.' }, 409);
-    // Départ direct sans pause
+    if (todayMin >= dayCutoffMin) {
+      return c.json({ error: `Pointage impossible : la journée de travail a été clôturée par le système à ${formatHm(dayCutoffMin)}.` }, 403);
+    }
   }
 
   if (pt === 'break_in' || pt === 'break_out') {
     return c.json({ error: 'Les pointages de pause et de reprise ont été supprimés du système.' }, 400);
   }
 
-  const reasonRequired = pt === 'in' && isWorkday && (
-    (todayMin >= lateThresholdMin && todayMin < morningLockoutMin) ||
-    (todayMin > afternoonCheckinStartMin + 10 && todayMin <= afternoonCheckinEndMin)
-  );
+  const reasonRequired = pt === 'in' && isWorkday && todayMin >= lateThresholdMin;
   let reason = body.data.reason?.trim() || null;
   if (!isWorkday) {
     reason = reason ? `${reason} (Astreinte / Jour non ouvré)` : 'Pointage exceptionnel (Jour non ouvré / Astreinte)';
