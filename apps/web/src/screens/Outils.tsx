@@ -986,13 +986,17 @@ export function Outils({
 
   return (
     <div className="space-y-4 pb-12">
-      {/* Top Page Header (masqué sur mobile pour laisser place directement à la barre d'outils tactile) */}
+      {/* Top Page Header (standard desktop & standard mobile) */}
       <div className="hidden sm:block">
         <PageHeader
           title="Parc Matériel & Machines"
           eyebrow="CFTM · Parc & Équipements"
           hint="Inventaire du parc électroportatif et machines-outils, gestion des prêts et suivi de maintenance"
         />
+      </div>
+      <div className="sm:hidden border-b border-line pb-2 mb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber font-mono">CFTM · Parc &amp; Équipements</p>
+        <h1 className="text-lg font-bold text-ink">Parc Matériel &amp; Machines</h1>
       </div>
 
       {error ? (

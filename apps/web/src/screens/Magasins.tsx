@@ -868,13 +868,17 @@ export function Magasins({
     <div className="space-y-4 sm:space-y-5 pb-10">
       {portal}
 
-      {/* Top Page Header (masqué sur mobile pour laisser place directement à la barre d'outils tactile) */}
+      {/* Top Page Header (standard desktop & standard mobile) */}
       <div className="hidden sm:block">
         <PageHeader
           title="Magasins & Dépôts"
           eyebrow="CFTM · Lieux de Stockage & Ateliers"
           hint="Gestion des ateliers, locaux de stockage, parcs locaux et affectations"
         />
+      </div>
+      <div className="sm:hidden border-b border-line pb-2 mb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber font-mono">CFTM · Stockage &amp; Ateliers</p>
+        <h1 className="text-lg font-bold text-ink">Magasins &amp; Dépôts</h1>
       </div>
 
       {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}

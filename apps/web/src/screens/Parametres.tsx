@@ -1545,13 +1545,17 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
 
   return (
     <div className="space-y-6">
-      {/* Top Header (masqué sur mobile pour laisser place directement à la barre d'onglets) */}
+      {/* Top Header unifié : standard desktop & standard mobile (identique au Registre des Travailleurs) */}
       <div className="hidden sm:block">
         <PageHeader
           title="Paramètres & Administration"
           eyebrow="CFTM · Configuration & Sécurité"
           hint="Gestion des comptes d'accès, permissions des rôles, bornes kiosque et sauvegardes CFTM"
         />
+      </div>
+      <div className="sm:hidden border-b border-line pb-2 mb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber font-mono">CFTM · Configuration &amp; Sécurité</p>
+        <h1 className="text-lg font-bold text-ink">Paramètres &amp; Administration</h1>
       </div>
 
       {settingsError ? (
@@ -1797,7 +1801,85 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
                     <span className="hidden sm:inline">Options</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
+                <DropdownMenuContent align="end" className="w-72 bg-paper border border-line shadow-card rounded-xl p-1 text-xs">
+                  {/* =========================================================
+                      BARRE DE RECHERCHE DYNAMIQUE (STICKY MENU OVERFLOW)
+                  ========================================================= */}
+                  {activeTab === 'comptes' && canViewUsers && (
+                    <div
+                      className="p-1.5 mb-1 border-b border-line/60 bg-paper-2/40 rounded-lg"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="relative">
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                        <input
+                          type="text"
+                          value={userSearch}
+                          onChange={(e) => setUserSearch(e.target.value)}
+                          placeholder="Rechercher nom, login, rôle..."
+                          className="h-8 w-full rounded-md border border-line bg-surface pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber shadow-2xs"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                        {userSearch && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUserSearch('');
+                            }}
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-1 cursor-pointer rounded"
+                            title="Effacer la recherche"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'permissions' && canViewPermissions && (
+                    <div
+                      className="p-1.5 mb-1 border-b border-line/60 bg-paper-2/40 rounded-lg"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="relative">
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+                        <input
+                          type="text"
+                          value={rbacView === 'matrix' ? permSearch : roleSearch}
+                          onChange={(e) => {
+                            if (rbacView === 'matrix') {
+                              setPermSearch(e.target.value);
+                            } else {
+                              setRoleSearch(e.target.value);
+                            }
+                          }}
+                          placeholder={rbacView === 'matrix' ? 'Rechercher une permission...' : 'Rechercher un rôle...'}
+                          className="h-8 w-full rounded-md border border-line bg-surface pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber shadow-2xs"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                        {(rbacView === 'matrix' ? permSearch : roleSearch) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (rbacView === 'matrix') setPermSearch('');
+                              else setRoleSearch('');
+                            }}
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-1 cursor-pointer rounded"
+                            title="Effacer la recherche"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* =========================================================
                       SECTION 1 : SOUS-ONGLETS & VUES DU 3E NIVEAU (STICKY OVERFLOW)
                   ========================================================= */}
