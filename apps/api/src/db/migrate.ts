@@ -357,6 +357,16 @@ export async function migrate(): Promise<void> {
     `);
     await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [MAGASINS_PHOTO_ECO_REVISION]);
   }
+
+  const ETOGA_LOGIN_REVISION = '027_etoga_login_unify_v2';
+  if (!(await getDb().one('SELECT name FROM _migrations WHERE name = $1', [ETOGA_LOGIN_REVISION]))) {
+    await getDb().query(`
+      UPDATE users SET login = 'etoga'
+       WHERE (id = 1023 OR login = 'ejosephine' OR employee_id = 'EMP-057')
+         AND NOT EXISTS (SELECT 1 FROM users WHERE login = 'etoga' AND id != 1023);
+    `);
+    await getDb().query('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', [ETOGA_LOGIN_REVISION]);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {

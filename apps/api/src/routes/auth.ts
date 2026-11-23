@@ -48,7 +48,11 @@ authRoutes.post('/login', async (c) => {
   }
 
   const user = await db.one<{ id: number; password_hash: string; active: boolean }>(
-    'SELECT id, password_hash, active FROM users WHERE login = $1',
+    `SELECT id, password_hash, active FROM users
+      WHERE login = $1
+         OR ($1 = 'etoga' AND login IN ('ejosephine', 'mme.etoga.josephine'))
+         OR ($1 = 'ejosephine' AND login = 'etoga')
+      LIMIT 1`,
     [login],
   );
   if (!user || !user.active || !verifyPassword(body.data.password, user.password_hash)) {

@@ -20,6 +20,7 @@ const createBody = z.object({
 });
 
 const patchBody = z.object({
+  login: z.string().min(2).toLowerCase().optional(),
   display_name: z.string().min(2).optional(),
   role: z.string().min(2).optional(),
   active: z.boolean().optional(),
@@ -133,18 +134,25 @@ usersRoutes.patch('/:id', requirePerm('users.manage'), async (c) => {
     if (!employee) return c.json({ error: 'Travailleur lié introuvable.' }, 404);
   }
 
+  if (patch.login && patch.login !== before.login) {
+    const conflict = await db.one('SELECT id FROM users WHERE login = $1 AND id != $2', [patch.login, id]);
+    if (conflict) return c.json({ error: `L’identifiant « ${patch.login} » est déjà utilisé.` }, 409);
+  }
+
   const updated = await db.one<UserListRow>(
     `UPDATE users SET
-       display_name = coalesce($2, display_name),
-       role = coalesce($3, role),
-       active = coalesce($4, active),
-       password_hash = coalesce($5, password_hash),
-       employee_id = CASE WHEN $6::text IS NOT NULL THEN (CASE WHEN $6 = '' THEN NULL ELSE $6 END) ELSE employee_id END,
-       photo_path = CASE WHEN $7::text IS NOT NULL THEN (CASE WHEN $7 = '' THEN NULL ELSE $7 END) ELSE photo_path END
+       login = coalesce($2, login),
+       display_name = coalesce($3, display_name),
+       role = coalesce($4, role),
+       active = coalesce($5, active),
+       password_hash = coalesce($6, password_hash),
+       employee_id = CASE WHEN $7::text IS NOT NULL THEN (CASE WHEN $7 = '' THEN NULL ELSE $7 END) ELSE employee_id END,
+       photo_path = CASE WHEN $8::text IS NOT NULL THEN (CASE WHEN $8 = '' THEN NULL ELSE $8 END) ELSE photo_path END
       WHERE id = $1
       RETURNING id, login, display_name, role, employee_id, photo_path, active, created_at`,
     [
       id,
+      patch.login ?? null,
       patch.display_name?.trim() ?? null,
       patch.role ?? null,
       patch.active ?? null,
