@@ -26,6 +26,7 @@ import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { EmployeeListRow } from '../components/EmployeeListRow';
 import { EmployeeBentoCard } from '../components/EmployeeBentoCard';
 import { StickyTableScroller } from '../components/StickyTableScroller';
+import { ModuleSearchBar } from '../components/ModuleSearchBar';
 import { useUndo } from '../components/UndoToast';
 import {
   Banner,
@@ -2164,12 +2165,12 @@ export function Employees({
       {/* Tabs Switcher: Équipe vs Calendrier Time-Off with Sticky Control Navbar */}
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-6">
         {/* Sticky Navigation Bar with Tabs, Real-Time Search, Filters & Hamburger Menu */}
-        <div data-employees-sticky-toolbar="true" data-timeoff-sticky-toolbar={activeTab === 'timeoff' ? 'true' : undefined} className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5 bg-paper border-b border-line shadow-xs">
+        <div data-employees-sticky-toolbar="true" data-timeoff-sticky-toolbar={activeTab === 'timeoff' ? 'true' : undefined} className="sticky-module-toolbar -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5 bg-paper border-b border-line shadow-xs">
           <div className="flex flex-col gap-1.5 sm:gap-2">
             {/* Top Row: Tabs, Search & Priority Actions */}
             <div className="flex items-center justify-between gap-2">
               {/* Left: Radix Navigation Tabs with Live Badges */}
-              <div className="min-w-0 flex-1 sm:flex-initial">
+              <div className="min-w-0 flex-initial">
                 <TabsList variant="line" className="flex w-full sm:w-auto min-w-0 items-center gap-1 sm:gap-2 bg-transparent p-0 pl-0.5">
                   {canViewEmployees && (
                     <TabsTrigger
@@ -2203,26 +2204,15 @@ export function Employees({
                 </TabsList>
               </div>
 
-              {/* Center: Integrated Real-Time Search Input (Desktop lg+) */}
+              {/* Center: Integrated Real-Time Search with Mobile Modal */}
               {activeTab === 'people' && canViewEmployees && (
-                <div className="relative hidden min-w-0 items-center lg:flex lg:flex-1 lg:max-w-xs xl:max-w-sm">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                  <input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    placeholder="Rechercher ouvrier, métier…"
-                    className="h-8 w-full rounded-lg border border-line bg-surface/90 pl-8 pr-7 text-xs text-ink placeholder:text-ink-faint focus:border-amber focus:bg-surface focus:outline-none transition-all shadow-2xs"
-                  />
-                  {q && (
-                    <button
-                      onClick={() => setQ('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-xs p-0.5"
-                      title="Effacer la recherche"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
+                <ModuleSearchBar
+                  value={q}
+                  onChange={setQ}
+                  placeholder="Rechercher ouvrier, métier…"
+                  moduleName="Équipe"
+                  resultsCount={filtered.length}
+                />
               )}
 
               {/* Right: Actions */}

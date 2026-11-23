@@ -1577,7 +1577,7 @@ function AdminSettings({ user, permissions }: { user: User; permissions: Record<
         className="w-full space-y-4 sm:space-y-6"
       >
         {/* Navigation et action visibles ; les filtres restent dans le flux mobile. */}
-        <div className="sticky top-0 lg:top-11 z-30 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2.5 bg-paper border-b border-line shadow-xs mb-3 sm:mb-6">
+        <div className="sticky-module-toolbar z-30 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2.5 bg-paper border-b border-line shadow-xs mb-3 sm:mb-6">
           {/* Row 1: Master Navigation Tabs + Grouped Master Actions */}
           <div className="grid min-w-0 grid-cols-1 items-center gap-2 2xl:grid-cols-[minmax(0,1fr)_auto]">
             {/* All primary sections stay visible on narrow screens with horizontal scroll; desktop keeps a compact row. */}

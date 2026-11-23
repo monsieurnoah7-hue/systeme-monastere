@@ -224,6 +224,15 @@ th.sticky-col {
   box-shadow: 6px 0 16px -2px rgba(0, 0, 0, 0.5) !important;
 }
 
+@utility sticky-module-toolbar {
+  position: sticky;
+  top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  z-index: 20;
+  @media (min-width: 1024px) {
+    top: 2.75rem;
+  }
+}
+
 @utility scroll-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--color-line-strong) transparent;

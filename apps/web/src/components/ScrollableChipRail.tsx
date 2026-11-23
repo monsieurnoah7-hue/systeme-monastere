@@ -75,6 +75,14 @@ export function ScrollableChipRail({
       role="region"
       aria-label={ariaLabel}
     >
+      {/* Indicateur de défilement mobile Gauche */}
+      {canScrollLeft && (
+        <div
+          aria-hidden="true"
+          className="sm:hidden pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-8 bg-gradient-to-r from-paper via-paper/80 to-transparent"
+        />
+      )}
+
       {/* Bouton défilement Gauche avec masque de dégradé (desktop uniquement) */}
       {canScrollLeft && (
         <div className="hidden sm:flex absolute left-0 top-0 bottom-0 z-10 items-center pr-6 bg-gradient-to-r from-paper via-paper/90 to-transparent pointer-events-none">
@@ -89,14 +97,22 @@ export function ScrollableChipRail({
         </div>
       )}
 
-      {/* Conteneur défilant */}
+      {/* Conteneur défilant avec dégagement droit sur mobile */}
       <div
         ref={scrollRef}
         onWheel={handleWheel}
-        className="flex items-center gap-1.5 overflow-x-auto w-full py-0.5 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        className="flex items-center gap-1.5 overflow-x-auto w-full py-0.5 pr-8 sm:pr-0 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       >
         {children}
       </div>
+
+      {/* Indicateur de défilement mobile Droite */}
+      {canScrollRight && (
+        <div
+          aria-hidden="true"
+          className="sm:hidden pointer-events-none absolute right-0 top-0 bottom-0 z-10 w-8 bg-gradient-to-l from-paper via-paper/80 to-transparent"
+        />
+      )}
 
       {/* Bouton défilement Droite avec masque de dégradé (desktop uniquement) */}
       {canScrollRight && (

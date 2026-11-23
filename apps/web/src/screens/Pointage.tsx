@@ -16,7 +16,6 @@ import {
   Printer,
   QrCode,
   RefreshCw,
-  Search,
   Smartphone,
   SlidersHorizontal,
   Users,
@@ -33,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { ScrollableChipRail } from '../components/ScrollableChipRail';
+import { ModuleSearchBar } from '../components/ModuleSearchBar';
 import { StickyTableScroller } from '../components/StickyTableScroller';
 import { exportToExcel, exportToPdf } from '../lib/export';
 
@@ -1281,7 +1281,7 @@ export function Pointage({
           <div ref={stickySentinelRef} className="h-0 w-full pointer-events-none opacity-0 -mb-4" aria-hidden="true" />
 
           {/* Tableur Sticky Toolbar (Ligne 1 Action Bar + Ligne 2 ScrollableChipRail) */}
-          <div data-pointage-sticky-toolbar="true" className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+          <div data-pointage-sticky-toolbar="true" className="sticky-module-toolbar -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
             <div className="flex flex-col gap-1.5">
               {/* LIGNE 1 : Barre d'action unifiée */}
               <div className="flex items-center justify-between gap-2">
@@ -1300,26 +1300,14 @@ export function Pointage({
                   </div>
                 </div>
 
-                {/* Recherche intégrée au centre */}
-                <div className="flex-1 max-w-xs sm:max-w-md relative min-w-0">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Rechercher ouvrier, fonction..."
-                    className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
-                      title="Effacer"
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                </div>
+                {/* Recherche intégrée au centre avec modale mobile */}
+                <ModuleSearchBar
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Rechercher ouvrier, fonction…"
+                  moduleName="Pointage & Présences"
+                  resultsCount={filteredAttendance.length}
+                />
 
                 {/* CTA et Menu Options */}
                 <div className="flex items-center gap-1.5 shrink-0">

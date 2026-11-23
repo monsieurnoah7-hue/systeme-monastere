@@ -47,8 +47,6 @@ import {
   Minus,
   Menu,
   RefreshCw,
-  Search,
-  X,
   LayoutGrid,
   List,
 } from 'lucide-react';
@@ -71,6 +69,7 @@ import { StockListRow } from '../components/StockListRow';
 import { StockBentoCard } from '../components/StockBentoCard';
 import { StockMovementCard } from '../components/StockMovementCard';
 import { ScrollableChipRail } from '../components/ScrollableChipRail';
+import { ModuleSearchBar } from '../components/ModuleSearchBar';
 import { StickyTableScroller } from '../components/StickyTableScroller';
 
 const ExcelImportModal = lazy(() => import('../components/ExcelImportModal').then((module) => ({ default: module.ExcelImportModal })));
@@ -802,7 +801,7 @@ export function Stock({
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'inventory' | 'journal')} className="w-full">
         {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
-        <div data-stock-sticky-toolbar="true" className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+        <div data-stock-sticky-toolbar="true" className="sticky-module-toolbar -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
           <div className="flex flex-col gap-1.5">
             {/* LIGNE 1 : Barre d'action unique (Titre + Recherche + CTA Primaire + Options) */}
             <div className="flex items-center justify-between gap-2">
@@ -823,47 +822,14 @@ export function Stock({
                 </div>
               </div>
 
-              {/* Recherche intégrée au centre */}
-              <div className="flex-1 min-w-[110px] sm:min-w-[160px] max-w-xs sm:max-w-md relative">
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                {activeTab === 'inventory' ? (
-                  <>
-                    <input
-                      value={q}
-                      onChange={(e) => setQ(e.target.value)}
-                      placeholder="Rechercher article, visserie..."
-                      className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
-                    />
-                    {q && (
-                      <button
-                        onClick={() => setQ('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
-                        title="Effacer"
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <input
-                      value={journalQ}
-                      onChange={(e) => setJournalQ(e.target.value)}
-                      placeholder="Filtrer mouvements..."
-                      className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
-                    />
-                    {journalQ && (
-                      <button
-                        onClick={() => setJournalQ('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
-                        title="Effacer"
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
+              {/* Recherche intégrée au centre avec modale mobile */}
+              <ModuleSearchBar
+                value={activeTab === 'inventory' ? q : journalQ}
+                onChange={activeTab === 'inventory' ? setQ : setJournalQ}
+                placeholder={activeTab === 'inventory' ? 'Rechercher article, visserie…' : 'Filtrer mouvements…'}
+                moduleName={activeTab === 'inventory' ? 'Matières & Quincaillerie' : 'Journal des mouvements'}
+                resultsCount={activeTab === 'inventory' ? filtered.length : movements.length}
+              />
 
               {/* Actions de droite : CTA Primaire + Menu Contextuel */}
               <div className="flex items-center gap-1.5 shrink-0">
@@ -1008,155 +974,183 @@ export function Stock({
               </div>
             </div>
 
-            {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Scroll avec flèches PC) */}
-            {activeTab === 'inventory' ? (
-              <ScrollableChipRail className="border-t border-line/40 pt-1 text-xs">
-                {/* Scope Chips */}
-                {[
-                  { id: 'all', label: 'Tout le stock', count: refs.length },
-                  { id: 'active', label: 'Parc Actif', count: activeRefs.length },
-                  ...(draftRefs.length > 0 ? [{ id: 'drafts', label: 'À affecter', count: draftRefs.length }] : []),
-                ].map((sc) => (
-                  <button
-                    key={sc.id}
-                    type="button"
-                    onClick={() => {
-                      setScopeFilter(sc.id as any);
-                      setSelectedRefIds(new Set());
-                    }}
-                    className={cx(
-                      'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
-                      scopeFilter === sc.id
-                        ? 'bg-amber text-white border-amber shadow-xs font-bold'
-                        : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
-                    )}
-                  >
-                    <span>{sc.label}</span>
-                    <span
-                      className={cx(
-                        'text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full',
-                        scopeFilter === sc.id ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint',
-                      )}
-                    >
-                      {sc.count}
-                    </span>
-                  </button>
-                ))}
-
-                <span className="h-4 w-px bg-line shrink-0 mx-0.5" />
-
-                {/* Status Chips */}
-                {[
-                  { key: '', label: 'Tous', count: stats.total },
-                  { key: 'normal', label: 'Disponibles', count: stats.normal },
-                  { key: 'warning', label: 'Stock bas', count: stats.warning },
-                  { key: 'empty', label: 'Rupture', count: stats.empty },
-                ].map(({ key, label, count }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setStatusFilter(key as any)}
-                    className={cx(
-                      'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
-                      statusFilter === key
-                        ? 'bg-amber text-white border-amber shadow-xs font-bold'
-                        : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
-                    )}
-                  >
-                    <span>{label}</span>
-                    <span
-                      className={cx(
-                        'text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full',
-                        statusFilter === key ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint',
-                      )}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                ))}
-
-                {/* Sélecteur Magasin sous forme de puce */}
-                {magasins.length > 0 && (
-                  <select
-                    value={magasinFilter}
-                    onChange={(e) => setMagasinFilter(e.target.value)}
-                    className="h-8 rounded-full border border-line bg-surface px-3 text-xs font-semibold text-ink focus:border-amber focus:outline-none shadow-2xs shrink-0 max-w-[170px] truncate"
-                    title="Filtrer par magasin"
-                  >
-                    <option value="">Tous magasins ({magasins.length})</option>
-                    {magasins.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
+            {/* LIGNE 2 : Rail de Défilement Horizontal YouTube (Scroll avec flèches PC & Swipe mobile) */}
+            <ScrollableChipRail className="border-t border-line/40 pt-1 text-xs">
+              {/* Onglets Maîtres de Vue (Matières vs Journal) - Toujours au début pour accessibilité immédiate */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('inventory')}
+                className={cx(
+                  'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                  activeTab === 'inventory'
+                    ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                    : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
                 )}
-
-                {/* Bascule vers le Journal sous forme de puce */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('journal')}
-                  className="h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border border-line bg-surface text-ink-soft hover:text-ink shadow-2xs"
+              >
+                <IconBox size={13} />
+                <span>Matières</span>
+                <span
+                  className={cx(
+                    'text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full',
+                    activeTab === 'inventory' ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint',
+                  )}
                 >
-                  <Clock size={13} className="text-amber" />
-                  <span>Journal ({movements.length})</span>
-                </button>
-              </ScrollableChipRail>
-            ) : (
-              <ScrollableChipRail className="border-t border-line/40 pt-1 text-xs">
-                {/* Revenir au Stock */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('inventory')}
-                  className="h-8 px-3 rounded-full text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 bg-amber text-white border border-amber shadow-xs"
+                  {filtered.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('journal')}
+                className={cx(
+                  'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                  activeTab === 'journal'
+                    ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                    : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                )}
+              >
+                <Clock size={13} className={activeTab === 'journal' ? 'text-white' : 'text-amber'} />
+                <span>Journal</span>
+                <span
+                  className={cx(
+                    'text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full',
+                    activeTab === 'journal' ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint',
+                  )}
                 >
-                  <IconBox size={13} />
-                  <span>← Retour aux Matières</span>
-                </button>
+                  {movements.length}
+                </span>
+              </button>
 
-                <span className="h-4 w-px bg-line shrink-0 mx-0.5" />
+              <span className="h-4 w-px bg-line shrink-0 mx-0.5" />
 
-                {/* Type chips */}
-                {[
-                  { value: '', label: 'Tous flux' },
-                  { value: 'in', label: 'Entrées' },
-                  { value: 'out', label: 'Sorties' },
-                  { value: 'transfer', label: 'Transferts' },
-                  { value: 'correction', label: 'Corrections' },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setJournalType(opt.value as any)}
-                    className={cx(
-                      'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all border shadow-2xs',
-                      journalType === opt.value
-                        ? 'bg-paper-2 text-ink border-amber shadow-xs font-bold'
-                        : 'bg-surface text-ink-soft border-line hover:text-ink',
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+              {/* Sous-filtres spécifiques selon l'onglet actif */}
+              {activeTab === 'inventory' ? (
+                <>
+                  {/* Scope Chips */}
+                  {[
+                    { id: 'all', label: 'Tout le stock', count: refs.length },
+                    { id: 'active', label: 'Parc Actif', count: activeRefs.length },
+                    ...(draftRefs.length > 0 ? [{ id: 'drafts', label: 'À affecter', count: draftRefs.length }] : []),
+                  ].map((sc) => (
+                    <button
+                      key={sc.id}
+                      type="button"
+                      onClick={() => {
+                        setScopeFilter(sc.id as any);
+                        setSelectedRefIds(new Set());
+                      }}
+                      className={cx(
+                        'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                        scopeFilter === sc.id
+                          ? 'bg-paper-2 text-ink border-amber shadow-xs font-bold'
+                          : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                      )}
+                    >
+                      <span>{sc.label}</span>
+                      <span
+                        className={cx(
+                          'text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full',
+                          scopeFilter === sc.id ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint',
+                        )}
+                      >
+                        {sc.count}
+                      </span>
+                    </button>
+                  ))}
 
-                {/* Dates de début / fin */}
-                <div className="flex items-center gap-1 shrink-0 text-ink-faint">
-                  <input
-                    type="date"
-                    value={journalFrom}
-                    onChange={(e) => setJournalFrom(e.target.value)}
-                    className="h-8 rounded-full border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none shadow-2xs"
-                  />
-                  <span>→</span>
-                  <input
-                    type="date"
-                    value={journalTo}
-                    onChange={(e) => setJournalTo(e.target.value)}
-                    className="h-8 rounded-full border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none shadow-2xs"
-                  />
-                </div>
-              </ScrollableChipRail>
-            )}
+                  <span className="h-4 w-px bg-line shrink-0 mx-0.5" />
+
+                  {/* Status Chips */}
+                  {[
+                    { key: '', label: 'Tous', count: stats.total },
+                    { key: 'normal', label: 'Disponibles', count: stats.normal },
+                    { key: 'warning', label: 'Stock bas', count: stats.warning },
+                    { key: 'empty', label: 'Rupture', count: stats.empty },
+                  ].map(({ key, label, count }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setStatusFilter(key as any)}
+                      className={cx(
+                        'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 border shadow-2xs',
+                        statusFilter === key
+                          ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                          : 'bg-surface text-ink-soft border-line hover:border-ink-faint hover:text-ink',
+                      )}
+                    >
+                      <span>{label}</span>
+                      <span
+                        className={cx(
+                          'text-xs tabular-nums font-mono font-bold px-1.5 py-0.2 rounded-full',
+                          statusFilter === key ? 'bg-white/20 text-white' : 'bg-paper text-ink-faint',
+                        )}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  ))}
+
+                  {/* Sélecteur Magasin sous forme de puce */}
+                  {magasins.length > 0 && (
+                    <select
+                      value={magasinFilter}
+                      onChange={(e) => setMagasinFilter(e.target.value)}
+                      className="h-8 rounded-full border border-line bg-surface px-3 text-xs font-semibold text-ink focus:border-amber focus:outline-none shadow-2xs shrink-0 max-w-[170px] truncate"
+                      title="Filtrer par magasin"
+                    >
+                      <option value="">Tous magasins ({magasins.length})</option>
+                      {magasins.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Type chips */}
+                  {[
+                    { value: '', label: 'Tous flux' },
+                    { value: 'in', label: 'Entrées' },
+                    { value: 'out', label: 'Sorties' },
+                    { value: 'transfer', label: 'Transferts' },
+                    { value: 'correction', label: 'Corrections' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setJournalType(opt.value as any)}
+                      className={cx(
+                        'h-8 px-3 rounded-full text-xs font-semibold shrink-0 transition-all border shadow-2xs',
+                        journalType === opt.value
+                          ? 'bg-amber text-white border-amber shadow-xs font-bold'
+                          : 'bg-surface text-ink-soft border-line hover:text-ink',
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+
+                  {/* Dates de début / fin */}
+                  <div className="flex items-center gap-1 shrink-0 text-ink-faint">
+                    <input
+                      type="date"
+                      value={journalFrom}
+                      onChange={(e) => setJournalFrom(e.target.value)}
+                      className="h-8 rounded-full border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none shadow-2xs"
+                    />
+                    <span>→</span>
+                    <input
+                      type="date"
+                      value={journalTo}
+                      onChange={(e) => setJournalTo(e.target.value)}
+                      className="h-8 rounded-full border border-line bg-surface px-2.5 text-xs text-ink focus:border-amber focus:outline-none shadow-2xs"
+                    />
+                  </div>
+                </>
+              )}
+            </ScrollableChipRail>
           </div>
         </div>
 

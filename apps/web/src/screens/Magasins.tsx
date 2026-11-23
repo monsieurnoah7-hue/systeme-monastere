@@ -48,7 +48,6 @@ import {
   List,
   Menu,
   RefreshCw,
-  Search,
   Pencil,
   ImagePlus,
   Crop,
@@ -70,6 +69,7 @@ import { ImagePickerModal } from '../components/ImagePickerModal';
 import { GroupedQrLabelsModal } from '../components/GroupedQrLabelsModal';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { ScrollableChipRail } from '../components/ScrollableChipRail';
+import { ModuleSearchBar } from '../components/ModuleSearchBar';
 import { ManualPhotoCropperModal } from '../components/ManualPhotoCropperModal';
 
 type MagasinTool = Pick<
@@ -882,7 +882,7 @@ export function Magasins({
       </div>
 
       {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
-      <div className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+      <div className="sticky-module-toolbar -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
         <div className="flex flex-col gap-1.5">
           {/* LIGNE 1 : Barre d'action unique (Titre + Recherche + CTA Primaire + Options) */}
           <div className="flex items-center justify-between gap-2">
@@ -903,26 +903,14 @@ export function Magasins({
               </div>
             </div>
 
-            {/* Recherche intégrée au centre */}
-            <div className="flex-1 max-w-xs sm:max-w-md relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Rechercher magasin, atelier, responsable…"
-                className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
-              />
-              {q && (
-                <button
-                  type="button"
-                  onClick={() => setQ('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
-                  title="Effacer"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
+            {/* Recherche intégrée au centre avec modale mobile */}
+            <ModuleSearchBar
+              value={q}
+              onChange={setQ}
+              placeholder="Rechercher magasin, atelier…"
+              moduleName="Magasins & Dépôts"
+              resultsCount={filtered.length}
+            />
 
             {/* Actions de droite : CTA Primaire + Menu Contextuel */}
             <div className="flex items-center gap-1.5 shrink-0">

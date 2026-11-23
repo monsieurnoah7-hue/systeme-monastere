@@ -73,8 +73,6 @@ import {
   Truck,
   Menu,
   RefreshCw,
-  Search,
-  X,
   LayoutGrid,
   List,
 } from 'lucide-react';
@@ -88,6 +86,7 @@ import { ToolLoanCard } from '../components/ToolLoanCard';
 import { FleetView } from '../components/FleetView';
 import { InventoryEditModal, type InventoryEditTarget } from '../components/InventoryEditModal';
 import { ScrollableChipRail } from '../components/ScrollableChipRail';
+import { ModuleSearchBar } from '../components/ModuleSearchBar';
 import { StickyTableScroller } from '../components/StickyTableScroller';
 import { computePortfolioAudit, computeToolAccounting, formatCurrency } from '../lib/accounting';
 import { fetchFleetSummary, type FleetSummary } from '../lib/api';
@@ -1007,7 +1006,7 @@ export function Outils({
 
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-4">
         {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
-        <div data-tools-sticky-toolbar="true" className="sticky top-0 lg:top-11 z-20 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+        <div data-tools-sticky-toolbar="true" className="sticky-module-toolbar -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
           <div className="flex flex-col gap-1.5">
             {/* LIGNE 1 : Barre d'action unique (Titre + Recherche + CTA Primaire + Options) */}
             <div className="flex items-center justify-between gap-2">
@@ -1033,51 +1032,28 @@ export function Outils({
                 </div>
               </div>
 
-              {/* Recherche intégrée au centre */}
-              <div className="flex-1 min-w-[110px] sm:min-w-[160px] max-w-xs sm:max-w-md relative">
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
-                {activeTab === 'tools' ? (
-                  <>
-                    <input
-                      value={filters.q}
-                      onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
-                      placeholder="Rechercher machine, marque, QR..."
-                      className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
-                    />
-                    {filters.q && (
-                      <button
-                        onClick={() => setFilters((f) => ({ ...f, q: '' }))}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
-                        title="Effacer"
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
-                  </>
-                ) : activeTab === 'loans' ? (
-                  <>
-                    <input
-                      value={loansSearch}
-                      onChange={(e) => setLoansSearch(e.target.value)}
-                      placeholder="Rechercher emprunteur, outil..."
-                      className="h-9 w-full rounded-xl border border-line bg-surface/90 pl-8 pr-7 text-xs sm:text-sm text-ink placeholder:text-ink-faint focus:border-amber focus:outline-none transition-all shadow-2xs"
-                    />
-                    {loansSearch && (
-                      <button
-                        onClick={() => setLoansSearch('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink p-1 rounded-md"
-                        title="Effacer"
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <div className="hidden sm:block text-xs text-ink-faint italic truncate">
-                    Supervision globale de la flotte et groupes électrogènes
-                  </div>
-                )}
-              </div>
+              {/* Recherche intégrée au centre avec modale mobile */}
+              {activeTab === 'tools' ? (
+                <ModuleSearchBar
+                  value={filters.q}
+                  onChange={(val) => setFilters((f) => ({ ...f, q: val }))}
+                  placeholder="Rechercher machine, marque, QR…"
+                  moduleName="Machines & Matériel"
+                  resultsCount={tools.length}
+                />
+              ) : activeTab === 'loans' ? (
+                <ModuleSearchBar
+                  value={loansSearch}
+                  onChange={setLoansSearch}
+                  placeholder="Rechercher emprunteur, outil…"
+                  moduleName="Prêts d’Outils"
+                  resultsCount={filteredActiveLoans.length}
+                />
+              ) : (
+                <div className="flex-1 min-w-0 text-xs text-ink-faint italic truncate text-center sm:text-left px-2">
+                  Supervision globale de la flotte et groupes électrogènes
+                </div>
+              )}
 
               {/* Actions de droite : CTA Primaire + Menu Contextuel */}
               <div className="flex items-center gap-1.5 shrink-0">
