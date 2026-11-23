@@ -124,19 +124,32 @@ employeesRoutes.get('/:id', requirePerm('employees.view'), async (c) => {
 });
 
 employeesRoutes.get('/:id/detail', requirePerm('employees.view'), async (c) => {
-  const id = c.req.param('id') ?? '';
+  const rawId = c.req.param('id') ?? '';
+  const id = decodeURIComponent(rawId).trim();
   const db = getDb();
-  const employee = await db.one<EmployeeRow & { has_pin: boolean }>(
-    `SELECT e.id, e.full_name, coalesce(r.name, e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin, coalesce(e.workdays, '[1,2,3,4,5,6]'::jsonb) AS workdays, coalesce(e.daily_work_hours, 8)::float AS daily_work_hours
+  let employee = await db.one<EmployeeRow & { has_pin: boolean }>(
+    `SELECT e.id, e.full_name, coalesce(max(r.name), e.job_title) AS job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin, coalesce(e.workdays, '[1,2,3,4,5,6]'::jsonb) AS workdays, coalesce(e.daily_work_hours, 8)::float AS daily_work_hours
        FROM employees e
        LEFT JOIN users u ON u.employee_id = e.id
        LEFT JOIN roles r ON r.id = u.role
-      WHERE e.id = $1`,
+      WHERE e.id = $1 OR upper(e.id) = upper($1)
+      GROUP BY e.id, e.full_name, e.job_title, e.photo_path, e.badge_token, e.active, e.pin_hash, e.workdays, e.daily_work_hours`,
     [id],
   );
+  if (!employee) {
+    employee = await db.one<EmployeeRow & { has_pin: boolean }>(
+      `SELECT e.id, e.full_name, e.job_title, e.photo_path, e.badge_token, e.active, (e.pin_hash IS NOT NULL) AS has_pin, coalesce(e.workdays, '[1,2,3,4,5,6]'::jsonb) AS workdays, coalesce(e.daily_work_hours, 8)::float AS daily_work_hours
+         FROM employees e
+        WHERE e.id ILIKE $1 OR e.badge_token ILIKE $1`,
+      [id],
+    );
+  }
   if (!employee) return c.json({ error: 'Travailleur introuvable.' }, 404);
 
-  const [history, monthRows, openLoans, loanHistory, userAccount, leaves] = await Promise.all([
+  const empId = employee.id;
+
+  // Requêtes résilientes avec fallback individuel : une anomalie sur les prêts ou congés ne fait jamais échouer la fiche
+  const [history, monthRows, userAccount] = await Promise.all([
     db.query<{
       punch_date: string;
       in_at: string | null;
@@ -158,31 +171,24 @@ employeesRoutes.get('/:id/detail', requirePerm('employees.view'), async (c) => {
         GROUP BY punch_date
         ORDER BY punch_date DESC
         LIMIT 30`,
-      [id],
-    ),
+      [empId],
+    ).catch((err) => {
+      console.warn('[employees:detail:history]', err);
+      return [];
+    }),
     db.query<{ late_count: string; days: string; breaks: string }>(
       `SELECT count(*) FILTER (WHERE late_minutes > 0)::text AS late_count,
               count(DISTINCT punch_date) FILTER (WHERE punch_type = 'in')::text AS days,
               count(*) FILTER (WHERE punch_type = 'break_in')::text AS breaks
          FROM attendance
-        WHERE employee_id = $1 AND date_trunc('month', punch_date) = date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')::date)`,
-      [id],
-    ),
-    db.query(
-      `SELECT l.id, l.tool_id, l.out_at, l.motive, t.name AS tool_name, t.category
-         FROM loans l JOIN tools t ON t.id = l.tool_id
-        WHERE l.employee_id = $1 AND l.status = 'out'
-        ORDER BY l.out_at DESC`,
-      [id],
-    ),
-    db.query(
-      `SELECT l.id, l.tool_id, l.out_at, l.returned_at, l.return_condition, l.motive, t.name AS tool_name
-         FROM loans l JOIN tools t ON t.id = l.tool_id
-        WHERE l.employee_id = $1
-        ORDER BY l.out_at DESC
-        LIMIT 20`,
-      [id],
-    ),
+        WHERE employee_id = $1
+          AND punch_date >= date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala'))::date
+          AND punch_date < (date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Douala')) + INTERVAL '1 month')::date`,
+      [empId],
+    ).catch((err) => {
+      console.warn('[employees:detail:monthRows]', err);
+      return [{ late_count: '0', days: '0', breaks: '0' }];
+    }),
     db.one<{
       id: number;
       login: string;
@@ -193,10 +199,37 @@ employeesRoutes.get('/:id/detail', requirePerm('employees.view'), async (c) => {
       `SELECT u.id, u.login, u.role, coalesce(r.name, u.role) AS role_name, u.created_at::text
          FROM users u
          LEFT JOIN roles r ON r.id = u.role
-        WHERE u.employee_id = $1
+        WHERE u.employee_id = $1 OR upper(u.employee_id) = upper($1)
         LIMIT 1`,
-      [id],
-    ),
+      [empId],
+    ).catch((err) => {
+      console.warn('[employees:detail:userAccount]', err);
+      return undefined;
+    }),
+  ]);
+
+  const [openLoans, loanHistory, leaves] = await Promise.all([
+    db.query(
+      `SELECT l.id, l.tool_id, l.out_at, l.motive, coalesce(t.name, 'Outil inconnu') AS tool_name, coalesce(t.category, 'Divers') AS category
+         FROM loans l LEFT JOIN tools t ON t.id = l.tool_id
+        WHERE (l.employee_id = $1 OR upper(l.employee_id) = upper($1)) AND l.status = 'out'
+        ORDER BY l.out_at DESC`,
+      [empId],
+    ).catch((err) => {
+      console.warn('[employees:detail:openLoans]', err);
+      return [];
+    }),
+    db.query(
+      `SELECT l.id, l.tool_id, l.out_at, l.returned_at, l.return_condition, l.motive, coalesce(t.name, 'Outil inconnu') AS tool_name
+         FROM loans l LEFT JOIN tools t ON t.id = l.tool_id
+        WHERE l.employee_id = $1 OR upper(l.employee_id) = upper($1)
+        ORDER BY l.out_at DESC
+        LIMIT 20`,
+      [empId],
+    ).catch((err) => {
+      console.warn('[employees:detail:loanHistory]', err);
+      return [];
+    }),
     db.query<{
       id: number;
       from_date: string;
@@ -209,10 +242,13 @@ employeesRoutes.get('/:id/detail', requirePerm('employees.view'), async (c) => {
     }>(
       `SELECT id, from_date::text AS from_date, to_date::text AS to_date, kind, status, note, reviewed_by, created_at::text
          FROM absences
-        WHERE employee_id = $1
+        WHERE employee_id = $1 OR upper(employee_id) = upper($1)
         ORDER BY from_date DESC, id DESC`,
-      [id],
-    ),
+      [empId],
+    ).catch((err) => {
+      console.warn('[employees:detail:leaves]', err);
+      return [];
+    }),
   ]);
 
   return c.json({

@@ -1513,6 +1513,8 @@ export function Employees({
   const [detailFor, setDetailFor] = useState<Employee | null>(null);
   const [detail, setDetail] = useState<EmployeeDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailRetry, setDetailRetry] = useState(0);
   const [employeeKit, setEmployeeKit] = useState<{ kit: EtabliKit | null; items: EtabliKitItem[] } | null>(null);
   const [createEtabliFor, setCreateEtabliFor] = useState<Employee | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<'fiche' | 'pointages' | 'etabli'>('fiche');
@@ -1567,25 +1569,42 @@ export function Employees({
     if (!detailFor) {
       setDetail(null);
       setEmployeeKit(null);
+      setDetailError(null);
       return;
     }
+    // Socle immédiat : la fiche dispose immédiatement des données du profil (nom, métier, badge, photo, PIN)
+    setDetail((prev) => {
+      if (prev && prev.employee.id === detailFor.id) return prev;
+      return {
+        employee: detailFor,
+        account: null,
+        leaves: [],
+        history: [],
+        month: { daysPresent: 0, lateCount: 0, breaks: 0 },
+        openLoans: [],
+        loanHistory: [],
+      };
+    });
+    setDetailError(null);
     let cancelled = false;
     setDetailLoading(true);
     setActiveDetailTab('fiche');
+    const encodedId = encodeURIComponent(detailFor.id.trim());
     Promise.all([
-      api<EmployeeDetail>(`/api/employees/${detailFor.id}/detail`),
-      api<{ kit: EtabliKit | null; items: EtabliKitItem[] }>(`/api/kits/by-employee/${detailFor.id}`).catch(() => ({ kit: null, items: [] })),
+      api<EmployeeDetail>(`/api/employees/${encodedId}/detail`, { timeoutMs: 15_000, bypassCache: detailRetry > 0 }),
+      api<{ kit: EtabliKit | null; items: EtabliKitItem[] }>(`/api/kits/by-employee/${encodedId}`, { timeoutMs: 15_000, bypassCache: detailRetry > 0 }).catch(() => ({ kit: null, items: [] })),
     ])
       .then(([resDetail, resKit]) => {
         if (!cancelled) {
           setDetail(resDetail);
           setEmployeeKit(resKit);
+          setDetailError(null);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
-          setDetail(null);
-          setEmployeeKit(null);
+          console.warn('[detail fetch failed]', err);
+          setDetailError(err instanceof Error ? err.message : 'Détails temporairement indisponibles');
         }
       })
       .finally(() => {
@@ -1594,7 +1613,7 @@ export function Employees({
     return () => {
       cancelled = true;
     };
-  }, [detailFor]);
+  }, [detailFor, detailRetry]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3028,12 +3047,31 @@ export function Employees({
         onClose={() => setDetailFor(null)}
         wide
       >
-        {detailLoading ? (
+        {detailLoading && !detail ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm text-ink-soft">
             <Spinner /> Chargement de la fiche…
           </div>
         ) : detail ? (
           <div className="space-y-5">
+            {detailLoading && (
+              <div className="flex items-center gap-2 text-xs text-amber animate-pulse">
+                <Spinner />
+                <span>Actualisation de l'historique et des autorisations…</span>
+              </div>
+            )}
+            {detailError && (
+              <div className="flex items-center justify-between rounded-xl border border-amber/30 bg-amber-wash/30 p-2.5 text-xs text-amber">
+                <span>⚠️ {detailError} (profil de base affiché)</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDetailRetry((r) => r + 1)}
+                  className="h-6 text-xs text-amber underline hover:text-ink cursor-pointer"
+                >
+                  Réessayer
+                </Button>
+              </div>
+            )}
             <div className="flex items-start gap-4">
               <div
                 onClick={() => {
@@ -3439,7 +3477,9 @@ export function Employees({
                 <section>
                   <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-faint">Historique 30 derniers jours</h3>
                   {detail.history.length === 0 ? (
-                    <p className="text-xs text-ink-soft">Aucun pointage enregistré.</p>
+                    <p className="text-xs text-ink-soft">
+                      {detailLoading ? 'Chargement des pointages…' : detailError ? 'Historique temporairement indisponible.' : 'Aucun pointage enregistré.'}
+                    </p>
                   ) : (
                     <div className="overflow-hidden rounded-xl border border-line bg-surface">
                       <table className="w-full text-left sheet-grid text-xs table-rhythm">
@@ -3488,7 +3528,12 @@ export function Employees({
             )}
           </div>
         ) : (
-          <Banner tone="error">Fiche introuvable.</Banner>
+          <div className="space-y-4 py-12 text-center">
+            <Banner tone="error">Impossible de charger les données de cette fiche.</Banner>
+            <Button variant="secondary" onClick={() => setDetailRetry((r) => r + 1)}>
+              Réessayer le chargement
+            </Button>
+          </div>
         )}
       </Drawer>
 
