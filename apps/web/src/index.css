@@ -226,7 +226,7 @@ th.sticky-col {
 
 @utility sticky-module-toolbar {
   position: sticky;
-  top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  top: 0;
   z-index: 20;
   @media (min-width: 1024px) {
     top: 2.75rem;

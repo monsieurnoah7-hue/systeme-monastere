@@ -1006,7 +1006,7 @@ export function Outils({
 
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="w-full space-y-4">
         {/* Navigation Bar Strictement 2 Lignes (Standard Apple / Google / YouTube) */}
-        <div data-tools-sticky-toolbar="true" className="sticky-module-toolbar -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper/98 border-b border-line backdrop-blur-md shadow-xs">
+        <div data-tools-sticky-toolbar="true" className="sticky-module-toolbar -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 bg-paper border-b border-line shadow-xs">
           <div className="flex flex-col gap-1.5">
             {/* LIGNE 1 : Barre d'action unique (Titre + Recherche + CTA Primaire + Options) */}
             <div className="flex items-center justify-between gap-2">
