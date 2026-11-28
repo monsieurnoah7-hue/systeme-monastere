@@ -155,7 +155,7 @@ echo "$(date -Iseconds) backup OK" >> "$BACKUP_DIR/backup.log"
 BACKUP
 chmod +x /usr/local/bin/mf-backup.sh
 
-(crontab -l 2>/dev/null | grep -v mf-backup; echo "0 2 * * * /usr/local/bin/mf-backup.sh") | crontab -
+{ crontab -l 2>/dev/null | grep -v mf-backup || true; echo "0 2 * * * /usr/local/bin/mf-backup.sh"; } | crontab -
 
 # -----------------------------------------------------------------------------
 # Résumé
